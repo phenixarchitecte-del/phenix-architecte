@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phénix-Architecte · Annuaire Artisans</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+<script type="module">
+import{initializeApp}from'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import{getFirestore,collection,doc,onSnapshot,setDoc,deleteDoc}from'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+const db=getFirestore(initializeApp({apiKey:"AIzaSyCjNKNvS6p3nqE6-_Gw9I397ZtXm2FG1ew",authDomain:"phenix-architecte-9151b.firebaseapp.com",projectId:"phenix-architecte-9151b",storageBucket:"phenix-architecte-9151b.firebasestorage.app",messagingSenderId:"811231684720",appId:"1:811231684720:web:413fa324ae43c07607acb5"}));
+window._fb={
+  save:a=>setDoc(doc(db,'phenix_artisans',String(a.id)),a),
+  del:id=>deleteDoc(doc(db,'phenix_artisans',String(id))),
+  listen:cb=>onSnapshot(collection(db,'phenix_artisans'),s=>{const l=[];s.forEach(d=>l.push(d.data()));cb(l);})
+};
+</script>
+<script>window.initGoogleMaps=function(){window._gReady=true;const b=document.getElementById('btn-g');if(b){b.disabled=false;b.title='';}}</script>
+<script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCAcWLVUGBBKyh2sq8bJwDFNQndsXF1bq4&libraries=places&language=fr&callback=initGoogleMaps"></script>
+<style>
+:root{--bg:#F0F4F8;--bg2:#E4ECF3;--card:#fff;--text:#0F1E3D;--text2:#4A6080;--text3:#8BA5C0;--border:#C8D8E8;--navy:#1B2D5B;--acc:#4A9CC7;--acc2:#2A5298;--accbg:#E8F4FB;--green:#2D7A4F;--gbg:#E3F5EC;--amber:#8A6020;--abg:#FDF3DC;--red:#C0392B;--rbg:#FDECEB;--sf:'DM Serif Display',Georgia,serif;--ss:'DM Sans',sans-serif;--r:9px;--rl:13px;--sh:0 1px 4px rgba(15,30,61,.07);--shm:0 4px 16px rgba(15,30,61,.1)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--ss);background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;min-height:100vh}
+.app{display:flex;height:100vh;overflow:hidden}
+.sb{width:240px;background:linear-gradient(180deg,#0F1E3D,#1B2D5B);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto}
+.sb-logo{padding:1.2rem 1rem;border-bottom:1px solid rgba(74,156,199,.2);display:flex;align-items:center;gap:10px}
+.sb-icon{width:36px;height:36px;border-radius:8px;background:linear-gradient(135deg,#4A9CC7,#2A5298);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.sb-name{font-family:var(--sf);font-size:14px;color:#fff;line-height:1.2}
+.sb-sub{font-size:9px;color:rgba(74,156,199,.8);letter-spacing:.1em;text-transform:uppercase}
+.sb-sep{font-size:9px;letter-spacing:.1em;color:rgba(74,156,199,.45);padding:.9rem 1rem .3rem;text-transform:uppercase;font-weight:600}
+.sb-it{display:flex;align-items:center;gap:9px;padding:8px 1rem;font-size:13px;color:rgba(255,255,255,.5);cursor:pointer;border-left:2.5px solid transparent;transition:all .15s}
+.sb-it:hover{color:#fff;background:rgba(74,156,199,.1)}
+.sb-it.on{color:#fff;background:rgba(74,156,199,.15);border-left-color:#4A9CC7;font-weight:600}
+.sb-badge{margin-left:auto;background:rgba(74,156,199,.2);color:#4A9CC7;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px}
+.sb-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.sb-bot{margin-top:auto;padding:.9rem 1rem;border-top:1px solid rgba(74,156,199,.15);font-size:11px;color:rgba(255,255,255,.3)}
+.sdot{width:7px;height:7px;border-radius:50%;background:#2D7A4F;display:inline-block;margin-right:5px;vertical-align:middle}
+.sdot.s{background:#4A9CC7;animation:blink 1s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{height:54px;background:#fff;border-bottom:2px solid var(--border);display:flex;align-items:center;padding:0 1.5rem;gap:10px;flex-shrink:0}
+.tb-title{font-family:var(--sf);font-size:18px;color:var(--navy);flex:1}
+.cnt{flex:1;overflow-y:auto;padding:1.75rem}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;font-size:13px;font-family:var(--ss);border-radius:var(--r);cursor:pointer;border:1.5px solid var(--border);background:var(--card);color:var(--text);transition:all .15s;font-weight:500;white-space:nowrap;text-decoration:none}
+.btn:hover{border-color:var(--acc);color:var(--navy)}
+.btn-p{background:linear-gradient(135deg,#1B2D5B,#2A5298);color:#fff;border-color:#1B2D5B}
+.btn-p:hover{background:linear-gradient(135deg,#4A9CC7,#2A5298);border-color:#4A9CC7;color:#fff}
+.btn-s{background:var(--gbg);color:var(--green);border-color:var(--green)}
+.btn-d{background:var(--rbg);color:var(--red);border-color:var(--red)}
+.btn-sm{padding:4px 10px;font-size:12px}
+.btn-i{padding:7px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--rl);padding:1.25rem;box-shadow:var(--sh)}
+.mets{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:1.5rem}
+.met{background:var(--card);border:1.5px solid var(--border);border-top:3px solid var(--acc);border-radius:var(--rl);padding:1rem;box-shadow:var(--sh)}
+.met.g{border-top-color:var(--green)}
+.met.a{border-top-color:#F5A623}
+.met-lbl{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+.met-val{font-family:var(--sf);font-size:22px;color:var(--navy)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:1rem}
+.ac{background:var(--card);border:1.5px solid var(--border);border-radius:var(--rl);padding:1.1rem;box-shadow:var(--sh);cursor:pointer;transition:box-shadow .2s,transform .15s;position:relative}
+.ac:hover{box-shadow:var(--shm);transform:translateY(-1px);border-color:var(--acc)}
+.av{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:var(--sf);font-size:16px;font-weight:700;color:#fff;flex-shrink:0}
+.ac-nom{font-family:var(--sf);font-size:15px;color:var(--navy)}
+.ac-ent{font-size:11px;color:var(--acc);font-weight:500}
+.mt{display:inline-flex;align-items:center;gap:3px;background:var(--accbg);color:var(--acc2);padding:1px 8px;border-radius:20px;font-size:10px;font-weight:600;margin-top:3px}
+.ac-row{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);margin-bottom:3px}
+.ac-row .ti{font-size:12px;color:var(--text3)}
+.ac-ft{display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding-top:8px;border-top:1px solid var(--bg2)}
+.fb{position:absolute;top:9px;right:9px;font-size:13px}
+.stars{display:flex;gap:1px}
+.star{font-size:12px;color:var(--bg2)}
+.star.on{color:#F5A623}
+.sbar{height:4px;background:var(--bg2);border-radius:2px;margin:5px 0;overflow:hidden}
+.sfill{height:100%;border-radius:2px;transition:width .4s}
+.stags{display:flex;flex-wrap:wrap;gap:3px;margin-bottom:8px}
+.stag{display:inline-flex;align-items:center;gap:2px;background:rgba(255,255,255,.7);border:1px solid var(--border);padding:1px 6px;border-radius:20px;font-size:10px;color:var(--text2)}
+.sb2{display:flex;align-items:center;gap:8px;background:var(--bg);border:1.5px solid var(--border);border-radius:var(--r);padding:8px 12px;flex:1}
+.sb2 input{border:none;background:transparent;font-size:13px;color:var(--text);font-family:var(--ss);flex:1;outline:none}
+.sb2:focus-within{border-color:var(--acc)}
+select.fs{padding:8px 10px;font-size:13px;border:1.5px solid var(--border);border-radius:var(--r);background:var(--bg);color:var(--text);font-family:var(--ss);cursor:pointer;outline:none}
+select.fs:focus{border-color:var(--acc)}
+.fg{display:flex;flex-direction:column;gap:4px}
+.fg label{font-size:10px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.06em}
+.fg input,.fg select,.fg textarea{font-size:13px;padding:8px 10px;border-radius:var(--r);border:1.5px solid var(--border);background:var(--bg);color:var(--text);font-family:var(--ss);transition:border-color .15s}
+.fg input:focus,.fg select:focus,.fg textarea:focus{outline:none;border-color:var(--acc);background:var(--card)}
+.fgr{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.fgr .full{grid-column:1/-1}
+.fsep{font-size:10px;font-weight:700;color:var(--acc2);text-transform:uppercase;letter-spacing:.09em;padding:.6rem 0 .4rem;border-top:1px solid var(--border);grid-column:1/-1}
+.fsep:first-child{border-top:none;padding-top:0}
+.ns{display:flex;gap:4px}
+.nst{font-size:20px;cursor:pointer;color:var(--bg2);transition:color .1s}
+.nst.on{color:#F5A623}
+.ov{position:fixed;inset:0;background:rgba(15,30,61,.5);z-index:200;display:none;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+.ov.open{display:flex}
+.modal{background:var(--card);border-radius:var(--rl);width:600px;max-width:96vw;max-height:92vh;overflow:hidden;box-shadow:var(--shm);border-top:3px solid var(--acc);display:flex;flex-direction:column}
+.mh{padding:1.1rem 1.4rem;border-bottom:1.5px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+.mh-t{font-family:var(--sf);font-size:17px;color:var(--navy)}
+.mb{padding:1.4rem;overflow-y:auto;flex:1}
+.mf{padding:.9rem 1.4rem;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;background:var(--bg);flex-shrink:0}
+.pg{display:none}.pg.on{display:block}
+.ph{margin-bottom:1.5rem}
+.ph-t{font-family:var(--sf);font-size:24px;color:var(--navy)}
+.ph-s{font-size:13px;color:var(--text2);margin-top:2px}
+.ph-l{width:36px;height:3px;background:linear-gradient(90deg,var(--acc),var(--navy));border-radius:2px;margin-top:5px}
+#vfab{position:fixed;bottom:22px;left:22px;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#1B2D5B,#4A9CC7);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;color:#fff;box-shadow:0 4px 16px rgba(27,45,91,.3);z-index:100;transition:all .2s}
+#vfab:hover{transform:scale(1.07)}
+#vfab.rec{background:linear-gradient(135deg,#C0392B,#E74C3C);animation:vp 1.2s infinite}
+@keyframes vp{0%,100%{box-shadow:0 0 0 0 rgba(192,57,43,.5)}50%{box-shadow:0 0 0 12px rgba(192,57,43,0)}}
+#vpanel{position:fixed;bottom:86px;left:22px;width:320px;max-width:calc(100vw - 44px);background:var(--card);border:1.5px solid var(--border);border-top:3px solid var(--acc);border-radius:var(--rl);box-shadow:var(--shm);z-index:100;display:none;flex-direction:column;overflow:hidden}
+#vpanel.open{display:flex}
+.vph{padding:10px 14px;background:linear-gradient(135deg,#0F1E3D,#1B2D5B);display:flex;align-items:center;gap:9px;color:#fff}
+.vpc{padding:12px 14px;display:flex;flex-direction:column;gap:9px}
+.vst{text-align:center;padding:10px;background:var(--bg);border-radius:var(--r);font-size:12px;color:var(--text2);min-height:44px;display:flex;align-items:center;justify-content:center}
+.vst.rec{color:var(--red);font-weight:600}
+.vtr{background:var(--bg);border:1.5px solid var(--border);border-radius:var(--r);padding:8px 10px;font-size:12px;color:var(--text);min-height:44px;font-style:italic;display:none}
+.vprev{background:var(--accbg);border:1.5px solid var(--acc);border-radius:var(--r);padding:10px;display:none}
+.vrow{display:flex;gap:5px;margin-bottom:4px}
+.vlbl{font-size:10px;color:var(--text3);text-transform:uppercase;width:65px;flex-shrink:0;margin-top:2px}
+.vval{font-size:12px;color:var(--text);font-weight:500;flex:1}
+.vhint{font-size:11px;color:var(--text3);text-align:center;line-height:1.4}
+.toast{position:fixed;bottom:1.4rem;right:1.4rem;background:var(--navy);color:#fff;padding:9px 14px;border-radius:var(--r);font-size:13px;z-index:999;transform:translateY(60px);opacity:0;transition:all .3s;pointer-events:none;border-left:3px solid var(--acc);max-width:300px}
+.toast.show{transform:translateY(0);opacity:1}
+.gc{background:var(--card);border:1.5px solid var(--border);border-radius:var(--rl);padding:.9rem;box-shadow:var(--sh);display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.gc.ok{border-color:var(--green)}
+.empty{text-align:center;padding:3rem 2rem;color:var(--text2)}
+.empty .ti{font-size:40px;color:var(--acc);opacity:.3;display:block;margin-bottom:10px}
+.empty-t{font-size:15px;font-weight:500;color:var(--navy);margin-bottom:4px}
+@media(max-width:768px){.sb{display:none}.mets{grid-template-columns:1fr 1fr}.grid{grid-template-columns:1fr}.fgr{grid-template-columns:1fr}.cnt{padding:1rem}}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(74,156,199,.4);border-radius:2px}
+@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="sb">
+  <div class="sb-logo"><div class="sb-icon">🏛</div><div><div class="sb-name">Phénix-Architecte</div><div class="sb-sub">Annuaire Artisans</div></div></div>
+  <div class="sb-sep">Navigation</div>
+  <div class="sb-it on" onclick="goPage('ann',this)"><i class="ti ti-address-book"></i> Annuaire <span class="sb-badge" id="nb-tot">0</span></div>
+  <div class="sb-it" onclick="goPage('fav',this)"><i class="ti ti-star"></i> Favoris <span class="sb-badge" id="nb-fav">0</span></div>
+  <div class="sb-it" onclick="goPage('ch',this)"><i class="ti ti-map-search"></i> Recherche chantier</div>
+  <div class="sb-sep">Métiers</div>
+  <div id="sb-mets"></div>
+  <div class="sb-sep">Données</div>
+  <div class="sb-it" onclick="exportJ()"><i class="ti ti-download"></i> Exporter</div>
+  <div class="sb-it" onclick="document.getElementById('imp').click()"><i class="ti ti-upload"></i> Importer</div>
+  <input type="file" id="imp" accept=".json" style="display:none" onchange="importJ(event)">
+  <div class="sb-bot"><span class="sdot" id="sdot"></span><span id="slbl">Synchronisé</span><div style="margin-top:3px">Phénix-Architecte © 2025</div></div>
+</aside>
+<div class="main">
+  <div class="topbar"><div class="tb-title" id="tb-title">Annuaire Artisans</div><button class="btn btn-p" onclick="openAdd()"><i class="ti ti-plus"></i> Nouvel artisan</button></div>
+  <div class="cnt">
+
+    <!-- ANNUAIRE -->
+    <div class="pg on" id="pg-ann">
+      <div class="ph"><div class="ph-t">Annuaire Artisans</div><div class="ph-s" id="ann-sub">Chargement…</div><div class="ph-l"></div></div>
+      <div class="mets">
+        <div class="met"><div class="met-lbl">Total</div><div class="met-val" id="m-tot">0</div></div>
+        <div class="met g"><div class="met-lbl">Favoris</div><div class="met-val" id="m-fav">0</div></div>
+        <div class="met a"><div class="met-lbl">Métiers</div><div class="met-val" id="m-met">0</div></div>
+        <div class="met"><div class="met-lbl">Communes</div><div class="met-val" id="m-com">0</div></div>
+      </div>
+      <div class="card" style="margin-bottom:1.25rem">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <div class="sb2" style="min-width:200px"><i class="ti ti-search" style="color:var(--text3)"></i><input type="text" id="q" placeholder="Rechercher…" oninput="renderAnn()"></div>
+          <select class="fs" id="fmet" onchange="renderAnn()"><option value="">Tous les métiers</option></select>
+          <select class="fs" id="fnote" onchange="renderAnn()"><option value="">Toutes notes</option><option value="5">★★★★★</option><option value="4">★★★★+</option><option value="3">★★★+</option></select>
+          <select class="fs" id="fdispo" onchange="renderAnn()"><option value="">Toute dispo</option><option value="disponible">Disponible</option><option value="occupe">Occupé</option><option value="contactez">À contacter</option></select>
+        </div>
+      </div>
+      <div class="grid" id="ann-grid"></div>
+    </div>
+
+    <!-- FAVORIS -->
+    <div class="pg" id="pg-fav">
+      <div class="ph"><div class="ph-t">Favoris</div><div class="ph-s">Vos artisans de confiance</div><div class="ph-l"></div></div>
+      <div class="grid" id="fav-grid"></div>
+    </div>
+
+    <!-- CHANTIER -->
+    <div class="pg" id="pg-ch">
+      <div class="ph"><div class="ph-t">Sélection pour un Chantier</div><div class="ph-s">Annuaire + recherche Google Places</div><div class="ph-l"></div></div>
+      <div style="background:linear-gradient(135deg,#0F1E3D,#1B2D5B);border-radius:var(--rl);padding:1.1rem;margin-bottom:1.1rem;display:flex;align-items:center;gap:12px">
+        <button id="ch-mic" onclick="startChV()" style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#4A9CC7,#2A5298);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;color:#fff;flex-shrink:0">🎙️</button>
+        <div style="flex:1"><div style="font-size:10px;color:rgba(74,156,199,.8);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px">Dictez votre besoin</div><div id="ch-vs" style="font-size:13px;color:rgba(255,255,255,.65);font-style:italic">"Électricien à Riom budget serré disponible"</div></div>
+        <button onclick="resetChV()" style="background:none;border:none;color:rgba(255,255,255,.35);font-size:16px;cursor:pointer">✕</button>
+      </div>
+      <div class="card" style="margin-bottom:1.1rem">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);margin-bottom:.75rem">Paramètres du chantier</div>
+        <div class="fgr">
+          <div class="fg"><label>Projet / Client</label><input type="text" id="ch-pro" placeholder="Maison Dupont…" oninput="renderCh()"></div>
+          <div class="fg"><label>Lieu du chantier</label><input type="text" id="ch-lieu" placeholder="Riom, Clermont-Ferrand…" oninput="renderCh()"></div>
+          <div class="fg"><label>Corps de métier</label><select id="ch-met" onchange="renderCh()"><option value="">Tous</option></select></div>
+          <div class="fg"><label>Budget</label><select id="ch-bud" onchange="renderCh()"><option value="">Tous budgets</option><option value="serre">💚 Serré</option><option value="moyen">💛 Moyen</option><option value="confortable">🔴 Confortable</option></select></div>
+          <div class="fg"><label>Disponibilité</label><select id="ch-dis" onchange="renderCh()"><option value="">Peu importe</option><option value="disponible">Disponible</option><option value="contactez">À contacter</option></select></div>
+          <div class="fg"><label>Trier par</label><select id="ch-tri" onchange="renderCh()"><option value="score">⚡ Score global</option><option value="note">⭐ Note</option><option value="dispo">✅ Disponibilité</option><option value="tarif">💚 Tarif</option><option value="fav">🤝 Favoris</option></select></div>
+        </div>
+      </div>
+      <div id="ch-res"></div>
+      <div style="display:flex;align-items:center;gap:12px;margin:1.5rem 0"><div style="flex:1;height:1px;background:var(--border)"></div><div style="font-size:12px;color:var(--text3);font-weight:600;white-space:nowrap">ou trouver de nouveaux artisans</div><div style="flex:1;height:1px;background:var(--border)"></div></div>
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;gap:10px;flex-wrap:wrap">
+          <div><div style="font-size:13px;font-weight:600;color:var(--navy);display:flex;align-items:center;gap:7px"><i class="ti ti-brand-google" style="color:#4285F4;font-size:16px"></i> Recherche Google Places</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Trouvez de nouveaux artisans et ajoutez-les en un clic</div></div>
+          <button id="btn-g" class="btn btn-p" onclick="lancerG()" disabled title="Chargement…"><i class="ti ti-search"></i> Rechercher sur Google</button>
+        </div>
+        <div id="g-res"><div class="empty"><i class="ti ti-map-search"></i><div class="empty-t">Sélectionnez un métier et un lieu</div><div style="font-size:12px">puis cliquez "Rechercher sur Google"</div></div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<!-- MODAL -->
+<div class="ov" id="ov">
+  <div class="modal">
+    <div class="mh"><div class="mh-t" id="m-title">Nouvel artisan</div><button class="btn btn-i" onclick="closeM()"><i class="ti ti-x"></i></button></div>
+    <div class="mb">
+      <div class="fgr">
+        <div class="fsep">Identité</div>
+        <div class="fg"><label>Prénom & Nom *</label><input id="f-nom" placeholder="Jean Dupont"></div>
+        <div class="fg"><label>Entreprise</label><input id="f-ent" placeholder="SARL Dupont BTP"></div>
+        <div class="fg"><label>Corps de métier *</label><select id="f-met"><option value="">— Choisir —</option><option>Maçonnerie</option><option>Charpente</option><option>Couverture</option><option>Plomberie</option><option>Électricité</option><option>Menuiserie</option><option>Carrelage</option><option>Peinture</option><option>Isolation</option><option>Plâtrerie</option><option>Terrassement</option><option>Serrurerie / Métallerie</option><option>Chauffage / CVC</option><option>Démolition</option><option>Génie civil</option><option>VRD</option><option>Autre</option></select></div>
+        <div class="fg"><label>Spécialité</label><input id="f-spe" placeholder="Rénovation ancienne…"></div>
+        <div class="fsep">Contact</div>
+        <div class="fg"><label>Téléphone</label><input id="f-tel" type="tel" placeholder="06 12 34 56 78"></div>
+        <div class="fg"><label>Email</label><input id="f-email" type="email" placeholder="contact@…"></div>
+        <div class="fsep">Localisation</div>
+        <div class="fg"><label>Ville *</label><input id="f-vil" placeholder="Clermont-Ferrand"></div>
+        <div class="fg"><label>Rayon (km)</label><input id="f-ray" type="number" placeholder="50"></div>
+        <div class="fg full"><label>Zones d'intervention</label><input id="f-zon" placeholder="63, 03, 15 — Puy-de-Dôme, Allier…"></div>
+        <div class="fsep">Évaluation</div>
+        <div class="fg"><label>Note de confiance</label><div class="ns" id="ns"><span class="nst" onclick="setN(1)">★</span><span class="nst" onclick="setN(2)">★</span><span class="nst" onclick="setN(3)">★</span><span class="nst" onclick="setN(4)">★</span><span class="nst" onclick="setN(5)">★</span></div></div>
+        <div class="fg"><label>Disponibilité</label><select id="f-dis"><option value="contactez">À contacter</option><option value="disponible">Disponible</option><option value="occupe">Occupé</option></select></div>
+        <div class="fg"><label>Tarif</label><select id="f-tar"><option value="">Non renseigné</option><option value="economique">💚 Économique</option><option value="moyen">💛 Moyen</option><option value="premium">🔴 Premium</option></select></div>
+        <div class="fg"><label>Favori</label><select id="f-fav"><option value="0">Non</option><option value="1">⭐ Oui</option></select></div>
+        <div class="fsep">Notes</div>
+        <div class="fg full"><label>Commentaires</label><textarea id="f-not" rows="3" style="resize:vertical" placeholder="Qualité, ponctualité…"></textarea></div>
+        <div class="fg"><label>Chantiers ensemble</label><input id="f-nbc" type="number" placeholder="0"></div>
+        <div class="fg"><label>Dernier chantier</label><input id="f-lst" placeholder="Maison Martin 2024"></div>
+      </div>
+    </div>
+    <div class="mf"><button class="btn btn-d btn-sm" id="btn-del" style="display:none;margin-right:auto" onclick="delA()"><i class="ti ti-trash"></i> Supprimer</button><button class="btn" onclick="closeM()">Annuler</button><button class="btn btn-p" onclick="saveA()"><i class="ti ti-check"></i> Enregistrer</button></div>
+  </div>
+</div>
+
+<button id="vfab" onclick="toggleVP()" title="Ajouter un artisan par la voix">🎙️</button>
+<div id="vpanel">
+  <div class="vph"><span style="font-size:16px;color:var(--acc)">🎙️</span><span style="font-size:13px;font-weight:600;flex:1">Artisan vocal</span><button style="background:none;border:none;color:rgba(255,255,255,.5);font-size:16px;cursor:pointer" onclick="closeVP()">✕</button></div>
+  <div class="vpc">
+    <div class="vst" id="vp-st">Appuyez sur écouter et dictez les infos</div>
+    <div class="vtr" id="vp-tr"></div>
+    <div class="vprev" id="vp-prev"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--navy);margin-bottom:6px">✨ Artisan détecté</div><div id="vp-pc"></div></div>
+    <div style="display:flex;gap:7px"><button class="btn btn-p" id="vp-mic" onclick="startVP()" style="flex:1"><i class="ti ti-microphone"></i> <span id="vp-lbl">Écouter</span></button><button class="btn btn-s" id="vp-ok" onclick="confirmVP()" style="display:none;flex:1"><i class="ti ti-check"></i> Créer</button></div>
+    <div style="display:flex;gap:7px" id="vp-a2" style="display:none"><button class="btn" onclick="resetVP()" style="flex:1"><i class="ti ti-refresh"></i> Recommencer</button><button class="btn btn-p" onclick="openVPM()" style="flex:1"><i class="ti ti-edit"></i> Compléter</button></div>
+    <div class="vhint" id="vp-hint">💡 Ex : <em>"Jean Dupont électricien Riom disponible favori note 5"</em></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+let arts=[],_eid=null,_note=0,_vp=null,_vr=null,_vl=false,_gc=[],_cvr=null,_cvl=false;
+const MC={'Maçonnerie':'#8B4513','Charpente':'#6B3E26','Couverture':'#1B2D5B','Plomberie':'#1a7abf','Électricité':'#E6A817','Menuiserie':'#7B5E3A','Carrelage':'#4A9CC7','Peinture':'#8A2BE2','Isolation':'#2D7A4F','Plâtrerie':'#C0A060','Terrassement':'#5A4A3A','Serrurerie / Métallerie':'#607080','Chauffage / CVC':'#C0392B','Démolition':'#4A4A4A','Génie civil':'#2A5298','VRD':'#3A7A50','Autre':'#8BA5C0'};
+const MK={'Maçonnerie':'maçon maçonnerie','Charpente':'charpentier charpente','Couverture':'couvreur toiture','Plomberie':'plombier plomberie','Électricité':'électricien électricité','Menuiserie':'menuisier menuiserie','Carrelage':'carreleur carrelage','Peinture':'peintre peinture bâtiment','Isolation':'isolation thermique','Plâtrerie':'plâtrier plâtrerie','Terrassement':'terrassement','Serrurerie / Métallerie':'serrurier métallerie','Chauffage / CVC':'chauffagiste CVC','Démolition':'démolition','Génie civil':'génie civil BTP','VRD':'VRD voirie'};
+const mc=m=>MC[m]||'#4A9CC7';
+const ini=n=>(n||'').split(' ').map(w=>w[0]||'').slice(0,2).join('').toUpperCase()||'?';
+
+function initFB(){const t=setInterval(()=>{if(window._fb){clearInterval(t);window._fb.listen(l=>{arts=l;renderAll();sync(false);});}},200);}
+function sync(on){document.getElementById('sdot').className='sdot'+(on?' s':'');document.getElementById('slbl').textContent=on?'Enregistrement…':'Synchronisé';}
+
+function goPage(id,el){document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));document.querySelectorAll('.sb-it').forEach(i=>i.classList.remove('on'));document.getElementById('pg-'+id).classList.add('on');if(el)el.classList.add('on');const T={ann:'Annuaire Artisans',fav:'Favoris',ch:'Sélection Chantier'};document.getElementById('tb-title').textContent=T[id]||'';if(id==='fav')renderFav();if(id==='ch'){popChMet();renderCh();}}
+
+function renderAll(){const tot=arts.length,fav=arts.filter(a=>a.favori==1).length,met=[...new Set(arts.map(a=>a.metier).filter(Boolean))].length,com=[...new Set(arts.map(a=>a.ville).filter(Boolean))].length;['m-tot','m-fav','m-met','m-com','nb-tot','nb-fav'].forEach((id,i)=>{const vals=[tot,fav,met,com,tot,fav];document.getElementById(id).textContent=vals[i];});document.getElementById('ann-sub').textContent=tot+' artisan'+(tot!==1?'s':'')+' · '+met+' corps de métier';renderAnn();renderSbMet();popFMet();}
+
+function renderSbMet(){const mets=[...new Set(arts.map(a=>a.metier).filter(Boolean))].sort();document.getElementById('sb-mets').innerHTML=mets.map(m=>{const n=arts.filter(a=>a.metier===m).length;return`<div class="sb-it" onclick="filMet('${m}')"><span class="sb-dot" style="background:${mc(m)}"></span>${m}<span class="sb-badge">${n}</span></div>`;}).join('');}
+function popFMet(){const s=document.getElementById('fmet'),cur=s.value,mets=[...new Set(arts.map(a=>a.metier).filter(Boolean))].sort();s.innerHTML='<option value="">Tous les métiers</option>'+mets.map(m=>`<option${m===cur?' selected':''}>${m}</option>`).join('');}
+function filMet(m){document.getElementById('fmet').value=m;goPage('ann',document.querySelector('.sb-it'));renderAnn();}
+
+function renderAnn(){const q=(document.getElementById('q').value||'').toLowerCase(),met=document.getElementById('fmet').value,note=parseInt(document.getElementById('fnote').value)||0,dispo=document.getElementById('fdispo').value;let l=arts.filter(a=>{if(q&&![(a.nom||''),(a.entreprise||''),(a.ville||''),(a.metier||'')].some(v=>v.toLowerCase().includes(q)))return false;if(met&&a.metier!==met)return false;if(note&&(parseInt(a.note)||0)<note)return false;if(dispo&&a.dispo!==dispo)return false;return true;});l.sort((a,b)=>(b.favori||0)-(a.favori||0)||(parseInt(b.note)||0)-(parseInt(a.note)||0));document.getElementById('ann-grid').innerHTML=l.length?l.map(a=>cHtml(a)).join(''):`<div class="empty" style="grid-column:1/-1"><i class="ti ti-address-book"></i><div class="empty-t">Aucun artisan</div><div style="font-size:12px">Ajoutez votre premier artisan</div></div>`;}
+function renderFav(){const l=arts.filter(a=>a.favori==1).sort((a,b)=>(parseInt(b.note)||0)-(parseInt(a.note)||0));document.getElementById('fav-grid').innerHTML=l.length?l.map(a=>cHtml(a)).join(''):`<div class="empty" style="grid-column:1/-1"><i class="ti ti-star"></i><div class="empty-t">Aucun favori</div></div>`;}
+
+function cHtml(a){const col=mc(a.metier);return`<div class="ac" onclick="openEdit('${a.id}')">${a.favori==1?'<span class="fb">⭐</span>':''}<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px"><div class="av" style="background:linear-gradient(135deg,${col},${col}99)">${ini(a.nom)}</div><div style="flex:1;min-width:0"><div class="ac-nom">${a.nom||'—'}</div><div class="ac-ent">${a.entreprise||'Artisan indépendant'}</div><div class="mt"><span style="width:6px;height:6px;border-radius:50%;background:${col};display:inline-block"></span>${a.metier||'—'}</div></div></div><div>${a.ville?`<div class="ac-row"><i class="ti ti-map-pin"></i>${a.ville}${a.rayon?' · '+a.rayon+' km':''}</div>`:''} ${a.tel?`<div class="ac-row"><i class="ti ti-phone"></i>${a.tel}</div>`:''}</div><div class="ac-ft"><div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">${stH(a.note)}${disH(a.dispo)}${tarH(a.tarif)}</div><div style="display:flex;gap:3px" onclick="event.stopPropagation()">${a.tel?`<a href="tel:${a.tel}" class="btn btn-sm btn-i"><i class="ti ti-phone"></i></a>`:''}<button class="btn btn-sm btn-i" onclick="togFav('${a.id}')"><i class="ti ti-star${a.favori==1?'-filled':''}"></i></button></div></div></div>`;}
+
+function calcSc(a,lieu,bud){let s=0;const d=[];if(a.favori==1){s+=2;d.push({i:'🤝',l:'Favori',p:2});}const n=parseInt(a.note)||0;if(n>0){const p=Math.round(n/5*2*10)/10;s+=p;d.push({i:'⭐',l:n+'★',p});}if(a.dispo==='disponible'){s+=2;d.push({i:'✅',l:'Dispo',p:2});}else if(a.dispo==='contactez')s+=0.5;if(lieu){const l=lieu.toLowerCase();if((a.ville||'').toLowerCase().includes(l)){s+=2;d.push({i:'📍',l:'Même zone',p:2});}else if((a.zones||'').toLowerCase().includes(l)){s+=1;d.push({i:'📍',l:'Zone proche',p:1});}}else s+=1;if(bud==='serre'){if(a.tarif==='economique'){s+=2;d.push({i:'💚',l:'Tarif ok',p:2});}else if(a.tarif==='premium')s-=1;else s+=1;}else if(bud==='moyen'){if(!a.tarif||a.tarif==='moyen'){s+=2;d.push({i:'💚',l:'Tarif ok',p:2});}else s+=1;}else if(bud==='confortable'){if(a.tarif==='premium'){s+=2;d.push({i:'💚',l:'Tarif ok',p:2});}else s+=1;}else s+=1;return{score:Math.min(Math.max(Math.round(s*10)/10,0),10),details:d};}
+const scC=s=>s>=8?'#2D7A4F':s>=6?'#4A9CC7':s>=4?'#8A6020':'#C0392B';
+
+function popChMet(){const s=document.getElementById('ch-met'),mets=[...new Set(arts.map(a=>a.metier).filter(Boolean))].sort();s.innerHTML='<option value="">Tous</option>'+mets.map(m=>`<option>${m}</option>`).join('');}
+
+function renderCh(){const lieu=(document.getElementById('ch-lieu').value||'').toLowerCase(),met=document.getElementById('ch-met').value,bud=document.getElementById('ch-bud').value,dis=document.getElementById('ch-dis').value,tri=document.getElementById('ch-tri').value,pro=(document.getElementById('ch-pro').value||'').trim();let l=arts.filter(a=>{if(met&&a.metier!==met)return false;if(dis&&a.dispo!==dis)return false;if(bud==='serre'&&a.tarif==='premium')return false;if(lieu){const iv=(a.ville||'').toLowerCase().includes(lieu),iz=(a.zones||'').toLowerCase().includes(lieu);if(!iv&&!iz)return false;}return true;});const sc=l.map(a=>{const r=calcSc(a,lieu,bud);return{a,...r};});sc.sort((x,y)=>{if(tri==='note')return(parseInt(y.a.note)||0)-(parseInt(x.a.note)||0);if(tri==='dispo')return(y.a.dispo==='disponible'?1:0)-(x.a.dispo==='disponible'?1:0)||y.score-x.score;if(tri==='tarif')return['economique','moyen','premium',''].indexOf(x.a.tarif)-['economique','moyen','premium',''].indexOf(y.a.tarif)||y.score-x.score;if(tri==='fav')return(y.a.favori||0)-(x.a.favori||0)||y.score-x.score;return y.score-x.score;});const div=document.getElementById('ch-res');if(!sc.length){div.innerHTML=`<div class="card" style="margin-bottom:1rem"><div class="empty"><i class="ti ti-address-book"></i><div class="empty-t">Aucun artisan dans votre annuaire</div><div style="font-size:12px">Utilisez la recherche Google ci-dessous</div></div></div>`;return;}const pl=pro?` — <span style="color:var(--acc)">${pro}</span>`:'';div.innerHTML=`<div class="card" style="margin-bottom:1rem"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px"><div style="font-size:13px;font-weight:600;color:var(--navy)">${sc.length} artisan${sc.length>1?'s':''}${pl}</div><div style="display:flex;flex-wrap:wrap;gap:6px;font-size:11px;color:var(--text3)"><span>🤝 Favori +2</span><span>⭐ Note +2</span><span>✅ Dispo +2</span><span>📍 Zone +2</span><span>💚 Tarif +2</span></div></div><div class="grid">${sc.map(({a,score,details})=>scCard(a,score,details)).join('')}</div></div>`;}
+
+function scCard(a,score,details){const col=mc(a.metier),pct=(score/10)*100,dt=details.map(d=>`<span class="stag">${d.i} ${d.l} <b>+${d.p}</b></span>`).join('');return`<div class="ac" onclick="openEdit('${a.id}')">${a.favori==1?'<span class="fb">⭐</span>':''}<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><div style="display:flex;align-items:center;gap:9px"><div class="av" style="background:linear-gradient(135deg,${col},${col}99);width:38px;height:38px;font-size:14px">${ini(a.nom)}</div><div><div class="ac-nom" style="font-size:14px">${a.nom||'—'}</div><div class="ac-ent">${a.entreprise||'Indépendant'}</div></div></div><div style="text-align:right;flex-shrink:0"><div style="font-family:var(--sf);font-size:20px;color:${scC(score)};line-height:1">${score}</div><div style="font-size:9px;color:var(--text3)">/10</div></div></div><div class="sbar"><div class="sfill" style="width:${pct}%;background:${scC(score)}"></div></div><div class="stags">${dt}</div><div class="mt" style="margin-bottom:6px"><span style="width:6px;height:6px;border-radius:50%;background:${col};display:inline-block"></span>${a.metier||'—'}</div>${a.ville?`<div class="ac-row"><i class="ti ti-map-pin"></i>${a.ville}</div>`:''} ${a.tel?`<div class="ac-row"><i class="ti ti-phone"></i>${a.tel}</div>`:''}<div class="ac-ft"><div style="display:flex;gap:5px;align-items:center">${stH(a.note)}${disH(a.dispo)}</div><div style="display:flex;gap:3px" onclick="event.stopPropagation()">${a.tel?`<a href="tel:${a.tel}" class="btn btn-sm btn-i"><i class="ti ti-phone"></i></a>`:''}<button class="btn btn-sm btn-i" onclick="togFav('${a.id}')"><i class="ti ti-star${a.favori==1?'-filled':''}"></i></button></div></div></div>`;}
+
+function lancerG(){const met=document.getElementById('ch-met').value,lieu=document.getElementById('ch-lieu').value.trim();if(!met){toast('⚠️ Sélectionnez un corps de métier');return;}if(!lieu){toast('⚠️ Saisissez un lieu');return;}if(!window._gReady){toast('⚠️ Google Maps charge, réessayez dans 2s');return;}const btn=document.getElementById('btn-g');btn.disabled=true;btn.innerHTML='<i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Recherche…';const kw=(MK[met]||met)+' '+lieu;new google.maps.places.PlacesService(document.createElement('div')).textSearch({query:kw,region:'fr'},(res,st)=>{btn.disabled=false;btn.innerHTML='<i class="ti ti-search"></i> Rechercher sur Google';if(st===google.maps.places.PlacesServiceStatus.OK&&res&&res.length){_gc=res.slice(0,8).map(r=>g2a(r,met));renderG(met,lieu);}else{document.getElementById('g-res').innerHTML=`<div class="empty"><i class="ti ti-map-search"></i><div class="empty-t">Aucun résultat</div><div style="font-size:12px">Essayez : "Vichy", "Moulins", "Thiers"…</div></div>`;}});}
+
+function g2a(p,met){const addr=p.formatted_address||'',parts=addr.split(','),vil=parts.length>=2?parts[parts.length-2].trim().replace(/\d{5}\s*/g,''):'';return{_pid:p.place_id,nom:p.name,entreprise:p.name,metier:met,ville:vil,adresse:addr,tel:'',note:p.rating?Math.round(p.rating):0,noteG:p.rating||0,avisG:p.user_ratings_total||0,dispo:'contactez',favori:0};}
+
+function renderG(met,lieu){document.getElementById('g-res').innerHTML=`<div style="font-size:12px;color:var(--text3);margin-bottom:10px;display:flex;align-items:center;gap:6px"><i class="ti ti-brand-google" style="color:#4285F4"></i>${_gc.length} résultats · cliquez ➕ pour ajouter à votre annuaire</div>`+_gc.map((a,i)=>{const col=mc(a.metier),deja=arts.some(x=>x._pid===a._pid||x.nom===a.nom),stars=a.noteG?'★'.repeat(Math.round(a.noteG))+'☆'.repeat(5-Math.round(a.noteG)):'';return`<div class="gc${deja?' ok':''}"><div class="av" style="background:linear-gradient(135deg,${col},${col}99);width:40px;height:40px;flex-shrink:0">${ini(a.nom)}</div><div style="flex:1;min-width:0"><div style="font-family:var(--sf);font-size:14px;color:var(--navy)">${a.nom}</div><div style="font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.adresse}</div>${a.noteG?`<div style="font-size:11px;color:#F5A623">${stars} <span style="color:var(--text3)">${a.noteG}/5 · ${a.avisG} avis</span></div>`:''}</div><div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0">${deja?`<span style="font-size:11px;color:var(--green);font-weight:600">✅ Ajouté</span>`:`<button class="btn btn-p btn-sm" onclick="addG(${i})"><i class="ti ti-plus"></i> Ajouter</button>`}<a href="https://www.google.com/maps/place/?q=place_id:${a._pid}" target="_blank" class="btn btn-sm"><i class="ti ti-map-pin"></i> Maps</a></div></div>`;}).join('');}
+
+async function addG(i){const g=_gc[i];if(!g)return;await new Promise(r=>{new google.maps.places.PlacesService(document.createElement('div')).getDetails({placeId:g._pid,fields:['formatted_phone_number']},(p,s)=>{if(s===google.maps.places.PlacesServiceStatus.OK&&p)g.tel=p.formatted_phone_number||'';r();});});const a={id:'art-g-'+Date.now(),nom:g.nom,entreprise:g.entreprise,metier:g.metier,ville:g.ville,adresse:g.adresse,tel:g.tel,email:'',rayon:'',zones:'',note:g.note,dispo:'contactez',tarif:'',favori:0,specialite:'',notes:`Google Places le ${new Date().toLocaleDateString('fr-FR')}. ${g.avisG} avis (${g.noteG}/5).`,nbChantiers:'',dernierChantier:'',_pid:g._pid,source:'google',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};sync(true);await window._fb.save(a);toast('✅ '+a.nom+' ajouté !');const met=document.getElementById('ch-met').value,lieu=document.getElementById('ch-lieu').value.trim();renderG(met,lieu);}
+
+function startChV(){if(_cvl){stopChV();return;}if(!('webkitSpeechRecognition' in window)&&!('SpeechRecognition' in window)){document.getElementById('ch-vs').textContent='⚠️ Utilisez Chrome';return;}const SR=window.SpeechRecognition||window.webkitSpeechRecognition;_cvr=new SR();_cvr.lang='fr-FR';_cvr.continuous=false;_cvr.interimResults=true;_cvr.onstart=()=>{_cvl=true;const b=document.getElementById('ch-mic');b.style.background='linear-gradient(135deg,#C0392B,#E74C3C)';b.textContent='⏹️';document.getElementById('ch-vs').textContent='🔴 Écoute…';};_cvr.onresult=e=>{const t=Array.from(e.results).map(r=>r[0].transcript).join('');document.getElementById('ch-vs').textContent=t;if(e.results[0].isFinal)parseChV(t);};_cvr.onerror=e=>{stopChV();document.getElementById('ch-vs').textContent='⚠️ '+e.error;};_cvr.onend=()=>stopChV();_cvr.start();}
+function stopChV(){if(_cvr){try{_cvr.stop();}catch(e){}_cvr=null;}_cvl=false;const b=document.getElementById('ch-mic');if(b){b.style.background='linear-gradient(135deg,#4A9CC7,#2A5298)';b.textContent='🎙️';}}
+function resetChV(){stopChV();document.getElementById('ch-vs').textContent='"Électricien à Riom budget serré disponible"';['ch-lieu','ch-pro'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});document.getElementById('ch-met').value='';document.getElementById('ch-bud').value='';document.getElementById('ch-dis').value='';renderCh();}
+function parseChV(tx){
+  const t=tx.toLowerCase();
+  const MM={'électricien':'Électricité','electricien':'Électricité','électricité':'Électricité','electricite':'Électricité',
+    'plombier':'Plomberie','plomberie':'Plomberie',
+    'maçon':'Maçonnerie','macon':'Maçonnerie','maçonnerie':'Maçonnerie','maconnerie':'Maçonnerie','entreprise de maçonnerie':'Maçonnerie','entreprise de macon':'Maçonnerie',
+    'charpentier':'Charpente','charpente':'Charpente',
+    'couvreur':'Couverture','couverture':'Couverture','toiture':'Couverture',
+    'menuisier':'Menuiserie','menuiserie':'Menuiserie',
+    'carreleur':'Carrelage','carrelage':'Carrelage',
+    'peintre':'Peinture','peinture':'Peinture',
+    'isolation':'Isolation',
+    'plâtrier':'Plâtrerie','platrier':'Plâtrerie',
+    'terrassement':'Terrassement','terrassier':'Terrassement',
+    'chauffage':'Chauffage / CVC','chauffagiste':'Chauffage / CVC','cvc':'Chauffage / CVC',
+    'serrurier':'Serrurerie / Métallerie','serrurerie':'Serrurerie / Métallerie',
+    'démolition':'Démolition','demolition':'Démolition',
+    'génie civil':'Génie civil','genie civil':'Génie civil',
+    'vrd':'VRD'};
+  // Trier les clés par longueur décroissante pour matcher les plus longs en premier
+  let met='';
+  const keys=Object.keys(MM).sort((a,b)=>b.length-a.length);
+  for(const k of keys){if(t.includes(k)){met=MM[k];break;}}
+
+  let bud='';
+  if(/serré|économique|pas cher|petit budget/.test(t))bud='serre';
+  else if(/confortable|premium|haut de gamme/.test(t))bud='confortable';
+  else if(/moyen|standard/.test(t))bud='moyen';
+
+  let dis='';
+  if(/disponible/.test(t))dis='disponible';
+
+  // Rayon en km
+  let rayon='';
+  const rm=t.match(/(\d+)\s*km/);
+  if(rm)rayon=rm[1];
+
+  // Lieu : chercher après "à", "près de", "autour de", "dans le", numéro de département
+  let lieu='';
+  // Département (ex: "dans le 03", "dans le 63")
+  const dm=t.match(/dans\s+le\s+(\d{2,3})/);
+  if(dm){
+    const depts={'03':'Allier','15':'Cantal','43':'Haute-Loire','63':'Puy-de-Dôme','42':'Loire','69':'Rhône','71':'Saône-et-Loire','23':'Creuse','19':'Corrèze','48':'Lozère','07':'Ardèche'};
+    lieu=depts[dm[1]]||dm[1];
+  }
+  // Ville après "à"
+  const lm=tx.match(/(?:à|près de|autour de|sur)\s+([A-ZÀ-Ÿa-zàâäéèêëîïôùûüç\-]+(?:\s+[A-ZÀ-Ÿa-zàâäéèêëîïôùûüç\-]+)?)/i);
+  if(lm){
+    const ville=lm[1].trim();
+    lieu=lieu?ville+', '+lieu:ville;
+  }
+
+  // Appliquer les filtres
+  if(met) document.getElementById('ch-met').value=met;
+  if(bud) document.getElementById('ch-bud').value=bud;
+  if(dis) document.getElementById('ch-dis').value=dis;
+  if(lieu)document.getElementById('ch-lieu').value=lieu;
+
+  // Mettre à jour le statut avec ce qui a été compris
+  const resume=[];
+  if(met)  resume.push('📍 '+met);
+  if(lieu) resume.push('📌 '+lieu);
+  if(rayon)resume.push('🔄 '+rayon+' km');
+  if(bud)  resume.push('💰 '+bud);
+  document.getElementById('ch-vs').textContent='✅ Compris : '+resume.join(' · ');
+
+  // Lancer automatiquement la recherche Google si métier + lieu détectés
+  if(met && lieu && window._gReady){
+    setTimeout(()=>lancerGVocal(met,lieu,rayon),400);
+  } else if(met && lieu){
+    renderCh();
+    toast('⚠️ Google Maps pas encore prêt, réessayez dans 2s');
+  } else {
+    renderCh();
+    if(!met) toast('⚠️ Métier non reconnu. Ex: "maçon", "électricien"…');
+    else if(!lieu) toast('⚠️ Lieu non reconnu. Ex: "à Riom", "dans le 63"…');
+  }
+}
+
+function lancerGVocal(met, lieu, rayon){
+  document.getElementById('ch-met').value=met;
+  document.getElementById('ch-lieu').value=lieu;
+  const btn=document.getElementById('btn-g');
+  btn.disabled=true;
+  btn.innerHTML='<i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Recherche…';
+  const kw=(MK[met]||met)+' '+lieu;
+  const req={query:kw,region:'fr'};
+  // Si rayon précisé, on fait une recherche de proximité avec coordonnées approximatives
+  new google.maps.places.PlacesService(document.createElement('div')).textSearch(req,(res,st)=>{
+    btn.disabled=false;
+    btn.innerHTML='<i class="ti ti-search"></i> Rechercher sur Google';
+    if(st===google.maps.places.PlacesServiceStatus.OK&&res&&res.length){
+      // Trier par note Google décroissante
+      res.sort((a,b)=>(b.rating||0)-(a.rating||0));
+      _gc=res.slice(0,10).map(r=>g2a(r,met));
+      renderG(met,lieu);
+      // Scroller vers les résultats Google
+      setTimeout(()=>{
+        const el=document.getElementById('g-res');
+        if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
+      },300);
+      toast('🎙️ '+_gc.length+' artisans trouvés près de '+lieu);
+    }else{
+      document.getElementById('g-res').innerHTML=`<div class="empty"><i class="ti ti-map-search"></i><div class="empty-t">Aucun résultat pour "${met}" près de "${lieu}"</div><div style="font-size:12px">Essayez une ville plus grande proche</div></div>`;
+    }
+  });
+}
+
+function openAdd(){_eid=null;_note=0;document.getElementById('m-title').textContent='Nouvel artisan';document.getElementById('btn-del').style.display='none';clearF();document.getElementById('ov').classList.add('open');}
+function openEdit(id){const a=arts.find(x=>x.id===id);if(!a)return;_eid=id;_note=parseInt(a.note)||0;document.getElementById('m-title').textContent='Modifier';document.getElementById('btn-del').style.display='';const map={nom:'nom',ent:'entreprise',met:'metier',spe:'specialite',tel:'tel',email:'email',vil:'ville',ray:'rayon',zon:'zones',dis:'dispo',tar:'tarif',not:'notes',nbc:'nbChantiers',lst:'dernierChantier'};Object.entries(map).forEach(([k,v])=>{const e=document.getElementById('f-'+k);if(e)e.value=a[v]||'';});document.getElementById('f-fav').value=a.favori?'1':'0';renderNS(_note);document.getElementById('ov').classList.add('open');}
+function closeM(){document.getElementById('ov').classList.remove('open');_eid=null;}
+function clearF(){['nom','ent','spe','tel','email','vil','ray','zon','not','nbc','lst'].forEach(id=>{const e=document.getElementById('f-'+id);if(e)e.value='';});document.getElementById('f-met').value='';document.getElementById('f-dis').value='contactez';document.getElementById('f-tar').value='';document.getElementById('f-fav').value='0';_note=0;renderNS(0);}
+function setN(n){_note=n;renderNS(n);}
+function renderNS(n){document.querySelectorAll('#ns .nst').forEach((s,i)=>s.classList.toggle('on',i<n));}
+async function saveA(){const nom=document.getElementById('f-nom').value.trim(),met=document.getElementById('f-met').value;if(!nom){toast('⚠️ Nom obligatoire');return;}if(!met){toast('⚠️ Métier obligatoire');return;}const a={id:_eid||('art-'+Date.now()),nom,metier:met,entreprise:document.getElementById('f-ent').value.trim(),specialite:document.getElementById('f-spe').value.trim(),tel:document.getElementById('f-tel').value.trim(),email:document.getElementById('f-email').value.trim(),ville:document.getElementById('f-vil').value.trim(),rayon:document.getElementById('f-ray').value.trim(),zones:document.getElementById('f-zon').value.trim(),note:_note,dispo:document.getElementById('f-dis').value,tarif:document.getElementById('f-tar').value,favori:document.getElementById('f-fav').value==='1'?1:0,notes:document.getElementById('f-not').value.trim(),nbChantiers:document.getElementById('f-nbc').value,dernierChantier:document.getElementById('f-lst').value.trim(),updatedAt:new Date().toISOString()};sync(true);await window._fb.save(a);closeM();toast('✅ Artisan enregistré !');}
+async function delA(){if(!_eid||!confirm('Supprimer ?'))return;sync(true);await window._fb.del(_eid);closeM();toast('🗑️ Supprimé');}
+async function togFav(id){const a=arts.find(x=>x.id===id);if(!a)return;a.favori=a.favori==1?0:1;sync(true);await window._fb.save(a);toast(a.favori?'⭐ Favori ajouté':'Retiré des favoris');}
+
+function toggleVP(){const p=document.getElementById('vpanel');p.classList.contains('open')?closeVP():p.classList.add('open');}
+function closeVP(){stopVP();document.getElementById('vpanel').classList.remove('open');resetVP();}
+function startVP(){if(_vl){stopVP();return;}if(!('webkitSpeechRecognition' in window)&&!('SpeechRecognition' in window)){setVS('⚠️ Utilisez Chrome',false);return;}const SR=window.SpeechRecognition||window.webkitSpeechRecognition;_vr=new SR();_vr.lang='fr-FR';_vr.continuous=false;_vr.interimResults=true;_vr.onstart=()=>{_vl=true;document.getElementById('vfab').classList.add('rec');document.getElementById('vp-lbl').textContent='Arrêter';document.getElementById('vp-mic').querySelector('i').className='ti ti-microphone-off';setVS('🔴 Écoute…',true);['vp-tr','vp-prev'].forEach(id=>document.getElementById(id).style.display='none');document.getElementById('vp-ok').style.display='none';document.getElementById('vp-a2').style.display='none';document.getElementById('vp-hint').style.display='block';};_vr.onresult=e=>{const t=Array.from(e.results).map(r=>r[0].transcript).join('');const tr=document.getElementById('vp-tr');tr.style.display='block';tr.textContent=t;if(e.results[0].isFinal)parseVP(t);};_vr.onerror=e=>{_vl=false;document.getElementById('vfab').classList.remove('rec');rstVPbtn();setVS('⚠️ '+e.error,false);};_vr.onend=()=>{_vl=false;document.getElementById('vfab').classList.remove('rec');rstVPbtn();};_vr.start();}
+function stopVP(){if(_vr){try{_vr.stop();}catch(e){}_vr=null;}_vl=false;document.getElementById('vfab').classList.remove('rec');rstVPbtn();}
+function rstVPbtn(){document.getElementById('vp-lbl').textContent='Écouter';document.getElementById('vp-mic').querySelector('i').className='ti ti-microphone';}
+function setVS(m,a){const e=document.getElementById('vp-st');e.textContent=m;e.className='vst'+(a?' rec':'');}
+function parseVP(tx){const t=tx.toLowerCase(),MM={'électricien':'Électricité','electricien':'Électricité','plombier':'Plomberie','maçon':'Maçonnerie','charpentier':'Charpente','couvreur':'Couverture','menuisier':'Menuiserie','carreleur':'Carrelage','peintre':'Peinture','isolation':'Isolation','plâtrier':'Plâtrerie','terrassement':'Terrassement','chauffage':'Chauffage / CVC','serrurier':'Serrurerie / Métallerie'};let met='';for(const[k,v]of Object.entries(MM)){if(t.includes(k)){met=v;break;}}let note=0;const nm=t.match(/note\s+(\d)|(\d)\s+étoile/);if(nm)note=parseInt(nm[1]||nm[2])||0;if(/excellent|parfait|top/.test(t)&&!note)note=5;let dispo='contactez';if(/disponible/.test(t))dispo='disponible';else if(/occupé|chargé/.test(t))dispo='occupe';const fav=/favori|confiance|référence/.test(t)?1:0;let vil='';const vm=tx.match(/(?:à|de|sur)\s+([A-ZÀ-Ÿa-zàâäéèêëîïôùûüç\-]+)/i);if(vm)vil=vm[1].charAt(0).toUpperCase()+vm[1].slice(1).toLowerCase();const ML=Object.keys(MM);let nomTx=tx;ML.forEach(m=>{nomTx=nomTx.replace(new RegExp(m,'gi'),'');});nomTx=nomTx.replace(/disponible|occupé|favori|confiance|note\s+\d|\d\s+étoile[s]?|excellent|parfait|top/gi,'').replace(/(?:à|de|sur)\s+\S+/gi,'').replace(/\s+/g,' ').trim();const nom=nomTx?nomTx.split(' ').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' '):'';_vp={nom,met,vil,note,dispo,fav};document.getElementById('vp-pc').innerHTML=`<div class="vrow"><span class="vlbl">Nom</span><span class="vval">${nom||'<em style="color:var(--text3)">Non détecté</em>'}</span></div><div class="vrow"><span class="vlbl">Métier</span><span class="vval">${met||'<em style="color:var(--text3)">Non détecté</em>'}</span></div><div class="vrow"><span class="vlbl">Ville</span><span class="vval">${vil||'—'}</span></div><div class="vrow"><span class="vlbl">Note</span><span class="vval">${note?'★'.repeat(note):'—'}</span></div><div class="vrow"><span class="vlbl">Dispo</span><span class="vval">${disH(dispo)}</span></div><div class="vrow"><span class="vlbl">Favori</span><span class="vval">${fav?'⭐ Oui':'Non'}</span></div>`;document.getElementById('vp-prev').style.display='block';document.getElementById('vp-ok').style.display='flex';document.getElementById('vp-a2').style.display='flex';document.getElementById('vp-hint').style.display='none';setVS('✅ Confirmez ou complétez',false);}
+async function confirmVP(){if(!_vp)return;const{nom,met,vil,note,dispo,fav}=_vp;if(!nom){setVS('⚠️ Nom non détecté',false);return;}if(!met){setVS('⚠️ Métier non détecté',false);return;}const a={id:'art-v-'+Date.now(),nom,metier:met,ville:vil,note,dispo,favori:fav,entreprise:'',specialite:'',tel:'',email:'',rayon:'',zones:'',tarif:'',notes:'',nbChantiers:'',dernierChantier:'',source:'vocal',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};sync(true);await window._fb.save(a);toast('🎙️ Artisan créé : '+nom);setVS('✅ Créé !',false);['vp-prev','vp-tr'].forEach(id=>document.getElementById(id).style.display='none');document.getElementById('vp-ok').style.display='none';document.getElementById('vp-a2').style.display='none';document.getElementById('vp-hint').style.display='block';_vp=null;setTimeout(()=>setVS('Appuyez sur écouter et dictez les infos',false),2500);}
+function openVPM(){if(!_vp)return;closeVP();_eid=null;_note=_vp.note||0;document.getElementById('m-title').textContent='Compléter la fiche';document.getElementById('btn-del').style.display='none';clearF();document.getElementById('f-nom').value=_vp.nom||'';document.getElementById('f-met').value=_vp.met||'';document.getElementById('f-vil').value=_vp.vil||'';document.getElementById('f-dis').value=_vp.dispo||'contactez';document.getElementById('f-fav').value=_vp.fav?'1':'0';renderNS(_note);document.getElementById('ov').classList.add('open');_vp=null;}
+function resetVP(){stopVP();_vp=null;['vp-tr','vp-prev'].forEach(id=>{const e=document.getElementById(id);if(e){e.style.display='none';e.textContent=''}});document.getElementById('vp-ok').style.display='none';document.getElementById('vp-a2').style.display='none';document.getElementById('vp-hint').style.display='block';setVS('Appuyez sur écouter et dictez les infos',false);}
+
+function stH(n){const v=parseInt(n)||0;if(!v)return'';return`<div class="stars">${[1,2,3,4,5].map(i=>`<span class="star${i<=v?' on':''}">${i<=v?'★':'☆'}</span>`).join('')}</div>`;}
+function disH(d){if(!d)return'';const m={disponible:['var(--gbg)','var(--green)','Disponible'],occupe:['var(--rbg)','var(--red)','Occupé'],contactez:['var(--abg)','var(--amber)','À contacter']};const s=m[d]||['var(--bg2)','var(--text2)',d];return`<span style="display:inline-flex;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:600;background:${s[0]};color:${s[1]}">${s[2]}</span>`;}
+function tarH(t){const m={economique:'💚',moyen:'💛',premium:'🔴'};return t&&m[t]?`<span style="font-size:12px">${m[t]}</span>`:''}
+
+function exportJ(){const b=new Blob([JSON.stringify(arts,null,2)],{type:'application/json'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=`phenix_artisans_${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(u);toast('💾 Export téléchargé');}
+function importJ(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=async ev=>{try{const l=JSON.parse(ev.target.result);if(!Array.isArray(l))throw new Error();if(!confirm(`Importer ${l.length} artisans ?`))return;sync(true);for(const a of l)if(a.id&&a.nom)await window._fb.save(a);toast(`✅ ${l.length} artisans importés`);}catch{toast('⚠️ Fichier invalide');}};r.readAsText(f);e.target.value='';}
+
+let _tt;
+function toast(m){const e=document.getElementById('toast');e.textContent=m;e.classList.add('show');clearTimeout(_tt);_tt=setTimeout(()=>e.classList.remove('show'),3200);}
+
+document.addEventListener('DOMContentLoaded',()=>{initFB();document.getElementById('ov').addEventListener('click',e=>{if(e.target===document.getElementById('ov'))closeM();});});
+</script>
+</body>
+</html>
