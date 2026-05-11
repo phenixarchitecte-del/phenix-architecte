@@ -1,0 +1,1259 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phénix-Architecte · Annuaire Artisans</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+
+<script type="module">
+import { initializeApp }    from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getFirestore,
+         collection, doc,
+         onSnapshot,
+         setDoc, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+const firebaseConfig = {
+  apiKey:            "AIzaSyCjNKNvS6p3nqE6-_Gw9I397ZtXm2FG1ew",
+  authDomain:        "phenix-architecte-9151b.firebaseapp.com",
+  projectId:         "phenix-architecte-9151b",
+  storageBucket:     "phenix-architecte-9151b.firebasestorage.app",
+  messagingSenderId: "811231684720",
+  appId:             "1:811231684720:web:413fa324ae43c07607acb5"
+};
+
+const app = initializeApp(firebaseConfig);
+const db  = getFirestore(app);
+const ARTISANS_COL = collection(db, 'phenix_artisans');
+
+window._fbArtisans = {
+  async save(a) {
+    await setDoc(doc(db, 'phenix_artisans', String(a.id)), a);
+  },
+  async delete(id) {
+    await deleteDoc(doc(db, 'phenix_artisans', String(id)));
+  },
+  listen(callback) {
+    return onSnapshot(ARTISANS_COL, snap => {
+      const list = [];
+      snap.forEach(d => list.push(d.data()));
+      callback(list);
+    });
+  }
+};
+</script>
+
+<style>
+:root {
+  --bg:#F0F4F8; --bg2:#E4ECF3; --bg3:#D4E2EC;
+  --sidebar:#0F1E3D; --sidebar2:#1B2D5B;
+  --card:#FFFFFF;
+  --text:#0F1E3D; --text2:#4A6080; --text3:#8BA5C0;
+  --border:#C8D8E8;
+  --accent:#4A9CC7; --accent2:#2A5298; --accent-bg:#E8F4FB;
+  --navy:#1B2D5B; --navy2:#2A3F6F;
+  --green:#2D7A4F; --green-bg:#E3F5EC;
+  --amber:#8A6020; --amber-bg:#FDF3DC;
+  --red:#C0392B; --red-bg:#FDECEB;
+  --font-serif:'DM Serif Display',Georgia,serif;
+  --font-sans:'DM Sans',sans-serif;
+  --r-sm:5px; --r-md:9px; --r-lg:13px;
+  --shadow:0 1px 4px rgba(15,30,61,.07),0 1px 2px rgba(15,30,61,.04);
+  --shadow-md:0 4px 16px rgba(15,30,61,.1),0 2px 6px rgba(15,30,61,.06);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans);background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;min-height:100vh}
+
+/* ── LAYOUT ── */
+.app{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:260px;background:linear-gradient(180deg,#0F1E3D 0%,#1B2D5B 60%,#1a3060 100%);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;border-right:1px solid rgba(74,156,199,.15)}
+.main-area{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.content{flex:1;overflow-y:auto;padding:2rem}
+
+/* ── SIDEBAR ── */
+.sidebar-logo{padding:1.4rem 1.25rem 1.2rem;border-bottom:1px solid rgba(74,156,199,.18);display:flex;align-items:center;gap:10px;cursor:pointer}
+.logo-icon{width:38px;height:38px;border-radius:8px;background:linear-gradient(135deg,#4A9CC7,#2A5298);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.logo-phoenix{font-family:var(--font-serif);font-size:15px;color:#fff;letter-spacing:.02em;line-height:1.1}
+.logo-sub{font-size:9.5px;color:rgba(74,156,199,.85);letter-spacing:.12em;text-transform:uppercase;margin-top:2px}
+.nav-section{font-size:9.5px;letter-spacing:.12em;color:rgba(74,156,199,.5);padding:1.3rem 1.25rem .35rem;text-transform:uppercase;font-weight:600}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 1.25rem;font-size:13px;color:rgba(255,255,255,.55);cursor:pointer;border-left:2.5px solid transparent;transition:all .15s}
+.nav-item:hover{color:#fff;background:rgba(74,156,199,.1)}
+.nav-item.active{color:#fff;background:rgba(74,156,199,.15);border-left-color:#4A9CC7;font-weight:600}
+.nav-badge{margin-left:auto;background:rgba(74,156,199,.25);color:#4A9CC7;font-size:10px;font-weight:700;padding:1px 7px;border-radius:20px}
+.sidebar-bottom{margin-top:auto;padding:1rem 1.25rem;border-top:1px solid rgba(74,156,199,.15)}
+.sync-dot{width:8px;height:8px;border-radius:50%;background:#2D7A4F;display:inline-block;margin-right:6px}
+.sync-dot.syncing{background:#4A9CC7;animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* ── TOPBAR ── */
+.topbar{height:56px;background:#fff;border-bottom:2px solid var(--border);display:flex;align-items:center;padding:0 1.75rem;gap:12px;flex-shrink:0;box-shadow:0 1px 4px rgba(15,30,61,.05)}
+.topbar-title{font-family:var(--font-serif);font-size:19px;color:var(--navy);flex:1}
+.topbar-title::after{content:'';display:block;width:32px;height:2px;background:linear-gradient(90deg,#4A9CC7,#2A5298);border-radius:2px;margin-top:1px}
+.topbar-actions{display:flex;align-items:center;gap:8px}
+
+/* ── BOUTONS ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;font-size:13px;font-family:var(--font-sans);border-radius:var(--r-md);cursor:pointer;border:1.5px solid var(--border);background:var(--card);color:var(--text);transition:all .15s;font-weight:500;white-space:nowrap}
+.btn:hover{background:var(--bg);border-color:#4A9CC7;color:var(--navy)}
+.btn-primary{background:linear-gradient(135deg,#1B2D5B,#2A5298);color:#fff;border-color:#1B2D5B}
+.btn-primary:hover{background:linear-gradient(135deg,#4A9CC7,#2A5298);border-color:#4A9CC7}
+.btn-danger{background:var(--red-bg);color:var(--red);border-color:var(--red)}
+.btn-success{background:var(--green-bg);color:var(--green);border-color:var(--green)}
+.btn-sm{padding:4px 10px;font-size:12px}
+.btn-icon{padding:7px}
+
+/* ── RECHERCHE ── */
+.search-zone{background:var(--card);border:1.5px solid var(--border);border-radius:var(--r-lg);padding:1.25rem;margin-bottom:1.5rem;box-shadow:var(--shadow)}
+.search-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.search-input-wrap{flex:1;min-width:200px;display:flex;align-items:center;gap:8px;background:var(--bg);border:1.5px solid var(--border);border-radius:var(--r-md);padding:8px 12px}
+.search-input-wrap input{border:none;background:transparent;font-size:13px;color:var(--text);font-family:var(--font-sans);flex:1;outline:none}
+.search-input-wrap:focus-within{border-color:#4A9CC7}
+.search-input-wrap .ti{color:var(--text3);font-size:16px}
+.filter-select{padding:8px 12px;font-size:13px;border:1.5px solid var(--border);border-radius:var(--r-md);background:var(--bg);color:var(--text);font-family:var(--font-sans);cursor:pointer;outline:none}
+.filter-select:focus{border-color:#4A9CC7}
+.filter-note count{font-size:12px;color:var(--text2);margin-left:auto;white-space:nowrap}
+
+/* ── GRILLE ARTISANS ── */
+.artisans-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem}
+.artisan-card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--r-lg);padding:1.25rem;box-shadow:var(--shadow);transition:box-shadow .2s,transform .15s;cursor:pointer;position:relative}
+.artisan-card:hover{box-shadow:var(--shadow-md);transform:translateY(-2px);border-color:#4A9CC7}
+.artisan-card-top{display:flex;align-items:flex-start;gap:12px;margin-bottom:12px}
+.artisan-avatar{width:46px;height:46px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:var(--font-serif);font-size:17px;font-weight:700;color:#fff;flex-shrink:0}
+.artisan-info{flex:1;min-width:0}
+.artisan-nom{font-family:var(--font-serif);font-size:16px;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.artisan-entreprise{font-size:12px;color:var(--accent);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.artisan-metier{display:inline-flex;align-items:center;gap:4px;background:var(--accent-bg);color:var(--accent2);padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600;margin-top:4px}
+.artisan-body{display:flex;flex-direction:column;gap:5px}
+.artisan-row{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text2)}
+.artisan-row .ti{font-size:13px;color:var(--text3);flex-shrink:0}
+.artisan-footer{display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding-top:10px;border-top:1px solid var(--bg2)}
+.artisan-note{display:flex;gap:2px}
+.artisan-star{font-size:13px;color:var(--bg3)}
+.artisan-star.on{color:#F5A623}
+.artisan-actions{display:flex;gap:4px}
+.artisan-badge-fav{position:absolute;top:10px;right:10px;font-size:14px}
+
+/* ── NOTE DE CONFIANCE ── */
+.note-stars{display:flex;gap:4px}
+.note-star{font-size:20px;cursor:pointer;color:var(--bg3);transition:color .15s}
+.note-star.on{color:#F5A623}
+.note-star:hover{color:#F5A623}
+
+/* ── MODAL ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(15,30,61,.55);z-index:100;display:none;align-items:center;justify-content:center;backdrop-filter:blur(3px)}
+.modal-overlay.open{display:flex}
+.modal{background:var(--card);border-radius:var(--r-lg);width:620px;max-width:96vw;max-height:92vh;overflow:hidden;box-shadow:var(--shadow-md);border-top:3px solid #4A9CC7;display:flex;flex-direction:column}
+.modal-header{padding:1.25rem 1.5rem;border-bottom:1.5px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+.modal-title{font-family:var(--font-serif);font-size:18px;color:var(--navy)}
+.modal-body{padding:1.5rem;overflow-y:auto;flex:1}
+.modal-footer{padding:1rem 1.5rem;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;flex-shrink:0;background:var(--bg)}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.form-group{display:flex;flex-direction:column;gap:5px}
+.form-group label{font-size:11px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.06em}
+.form-group input,.form-group select,.form-group textarea{font-size:13px;padding:8px 10px;border-radius:var(--r-sm);border:1.5px solid var(--border);background:var(--bg);color:var(--text);font-family:var(--font-sans);transition:border-color .15s}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{outline:none;border-color:#4A9CC7;background:var(--card);box-shadow:0 0 0 3px rgba(74,156,199,.12)}
+.form-sep{font-size:10px;font-weight:700;color:var(--accent2);text-transform:uppercase;letter-spacing:.09em;padding:.75rem 0 .5rem;border-top:1px solid var(--border);margin-top:.25rem}
+.form-sep:first-child{border-top:none;padding-top:0}
+.form-full{grid-column:1/-1}
+
+/* ── MÉTRIQUES ── */
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:1.5rem}
+.metric{background:var(--card);border:1.5px solid var(--border);border-radius:var(--r-lg);padding:1rem 1.25rem;box-shadow:var(--shadow);border-top:3px solid #4A9CC7}
+.metric.m-green{border-top-color:var(--green)}
+.metric.m-amber{border-top-color:#F5A623}
+.metric-icon{width:30px;height:30px;border-radius:var(--r-sm);background:var(--accent-bg);display:flex;align-items:center;justify-content:center;margin-bottom:.6rem;color:var(--accent);font-size:15px}
+.metric-icon.g{background:var(--green-bg);color:var(--green)}
+.metric-icon.a{background:var(--amber-bg);color:var(--amber)}
+.metric-label{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px}
+.metric-value{font-family:var(--font-serif);font-size:24px;color:var(--navy);line-height:1.1}
+
+/* ── PAGE HEADER ── */
+.page-header{margin-bottom:1.75rem;display:flex;align-items:flex-start;justify-content:space-between;gap:1rem}
+.page-title{font-family:var(--font-serif);font-size:26px;color:var(--navy)}
+.page-subtitle{font-size:13px;color:var(--text2);margin-top:2px}
+.page-title-line{width:40px;height:3px;background:linear-gradient(90deg,#4A9CC7,#1B2D5B);border-radius:2px;margin-top:6px}
+
+/* ── VIDE ── */
+.empty-state{text-align:center;padding:4rem 2rem;color:var(--text2)}
+.empty-icon{font-size:48px;color:var(--accent);margin-bottom:12px;opacity:.35}
+.empty-title{font-size:16px;font-weight:500;color:var(--navy);margin-bottom:6px}
+.empty-sub{font-size:13px}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--navy);color:#fff;padding:10px 16px;border-radius:var(--r-md);font-size:13px;z-index:999;transform:translateY(80px);opacity:0;transition:all .3s;pointer-events:none;max-width:320px;border-left:3px solid #4A9CC7}
+.toast.show{transform:translateY(0);opacity:1}
+
+/* ── BOUTON VOCAL FLOTTANT ── */
+#vocal-fab {
+  position:fixed;bottom:24px;left:24px;width:58px;height:58px;
+  border-radius:50%;background:linear-gradient(135deg,#1B2D5B,#4A9CC7);
+  border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  font-size:22px;color:#fff;box-shadow:0 4px 18px rgba(27,45,91,.35);
+  z-index:300;transition:all .2s
+}
+#vocal-fab:hover{transform:scale(1.08)}
+#vocal-fab.listening{background:linear-gradient(135deg,#C0392B,#E74C3C);animation:vpulse 1.2s infinite}
+@keyframes vpulse{0%,100%{box-shadow:0 0 0 0 rgba(192,57,43,.5)}50%{box-shadow:0 0 0 14px rgba(192,57,43,0)}}
+
+/* ── PANEL VOCAL ── */
+#vocal-panel{
+  position:fixed;bottom:96px;left:24px;width:340px;max-width:calc(100vw - 48px);
+  background:var(--card);border:1.5px solid var(--border);border-radius:var(--r-lg);
+  box-shadow:var(--shadow-md);z-index:300;display:none;flex-direction:column;
+  overflow:hidden;border-top:3px solid #4A9CC7
+}
+#vocal-panel.open{display:flex}
+.vp-header{padding:12px 16px;background:linear-gradient(135deg,#0F1E3D,#1B2D5B);display:flex;align-items:center;gap:10px;color:#fff}
+.vp-header-icon{font-size:18px;color:#4A9CC7}
+.vp-header-title{font-size:14px;font-weight:600;flex:1}
+.vp-close{background:none;border:none;color:rgba(255,255,255,.6);font-size:18px;cursor:pointer;padding:0}
+.vp-body{padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.vp-status{text-align:center;padding:12px;background:var(--bg);border-radius:var(--r-md);font-size:13px;color:var(--text2);min-height:48px;display:flex;align-items:center;justify-content:center}
+.vp-status.active{color:var(--red);font-weight:600}
+.vp-transcript{background:var(--bg);border:1.5px solid var(--border);border-radius:var(--r-md);padding:10px 12px;font-size:13px;color:var(--text);min-height:52px;max-height:80px;overflow-y:auto;font-style:italic;display:none}
+.vp-preview{background:var(--accent-bg);border:1.5px solid #4A9CC7;border-radius:var(--r-md);padding:12px;font-size:12px;display:none}
+.vp-preview-title{font-weight:700;color:var(--navy);margin-bottom:8px;font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+.vp-row{display:flex;gap:6px;margin-bottom:5px;align-items:flex-start}
+.vp-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;width:70px;flex-shrink:0;margin-top:2px}
+.vp-val{font-size:12px;color:var(--text);font-weight:500;flex:1}
+.vp-actions{display:flex;gap:8px}
+.vp-hint{font-size:11px;color:var(--text3);text-align:center;padding:0 4px 2px;line-height:1.5}
+
+/* ── DÉTAIL ARTISAN ── */
+.detail-header{background:linear-gradient(135deg,#0F1E3D,#1B2D5B,#2A5298);border-radius:var(--r-lg);padding:1.5rem;color:#fff;margin-bottom:1.5rem;display:flex;align-items:center;gap:16px}
+.detail-avatar{width:60px;height:60px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-family:var(--font-serif);font-size:22px;font-weight:700;color:#fff;flex-shrink:0;border:2px solid rgba(74,156,199,.4)}
+.detail-nom{font-family:var(--font-serif);font-size:22px}
+.detail-entreprise{font-size:13px;opacity:.75;margin-top:2px}
+.detail-metier{margin-top:6px;display:inline-flex;align-items:center;gap:5px;background:rgba(74,156,199,.25);color:#7DC6E8;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem}
+.detail-card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--r-lg);padding:1rem;box-shadow:var(--shadow)}
+.detail-card-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:8px}
+.detail-field{display:flex;align-items:center;gap:8px;font-size:13px;padding:4px 0;border-bottom:1px solid var(--bg2)}
+.detail-field:last-child{border-bottom:none}
+.detail-field .ti{color:var(--accent);font-size:14px;flex-shrink:0}
+.chantiers-tag{display:inline-flex;align-items:center;gap:4px;background:var(--bg2);color:var(--text2);padding:2px 8px;border-radius:20px;font-size:11px;margin:2px}
+
+/* ── BADGES MÉTIER ── */
+.badge-metier{display:inline-flex;align-items:center;gap:3px;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600}
+
+/* ── PAGE TABS ── */
+.page{display:none}.page.active{display:block}
+.tabs{display:flex;border-bottom:2px solid var(--border);margin-bottom:1.25rem}
+.tab{padding:8px 16px;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;border-bottom:2.5px solid transparent;margin-bottom:-2px;transition:all .15s}
+.tab:hover{color:var(--navy)}
+.tab.active{color:var(--accent);border-bottom-color:#4A9CC7;font-weight:700}
+
+/* ── RESPONSIVE ── */
+@media(max-width:768px){
+  .sidebar{display:none}
+  .metrics{grid-template-columns:1fr 1fr}
+  .artisans-grid{grid-template-columns:1fr}
+  .form-grid{grid-template-columns:1fr}
+  .detail-grid{grid-template-columns:1fr}
+  .search-row{flex-direction:column}
+  .content{padding:1rem}
+}
+::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(74,156,199,.4);border-radius:3px}
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">🏛</div>
+      <div>
+        <div class="logo-phoenix">Phénix-Architecte</div>
+        <div class="logo-sub">Annuaire Artisans</div>
+      </div>
+    </div>
+
+    <div class="nav-section">Navigation</div>
+    <div class="nav-item active" onclick="showPage('annuaire',this)"><i class="ti ti-address-book"></i> Annuaire <span class="nav-badge" id="nb-total">0</span></div>
+    <div class="nav-item" onclick="showPage('favoris',this)"><i class="ti ti-star"></i> Favoris <span class="nav-badge" id="nb-favoris">0</span></div>
+    <div class="nav-item" onclick="showPage('recherche',this)"><i class="ti ti-map-search"></i> Recherche chantier</div>
+
+    <div class="nav-section">Métiers</div>
+    <div id="sidebar-metiers"></div>
+
+    <div class="nav-section">Données</div>
+    <div class="nav-item" onclick="exportJSON()"><i class="ti ti-download"></i> Exporter JSON</div>
+    <div class="nav-item" onclick="document.getElementById('importInput').click()"><i class="ti ti-upload"></i> Importer JSON</div>
+    <input type="file" id="importInput" accept=".json" style="display:none" onchange="importJSON(event)">
+
+    <div class="sidebar-bottom">
+      <div style="font-size:11px;color:rgba(255,255,255,.4);display:flex;align-items:center">
+        <span class="sync-dot" id="syncDot"></span>
+        <span id="syncLabel">Synchronisé</span>
+      </div>
+      <div style="font-size:12px;color:rgba(255,255,255,.35);margin-top:4px">Phénix-Architecte © 2025</div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main-area">
+    <div class="topbar">
+      <div class="topbar-title" id="topbar-title">Annuaire Artisans</div>
+      <div class="topbar-actions">
+        <button class="btn" onclick="openAddModal()"><i class="ti ti-plus"></i> <span>Nouvel artisan</span></button>
+        <button class="btn btn-primary" onclick="toggleVocalPanel()"><i class="ti ti-microphone"></i> <span>Vocal</span></button>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- ══ PAGE ANNUAIRE ══ -->
+      <div class="page active" id="page-annuaire">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Annuaire Artisans</div>
+            <div class="page-subtitle" id="annuaire-subtitle">Chargement…</div>
+            <div class="page-title-line"></div>
+          </div>
+          <button class="btn btn-primary" onclick="openAddModal()"><i class="ti ti-plus"></i> Nouvel artisan</button>
+        </div>
+
+        <!-- Métriques -->
+        <div class="metrics" id="metrics-zone">
+          <div class="metric"><div class="metric-icon"><i class="ti ti-users"></i></div><div class="metric-label">Total artisans</div><div class="metric-value" id="m-total">0</div></div>
+          <div class="metric m-green"><div class="metric-icon g"><i class="ti ti-star"></i></div><div class="metric-label">Favoris</div><div class="metric-value" id="m-favoris">0</div></div>
+          <div class="metric m-amber"><div class="metric-icon a"><i class="ti ti-tools"></i></div><div class="metric-label">Corps de métier</div><div class="metric-value" id="m-metiers">0</div></div>
+          <div class="metric"><div class="metric-icon"><i class="ti ti-map-pin"></i></div><div class="metric-label">Communes</div><div class="metric-value" id="m-communes">0</div></div>
+        </div>
+
+        <!-- Recherche & filtres -->
+        <div class="search-zone">
+          <div class="search-row">
+            <div class="search-input-wrap">
+              <i class="ti ti-search"></i>
+              <input type="text" id="search-input" placeholder="Rechercher un artisan, une entreprise…" oninput="renderAnnuaire()">
+            </div>
+            <select class="filter-select" id="filter-metier" onchange="renderAnnuaire()">
+              <option value="">Tous les métiers</option>
+            </select>
+            <select class="filter-select" id="filter-note" onchange="renderAnnuaire()">
+              <option value="">Toutes les notes</option>
+              <option value="5">⭐⭐⭐⭐⭐ 5 étoiles</option>
+              <option value="4">⭐⭐⭐⭐ 4+ étoiles</option>
+              <option value="3">⭐⭐⭐ 3+ étoiles</option>
+            </select>
+            <select class="filter-select" id="filter-dispo" onchange="renderAnnuaire()">
+              <option value="">Toute disponibilité</option>
+              <option value="disponible">Disponible</option>
+              <option value="occupe">Occupé</option>
+              <option value="contactez">À contacter</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Grille artisans -->
+        <div class="artisans-grid" id="artisans-grid"></div>
+      </div>
+
+      <!-- ══ PAGE FAVORIS ══ -->
+      <div class="page" id="page-favoris">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Artisans Favoris</div>
+            <div class="page-subtitle">Vos artisans de confiance</div>
+            <div class="page-title-line"></div>
+          </div>
+        </div>
+        <div class="artisans-grid" id="favoris-grid"></div>
+      </div>
+
+      <!-- ══ PAGE RECHERCHE CHANTIER ══ -->
+      <div class="page" id="page-recherche">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Recherche pour un Chantier</div>
+            <div class="page-subtitle">Trouvez les meilleurs artisans pour votre prochain chantier</div>
+            <div class="page-title-line"></div>
+          </div>
+        </div>
+        <div style="background:var(--card);border:1.5px solid var(--border);border-radius:var(--r-lg);padding:1.5rem;box-shadow:var(--shadow);margin-bottom:1.5rem">
+          <div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:1rem">🎯 Paramètres du chantier</div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Lieu du chantier</label>
+              <input type="text" id="ch-lieu" placeholder="Ex: Riom, Clermont-Ferrand…" oninput="rechercheChantier()">
+            </div>
+            <div class="form-group">
+              <label>Corps de métier requis</label>
+              <select id="ch-metier" onchange="rechercheChantier()">
+                <option value="">Tous les métiers</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Budget client</label>
+              <select id="ch-budget" onchange="rechercheChantier()">
+                <option value="">Tous budgets</option>
+                <option value="serre">Serré (économique)</option>
+                <option value="moyen">Moyen</option>
+                <option value="confortable">Confortable</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Disponibilité souhaitée</label>
+              <select id="ch-dispo" onchange="rechercheChantier()">
+                <option value="">Peu importe</option>
+                <option value="disponible">Disponible maintenant</option>
+                <option value="contactez">À contacter</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div id="recherche-results"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL ARTISAN ══ -->
+<div class="modal-overlay" id="artisanModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">Nouvel artisan</div>
+      <button class="btn btn-icon" onclick="closeModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-sep">Identité</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Prénom & Nom *</label>
+          <input type="text" id="f-nom" placeholder="Jean Dupont">
+        </div>
+        <div class="form-group">
+          <label>Entreprise</label>
+          <input type="text" id="f-entreprise" placeholder="SARL Dupont BTP">
+        </div>
+        <div class="form-group">
+          <label>Corps de métier *</label>
+          <select id="f-metier">
+            <option value="">— Choisir —</option>
+            <option>Maçonnerie</option>
+            <option>Charpente</option>
+            <option>Couverture</option>
+            <option>Plomberie</option>
+            <option>Électricité</option>
+            <option>Menuiserie</option>
+            <option>Carrelage</option>
+            <option>Peinture</option>
+            <option>Isolation</option>
+            <option>Plâtrerie</option>
+            <option>Terrassement</option>
+            <option>Serrurerie / Métallerie</option>
+            <option>Chauffage / CVC</option>
+            <option>Démolition</option>
+            <option>Génie civil</option>
+            <option>VRD</option>
+            <option>Autre</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Spécialité</label>
+          <input type="text" id="f-specialite" placeholder="Ex: rénovation ancienne, ossature bois…">
+        </div>
+      </div>
+
+      <div class="form-sep">Contact</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Téléphone</label>
+          <input type="tel" id="f-tel" placeholder="06 12 34 56 78">
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="f-email" placeholder="contact@entreprise.fr">
+        </div>
+      </div>
+
+      <div class="form-sep">Localisation</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Ville / Commune *</label>
+          <input type="text" id="f-ville" placeholder="Clermont-Ferrand">
+        </div>
+        <div class="form-group">
+          <label>Rayon d'intervention (km)</label>
+          <input type="number" id="f-rayon" placeholder="50" min="5" max="500">
+        </div>
+        <div class="form-group form-full">
+          <label>Zones d'intervention (départements / villes)</label>
+          <input type="text" id="f-zones" placeholder="Ex: 63, 03, 15 — Puy-de-Dôme, Allier, Cantal">
+        </div>
+      </div>
+
+      <div class="form-sep">Évaluation</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Note de confiance</label>
+          <div class="note-stars" id="note-stars-edit">
+            <span class="note-star" onclick="setNote(1)">★</span>
+            <span class="note-star" onclick="setNote(2)">★</span>
+            <span class="note-star" onclick="setNote(3)">★</span>
+            <span class="note-star" onclick="setNote(4)">★</span>
+            <span class="note-star" onclick="setNote(5)">★</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Disponibilité</label>
+          <select id="f-dispo">
+            <option value="contactez">À contacter</option>
+            <option value="disponible">Disponible</option>
+            <option value="occupe">Occupé</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Fourchette tarifaire</label>
+          <select id="f-tarif">
+            <option value="">Non renseigné</option>
+            <option value="economique">💚 Économique</option>
+            <option value="moyen">💛 Moyen marché</option>
+            <option value="premium">🔴 Premium</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Favori</label>
+          <select id="f-favori">
+            <option value="0">Non</option>
+            <option value="1">⭐ Oui — Artisan de confiance</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-sep">Notes & Historique</div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Commentaires libres</label>
+        <textarea id="f-notes" rows="3" placeholder="Qualité du travail, ponctualité, références, conditions particulières…" style="resize:vertical"></textarea>
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Nombre de chantiers ensemble</label>
+          <input type="number" id="f-nb-chantiers" placeholder="0" min="0">
+        </div>
+        <div class="form-group">
+          <label>Dernier chantier</label>
+          <input type="text" id="f-dernier-chantier" placeholder="Ex: Maison Martin, Riom 2024">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-sm" id="btn-delete-artisan" style="display:none;margin-right:auto" onclick="deleteArtisan()"><i class="ti ti-trash"></i> Supprimer</button>
+      <button class="btn" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="saveArtisan()"><i class="ti ti-check"></i> Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ BOUTON VOCAL ══ -->
+<button id="vocal-fab" onclick="toggleVocalPanel()" title="Ajouter un artisan par la voix">🎙️</button>
+
+<!-- ══ PANEL VOCAL ══ -->
+<div id="vocal-panel">
+  <div class="vp-header">
+    <span class="vp-header-icon">🎙️</span>
+    <span class="vp-header-title">Artisan vocal</span>
+    <button class="vp-close" onclick="closeVocalPanel()">✕</button>
+  </div>
+  <div class="vp-body">
+    <div class="vp-status" id="vp-status">Appuyez sur écouter et dictez les infos de l'artisan</div>
+    <div class="vp-transcript" id="vp-transcript"></div>
+    <div class="vp-preview" id="vp-preview">
+      <div class="vp-preview-title">✨ Artisan détecté</div>
+      <div id="vp-preview-content"></div>
+    </div>
+    <div class="vp-actions">
+      <button class="btn btn-primary" id="vp-mic-btn" onclick="startVocal()" style="flex:1">
+        <i class="ti ti-microphone"></i> <span id="vp-btn-label">Écouter</span>
+      </button>
+      <button class="btn btn-success" id="vp-confirm-btn" onclick="confirmVocalArtisan()" style="display:none;flex:1">
+        <i class="ti ti-check"></i> Créer la fiche
+      </button>
+    </div>
+    <div class="vp-actions" id="vp-edit-actions" style="display:none">
+      <button class="btn" onclick="resetVocal()" style="flex:1"><i class="ti ti-refresh"></i> Recommencer</button>
+      <button class="btn btn-primary" onclick="openVocalInModal()" style="flex:1"><i class="ti ti-edit"></i> Compléter</button>
+    </div>
+    <div class="vp-hint" id="vp-hint">
+      💡 Exemple : <em>"Jean Dupont électricien Riom disponible favori"</em>
+      ou <em>"Entreprise Martin couverture Clermont-Ferrand note 5"</em>
+    </div>
+  </div>
+</div>
+
+<!-- ══ TOAST ══ -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════
+//  ÉTAT & DONNÉES
+// ════════════════════════════════════════════════════════════
+let artisans = [];
+let _editingId = null;
+let _noteEdit = 0;
+let _vocalParsed = null;
+let _vocalRecognition = null;
+let _vocalListening = false;
+
+// Couleurs par métier
+const METIER_COLORS = {
+  'Maçonnerie':         '#8B4513',
+  'Charpente':          '#6B3E26',
+  'Couverture':         '#1B2D5B',
+  'Plomberie':          '#1a7abf',
+  'Électricité':        '#E6A817',
+  'Menuiserie':         '#7B5E3A',
+  'Carrelage':          '#4A9CC7',
+  'Peinture':           '#8A2BE2',
+  'Isolation':          '#2D7A4F',
+  'Plâtrerie':          '#C0A060',
+  'Terrassement':       '#5A4A3A',
+  'Serrurerie / Métallerie': '#607080',
+  'Chauffage / CVC':    '#C0392B',
+  'Démolition':         '#4A4A4A',
+  'Génie civil':        '#2A5298',
+  'VRD':                '#3A7A50',
+  'Autre':              '#8BA5C0',
+};
+
+function metierColor(m) { return METIER_COLORS[m] || '#4A9CC7'; }
+function initials(nom) { return (nom||'').split(' ').map(w=>w[0]||'').slice(0,2).join('').toUpperCase() || '?'; }
+
+// ════════════════════════════════════════════════════════════
+//  FIREBASE — Écoute temps réel
+// ════════════════════════════════════════════════════════════
+function initFirebase() {
+  const check = setInterval(() => {
+    if (window._fbArtisans) {
+      clearInterval(check);
+      window._fbArtisans.listen(list => {
+        artisans = list;
+        renderAll();
+        setSyncOk();
+      });
+    }
+  }, 200);
+}
+
+function setSyncOk() {
+  document.getElementById('syncDot').className = 'sync-dot';
+  document.getElementById('syncLabel').textContent = 'Synchronisé';
+}
+function setSyncing() {
+  document.getElementById('syncDot').className = 'sync-dot syncing';
+  document.getElementById('syncLabel').textContent = 'Enregistrement…';
+}
+
+// ════════════════════════════════════════════════════════════
+//  NAVIGATION
+// ════════════════════════════════════════════════════════════
+function showPage(id, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  if (el) el.classList.add('active');
+  const titles = { annuaire:'Annuaire Artisans', favoris:'Artisans Favoris', recherche:'Recherche Chantier' };
+  document.getElementById('topbar-title').textContent = titles[id] || '';
+  if (id === 'favoris') renderFavoris();
+  if (id === 'recherche') { populateChMetier(); rechercheChantier(); }
+}
+
+// ════════════════════════════════════════════════════════════
+//  RENDU PRINCIPAL
+// ════════════════════════════════════════════════════════════
+function renderAll() {
+  renderMetrics();
+  renderAnnuaire();
+  renderSidebarMetiers();
+  populateFilterMetier();
+  updateBadges();
+}
+
+function renderMetrics() {
+  const total   = artisans.length;
+  const favoris = artisans.filter(a => a.favori == 1).length;
+  const metiers = [...new Set(artisans.map(a => a.metier).filter(Boolean))].length;
+  const communes= [...new Set(artisans.map(a => a.ville).filter(Boolean))].length;
+  document.getElementById('m-total').textContent   = total;
+  document.getElementById('m-favoris').textContent = favoris;
+  document.getElementById('m-metiers').textContent = metiers;
+  document.getElementById('m-communes').textContent= communes;
+  document.getElementById('annuaire-subtitle').textContent =
+    total + ' artisan'+(total!==1?'s':'')+' · '+metiers+' corps de métier';
+}
+
+function updateBadges() {
+  document.getElementById('nb-total').textContent   = artisans.length;
+  document.getElementById('nb-favoris').textContent = artisans.filter(a=>a.favori==1).length;
+}
+
+function renderSidebarMetiers() {
+  const metiers = [...new Set(artisans.map(a=>a.metier).filter(Boolean))].sort();
+  const c = document.getElementById('sidebar-metiers');
+  c.innerHTML = metiers.map(m => {
+    const n = artisans.filter(a=>a.metier===m).length;
+    return `<div class="nav-item" onclick="filterByMetier('${m}')">
+      <span style="width:8px;height:8px;border-radius:50%;background:${metierColor(m)};flex-shrink:0;display:inline-block"></span>
+      ${m} <span class="nav-badge">${n}</span>
+    </div>`;
+  }).join('');
+}
+
+function filterByMetier(m) {
+  document.getElementById('filter-metier').value = m;
+  showPage('annuaire', document.querySelector('.nav-item'));
+  renderAnnuaire();
+}
+
+function populateFilterMetier() {
+  const sel = document.getElementById('filter-metier');
+  const cur = sel.value;
+  const metiers = [...new Set(artisans.map(a=>a.metier).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">Tous les métiers</option>' +
+    metiers.map(m=>`<option value="${m}" ${m===cur?'selected':''}>${m}</option>`).join('');
+}
+
+function renderAnnuaire() {
+  const q      = (document.getElementById('search-input').value || '').toLowerCase();
+  const metier = document.getElementById('filter-metier').value;
+  const note   = parseInt(document.getElementById('filter-note').value) || 0;
+  const dispo  = document.getElementById('filter-dispo').value;
+
+  let list = artisans.filter(a => {
+    if (q && !((a.nom||'').toLowerCase().includes(q)) && !((a.entreprise||'').toLowerCase().includes(q)) && !((a.ville||'').toLowerCase().includes(q)) && !((a.metier||'').toLowerCase().includes(q))) return false;
+    if (metier && a.metier !== metier) return false;
+    if (note && (parseInt(a.note)||0) < note) return false;
+    if (dispo && a.dispo !== dispo) return false;
+    return true;
+  });
+
+  // Trier : favoris en premier, puis par note
+  list.sort((a,b) => {
+    if ((b.favori||0) !== (a.favori||0)) return (b.favori||0) - (a.favori||0);
+    return (parseInt(b.note)||0) - (parseInt(a.note)||0);
+  });
+
+  const grid = document.getElementById('artisans-grid');
+  if (!list.length) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+      <div class="empty-icon"><i class="ti ti-address-book"></i></div>
+      <div class="empty-title">Aucun artisan trouvé</div>
+      <div class="empty-sub">Modifiez vos filtres ou ajoutez un artisan</div>
+    </div>`;
+    return;
+  }
+  grid.innerHTML = list.map(a => artisanCardHtml(a)).join('');
+}
+
+function artisanCardHtml(a) {
+  const col = metierColor(a.metier);
+  const stars = starsHtml(a.note);
+  const dispoBadge = dispoHtml(a.dispo);
+  const tarifBadge = tarifHtml(a.tarif);
+  const favBadge = a.favori == 1 ? '<span class="artisan-badge-fav">⭐</span>' : '';
+  return `<div class="artisan-card" onclick="openEditModal('${a.id}')">
+    ${favBadge}
+    <div class="artisan-card-top">
+      <div class="artisan-avatar" style="background:linear-gradient(135deg,${col},${col}99)">${initials(a.nom)}</div>
+      <div class="artisan-info">
+        <div class="artisan-nom">${a.nom||'—'}</div>
+        <div class="artisan-entreprise">${a.entreprise||'Artisan indépendant'}</div>
+        <div class="artisan-metier"><span style="width:7px;height:7px;border-radius:50%;background:${col};display:inline-block"></span> ${a.metier||'—'}</div>
+      </div>
+    </div>
+    <div class="artisan-body">
+      ${a.ville ? `<div class="artisan-row"><i class="ti ti-map-pin"></i> ${a.ville}${a.rayon?' · '+a.rayon+' km':''}</div>` : ''}
+      ${a.tel   ? `<div class="artisan-row"><i class="ti ti-phone"></i> ${a.tel}</div>` : ''}
+      ${a.specialite ? `<div class="artisan-row"><i class="ti ti-tool"></i> ${a.specialite}</div>` : ''}
+    </div>
+    <div class="artisan-footer">
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        ${stars}
+        ${dispoBadge}
+        ${tarifBadge}
+      </div>
+      <div class="artisan-actions" onclick="event.stopPropagation()">
+        ${a.tel ? `<a href="tel:${a.tel}" class="btn btn-sm btn-icon" title="Appeler"><i class="ti ti-phone"></i></a>` : ''}
+        <button class="btn btn-sm btn-icon" onclick="toggleFavori('${a.id}')" title="${a.favori==1?'Retirer des favoris':'Ajouter aux favoris'}"><i class="ti ti-star${a.favori==1?'-filled':''}"></i></button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function starsHtml(note) {
+  const n = parseInt(note) || 0;
+  if (!n) return '';
+  return `<div class="artisan-note">${[1,2,3,4,5].map(i=>`<span class="artisan-star${i<=n?' on':''}">${i<=n?'★':'☆'}</span>`).join('')}</div>`;
+}
+
+function dispoHtml(d) {
+  if (!d) return '';
+  const map = { disponible:['badge-green','Disponible'], occupe:['badge-red','Occupé'], contactez:['badge-amber','À contacter'] };
+  const s = map[d] || ['badge-gray', d];
+  return `<span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600;background:${d==='disponible'?'var(--green-bg)':d==='occupe'?'var(--red-bg)':'var(--amber-bg)'};color:${d==='disponible'?'var(--green)':d==='occupe'?'var(--red)':'var(--amber)'}">${s[1]}</span>`;
+}
+
+function tarifHtml(t) {
+  if (!t) return '';
+  const map = { economique:'💚', moyen:'💛', premium:'🔴' };
+  return `<span style="font-size:12px" title="${t}">${map[t]||''}</span>`;
+}
+
+function renderFavoris() {
+  const list = artisans.filter(a=>a.favori==1).sort((a,b)=>(parseInt(b.note)||0)-(parseInt(a.note)||0));
+  const grid = document.getElementById('favoris-grid');
+  if (!list.length) {
+    grid.innerHTML=`<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon"><i class="ti ti-star"></i></div><div class="empty-title">Aucun favori</div><div class="empty-sub">Cliquez sur l'étoile d'un artisan pour l'ajouter</div></div>`;
+    return;
+  }
+  grid.innerHTML = list.map(a=>artisanCardHtml(a)).join('');
+}
+
+// ════════════════════════════════════════════════════════════
+//  RECHERCHE CHANTIER
+// ════════════════════════════════════════════════════════════
+function populateChMetier() {
+  const sel = document.getElementById('ch-metier');
+  const metiers = [...new Set(artisans.map(a=>a.metier).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">Tous les métiers</option>' +
+    metiers.map(m=>`<option value="${m}">${m}</option>`).join('');
+}
+
+function rechercheChantier() {
+  const lieu   = (document.getElementById('ch-lieu').value || '').toLowerCase();
+  const metier = document.getElementById('ch-metier').value;
+  const budget = document.getElementById('ch-budget').value;
+  const dispo  = document.getElementById('ch-dispo').value;
+
+  let list = artisans.filter(a => {
+    if (metier && a.metier !== metier) return false;
+    if (dispo && a.dispo !== dispo) return false;
+    if (budget === 'serre'      && a.tarif === 'premium') return false;
+    if (budget === 'confortable'&& a.tarif === 'economique') return false;
+    if (lieu) {
+      const inVille  = (a.ville||'').toLowerCase().includes(lieu);
+      const inZones  = (a.zones||'').toLowerCase().includes(lieu);
+      if (!inVille && !inZones) return false;
+    }
+    return true;
+  });
+
+  // Score : favoris + note + dispo
+  list.sort((a,b) => {
+    let sa = (a.favori==1?3:0) + (parseInt(a.note)||0) + (a.dispo==='disponible'?2:0);
+    let sb = (b.favori==1?3:0) + (parseInt(b.note)||0) + (b.dispo==='disponible'?2:0);
+    return sb - sa;
+  });
+
+  const div = document.getElementById('recherche-results');
+  if (!list.length) {
+    div.innerHTML = `<div class="empty-state"><div class="empty-icon"><i class="ti ti-map-search"></i></div><div class="empty-title">Aucun artisan correspondant</div><div class="empty-sub">Élargissez vos critères ou ajoutez des artisans à votre annuaire</div></div>`;
+    return;
+  }
+  div.innerHTML = `<div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:1rem">${list.length} artisan${list.length>1?'s':''} recommandé${list.length>1?'s':''} — classés par pertinence</div>
+    <div class="artisans-grid">${list.map(a=>artisanCardHtml(a)).join('')}</div>`;
+}
+
+// ════════════════════════════════════════════════════════════
+//  MODAL ARTISAN
+// ════════════════════════════════════════════════════════════
+function openAddModal() {
+  _editingId = null;
+  _noteEdit  = 0;
+  document.getElementById('modal-title').textContent = 'Nouvel artisan';
+  document.getElementById('btn-delete-artisan').style.display = 'none';
+  clearForm();
+  document.getElementById('artisanModal').classList.add('open');
+}
+
+function openEditModal(id) {
+  const a = artisans.find(x=>x.id===id);
+  if (!a) return;
+  _editingId = id;
+  _noteEdit  = parseInt(a.note) || 0;
+  document.getElementById('modal-title').textContent = 'Modifier l\'artisan';
+  document.getElementById('btn-delete-artisan').style.display = '';
+  document.getElementById('f-nom').value            = a.nom || '';
+  document.getElementById('f-entreprise').value     = a.entreprise || '';
+  document.getElementById('f-metier').value         = a.metier || '';
+  document.getElementById('f-specialite').value     = a.specialite || '';
+  document.getElementById('f-tel').value            = a.tel || '';
+  document.getElementById('f-email').value          = a.email || '';
+  document.getElementById('f-ville').value          = a.ville || '';
+  document.getElementById('f-rayon').value          = a.rayon || '';
+  document.getElementById('f-zones').value          = a.zones || '';
+  document.getElementById('f-dispo').value          = a.dispo || 'contactez';
+  document.getElementById('f-tarif').value          = a.tarif || '';
+  document.getElementById('f-favori').value         = a.favori ? '1' : '0';
+  document.getElementById('f-notes').value          = a.notes || '';
+  document.getElementById('f-nb-chantiers').value   = a.nbChantiers || '';
+  document.getElementById('f-dernier-chantier').value = a.dernierChantier || '';
+  renderNoteStars(_noteEdit);
+  document.getElementById('artisanModal').classList.add('open');
+}
+
+function clearForm() {
+  ['f-nom','f-entreprise','f-specialite','f-tel','f-email','f-ville','f-rayon','f-zones','f-notes','f-nb-chantiers','f-dernier-chantier'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('f-metier').value  = '';
+  document.getElementById('f-dispo').value   = 'contactez';
+  document.getElementById('f-tarif').value   = '';
+  document.getElementById('f-favori').value  = '0';
+  _noteEdit = 0;
+  renderNoteStars(0);
+}
+
+function closeModal() {
+  document.getElementById('artisanModal').classList.remove('open');
+  _editingId = null;
+}
+
+function setNote(n) {
+  _noteEdit = n;
+  renderNoteStars(n);
+}
+
+function renderNoteStars(n) {
+  document.querySelectorAll('#note-stars-edit .note-star').forEach((s,i) => {
+    s.classList.toggle('on', i < n);
+  });
+}
+
+async function saveArtisan() {
+  const nom    = document.getElementById('f-nom').value.trim();
+  const metier = document.getElementById('f-metier').value;
+  if (!nom)    { toast('⚠️ Le nom est obligatoire.'); return; }
+  if (!metier) { toast('⚠️ Le corps de métier est obligatoire.'); return; }
+
+  const a = {
+    id:              _editingId || ('art-' + Date.now()),
+    nom,
+    entreprise:      document.getElementById('f-entreprise').value.trim(),
+    metier,
+    specialite:      document.getElementById('f-specialite').value.trim(),
+    tel:             document.getElementById('f-tel').value.trim(),
+    email:           document.getElementById('f-email').value.trim(),
+    ville:           document.getElementById('f-ville').value.trim(),
+    rayon:           document.getElementById('f-rayon').value.trim(),
+    zones:           document.getElementById('f-zones').value.trim(),
+    note:            _noteEdit,
+    dispo:           document.getElementById('f-dispo').value,
+    tarif:           document.getElementById('f-tarif').value,
+    favori:          document.getElementById('f-favori').value === '1' ? 1 : 0,
+    notes:           document.getElementById('f-notes').value.trim(),
+    nbChantiers:     document.getElementById('f-nb-chantiers').value,
+    dernierChantier: document.getElementById('f-dernier-chantier').value.trim(),
+    updatedAt:       new Date().toISOString(),
+  };
+
+  setSyncing();
+  await window._fbArtisans.save(a);
+  closeModal();
+  toast('✅ Artisan enregistré !');
+}
+
+async function deleteArtisan() {
+  if (!_editingId || !confirm('Supprimer cet artisan ?')) return;
+  setSyncing();
+  await window._fbArtisans.delete(_editingId);
+  closeModal();
+  toast('🗑️ Artisan supprimé.');
+}
+
+async function toggleFavori(id) {
+  const a = artisans.find(x=>x.id===id);
+  if (!a) return;
+  a.favori = a.favori == 1 ? 0 : 1;
+  setSyncing();
+  await window._fbArtisans.save(a);
+  toast(a.favori ? '⭐ Ajouté aux favoris.' : 'Retiré des favoris.');
+}
+
+// ════════════════════════════════════════════════════════════
+//  EXPORT / IMPORT JSON
+// ════════════════════════════════════════════════════════════
+function exportJSON() {
+  const blob = new Blob([JSON.stringify(artisans, null, 2)], {type:'application/json'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `phenix_artisans_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('💾 Export téléchargé.');
+}
+
+function importJSON(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const r = new FileReader();
+  r.onload = async ev => {
+    try {
+      const list = JSON.parse(ev.target.result);
+      if (!Array.isArray(list)) throw new Error('Format invalide');
+      if (!confirm(`Importer ${list.length} artisans ? (Les existants seront conservés)`)) return;
+      setSyncing();
+      for (const a of list) {
+        if (a.id && a.nom) await window._fbArtisans.save(a);
+      }
+      toast(`✅ ${list.length} artisans importés.`);
+    } catch { toast('⚠️ Fichier JSON invalide.'); }
+  };
+  r.readAsText(file);
+  e.target.value = '';
+}
+
+// ════════════════════════════════════════════════════════════
+//  MODULE VOCAL
+// ════════════════════════════════════════════════════════════
+function toggleVocalPanel() {
+  const p = document.getElementById('vocal-panel');
+  p.classList.contains('open') ? closeVocalPanel() : p.classList.add('open');
+}
+function closeVocalPanel() {
+  stopVocal();
+  document.getElementById('vocal-panel').classList.remove('open');
+  resetVocal();
+}
+
+function startVocal() {
+  if (_vocalListening) { stopVocal(); return; }
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    setVpStatus('⚠️ Utilisez Chrome sur Android ou PC pour la reconnaissance vocale.', false);
+    return;
+  }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  _vocalRecognition = new SR();
+  _vocalRecognition.lang = 'fr-FR';
+  _vocalRecognition.continuous = false;
+  _vocalRecognition.interimResults = true;
+
+  _vocalRecognition.onstart = () => {
+    _vocalListening = true;
+    document.getElementById('vocal-fab').classList.add('listening');
+    document.getElementById('vp-btn-label').textContent = 'Arrêter';
+    document.getElementById('vp-mic-btn').querySelector('i').className = 'ti ti-microphone-off';
+    setVpStatus('🔴 Écoute… parlez maintenant', true);
+    document.getElementById('vp-transcript').style.display = 'none';
+    document.getElementById('vp-preview').style.display = 'none';
+    document.getElementById('vp-confirm-btn').style.display = 'none';
+    document.getElementById('vp-edit-actions').style.display = 'none';
+    document.getElementById('vp-hint').style.display = 'block';
+  };
+
+  _vocalRecognition.onresult = e => {
+    const txt = Array.from(e.results).map(r=>r[0].transcript).join('');
+    const tr = document.getElementById('vp-transcript');
+    tr.style.display = 'block';
+    tr.textContent = txt;
+    if (e.results[0].isFinal) processVocal(txt);
+  };
+
+  _vocalRecognition.onerror = e => {
+    _vocalListening = false;
+    document.getElementById('vocal-fab').classList.remove('listening');
+    resetMicBtn();
+    if (e.error==='not-allowed') setVpStatus('⚠️ Accès micro refusé. Autorisez dans Chrome.', false);
+    else if (e.error==='no-speech') setVpStatus('Aucune parole détectée. Réessayez.', false);
+    else setVpStatus('⚠️ Erreur : '+e.error, false);
+  };
+
+  _vocalRecognition.onend = () => {
+    _vocalListening = false;
+    document.getElementById('vocal-fab').classList.remove('listening');
+    resetMicBtn();
+  };
+
+  _vocalRecognition.start();
+}
+
+function stopVocal() {
+  if (_vocalRecognition) { try { _vocalRecognition.stop(); } catch(e){} _vocalRecognition = null; }
+  _vocalListening = false;
+  document.getElementById('vocal-fab').classList.remove('listening');
+  resetMicBtn();
+}
+
+function resetMicBtn() {
+  document.getElementById('vp-btn-label').textContent = 'Écouter';
+  document.getElementById('vp-mic-btn').querySelector('i').className = 'ti ti-microphone';
+}
+
+function processVocal(text) {
+  const t = text.toLowerCase().trim();
+  setVpStatus('🔍 Analyse…', false);
+
+  // ── Nom (premier groupe de mots avant un métier) ──────────
+  let nom = '';
+  const METIERS_LIST = ['maçon','maçonnerie','charpente','charpentier','couverture','couvreur','plombier','plomberie','électricien','électricité','menuisier','menuiserie','carreleur','carrelage','peintre','peinture','isolation','plâtrier','terrassement','chauffage','serrurerie','démolition'];
+  let metier = '';
+
+  for (const m of METIERS_LIST) {
+    if (t.includes(m)) {
+      const map = {
+        'maçon':'Maçonnerie','maçonnerie':'Maçonnerie',
+        'charpente':'Charpente','charpentier':'Charpente',
+        'couverture':'Couverture','couvreur':'Couverture',
+        'plombier':'Plomberie','plomberie':'Plomberie',
+        'électricien':'Électricité','électricité':'Électricité',
+        'menuisier':'Menuiserie','menuiserie':'Menuiserie',
+        'carreleur':'Carrelage','carrelage':'Carrelage',
+        'peintre':'Peinture','peinture':'Peinture',
+        'isolation':'Isolation',
+        'plâtrier':'Plâtrerie',
+        'terrassement':'Terrassement',
+        'chauffage':'Chauffage / CVC',
+        'serrurerie':'Serrurerie / Métallerie',
+        'démolition':'Démolition',
+      };
+      metier = map[m] || m.charAt(0).toUpperCase()+m.slice(1);
+      break;
+    }
+  }
+
+  // ── Note ─────────────────────────────────────────────────
+  let note = 0;
+  const noteM = t.match(/note\s+(\d)|(\d)\s+étoile|étoiles?\s+(\d)/);
+  if (noteM) note = parseInt(noteM[1]||noteM[2]||noteM[3]) || 0;
+  if (/excellent|parfait|top/.test(t)) note = 5;
+  if (/bien|bon/.test(t) && !note) note = 4;
+
+  // ── Disponibilité ─────────────────────────────────────────
+  let dispo = 'contactez';
+  if (/disponible/.test(t)) dispo = 'disponible';
+  else if (/occupé|chargé|indisponible/.test(t)) dispo = 'occupe';
+
+  // ── Favori ────────────────────────────────────────────────
+  const favori = /favori|confiance|référence/.test(t) ? 1 : 0;
+
+  // ── Ville (après le métier ou à la fin) ──────────────────
+  let ville = '';
+  const villeM = text.match(/(?:à|de|sur)\s+([A-ZÀ-Ÿa-zàâäéèêëîïôùûüç\-]+(?:\s+[A-ZÀ-Ÿa-zàâäéèêëîïôùûüç\-]+)?)/i);
+  if (villeM) ville = villeM[1].trim().split(' ').map(w=>w.charAt(0).toUpperCase()+w.slice(1).toLowerCase()).join(' ');
+
+  // ── Nom : tout ce qui n'est pas un métier ou mot-clé ─────
+  let nomText = text;
+  nomText = nomText.replace(new RegExp(METIERS_LIST.join('|'), 'gi'), '');
+  nomText = nomText.replace(/disponible|occupé|favori|confiance|référence|note\s+\d|\d\s+étoile[s]?|étoile[s]?\s+\d|excellent|parfait|top|bien|bon/gi, '');
+  nomText = nomText.replace(/(à|de|sur)\s+\S+/gi, '');
+  nomText = nomText.replace(/\s+/g, ' ').trim();
+  if (nomText) nom = nomText.split(' ').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' ');
+
+  _vocalParsed = { nom, metier, ville, note, dispo, favori };
+
+  // ── Affichage prévisualisation ────────────────────────────
+  document.getElementById('vp-preview-content').innerHTML = `
+    <div class="vp-row"><span class="vp-label">Nom</span><span class="vp-val">${nom || '<em style="color:var(--text3)">Non détecté</em>'}</span></div>
+    <div class="vp-row"><span class="vp-label">Métier</span><span class="vp-val">${metier ? `<span style="background:${metierColor(metier)}22;color:${metierColor(metier)};padding:1px 8px;border-radius:20px;font-size:11px;font-weight:600">${metier}</span>` : '<em style="color:var(--text3)">Non détecté</em>'}</span></div>
+    <div class="vp-row"><span class="vp-label">Ville</span><span class="vp-val">${ville || '<em style="color:var(--text3)">Non précisée</em>'}</span></div>
+    <div class="vp-row"><span class="vp-label">Note</span><span class="vp-val">${note ? '★'.repeat(note)+'☆'.repeat(5-note) : '—'}</span></div>
+    <div class="vp-row"><span class="vp-label">Dispo</span><span class="vp-val">${dispoHtml(dispo)}</span></div>
+    <div class="vp-row"><span class="vp-label">Favori</span><span class="vp-val">${favori ? '⭐ Oui' : 'Non'}</span></div>
+  `;
+  document.getElementById('vp-preview').style.display = 'block';
+  document.getElementById('vp-confirm-btn').style.display = 'flex';
+  document.getElementById('vp-edit-actions').style.display = 'flex';
+  document.getElementById('vp-hint').style.display = 'none';
+  setVpStatus('✅ Confirmez ou complétez la fiche', false);
+}
+
+async function confirmVocalArtisan() {
+  if (!_vocalParsed) return;
+  const { nom, metier, ville, note, dispo, favori } = _vocalParsed;
+  if (!nom) { setVpStatus('⚠️ Nom non détecté. Recommencez.', false); return; }
+  if (!metier) { setVpStatus('⚠️ Métier non détecté. Recommencez.', false); return; }
+
+  const a = {
+    id:        'art-vocal-' + Date.now(),
+    nom, metier, ville, note, dispo, favori,
+    entreprise:'', specialite:'', tel:'', email:'',
+    rayon:'', zones:'', tarif:'', notes:'',
+    nbChantiers:'', dernierChantier:'',
+    source: 'vocal',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  setSyncing();
+  await window._fbArtisans.save(a);
+  toast('🎙️ Artisan créé : ' + nom);
+  setVpStatus('✅ Fiche créée ! Vous pouvez la compléter.', false);
+  document.getElementById('vp-preview').style.display = 'none';
+  document.getElementById('vp-confirm-btn').style.display = 'none';
+  document.getElementById('vp-edit-actions').style.display = 'none';
+  document.getElementById('vp-hint').style.display = 'block';
+  document.getElementById('vp-transcript').style.display = 'none';
+  _vocalParsed = null;
+  setTimeout(() => setVpStatus('Appuyez sur écouter et dictez les infos de l\'artisan', false), 3000);
+}
+
+function openVocalInModal() {
+  if (!_vocalParsed) return;
+  closeVocalPanel();
+  _editingId = null;
+  _noteEdit  = _vocalParsed.note || 0;
+  document.getElementById('modal-title').textContent = 'Compléter la fiche artisan';
+  document.getElementById('btn-delete-artisan').style.display = 'none';
+  clearForm();
+  document.getElementById('f-nom').value    = _vocalParsed.nom    || '';
+  document.getElementById('f-metier').value = _vocalParsed.metier || '';
+  document.getElementById('f-ville').value  = _vocalParsed.ville  || '';
+  document.getElementById('f-dispo').value  = _vocalParsed.dispo  || 'contactez';
+  document.getElementById('f-favori').value = _vocalParsed.favori ? '1' : '0';
+  renderNoteStars(_noteEdit);
+  document.getElementById('artisanModal').classList.add('open');
+  _vocalParsed = null;
+}
+
+function resetVocal() {
+  stopVocal();
+  _vocalParsed = null;
+  document.getElementById('vp-transcript').style.display = 'none';
+  document.getElementById('vp-transcript').textContent = '';
+  document.getElementById('vp-preview').style.display = 'none';
+  document.getElementById('vp-confirm-btn').style.display = 'none';
+  document.getElementById('vp-edit-actions').style.display = 'none';
+  document.getElementById('vp-hint').style.display = 'block';
+  setVpStatus('Appuyez sur écouter et dictez les infos de l\'artisan', false);
+}
+
+function setVpStatus(msg, active) {
+  const el = document.getElementById('vp-status');
+  el.textContent = msg;
+  el.className = 'vp-status' + (active ? ' active' : '');
+}
+
+// ════════════════════════════════════════════════════════════
+//  TOAST
+// ════════════════════════════════════════════════════════════
+let _toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+// ════════════════════════════════════════════════════════════
+//  INIT
+// ════════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  initFirebase();
+  // Fermer modal en cliquant le fond
+  document.getElementById('artisanModal').addEventListener('click', e => {
+    if (e.target === document.getElementById('artisanModal')) closeModal();
+  });
+});
+</script>
+
+</body>
+</html>
