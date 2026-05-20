@@ -1326,6 +1326,1476 @@ if (typeof pdfjsLib !== 'undefined') {
 </style>
 </head>
 <body>
+<div id="app-dossier" style="display:none">
+
+
+<div class="toast" id="toast_d"></div>
+
+<!-- ══ AI PANEL ══════════════════════════════════════════ -->
+<div class="ai-panel" id="aiPanel_d">
+  <div class="ai-header">
+    <div class="ai-header-icon"><i class="ti ti-sparkles"></i></div>
+    <div class="ai-header-title">Assistant Phénix</div>
+    <button class="btn btn-sm btn-icon" onclick="toggleAI_d()"><i class="ti ti-x"></i></button>
+  </div>
+  <div class="ai-messages" id="aiMessages_d">
+    <div class="ai-msg">
+      <div class="ai-msg-avatar ai-avatar-ai">P</div>
+      <div class="ai-msg-bubble ai-bubble-ai">Bonjour ! Je suis votre assistant Phénix-Architecte. Je peux vous aider à rédiger des contrats, devis, comptes-rendus ou répondre à vos questions MOE.</div>
+    </div>
+  </div>
+  <div class="ai-suggestions-title">Suggestions rapides</div>
+  <div class="ai-suggestions">
+    <button class="ai-suggestion" onclick="askAI('Rédige un contrat de maîtrise d\'œuvre pour un logement individuel neuf')">📄 Contrat MOE — logement individuel</button>
+    <button class="ai-suggestion" onclick="askAI('Crée un compte-rendu de réunion de chantier professionnel')">📝 Compte-rendu de chantier</button>
+    <button class="ai-suggestion" onclick="askAI('Quelles sont les phases de la mission MOP et leurs % d\'honoraires ?')">ℹ️ Phases MOP &amp; honoraires</button>
+  </div>
+  <div class="ai-input-area">
+    <textarea class="ai-input" id="aiInput_d" placeholder="Posez votre question…" onkeydown="aiKeydown(event)"></textarea>
+    <button class="btn btn-primary btn-icon" onclick="sendAI()"><i class="ti ti-send"></i></button>
+  </div>
+</div>
+
+<!-- ══ MODALS ═════════════════════════════════════════════ -->
+<!-- Modal : vue projet (avec onglets Fiche / Historique) -->
+<div class="modal-overlay" id="projectModal">
+  <div class="modal" style="max-width:740px">
+
+    <!-- Header fixe -->
+    <div class="modal-header">
+      <div class="modal-title" id="projectModalTitle">Détails du projet</div>
+      <button class="btn btn-sm btn-icon" onclick="closeModal_d('projectModal')"><i class="ti ti-x"></i></button>
+    </div>
+
+    <!-- Onglets fixes (hors du body scrollable) -->
+    <div class="modal-tabs">
+      <div class="modal-tab active" id="tab-fiche" onclick="switchModalTab('fiche')"><i class="ti ti-file-description"></i> Fiche projet</div>
+      <div class="modal-tab" id="tab-facturation-proj" onclick="switchModalTab('facturation-proj')"><i class="ti ti-receipt-2"></i> Facturation <span id="projFactCount" style="background:var(--accent-bg);color:var(--accent);font-size:10px;padding:1px 6px;border-radius:20px;margin-left:4px;font-weight:700">0</span></div>
+      <div class="modal-tab" id="tab-historique" onclick="switchModalTab('historique')"><i class="ti ti-history"></i> Historique <span id="histCount" style="background:var(--accent-bg);color:var(--accent);font-size:10px;padding:1px 6px;border-radius:20px;margin-left:4px;font-weight:700">0</span></div>
+    </div>
+
+    <!-- Barre de progression de phase — fixe, visible en permanence sur l'onglet Fiche -->
+    <div class="phase-advance-bar" id="phaseAdvanceBar" style="margin:0;border-radius:0;border-left:none;border-right:none;border-top:none;flex-shrink:0">
+      <div style="flex:1">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:6px">Progression de la mission</div>
+        <div class="phase-chain-bar" id="phaseChainBar"></div>
+      </div>
+      <button class="btn btn-primary btn-sm" id="btnNextPhase" onclick="advanceToNextPhase()" style="white-space:nowrap"><i class="ti ti-arrow-right"></i> Phase suivante</button>
+    </div>
+
+    <!-- Body scrollable -->
+    <div class="modal-body">
+      <!-- Contenu onglet Fiche -->
+      <div class="modal-tab-content active" id="tabcontent-fiche">
+        <div id="projectModalBody"></div>
+      </div>
+      <!-- Contenu onglet Facturation projet -->
+      <div class="modal-tab-content" id="tabcontent-facturation-proj">
+        <div id="projectFacturationBody"></div>
+      </div>
+      <!-- Contenu onglet Historique -->
+      <div class="modal-tab-content" id="tabcontent-historique">
+        <div id="projectHistoriqueBody"></div>
+      </div>
+    </div>
+
+    <!-- Footer fixe -->
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-sm" onclick="deleteCurrentProject()"><i class="ti ti-trash"></i> Supprimer</button>
+      <button class="btn" onclick="closeModal_d('projectModal')">Fermer</button>
+      <button class="btn btn-primary" id="modalAiBtn">↗ Analyse IA</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal : nouveau devis / facture -->
+<div class="modal-overlay" id="factureModal">
+  <div class="modal" style="max-width:620px">
+    <div class="modal-header">
+      <div class="modal-title" id="factureModalTitle">Nouveau devis</div>
+      <button class="btn btn-sm btn-icon" onclick="closeModal_d('factureModal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="fact-edit-id">
+      <div class="fact-modal-section">Informations générales</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Type *</label>
+          <select id="fact-type" onchange="onFactTypeChange()">
+            <option value="devis">Devis</option>
+            <option value="facture">Facture</option>
+            <option value="avoir">Avoir</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Numéro *</label><input type="text" id="fact-numero" placeholder="Ex. DEV-2025-001"></div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group"><label>Projet *</label>
+          <select id="fact-projet-id" onchange="prefillFactBase()"></select>
+        </div>
+        <div class="form-group"><label>Phase associée</label>
+          <select id="fact-phase">
+            <option value="">— Toutes phases —</option>
+            <option>ESQ</option><option>APS</option><option>APD</option><option>PC</option>
+            <option>DCE</option><option>ACT</option><option>DET</option><option>AOR</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group"><label>Date d'émission *</label><input type="date" id="fact-date-emission"></div>
+        <div class="form-group" id="fact-date-echeance-group"><label>Date d'échéance</label><input type="date" id="fact-date-echeance"></div>
+      </div>
+      <div class="form-group" style="margin-bottom:14px"><label>Objet / Description</label><input type="text" id="fact-objet" placeholder="Ex. Honoraires ESQ — 30% de la mission"></div>
+
+      <div class="fact-modal-section">Honoraires & Facturation</div>
+      <!-- Calcul par pourcentage -->
+      <div style="background:var(--accent-bg);border:1.5px solid var(--accent);border-radius:var(--r-md);padding:14px 16px;margin-bottom:14px">
+        <div style="font-size:11px;font-weight:700;color:var(--accent2);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px">Calcul par tranche d'honoraires</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px">
+          <div class="form-group" style="margin:0">
+            <label>Base honoraires HT (€)</label>
+            <input type="number" id="fact-base-honoraires" placeholder="Ex. 45 000" oninput="calcFactFromPct()">
+          </div>
+          <div class="form-group" style="margin:0">
+            <label>Pourcentage à facturer (%)</label>
+            <input type="number" id="fact-pct" placeholder="Ex. 30" min="0" max="100" step="0.5" oninput="calcFactFromPct()">
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+          <span style="font-size:11px;color:var(--text2)">Raccourcis :</span>
+          <button type="button" onclick="setPct(30)" class="btn btn-sm" style="font-size:11px;padding:2px 10px">30%</button>
+          <button type="button" onclick="setPct(40)" class="btn btn-sm" style="font-size:11px;padding:2px 10px">40%</button>
+          <button type="button" onclick="setPct(50)" class="btn btn-sm" style="font-size:11px;padding:2px 10px">50%</button>
+          <button type="button" onclick="setPct(70)" class="btn btn-sm" style="font-size:11px;padding:2px 10px">70%</button>
+          <button type="button" onclick="setPctSolde()" class="btn btn-sm btn-primary" style="font-size:11px;padding:2px 10px">Solde</button>
+        </div>
+        <div id="fact-pct-result" style="display:none;padding:8px 12px;background:var(--card);border-radius:var(--r-sm);font-size:13px;font-weight:600;color:var(--navy);text-align:center;border:1px solid var(--border)"></div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group"><label>Montant HT (€) *</label><input type="number" id="fact-montant-ht" placeholder="Calculé ou saisi manuellement" oninput="calcFactTTC()"></div>
+        <div class="form-group"><label>TVA (%)</label><input type="number" id="fact-tva" value="20" step="0.5" oninput="calcFactTTC()"></div>
+      </div>
+      <div id="fact-ttc-preview" style="background:var(--accent-bg);border:1px solid var(--accent);border-radius:var(--r-sm);padding:8px 12px;font-size:12px;color:var(--accent);margin-bottom:14px;display:none"></div>
+
+      <div class="form-grid">
+        <div class="form-group"><label id="fact-statut-label">Statut devis</label>
+          <select id="fact-statut">
+            <option value="en_attente">En attente</option>
+            <option value="accepte">Accepté</option>
+            <option value="refuse">Refusé</option>
+          </select>
+        </div>
+        <div class="form-group" id="fact-paye-group"><label>Montant payé HT (€)</label><input type="number" id="fact-montant-paye" placeholder="0" oninput="calcFactPaiement()"></div>
+      </div>
+      <div id="fact-paiement-preview" style="display:none;margin-bottom:10px"></div>
+      <div class="form-group"><label>Notes internes</label><textarea id="fact-notes" rows="2" placeholder="Informations complémentaires, référence PO client…"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal_d('factureModal')">Annuler</button>
+      <button class="btn btn-primary" onclick="saveFacture_d()"><i class="ti ti-check"></i> Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal : édition projet -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Modifier le projet</div>
+      <button class="btn btn-sm btn-icon" onclick="closeModal_d('editModal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body" id="editModalBody"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal_d('editModal')">Annuler</button>
+      <button class="btn btn-primary" onclick="saveEditProject()"><i class="ti ti-check"></i> Sauvegarder</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal : tâche -->
+<div class="modal-overlay" id="tacheModal">
+  <div class="modal" style="max-width:540px">
+    <div class="modal-header">
+      <div class="modal-title" id="tacheModalTitle">Nouvelle tâche</div>
+      <button class="btn btn-sm btn-icon" onclick="closeModal_d('tacheModal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="tache-edit-id">
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Titre de la tâche *</label>
+        <input type="text" id="tache-titre" placeholder="Ex. Envoyer le DCE à l'entreprise Dupont">
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Description / Notes</label>
+        <textarea id="tache-desc" rows="2" placeholder="Détails, contexte, pièces jointes…"></textarea>
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Projet associé</label>
+          <select id="tache-projet"></select>
+        </div>
+        <div class="form-group">
+          <label>Phase</label>
+          <select id="tache-phase">
+            <option value="">— Aucune —</option>
+            <option>ESQ</option><option>APS</option><option>APD</option><option>PC</option>
+            <option>DCE</option><option>ACT</option><option>DET</option><option>AOR</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Date prévue</label>
+          <input type="date" id="tache-date">
+        </div>
+        <div class="form-group">
+          <label>Heure</label>
+          <input type="time" id="tache-heure" value="09:00" min="08:00" max="19:00">
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Durée estimée</label>
+        <select id="tache-duree">
+          <option value="30">30 min</option>
+          <option value="60" selected>1 heure</option>
+          <option value="90">1h30</option>
+          <option value="120">2 heures</option>
+          <option value="180">3 heures</option>
+          <option value="240">4 heures</option>
+          <option value="480">Journée entière</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom:14px">
+        <label>Priorité</label>
+        <div class="tache-modal-prio">
+          <button type="button" class="prio-btn" id="prio-normale" onclick="setPrio('normale')">🔵 Normale</button>
+          <button type="button" class="prio-btn" id="prio-haute" onclick="setPrio('haute')">🟡 Haute</button>
+          <button type="button" class="prio-btn" id="prio-urgent" onclick="setPrio('urgent')">🔴 Urgent</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Statut</label>
+        <select id="tache-statut">
+          <option value="todo">À faire</option>
+          <option value="doing">En cours</option>
+          <option value="done">Achevée</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-sm" id="tacheDeleteBtn" style="display:none" onclick="deleteTache()"><i class="ti ti-trash"></i> Supprimer</button>
+      <button class="btn" onclick="closeModal_d('tacheModal')">Annuler</button>
+      <button class="btn btn-primary" onclick="saveTache()"><i class="ti ti-check"></i> Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal : calculateur -->
+<div class="modal-overlay" id="calcModal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <div class="modal-title">🧮 Calculateur d'honoraires</div>
+      <button class="btn btn-sm btn-icon" onclick="closeModal_d('calcModal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group"><label>Montant travaux HT (€)</label><input type="number" id="calcMontant" placeholder="Ex. 350 000" oninput="calcHonoraires()"></div>
+        <div class="form-group"><label>Taux d'honoraires (%)</label><input type="number" id="calcTaux" placeholder="Ex. 11.5" step="0.5" oninput="calcHonoraires()"></div>
+      </div>
+      <div id="calcResult" style="display:none;background:var(--accent-bg);border:1px solid var(--accent);border-radius:var(--r-md);padding:14px;margin-top:8px">
+        <div id="calcDetails"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal : échéance -->
+<div class="modal-overlay" id="echeanceModal">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-header">
+      <div class="modal-title" id="echeanceModalTitle">Nouvelle échéance</div>
+      <button class="btn btn-sm btn-icon" onclick="closeModal_d('echeanceModal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group"><label>Date *</label><input type="date" id="ech-date"></div>
+        <div class="form-group"><label>Type</label>
+          <select id="ech-type"><option>Rendu</option><option>Facture</option><option>Réunion</option><option>Chantier</option><option>Dépôt</option><option>Autre</option></select>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:12px"><label>Description *</label><input type="text" id="ech-desc" placeholder="Ex. Dossier DCE complet"></div>
+      <div class="form-grid">
+        <div class="form-group"><label>Projet</label><input type="text" id="ech-projet" placeholder="Nom du projet"></div>
+        <div class="form-group"><label>Client</label><input type="text" id="ech-client" placeholder="Nom du client"></div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group"><label>Priorité</label>
+          <select id="ech-prio"><option>Normale</option><option>Haute</option><option>Urgent</option></select>
+        </div>
+        <div class="form-group"><label>Heure</label>
+          <input type="time" id="ech-heure" value="09:00" min="08:00" max="19:00">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Couleur <span style="font-size:10px;color:var(--text3);font-weight:400">(identifiant visuel dans le calendrier)</span></label>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:4px" id="ech-color-picker">
+          <input type="color" id="ech-color" value="#F5A623" style="width:40px;height:32px;border:1px solid var(--border);border-radius:var(--r-sm);cursor:pointer;padding:2px">
+          <div style="display:flex;gap:6px;flex-wrap:wrap" id="ech-color-swatches">
+            <button type="button" class="color-swatch" style="background:#4A9CC7" onclick="setEchColor('#4A9CC7')" title="Bleu"></button>
+            <button type="button" class="color-swatch" style="background:#F5A623" onclick="setEchColor('#F5A623')" title="Ambre"></button>
+            <button type="button" class="color-swatch" style="background:#C0392B" onclick="setEchColor('#C0392B')" title="Rouge"></button>
+            <button type="button" class="color-swatch" style="background:#2D7A4F" onclick="setEchColor('#2D7A4F')" title="Vert"></button>
+            <button type="button" class="color-swatch" style="background:#8E44AD" onclick="setEchColor('#8E44AD')" title="Violet"></button>
+            <button type="button" class="color-swatch" style="background:#1B2D5B" onclick="setEchColor('#1B2D5B')" title="Marine"></button>
+            <button type="button" class="color-swatch" style="background:#E67E22" onclick="setEchColor('#E67E22')" title="Orange"></button>
+            <button type="button" class="color-swatch" style="background:#16A085" onclick="setEchColor('#16A085')" title="Teal"></button>
+            <button type="button" class="color-swatch" style="background:#2C3E50" onclick="setEchColor('#2C3E50')" title="Gris foncé"></button>
+            <button type="button" class="color-swatch" style="background:#E91E63" onclick="setEchColor('#E91E63')" title="Rose"></button>
+          </div>
+          <span id="ech-color-preview" style="font-size:12px;color:var(--text2)"></span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-sm" id="ech-delete-btn" style="display:none;margin-right:auto" onclick="deleteEchFromModal()"><i class="ti ti-trash"></i> Supprimer</button>
+      <button class="btn" onclick="closeModal_d('echeanceModal')">Annuler</button>
+      <button class="btn btn-primary" onclick="saveEcheance()"><i class="ti ti-check"></i> Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL IMPORT ══════════════════════════════════════════ -->
+<div class="modal-overlay" id="importModalOverlay" onclick="if(event.target===this)closeModal_d('importModal')" style="display:none;position:fixed;inset:0;background:rgba(15,30,61,.55);z-index:150;align-items:center;justify-content:center">
+  <div class="modal" id="importModal" style="max-width:560px;width:100%;max-height:90vh;overflow-y:auto">
+    <div class="modal-header" style="display:flex;align-items:center;justify-content:space-between;padding:1.25rem 1.5rem;border-bottom:1.5px solid var(--border);flex-shrink:0">
+      <div style="font-family:var(--font-serif);font-size:17px;color:var(--navy)" id="importModalTitle">Importer des documents</div>
+      <button class="btn btn-icon" onclick="closeModal_d('importModal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div style="padding:1.5rem">
+
+      <!-- Onglets import -->
+      <div class="tabs" style="margin-bottom:1.25rem">
+        <div class="tab active" id="itab-json" onclick="switchImportTab('json',this)"><i class="ti ti-code"></i> JSON</div>
+        <div class="tab" id="itab-csv" onclick="switchImportTab('csv',this)"><i class="ti ti-table"></i> CSV / Excel</div>
+        <div class="tab" id="itab-pdf" onclick="switchImportTab('pdf',this)"><i class="ti ti-file-text"></i> PDF (IA)</div>
+      </div>
+
+      <!-- Onglet JSON -->
+      <div id="importView-json">
+        <div style="background:var(--accent-bg);border:1.5px solid var(--accent);border-radius:var(--r-md);padding:12px 14px;margin-bottom:1rem;font-size:13px;color:var(--accent2)">
+          <strong>Format JSON Phénix-Architecte</strong><br>Importez un fichier exporté depuis ce logiciel. Toutes les factures et devis seront restaurés avec leurs données complètes.
+        </div>
+        <div id="json-drop-zone" style="border:2px dashed var(--border);border-radius:var(--r-lg);padding:2.5rem;text-align:center;cursor:pointer;transition:all .2s;background:var(--bg)" onclick="document.getElementById('json-file-input').click()" ondragover="event.preventDefault();this.style.borderColor='#4A9CC7';this.style.background='var(--accent-bg)'" ondragleave="this.style.borderColor='var(--border)';this.style.background='var(--bg)'" ondrop="handleJsonDrop(event)">
+          <div style="font-size:32px;color:var(--accent);margin-bottom:8px"><i class="ti ti-file-code"></i></div>
+          <div style="font-weight:600;color:var(--navy);margin-bottom:4px">Glissez votre fichier JSON ici</div>
+          <div style="font-size:12px;color:var(--text2)">ou cliquez pour parcourir</div>
+          <input type="file" id="json-file-input" accept=".json" style="display:none" onchange="handleJsonFile(this.files[0])">
+        </div>
+        <div id="json-preview" style="display:none;margin-top:1rem"></div>
+        <div style="margin-top:1rem;display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn" onclick="closeModal_d('importModal')">Annuler</button>
+          <button class="btn btn-primary" id="btn-import-json" style="display:none" onclick="confirmImportJson()"><i class="ti ti-check"></i> Importer</button>
+        </div>
+      </div>
+
+      <!-- Onglet CSV -->
+      <div id="importView-csv" style="display:none">
+        <div style="background:var(--accent-bg);border:1.5px solid var(--accent);border-radius:var(--r-md);padding:12px 14px;margin-bottom:1rem;font-size:13px;color:var(--accent2)">
+          <strong>Format CSV attendu (séparateur ;)</strong><br>
+          Colonnes : <code style="font-size:11px;background:var(--bg);padding:1px 5px;border-radius:3px">type;numero;projetNom;phase;objet;dateEmission;dateEcheance;montantHt;tva;montantPaye;statut;notes</code>
+        </div>
+        <div style="margin-bottom:.75rem">
+          <button class="btn btn-sm" onclick="downloadCsvTemplate()" style="font-size:12px"><i class="ti ti-download"></i> Télécharger le modèle CSV</button>
+        </div>
+        <div id="csv-drop-zone" style="border:2px dashed var(--border);border-radius:var(--r-lg);padding:2.5rem;text-align:center;cursor:pointer;transition:all .2s;background:var(--bg)" onclick="document.getElementById('csv-file-input').click()" ondragover="event.preventDefault();this.style.borderColor='#4A9CC7';this.style.background='var(--accent-bg)'" ondragleave="this.style.borderColor='var(--border)';this.style.background='var(--bg)'" ondrop="handleCsvDrop(event)">
+          <div style="font-size:32px;color:var(--accent);margin-bottom:8px"><i class="ti ti-table"></i></div>
+          <div style="font-weight:600;color:var(--navy);margin-bottom:4px">Glissez votre fichier CSV ici</div>
+          <div style="font-size:12px;color:var(--text2)">ou cliquez pour parcourir (.csv)</div>
+          <input type="file" id="csv-file-input" accept=".csv,.txt" style="display:none" onchange="handleCsvFile(this.files[0])">
+        </div>
+        <div id="csv-preview" style="display:none;margin-top:1rem"></div>
+        <div style="margin-top:1rem;display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn" onclick="closeModal_d('importModal')">Annuler</button>
+          <button class="btn btn-primary" id="btn-import-csv" style="display:none" onclick="confirmImportCsv()"><i class="ti ti-check"></i> Importer</button>
+        </div>
+      </div>
+
+      <!-- Onglet PDF -->
+      <div id="importView-pdf" style="display:none">
+        <div style="background:var(--accent-bg);border:1.5px solid var(--accent);border-radius:var(--r-md);padding:12px 14px;margin-bottom:1rem;font-size:13px;color:var(--accent2)">
+          Chargez un PDF de devis ou facture. Choisissez si vous souhaitez l'analyser avec l'IA ou le rattacher manuellement à une fiche existante.
+        </div>
+
+        <!-- Mode selector -->
+        <div style="display:flex;gap:8px;margin-bottom:1.25rem">
+          <button id="pdf-mode-ai" class="btn btn-primary btn-sm" onclick="setPdfMode('ai')" style="flex:1"><i class="ti ti-sparkles"></i> Reconnaissance IA</button>
+          <button id="pdf-mode-manual" class="btn btn-sm" onclick="setPdfMode('manual')" style="flex:1"><i class="ti ti-paperclip"></i> Attacher manuellement</button>
+        </div>
+
+        <div id="pdf-drop-zone" style="border:2px dashed var(--border);border-radius:var(--r-lg);padding:2.5rem;text-align:center;cursor:pointer;transition:all .2s;background:var(--bg)" onclick="document.getElementById('pdf-file-input').click()" ondragover="event.preventDefault();this.style.borderColor='#4A9CC7';this.style.background='var(--accent-bg)'" ondragleave="this.style.borderColor='var(--border)';this.style.background='var(--bg)'" ondrop="handlePdfDrop(event)">
+          <div style="font-size:32px;color:var(--accent);margin-bottom:8px"><i class="ti ti-file-text"></i></div>
+          <div style="font-weight:600;color:var(--navy);margin-bottom:4px">Glissez votre PDF ici</div>
+          <div style="font-size:12px;color:var(--text2)">ou cliquez pour parcourir (.pdf)</div>
+          <input type="file" id="pdf-file-input" accept=".pdf" style="display:none" onchange="handlePdfFile(this.files[0])">
+        </div>
+
+        <!-- Panneau mode manuel (caché par défaut) -->
+        <div id="pdf-manual-panel" style="display:none;margin-top:1rem">
+          <div class="form-group">
+            <label>Rattacher à une facture / devis existant(e)</label>
+            <select id="pdf-attach-target" style="width:100%">
+              <option value="">-- Sélectionner --</option>
+            </select>
+          </div>
+          <div id="pdf-manual-info" style="display:none;margin-top:.5rem;font-size:12px;color:var(--text2)"></div>
+        </div>
+
+        <div id="pdf-status" style="display:none;margin-top:1rem"></div>
+        <div id="pdf-result" style="display:none;margin-top:1rem"></div>
+        <div style="margin-top:1rem;display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn" onclick="closeModal_d('importModal')">Annuler</button>
+          <button class="btn btn-primary" id="btn-import-pdf" style="display:none" onclick="confirmImportPdf()"><i class="ti ti-check"></i> <span id="btn-import-pdf-label">Créer la facture/devis</span></button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Overlay pour fermer le menu sur mobile -->
+<div class="sidebar-overlay" id="sidebarOverlay_d" onclick="closeSidebar_d()"></div>
+
+
+
+
+<!-- ══ MODAL CR RÉUNION (Dossier) ══════════════════════════ -->
+<div class="modal-overlay" id="modalReunion">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <div class="modal-title" id="mReunionTitle">Nouveau compte rendu de réunion</div>
+      <button class="btn btn-sm btn-icon" onclick="closeModal_d('modalReunion')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <!-- Projet + Num + Date -->
+        <div class="form-group"><label>Projet *</label>
+          <select id="reun-projet" onchange="updateReunionSubtitle()">
+            <option value="">— Sélectionner un projet —</option>
+          </select>
+        </div>
+        <div class="form-group"><label>N° de CR</label><input type="text" id="reun-num" placeholder="CR-001"></div>
+        <div class="form-group"><label>Date *</label><input type="date" id="reun-date"></div>
+        <div class="form-group"><label>Prochain RDV</label><input type="date" id="reun-prochaine"></div>
+
+        <!-- Rédacteur -->
+        <div class="form-group"><label>Rédigé par</label><input type="text" id="reun-auteur" placeholder="Phénix-Architecte"></div>
+
+        <!-- Participants (saisie libre — différent du CR chantier) -->
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Participants présents</label>
+          <div style="display:flex;gap:6px;margin-bottom:6px">
+            <input type="text" id="reun-presents-input" placeholder="Nom, prénom ou société…" style="flex:1"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();reunAddPresent()}">
+            <button class="btn btn-sm" onclick="reunAddPresent()"><i class="ti ti-plus"></i> Ajouter</button>
+          </div>
+          <div id="reun-presents-chips" style="display:flex;flex-wrap:wrap;gap:6px;min-height:32px;background:var(--bg);border:1.5px solid var(--border);border-radius:var(--r-md);padding:6px 8px"></div>
+          <input type="hidden" id="reun-presents-val">
+        </div>
+      </div>
+
+      <!-- Contenu du CR -->
+      <div style="display:flex;flex-direction:column;gap:12px;margin-top:4px">
+
+        <div class="form-group">
+          <label>Avancement du projet</label>
+          <textarea id="reun-avancement" rows="4" class="form-input" placeholder="Décrivez l'état d'avancement général du projet…"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label>Points abordés / Décisions</label>
+          <textarea id="reun-decisions" rows="4" class="form-input" placeholder="Points discutés, décisions prises, actions à mener…"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label>Réserves / Points en suspens</label>
+          <textarea id="reun-reserves" rows="3" class="form-input" placeholder="Points en attente, problèmes soulevés, réserves… (laisser vide si RAS)"></textarea>
+        </div>
+
+        <!-- Photos -->
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <label style="font-weight:600;color:var(--navy)">📷 Photos</label>
+            <label class="btn btn-sm" style="cursor:pointer">
+              <i class="ti ti-photo-plus"></i> Ajouter
+              <input type="file" accept="image/*" multiple style="display:none" onchange="reunAddPhotos(this)">
+            </label>
+          </div>
+          <div id="reun-photos-container" style="display:flex;flex-wrap:wrap;gap:8px;min-height:60px;background:var(--bg);border:1.5px dashed var(--border);border-radius:var(--r-md);padding:8px"></div>
+        </div>
+
+        <!-- Plans / Documents PDF -->
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <label style="font-weight:600;color:var(--navy)">📐 Plans & Documents annotables</label>
+            <label class="btn btn-sm" style="cursor:pointer">
+              <i class="ti ti-file-plus"></i> Ajouter PDF/Image
+              <input type="file" accept="image/*,.pdf" id="reun-plan-input" style="display:none" onchange="reunAddPlan(this)">
+            </label>
+          </div>
+          <div id="reun-plans-container"></div>
+        </div>
+
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger" id="reun-delete-btn" style="display:none;margin-right:auto" onclick="deleteReunion()">
+        <i class="ti ti-trash"></i> Supprimer
+      </button>
+      <button class="btn btn-sm" onclick="exportReunionPdf()" style="margin-right:auto">
+        <i class="ti ti-printer"></i> Exporter PDF
+      </button>
+      <button class="btn" onclick="closeModal_d('modalReunion')">Annuler</button>
+      <button class="btn btn-primary" onclick="saveReunion()"><i class="ti ti-check"></i> Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL CR VOCAL RÉUNION ══════════════════════════════ -->
+<div class="modal-overlay" id="modalReunionVocal">
+  <div class="modal" style="max-width:520px;padding:0;overflow:hidden;max-height:90vh;display:flex;flex-direction:column">
+    <div style="background:linear-gradient(135deg,#7B0000,#C0392B);padding:16px 22px;color:#fff;display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+      <div>
+        <div style="font-size:11px;opacity:.65;text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px">Phénix-Architecte · Mode Mains Libres</div>
+        <div style="font-size:17px;font-weight:600">🎙️ CR Réunion Vocal</div>
+      </div>
+      <button class="btn btn-sm" onclick="stopReunionVocal(true)" style="background:rgba(255,255,255,.15);color:#fff;border-color:transparent">✕</button>
+    </div>
+    <div style="background:rgba(192,57,43,.12);padding:10px 22px;display:flex;align-items:center;gap:10px;flex-shrink:0">
+      <div id="rvocal-step-dots" style="display:flex;gap:6px;flex:1"></div>
+      <div id="rvocal-step-label" style="font-size:11px;font-weight:700;color:#C0392B;text-transform:uppercase;letter-spacing:.07em;white-space:nowrap"></div>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:20px 22px;display:flex;flex-direction:column;gap:14px">
+      <div id="rvocal-question-block" style="background:linear-gradient(135deg,#C0392B11,#C0392B05);border:1.5px solid #C0392B44;border-radius:12px;padding:16px 18px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#C0392B;margin-bottom:8px" id="rvocal-step-name"></div>
+        <div style="font-size:17px;font-weight:600;color:var(--navy);line-height:1.4" id="rvocal-question"></div>
+        <div style="font-size:11px;color:var(--text3);margin-top:6px" id="rvocal-hint"></div>
+      </div>
+      <div id="rvocal-transcript-wrap" style="display:none">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:5px">J'entends…</div>
+        <div id="rvocal-transcript" style="background:var(--bg);border:1.5px solid var(--border);border-radius:var(--r-md);padding:10px 12px;font-size:14px;color:var(--text);font-style:italic;min-height:42px"></div>
+      </div>
+      <div id="rvocal-answer-wrap" style="display:none">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--green);margin-bottom:5px">✓ Enregistré</div>
+        <div id="rvocal-answer" style="background:#E3F5EC;border:1.5px solid #2D7A4F44;border-radius:var(--r-md);padding:10px 12px;font-size:13px;color:#1a4731"></div>
+      </div>
+      <div id="rvocal-recap" style="display:none;flex-direction:column;gap:8px"></div>
+      <div id="rvocal-status" style="text-align:center;font-size:13px;color:var(--text2);padding:6px 0"></div>
+    </div>
+    <div style="padding:14px 22px;border-top:2px solid var(--border);background:var(--card);display:flex;flex-direction:column;gap:8px;flex-shrink:0">
+      <button id="rvocal-mic-btn" onclick="toggleReunionVocalListening()"
+        style="width:100%;padding:14px;border-radius:12px;background:linear-gradient(135deg,#C0392B,#E74C3C);color:#fff;border:none;font-size:16px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px">
+        <i class="ti ti-microphone" style="font-size:22px" id="rvocal-mic-icon"></i>
+        <span id="rvocal-mic-label">Appuyer pour parler</span>
+      </button>
+      <div style="display:flex;gap:8px">
+        <button onclick="rvocalSkipStep()" class="btn" style="flex:1;font-size:12px"><i class="ti ti-arrow-right"></i> Passer</button>
+        <button onclick="rvocalPrevStep()" class="btn" style="flex:1;font-size:12px"><i class="ti ti-arrow-left"></i> Retour</button>
+        <button id="rvocal-confirm-btn" onclick="rvocalConfirmSave()" class="btn btn-primary" style="flex:2;font-size:13px;display:none"><i class="ti ti-check"></i> Confirmer & Sauvegarder</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+<!-- ══ APPLICATION ════════════════════════════════════════ -->
+
+<div class="app">
+  <aside class="sidebar" id="sidebar_d">
+    <div class="sidebar-logo" onclick="switchApp('chantier')" style="cursor:pointer" title="→ Gestion de Chantier">
+      <div class="logo-icon" style="background:linear-gradient(135deg,#1B2D5B,#4A9CC7)"><i class="ti ti-briefcase"></i></div>
+      <div class="logo-text-block">
+        <div class="logo-phoenix">Phénix</div>
+        <div class="logo-sub" style="display:flex;align-items:center;gap:4px">Dossier&nbsp;<i class="ti ti-arrows-exchange" style="font-size:9px;opacity:.8"></i>&nbsp;Chantier</div>
+      </div>
+    </div>
+    <div class="nav-section">Projets</div>
+    <div class="nav-item active" onclick="show_d('dashboard',this)"><i class="ti ti-layout-dashboard"></i> Tableau de bord</div>
+    <div class="nav-item" onclick="show_d('projets',this)"><i class="ti ti-building"></i> Projets <span class="nav-badge" id="navBadgeProjets">0</span></div>
+    <div class="nav-item" onclick="show_d('phases',this)"><i class="ti ti-list-check"></i> Phases &amp; suivi</div>
+    <div class="nav-item" onclick="show_d('reunions',this)"><i class="ti ti-file-description"></i> Comptes Rendus <span class="nav-badge" id="navBadgeReunions">0</span></div>
+    <div class="nav-item" onclick="show_d('taches',this)"><i class="ti ti-checkbox"></i> Tâches <span class="nav-badge" id="navBadgeTaches">0</span></div>
+    <div class="nav-item" onclick="show_d('agenda',this)"><i class="ti ti-calendar"></i> Agenda &amp; échéances</div>
+    <div class="nav-item" onclick="show_d('calendrier',this)"><i class="ti ti-calendar-week"></i> Calendrier</div>
+    <div class="nav-section">Gestion</div>
+    <div class="nav-item" onclick="show_d('devis',this)"><i class="ti ti-file-invoice"></i> Devis &amp; honoraires</div>
+    <div class="nav-item" onclick="show_d('facturation',this)"><i class="ti ti-receipt-2"></i> Facturation <span class="nav-badge" id="navBadgeFactures">0</span></div>
+    <div class="nav-item" onclick="show_d('comptabilite',this)"><i class="ti ti-calculator"></i> Comptabilité</div>
+    <div class="nav-section">Documents</div>
+    <div class="nav-item" onclick="show_d('docs',this)"><i class="ti ti-folder"></i> Bibliothèque</div>
+    <div class="nav-item" onclick="show_d('new',this)"><i class="ti ti-plus"></i> Nouveau projet</div>
+    <div class="nav-section">Sécurité</div>
+    <div class="nav-item" onclick="exportToutJSON()" title="Sauvegarder toutes vos données"><i class="ti ti-database-export"></i> Exporter tout</div>
+    <div class="nav-item" onclick="nettoyerFacturesFantomes()" title="Supprimer les factures sans projet ni numéro"><i class="ti ti-trash"></i> Nettoyer données</div>
+    <div class="nav-item" onclick="openChangePwd()"><i class="ti ti-lock"></i> Mot de passe</div>
+    <div class="sidebar-bottom">
+      <div class="user-chip">
+        <div class="user-avatar">PA</div>
+        <div class="user-name" id="sidebarSyncLabel_d">Connexion…</div>
+      </div>
+    </div>
+  </aside>
+
+  <div class="main-area">
+    <div class="topbar">
+      <button class="btn-hamburger" onclick="openSidebar_d()" aria-label="Menu"><i class="ti ti-menu-2"></i></button>
+      <div class="topbar-title" id="topbarTitle_d">Tableau de bord</div>
+      <div class="topbar-actions">
+        <span class="sync-status"><span class="sync-dot" id="syncDot_d"></span><span id="syncLabel_d">Connexion…</span></span>
+        <div class="search-bar"><i class="ti ti-search"></i><input type="text" placeholder="Rechercher un projet…" oninput="globalSearch(this.value)"></div>
+        <button class="btn" onclick="toggleAI_d()"><i class="ti ti-sparkles"></i> <span class="btn-ai-label">Assistant IA</span></button>
+        <button class="btn btn-primary" onclick="show_d('new', document.querySelectorAll('.nav-item')[6])"><i class="ti ti-plus"></i> <span class="btn-label">Nouveau</span></button>
+      </div>
+    </div>
+
+    <div class="content" id="mainContent_d">
+
+      <!-- ═══ DASHBOARD ═══ -->
+      <div class="page active" id="page-dashboard_d">
+        <!-- Bannière de configuration -->
+        <div class="config-banner" id="configBanner_d">
+          <div class="config-banner-icon">⚙️</div>
+          <div class="config-banner-text">
+            <h3>Configuration Firebase requise</h3>
+            <p>Pour activer la synchronisation multi-appareils, ouvrez le fichier HTML dans un éditeur de texte et remplacez les valeurs <code>VOTRE_API_KEY</code>, <code>VOTRE_PROJECT_ID</code>, etc. par vos identifiants Firebase.<br>
+            Consultez le <strong>guide d'installation</strong> fourni avec ce fichier pour les instructions pas à pas.</p>
+          </div>
+        </div>
+
+        <div class="metrics">
+          <div class="metric"><div class="metric-icon"><i class="ti ti-building"></i></div><div class="metric-label">Projets actifs</div><div class="metric-value" id="db-projetsActifs">0</div><div class="metric-sub" id="db-projetsActifsSub">—</div></div>
+          <div class="metric"><div class="metric-icon"><i class="ti ti-trending-up"></i></div><div class="metric-label">CA en cours (Hon. + Com.)</div><div class="metric-value" id="db-honoraires_d">0 €</div><div class="metric-sub" id="db-honorairesSub">—</div></div>
+          <div class="metric"><div class="metric-icon"><i class="ti ti-calendar"></i></div><div class="metric-label">Échéances ce mois</div><div class="metric-value" id="db-echeances">0</div><div class="metric-sub" id="db-echeancesSub">—</div></div>
+          <div class="metric"><div class="metric-icon"><i class="ti ti-chart-line"></i></div><div class="metric-label">Avancement moyen</div><div class="metric-value" id="db-avancement_d">—</div><div class="metric-sub">tous projets actifs</div></div>
+        </div>
+        <div class="two-col">
+          <div>
+            <div class="card">
+              <div class="card-header">
+                <div><div class="card-title">Projets en cours</div><div class="card-subtitle" id="db-subtitle_d">—</div></div>
+                <button class="btn btn-sm" onclick="show_d('projets',document.querySelectorAll('.nav-item')[1])">Voir tout <i class="ti ti-arrow-right"></i></button>
+              </div>
+              <div id="db-projetsList"><div class="empty-state"><div class="empty-icon"><i class="ti ti-building"></i></div><div class="empty-title">Aucun projet</div><div class="empty-sub">Créez votre premier projet</div></div></div>
+            </div>
+          </div>
+          <div>
+            <div class="card">
+              <div class="card-header"><div class="card-title">Prochaines échéances</div></div>
+              <div id="db-echeancesList"><div style="color:var(--text2);font-size:13px;padding:1rem 0">Aucune échéance enregistrée.</div></div>
+            </div>
+            <div class="card">
+              <div class="card-header"><div class="card-title">Accès rapides IA</div></div>
+              <div style="display:flex;flex-direction:column;gap:7px">
+                <button class="ai-suggestion" onclick="toggleAI_d();askAI('Génère un contrat de maîtrise d\'œuvre pour un logement individuel neuf, mission complète loi MOP.')">📄 Générer un contrat MOE</button>
+                <button class="ai-suggestion" onclick="toggleAI_d();askAI('Crée un compte-rendu de réunion de chantier professionnel avec tous les champs nécessaires.')">📝 Compte-rendu de chantier</button>
+                <button class="ai-suggestion" onclick="openCalcModal()">🧮 Calculateur d'honoraires</button>
+                <button class="ai-suggestion" onclick="toggleAI_d();askAI('Rédige une lettre de mission et de présentation de mes honoraires pour un nouveau projet.')">✉️ Lettre de mission</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ PROJETS ═══ -->
+      <div class="page" id="page-projets">
+        <div class="page-header">
+          <div><div class="page-title">Projets</div><div class="page-subtitle" id="projets-subtitle">—</div></div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn" id="viewToggle" onclick="toggleProjectView()"><i class="ti ti-layout-grid"></i> Vue cartes</button>
+            <button class="btn btn-primary" onclick="show_d('new',document.querySelectorAll('.nav-item')[6])"><i class="ti ti-plus"></i> Nouveau projet</button>
+          </div>
+        </div>
+        <div class="tabs">
+          <div class="tab active" onclick="filterProjects('all',this)">Tous</div>
+          <div class="tab" onclick="filterProjects('actif',this)">Actifs</div>
+          <div class="tab" onclick="filterProjects('demarrage',this)">Démarrage</div>
+          <div class="tab" onclick="filterProjects('etude',this)">Études</div>
+          <div class="tab" onclick="filterProjects('cloture',this)">Clôturés</div>
+        </div>
+        <div id="projectListView">
+          <div class="card" style="padding:0;overflow:hidden">
+            <table>
+              <thead style="background:var(--bg)"><tr>
+                <th style="padding:12px 8px 12px 16px">Réf.</th>
+                <th>Nom du projet</th><th>Client</th><th>Type</th><th>Mission</th>
+                <th>Phase</th><th>Avancement</th><th>Honoraires HT</th><th>Statut</th><th></th>
+              </tr></thead>
+              <tbody id="projectTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div id="projectCardView" style="display:none">
+          <div class="project-grid" id="projectCardGrid"></div>
+        </div>
+      </div>
+
+      <!-- ═══ PHASES ═══ -->
+      <div class="page" id="page-phases">
+        <div class="page-header">
+          <div><div class="page-title">Phases &amp; suivi</div><div class="page-subtitle">Suivi des missions par phase loi MOP</div></div>
+          <select class="btn" id="phaseSelect" onchange="renderPhases(this.value)" style="padding:7px 12px;font-size:13px;border-radius:var(--r-md)"></select>
+        </div>
+        <div id="phasesContent"><div class="empty-state"><div class="empty-icon"><i class="ti ti-list-check"></i></div><div class="empty-title">Aucun projet</div></div></div>
+      </div>
+
+
+      <!-- ═══ COMPTES RENDUS DE RÉUNION ═══ -->
+      <div class="page" id="page-reunions">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Comptes Rendus de Réunion</div>
+            <div class="page-subtitle" id="reunion-subtitle">Réunions de projet et de coordination</div>
+            <div class="page-title-line"></div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <select class="btn" id="reunion-filter-proj" onchange="renderReunions()" style="padding:7px 12px;font-size:13px">
+              <option value="">Tous les projets</option>
+            </select>
+            <button class="btn btn-primary" onclick="openModalReunion()"><i class="ti ti-plus"></i> Nouveau CR</button>
+            <button class="btn" onclick="startReunionVocal()" style="background:linear-gradient(135deg,#C0392B,#E74C3C);color:#fff;border-color:#C0392B">
+              <i class="ti ti-microphone"></i> CR Vocal 🎙️
+            </button>
+          </div>
+        </div>
+        <div id="reunion-list"></div>
+      </div>
+
+      <!-- ═══ TÂCHES ═══ -->
+      <div class="page" id="page-taches">
+        <div class="page-header">
+          <div><div class="page-title">Tâches</div><div class="page-subtitle" id="taches-subtitle">—</div></div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary" onclick="openTacheModal()"><i class="ti ti-plus"></i> Nouvelle tâche</button>
+          </div>
+        </div>
+        <!-- Filtres rapides -->
+        <div style="display:flex;gap:8px;margin-bottom:1.25rem;flex-wrap:wrap;align-items:center">
+          <div class="search-bar" style="max-width:240px"><i class="ti ti-search"></i><input type="text" placeholder="Rechercher…" oninput="filterTaches(this.value)" id="tacheSearch"></div>
+          <select class="btn" id="tacheProjetFilter" onchange="renderTaches()" style="padding:7px 12px;font-size:13px">
+            <option value="">Tous les projets</option>
+          </select>
+          <select class="btn" id="tachePrioFilter" onchange="renderTaches()" style="padding:7px 12px;font-size:13px">
+            <option value="">Toutes priorités</option>
+            <option value="urgent">Urgent</option>
+            <option value="haute">Haute</option>
+            <option value="normale">Normale</option>
+          </select>
+        </div>
+        <!-- Kanban 3 colonnes -->
+        <div class="taches-layout" id="kanbanBoard">
+          <!-- Todo -->
+          <div class="kanban-col" id="col-todo">
+            <div class="kanban-col-header">
+              <div class="kanban-col-title"><div class="kanban-dot kd-todo"></div> À faire <span class="kanban-count" id="cnt-todo">0</span></div>
+              <button class="kanban-add" onclick="openTacheModal('todo')" title="Ajouter une tâche">+</button>
+            </div>
+            <div id="cards-todo"></div>
+          </div>
+          <!-- En cours -->
+          <div class="kanban-col" id="col-doing">
+            <div class="kanban-col-header">
+              <div class="kanban-col-title"><div class="kanban-dot kd-doing"></div> En cours <span class="kanban-count" id="cnt-doing">0</span></div>
+              <button class="kanban-add" onclick="openTacheModal('doing')" title="Ajouter une tâche">+</button>
+            </div>
+            <div id="cards-doing"></div>
+          </div>
+          <!-- Achevées -->
+          <div class="kanban-col" id="col-done">
+            <div class="kanban-col-header">
+              <div class="kanban-col-title"><div class="kanban-dot kd-done"></div> Achevées <span class="kanban-count" id="cnt-done">0</span></div>
+              <button class="kanban-add" onclick="openTacheModal('done')" title="Ajouter">+</button>
+            </div>
+            <div id="cards-done"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ CALENDRIER ═══ -->
+      <div class="page" id="page-calendrier">
+        <div class="page-header">
+          <div><div class="page-title">Calendrier</div><div class="page-subtitle">Tâches &amp; échéances de 8h à 19h</div></div>
+          <div style="display:flex;gap:8px">
+            <button class="btn" onclick="openTacheModal()"><i class="ti ti-plus"></i> Tâche</button>
+            <button class="btn" onclick="openEcheanceModal()"><i class="ti ti-calendar-plus"></i> Échéance</button>
+          </div>
+        </div>
+        <!-- Navigation semaine -->
+        <div class="agenda-cal-header">
+          <div class="agenda-cal-nav">
+            <button class="btn btn-sm btn-icon" onclick="calNav(-1)"><i class="ti ti-chevron-left"></i></button>
+            <div class="agenda-cal-title" id="calWeekLabel">—</div>
+            <button class="btn btn-sm btn-icon" onclick="calNav(1)"><i class="ti ti-chevron-right"></i></button>
+          </div>
+          <button class="btn btn-sm" onclick="calGoToday()"><i class="ti ti-calendar-today"></i> Aujourd'hui</button>
+        </div>
+        <!-- Grille semaine -->
+        <div style="overflow-x:auto">
+          <div class="agenda-week-grid" id="weekGrid"></div>
+        </div>
+        <!-- Tâches du jour sélectionné -->
+        <div style="margin-top:1.25rem;display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+          <div class="today-tasks">
+            <div class="card-header" style="margin-bottom:.75rem">
+              <div class="card-title" id="todayTasksTitle">Tâches d'aujourd'hui</div>
+              <button class="btn btn-sm btn-primary" onclick="openTacheModal('todo')"><i class="ti ti-plus"></i></button>
+            </div>
+            <div id="todayTasksList"><div style="font-size:13px;color:var(--text3);padding:.5rem 0">Aucune tâche planifiée ce jour.</div></div>
+          </div>
+          <div class="today-tasks">
+            <div class="card-header" style="margin-bottom:.75rem">
+              <div class="card-title" id="todayEchTitle">Échéances d'aujourd'hui</div>
+            </div>
+            <div id="todayEchList"><div style="font-size:13px;color:var(--text3);padding:.5rem 0">Aucune échéance ce jour.</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ AGENDA ═══ -->
+      <div class="page" id="page-agenda">
+        <div class="page-header">
+          <div><div class="page-title">Agenda &amp; échéances</div><div class="page-subtitle" id="agenda-subtitle">—</div></div>
+          <div style="display:flex;gap:8px">
+            <button class="btn" onclick="openEcheanceModal()"><i class="ti ti-plus"></i> Nouvelle échéance</button>
+            <button class="btn btn-primary" onclick="toggleAI_d();askAI('Aide-moi à planifier les prochaines semaines de mes projets en cours.')">↗ Planifier avec IA</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">Toutes les échéances</div></div>
+          <div id="agendaTable"></div>
+        </div>
+      </div>
+
+      <!-- ═══ DEVIS ═══ -->
+      <div class="page" id="page-devis">
+        <div class="page-header">
+          <div><div class="page-title">Devis &amp; honoraires</div><div class="page-subtitle">Suivi financier de tous les contrats</div></div>
+          <div style="display:flex;gap:8px">
+            <button class="btn" onclick="openCalcModal()"><i class="ti ti-calculator"></i> Calculateur</button>
+            <button class="btn btn-primary" onclick="toggleAI_d();askAI('Génère un modèle de devis d\'honoraires d\'architecte pour une mission de maîtrise d\'œuvre complète, avec décomposition par phase.')">↗ Générer un devis IA</button>
+          </div>
+        </div>
+        <div class="metrics">
+          <div class="metric"><div class="metric-icon"><i class="ti ti-trending-up"></i></div><div class="metric-label">CA total (Hon. + Com.)</div><div class="metric-value" id="dv-ca">0 €</div><div class="metric-sub" id="dv-caSub">—</div></div>
+          <div class="metric"><div class="metric-icon"><i class="ti ti-cash"></i></div><div class="metric-label">Honoraires HT</div><div class="metric-value" id="dv-total">0 €</div><div class="metric-sub" id="dv-totalSub">—</div></div>
+          <div class="metric"><div class="metric-icon"><i class="ti ti-coin"></i></div><div class="metric-label">Commissions HT</div><div class="metric-value" id="dv-commissions">0 €</div><div class="metric-sub" id="dv-commissionsSub">—</div></div>
+          <div class="metric"><div class="metric-icon"><i class="ti ti-building"></i></div><div class="metric-label">Projets actifs</div><div class="metric-value" id="dv-nbProjets">0</div><div class="metric-sub">en mission</div></div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Contrats d'honoraires &amp; commissions</div>
+            <button class="btn btn-sm" onclick="toggleAI_d();askAI('Génère un modèle de contrat de maîtrise d\'œuvre pour un logement individuel, conforme aux pratiques françaises.')">↗ Générer un contrat</button>
+          </div>
+          <div id="devisTable"></div>
+        </div>
+      </div>
+
+      <!-- ═══ FACTURATION ═══ -->
+      <div class="page" id="page-facturation">
+        <div class="page-header">
+          <div><div class="page-title">Facturation</div><div class="page-subtitle">Devis, factures et suivi des paiements par dossier</div></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn" onclick="openFactureModal('devis')"><i class="ti ti-file-plus"></i> Nouveau devis</button>
+            <button class="btn btn-primary" onclick="openFactureModal('facture')"><i class="ti ti-receipt"></i> Nouvelle facture</button>
+            <button class="btn" onclick="openImportModal()" title="Importer des factures/devis"><i class="ti ti-upload"></i> Importer</button>
+          </div>
+        </div>
+
+        <!-- KPIs -->
+        <div class="fact-status-bar" id="factKpis">
+          <div class="fact-kpi"><div class="fact-kpi-label">CA facturé HT</div><div class="fact-kpi-value" id="fkpi-facture">0 €</div><div class="fact-kpi-sub" id="fkpi-facture-sub">—</div></div>
+          <div class="fact-kpi kpi-green"><div class="fact-kpi-label">Encaissé HT</div><div class="fact-kpi-value" id="fkpi-paye">0 €</div><div class="fact-kpi-sub" id="fkpi-paye-sub">—</div></div>
+          <div class="fact-kpi kpi-amber"><div class="fact-kpi-label">En attente</div><div class="fact-kpi-value" id="fkpi-attente">0 €</div><div class="fact-kpi-sub" id="fkpi-attente-sub">—</div></div>
+          
+          <div class="fact-kpi"><div class="fact-kpi-label">Devis en attente</div><div class="fact-kpi-value" id="fkpi-devis-att">0</div><div class="fact-kpi-sub" id="fkpi-devis-att-sub">—</div></div>
+        </div>
+
+        <!-- Onglets Devis / Factures / Par projet -->
+        <div class="tabs">
+          <div class="tab active" id="ftab-projets" onclick="filterFactTab('projets',this)"><i class="ti ti-building" style="font-size:12px"></i> Par projet</div>
+          <div class="tab" id="ftab-commissions" onclick="filterFactTab('commissions',this)"><i class="ti ti-percentage" style="font-size:12px"></i> Commissions artisans</div>
+          <div class="tab" id="ftab-factures" onclick="filterFactTab('factures',this)"><i class="ti ti-receipt" style="font-size:12px"></i> Factures</div>
+          <div class="tab" id="ftab-devis" onclick="filterFactTab('devis',this)"><i class="ti ti-file-plus" style="font-size:12px"></i> Devis</div>
+        </div>
+
+        <!-- Vue Par projet (défaut) -->
+        <div id="factView-projets">
+          <div id="factParProjetBody"></div>
+        </div>
+
+        <!-- Vue Commissions artisans -->
+        <div id="factView-commissions" style="display:none">
+          <div id="factCommissionsBody"></div>
+        </div>
+
+        <!-- Vue Factures -->
+        <div id="factView-factures" style="display:none">
+          <div class="card" style="padding:0;overflow:hidden">
+            <div class="fact-table-wrap">
+              <table class="fact-table">
+                <thead style="background:var(--bg)"><tr>
+                  <th style="padding-left:16px">N°</th>
+                  <th>Projet</th><th>Phase</th><th>Objet</th><th>Date</th>
+                  <th>Échéance</th><th>Montant HT</th><th>Payé HT</th>
+                  <th>Avancement</th><th>Statut</th><th>PDF</th><th></th>
+                </tr></thead>
+                <tbody id="factTableBodyFactures"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vue Devis -->
+        <div id="factView-devis" style="display:none">
+          <div class="card" style="padding:0;overflow:hidden">
+            <div class="fact-table-wrap">
+              <table class="fact-table">
+                <thead style="background:var(--bg)"><tr>
+                  <th style="padding-left:16px">N°</th>
+                  <th>Projet</th><th>Phase</th><th>Objet</th><th>Date</th>
+                  <th>Montant HT</th><th>Statut</th><th>PDF</th><th></th>
+                </tr></thead>
+                <tbody id="factTableBodyDevis"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+
+      </div>
+
+      <!-- ═══ COMPTABILITÉ ═══ -->
+      <div class="page" id="page-comptabilite">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Comptabilité</div>
+            <div class="page-subtitle">Charges, bénéfices et suivi financier</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn" onclick="openChargeModal()"><i class="ti ti-plus"></i> Nouvelle charge</button>
+            <button class="btn btn-primary" onclick="openRemuModal()" style="background:linear-gradient(135deg,#8e44ad,#6c3483);border-color:#8e44ad">
+              <i class="ti ti-user-dollar"></i> Rémunération & Cotisations
+            </button>
+            <button class="btn" onclick="exportComptaCSV()"><i class="ti ti-download"></i> Exporter CSV</button>
+          </div>
+        </div>
+
+        <!-- Sélecteur mois/année -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:1.25rem;flex-wrap:wrap">
+          <button class="btn btn-sm" onclick="comptaMoisPrev()"><i class="ti ti-chevron-left"></i></button>
+          <div style="font-family:var(--font-serif);font-size:18px;color:var(--navy);min-width:160px;text-align:center" id="compta-mois-label">Mai 2026</div>
+          <button class="btn btn-sm" onclick="comptaMoisNext()"><i class="ti ti-chevron-right"></i></button>
+          <button class="btn btn-sm" onclick="comptaGoAujourdhui()">Aujourd'hui</button>
+          <select class="form-input" id="compta-annee-sel" style="width:auto;padding:6px 10px" onchange="renderComptabilite()">
+            <option value="2024">2024</option>
+            <option value="2025">2025</option>
+            <option value="2026" selected>2026</option>
+            <option value="2027">2027</option>
+          </select>
+          <!-- Budget prévisionnel annuel -->
+          <div style="display:flex;align-items:center;gap:6px;margin-left:8px">
+            <label style="font-size:12px;color:var(--text2);white-space:nowrap">Objectif CA :</label>
+            <input type="number" id="compta-previsionnel" placeholder="Ex: 80 000"
+              style="width:130px;padding:6px 10px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;background:var(--card)"
+              oninput="_renderComptaDebounced()" value="">
+            <span style="font-size:12px;color:var(--text3)">€ HT</span>
+          </div>
+        </div>
+
+        <!-- Bandeau EURL — seuils et alertes -->
+        <div id="compta-eurl-banner" style="background:linear-gradient(135deg,#1B2D5B11,#4A9CC711);border:1.5px solid #4A9CC744;border-radius:var(--r-md);padding:10px 16px;margin-bottom:1rem;display:flex;flex-wrap:wrap;gap:12px;align-items:center">
+          <div style="font-size:11px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.07em;margin-right:4px">EURL</div>
+          <div id="eurl-tva-indicator" style="font-size:12px"></div>
+          <div id="eurl-is-indicator" style="font-size:12px"></div>
+          <div id="eurl-previsionnel-indicator" style="font-size:12px"></div>
+          <div style="flex:1"></div>
+          <div id="eurl-taux-info" style="font-size:11px;color:var(--text2)">Taux IS : 15% jusqu'à 42 500€ · 25% au-delà</div>
+        </div>
+
+        <!-- KPIs mensuels -->
+        <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:1rem;margin-bottom:1.25rem" id="compta-kpis">
+          <div class="card" style="border-top:3px solid #4A9CC7;padding:1rem">
+            <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">CA Encaissé HT</div>
+            <div style="font-family:var(--font-serif);font-size:22px;color:var(--navy)" id="ckpi-ca">0 €</div>
+            <div style="font-size:11px;color:var(--text3)" id="ckpi-ca-sub">Ce mois</div>
+          </div>
+          <div class="card" style="border-top:3px solid var(--red);padding:1rem">
+            <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Charges HT</div>
+            <div style="font-family:var(--font-serif);font-size:22px;color:var(--red)" id="ckpi-charges">0 €</div>
+            <div style="font-size:11px;color:var(--text3)" id="ckpi-charges-sub">Ce mois</div>
+          </div>
+          <div class="card" style="border-top:3px solid var(--green);padding:1rem">
+            <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Bénéfice net HT</div>
+            <div style="font-family:var(--font-serif);font-size:22px;color:var(--green)" id="ckpi-benefice">0 €</div>
+            <div style="font-size:11px;color:var(--text3)" id="ckpi-taux">Taux : 0%</div>
+          </div>
+          <div class="card" style="border-top:3px solid #8A6020;padding:1rem">
+            <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">TVA déductible</div>
+            <div style="font-family:var(--font-serif);font-size:22px;color:#8A6020" id="ckpi-tva">0 €</div>
+            <div style="font-size:11px;color:var(--text3)">Sur charges du mois</div>
+          </div>
+          <div class="card" style="border-top:3px solid #8e44ad;padding:1rem">
+            <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Rémunération nette</div>
+            <div style="font-family:var(--font-serif);font-size:22px;color:#8e44ad" id="ckpi-remuneration">0 €</div>
+            <div style="font-size:11px;color:var(--text3)" id="ckpi-remuneration-sub">Ce mois</div>
+          </div>
+          <div class="card" style="border-top:3px solid #C0392B;padding:1rem">
+            <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Cotisations sociales</div>
+            <div style="font-family:var(--font-serif);font-size:22px;color:#C0392B" id="ckpi-cotisations">0 €</div>
+            <div style="font-size:11px;color:var(--text3)" id="ckpi-cotisations-sub">URSSAF + retraite</div>
+          </div>
+        </div>
+
+        <!-- Onglets -->
+        <div class="tabs">
+          <div class="tab active" id="ctab-mois" onclick="filterComptaTab('mois',this)"><i class="ti ti-calendar-month" style="font-size:13px"></i> Mois en cours</div>
+          <div class="tab" id="ctab-charges" onclick="filterComptaTab('charges',this)"><i class="ti ti-list" style="font-size:13px"></i> Toutes les charges</div>
+          <div class="tab" id="ctab-remuneration" onclick="filterComptaTab('remuneration',this)"><i class="ti ti-user-dollar" style="font-size:13px"></i> Rémunération</div>
+          <div class="tab" id="ctab-annuel" onclick="filterComptaTab('annuel',this)"><i class="ti ti-chart-bar" style="font-size:13px"></i> Bilan annuel</div>
+        </div>
+
+        <!-- Vue mois -->
+        <div id="comptaView-mois">
+          <div id="compta-mois-body"></div>
+        </div>
+
+        <!-- Vue toutes charges -->
+        <div id="comptaView-charges" style="display:none">
+          <div class="card" style="padding:0;overflow:hidden">
+            <div style="padding:1rem 1.25rem;border-bottom:1.5px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <div style="flex:1;font-size:13px;font-weight:600;color:var(--navy)">Toutes les charges</div>
+              <select class="form-input" id="charges-filter-cat" style="width:auto;padding:6px 10px" onchange="renderChargesTable()">
+                <option value="">Toutes catégories</option>
+                <option value="deplacement">🚗 Déplacements</option>
+                <option value="assurance">📋 Assurances</option>
+                <option value="honoraires_ext">👔 Honoraires externes</option>
+                <option value="telecom">📱 Télécommunications</option>
+                <option value="logiciels">🖥️ Logiciels & abonnements</option>
+                <option value="bureau">🏢 Frais de bureau</option>
+                <option value="formation">📚 Formation</option>
+                <option value="materiel">🔧 Matériel & fournitures</option>
+                <option value="social">💰 Charges sociales</option>
+                <option value="autre">📌 Autre</option>
+              </select>
+              <select class="form-input" id="charges-filter-type" style="width:auto;padding:6px 10px" onchange="renderChargesTable()">
+                <option value="">Tous types</option>
+                <option value="fixe">Fixes récurrentes</option>
+                <option value="variable">Variables</option>
+              </select>
+            </div>
+            <div class="fact-table-wrap">
+              <table class="fact-table">
+                <thead style="background:var(--bg)"><tr>
+                  <th style="padding-left:16px">Libellé</th>
+                  <th>Catégorie</th>
+                  <th>Type</th>
+                  <th>Période</th>
+                  <th style="text-align:right">Montant HT</th>
+                  <th style="text-align:right">TVA</th>
+                  <th style="text-align:right">Montant TTC</th>
+                  <th>TVA déd.</th>
+                  <th></th>
+                </tr></thead>
+                <tbody id="chargesTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vue rémunération -->
+        <div id="comptaView-remuneration" style="display:none">
+          <div id="compta-remuneration-body"></div>
+        </div>
+
+        <!-- Vue bilan annuel -->
+        <div id="comptaView-annuel" style="display:none">
+          <div id="compta-annuel-body"></div>
+        </div>
+
+      </div>
+
+      <!-- MODAL RÉMUNÉRATION & COTISATIONS -->
+<div class="modal-overlay" id="remuModal" onclick="if(event.target===this)closeModal_d('remuModal')">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-header">
+      <div class="modal-title" id="remu-modal-title">Rémunération & Cotisations</div>
+      <button class="btn btn-sm" onclick="closeModal_d('remuModal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="remu-id">
+      <div class="form-grid" style="grid-template-columns:1fr 1fr">
+
+        <!-- Mois / Année -->
+        <div class="form-group">
+          <label class="form-label">Mois *</label>
+          <select class="form-input" id="remu-mois">
+            <option value="0">Janvier</option><option value="1">Février</option>
+            <option value="2">Mars</option><option value="3">Avril</option>
+            <option value="4">Mai</option><option value="5">Juin</option>
+            <option value="6">Juillet</option><option value="7">Août</option>
+            <option value="8">Septembre</option><option value="9">Octobre</option>
+            <option value="10">Novembre</option><option value="11">Décembre</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Année *</label>
+          <input type="number" class="form-input" id="remu-annee" value="2026" min="2020" max="2035">
+        </div>
+
+        <!-- Séparateur Rémunération -->
+        <div style="grid-column:1/-1;background:linear-gradient(135deg,#8e44ad18,#8e44ad08);border:1px solid #8e44ad44;border-radius:var(--r-md);padding:10px 14px;margin:4px 0">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#8e44ad;margin-bottom:8px">💼 Rémunération</div>
+          <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:10px">
+            <div class="form-group" style="margin:0">
+              <label class="form-label">Salaire brut (€)</label>
+              <input type="number" class="form-input" id="remu-salaire-brut" placeholder="0" oninput="calcRemuNet()">
+            </div>
+            <div class="form-group" style="margin:0">
+              <label class="form-label">Salaire net (€)</label>
+              <input type="number" class="form-input" id="remu-salaire-net" placeholder="Calculé automatiquement" oninput="calcRemuNet()">
+            </div>
+          </div>
+          <div id="remu-net-preview" style="display:none;margin-top:8px;font-size:12px;color:#8e44ad;background:#fff;padding:6px 10px;border-radius:var(--r-sm)"></div>
+          <button type="button" onclick="calcTauxURSSAF()"
+            style="margin-top:8px;width:100%;padding:8px;border:1.5px solid #8e44ad44;border-radius:var(--r-md);background:#8e44ad11;color:#8e44ad;font-size:12px;font-weight:600;cursor:pointer">
+            <i class="ti ti-calculator"></i> Calculer les cotisations EURL automatiquement
+          </button>
+        </div>
+
+        <!-- Séparateur Cotisations -->
+        <div style="grid-column:1/-1;background:linear-gradient(135deg,#C0392B18,#C0392B08);border:1px solid #C0392B44;border-radius:var(--r-md);padding:10px 14px;margin:4px 0">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#C0392B;margin-bottom:8px">📋 Cotisations sociales</div>
+          <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:10px">
+            <div class="form-group" style="margin:0">
+              <label class="form-label">URSSAF (€)</label>
+              <input type="number" class="form-input" id="remu-urssaf" placeholder="0" oninput="calcRemuTotal()">
+            </div>
+            <div class="form-group" style="margin:0">
+              <label class="form-label">Retraite (€)</label>
+              <input type="number" class="form-input" id="remu-retraite" placeholder="0" oninput="calcRemuTotal()">
+            </div>
+            <div class="form-group" style="margin:0">
+              <label class="form-label">Prévoyance (€)</label>
+              <input type="number" class="form-input" id="remu-prevoyance" placeholder="0" oninput="calcRemuTotal()">
+            </div>
+            <div class="form-group" style="margin:0">
+              <label class="form-label">Mutuelle (€)</label>
+              <input type="number" class="form-input" id="remu-mutuelle" placeholder="0" oninput="calcRemuTotal()">
+            </div>
+            <div class="form-group" style="margin:0">
+              <label class="form-label">Formation (CFP) (€)</label>
+              <input type="number" class="form-input" id="remu-cfp" placeholder="0" oninput="calcRemuTotal()">
+            </div>
+            <div class="form-group" style="margin:0">
+              <label class="form-label">Autres cotisations (€)</label>
+              <input type="number" class="form-input" id="remu-autres-cot" placeholder="0" oninput="calcRemuTotal()">
+            </div>
+          </div>
+        </div>
+
+        <!-- Total récap -->
+        <div style="grid-column:1/-1;background:var(--bg);border:1.5px solid var(--border);border-radius:var(--r-md);padding:12px 14px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--navy);margin-bottom:10px">Récapitulatif</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px" id="remu-recap-grid">
+            <div style="text-align:center;background:var(--card);border-radius:var(--r-sm);padding:8px">
+              <div style="font-size:10px;color:var(--text3);margin-bottom:3px">Salaire net</div>
+              <div style="font-size:16px;font-weight:700;color:#8e44ad" id="remu-r-net">0 €</div>
+            </div>
+            <div style="text-align:center;background:var(--card);border-radius:var(--r-sm);padding:8px">
+              <div style="font-size:10px;color:var(--text3);margin-bottom:3px">Total cotisations</div>
+              <div style="font-size:16px;font-weight:700;color:#C0392B" id="remu-r-cot">0 €</div>
+            </div>
+            <div style="text-align:center;background:var(--card);border-radius:var(--r-sm);padding:8px">
+              <div style="font-size:10px;color:var(--text3);margin-bottom:3px">Coût total</div>
+              <div style="font-size:16px;font-weight:700;color:var(--navy)" id="remu-r-total">0 €</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Notes -->
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Notes</label>
+          <textarea class="form-input" id="remu-notes" rows="2" placeholder="Ex: Prime exceptionnelle, arrêt maladie partiel…"></textarea>
+        </div>
+
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger" id="remu-delete-btn" style="display:none;margin-right:auto" onclick="deleteRemu()">
+        <i class="ti ti-trash"></i> Supprimer
+      </button>
+      <button class="btn" onclick="closeModal_d('remuModal')">Annuler</button>
+      <button class="btn btn-primary" onclick="saveRemu()"><i class="ti ti-check"></i> Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+      <!-- MODAL CHARGE -->
+<!-- MODAL COMMISSION ARTISAN -->
+<div class="modal-overlay" id="commModal" onclick="if(event.target===this)closeCommModal()" class="modal-overlay" style="z-index:200">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <div class="modal-title" id="comm-modal-title">Nouvelle commission artisan</div>
+      <button class="btn btn-sm" onclick="closeCommModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid" style="grid-template-columns:1fr 1fr">
+        <div class="form-group" style="grid-column:1/-1"><label class="form-label">Nom de l'artisan *</label><input type="text" class="form-input" id="ch-comm-artisan" placeholder="Jean Dupont Électricité"></div>
+        <div class="form-group"><label class="form-label">Corps de métier</label><input type="text" class="form-input" id="ch-comm-metier" placeholder="Électricité, Plomberie…"></div>
+        <div class="form-group"><label class="form-label">Projet / Chantier</label><select class="form-input" id="ch-comm-projet"><option value="">— Choisir —</option></select></div>
+        <div class="form-group"><label class="form-label">Devis artisan HT *</label><input type="number" class="form-input" id="ch-comm-devis" placeholder="0.00" step="0.01" oninput="calcCommAttendue()"></div>
+        <div class="form-group"><label class="form-label">Taux commission (%)</label><input type="number" class="form-input" id="ch-comm-taux" placeholder="5" step="0.5" oninput="calcCommAttendue()"></div>
+        <div class="form-group" style="grid-column:1/-1"><label class="form-label">Commission attendue HT (calculée auto)</label><input type="number" class="form-input" id="ch-comm-attendue" step="0.01" style="background:var(--bg2)"></div>
+        <div class="form-group"><label class="form-label">Montant reçu HT</label><input type="number" class="form-input" id="ch-comm-recu" placeholder="0.00" step="0.01"></div>
+        <div class="form-group"><label class="form-label">Statut</label><select class="form-input" id="ch-comm-statut"><option value="attente">En attente</option><option value="partiel">Partiel</option><option value="recu">Reçu ✓</option><option value="litige">Litige</option></select></div>
+        <div class="form-group"><label class="form-label">Date de réception</label><input type="date" class="form-input" id="ch-comm-date"></div>
+        <div class="form-group"><label class="form-label">Notes</label><input type="text" class="form-input" id="ch-comm-notes" placeholder="Notes…"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-sm" id="btn-del-comm" style="display:none;margin-right:auto" onclick="confirmDeleteComm(_editCommId)"><i class="ti ti-trash"></i> Supprimer</button>
+      <button class="btn btn-sm" onclick="toggleCommPdfZone()" title="Importer depuis un PDF artisan"><i class="ti ti-file-upload"></i> PDF IA</button>
+      <button class="btn" onclick="closeCommModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="saveCommission()"><i class="ti ti-check"></i> Enregistrer</button>
+    </div>
+    <!-- Zone import PDF artisan -->
+    <div id="comm-pdf-zone" style="display:none;padding:1rem 1.25rem;background:var(--bg);border-top:1px solid var(--border)">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:.75rem">📄 Importer PDF facture artisan — l'IA remplit les champs</div>
+      <div onclick="document.getElementById('comm-pdf-input').click()" style="text-align:center;padding:1rem;cursor:pointer;border:1.5px dashed var(--border);border-radius:var(--r-md);background:var(--card)" id="comm-pdf-drop">
+        <div style="font-size:24px;color:var(--acc);margin-bottom:4px"><i class="ti ti-file-upload"></i></div>
+        <div style="font-size:12px;color:var(--text2)">Cliquez pour charger le PDF</div>
+        <input type="file" id="comm-pdf-input" accept=".pdf" style="display:none" onchange="handleCommPdf(this.files[0])">
+      </div>
+      <div id="comm-pdf-status" style="font-size:12px;margin-top:8px;min-height:20px"></div>
+    </div>
+  </div>
+</div>
+
+      <div class="modal-overlay" id="chargeModal" onclick="if(event.target===this)closeChargeModal()">
+        <div class="modal" style="max-width:560px">
+          <div class="modal-header">
+            <div class="modal-title" id="charge-modal-title">Nouvelle charge</div>
+            <button class="btn btn-sm" onclick="closeChargeModal()"><i class="ti ti-x"></i></button>
+          </div>
+          <div class="modal-body">
+            <div class="form-grid" style="grid-template-columns:1fr 1fr">
+              <div class="form-group" style="grid-column:1/-1">
+                <label class="form-label">Libellé *</label>
+                <input type="text" class="form-input" id="ch-libelle" placeholder="Ex: Adobe Acrobat, Assurance RC Pro…">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Catégorie *</label>
+                <select class="form-input" id="ch-categorie">
+                  <option value="">— Choisir —</option>
+                  <option value="deplacement">🚗 Déplacements</option>
+                  <option value="assurance">📋 Assurances</option>
+                  <option value="honoraires_ext">👔 Honoraires externes</option>
+                  <option value="telecom">📱 Télécommunications</option>
+                  <option value="logiciels">🖥️ Logiciels & abonnements</option>
+                  <option value="bureau">🏢 Frais de bureau</option>
+                  <option value="formation">📚 Formation</option>
+                  <option value="materiel">🔧 Matériel & fournitures</option>
+                  <option value="social">💰 Charges sociales</option>
+                  <option value="autre">📌 Autre</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Type</label>
+                <select class="form-input" id="ch-type">
+                  <option value="fixe">Fixe récurrente</option>
+                  <option value="variable">Variable / ponctuelle</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Montant HT *</label>
+                <input type="number" class="form-input" id="ch-montant-ht" placeholder="0.00" step="0.01" oninput="calcChargeTTC()">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Taux TVA (%)</label>
+                <select class="form-input" id="ch-tva-taux" onchange="calcChargeTTC()">
+                  <option value="20">20% (standard)</option>
+                  <option value="10">10% (intermédiaire)</option>
+                  <option value="5.5">5,5% (réduit)</option>
+                  <option value="0">0% (exonéré)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Montant TTC</label>
+                <input type="number" class="form-input" id="ch-montant-ttc" placeholder="0.00" step="0.01" style="background:var(--bg2)" readonly>
+              </div>
+              <div class="form-group">
+                <label class="form-label">TVA déductible ?</label>
+                <select class="form-input" id="ch-tva-ded">
+                  <option value="1">Oui — déductible</option>
+                  <option value="0">Non — non déductible</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Date</label>
+                <input type="date" class="form-input" id="ch-date">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Fréquence (si fixe)</label>
+                <select class="form-input" id="ch-frequence">
+                  <option value="mensuel">Mensuelle</option>
+                  <option value="trimestriel">Trimestrielle</option>
+                  <option value="annuel">Annuelle</option>
+                  <option value="ponctuel">Ponctuelle</option>
+                </select>
+              </div>
+              <div class="form-group" style="grid-column:1/-1">
+                <label class="form-label">Notes</label>
+                <input type="text" class="form-input" id="ch-notes" placeholder="Notes optionnelles…">
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-danger btn-sm" id="btn-del-charge" style="display:none;margin-right:auto" onclick="deleteCharge()"><i class="ti ti-trash"></i> Supprimer</button>
+            <button class="btn" onclick="closeChargeModal()">Annuler</button>
+            <button class="btn btn-primary" onclick="saveCharge()"><i class="ti ti-check"></i> Enregistrer</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ BIBLIOTHÈQUE ═══ -->
+      <div class="page" id="page-docs">
+        <div class="page-header"><div><div class="page-title">Bibliothèque de documents</div><div class="page-subtitle">Modèles, contrats et outils professionnels</div></div></div>
+        <div class="two-col">
+          <div class="card">
+            <div class="card-header"><div class="card-title">📋 Modèles de contrats</div></div>
+            <div class="timeline">
+              <div class="tl-item"><div class="tl-dot tl-done"><i class="ti ti-file-text"></i></div><div class="tl-line"></div><div class="tl-content"><div class="tl-title">Contrat MOE — Logement individuel neuf</div><div class="tl-sub"><button class="btn btn-sm" style="margin-top:5px" onclick="toggleAI_d();askAI('Génère un contrat de maîtrise d\'œuvre complet pour un logement individuel neuf, mission loi MOP.')">↗ Générer</button></div></div></div>
+              <div class="tl-item"><div class="tl-dot tl-done"><i class="ti ti-file-text"></i></div><div class="tl-line"></div><div class="tl-content"><div class="tl-title">Contrat MOE — Rénovation / Patrimoine</div><div class="tl-sub"><button class="btn btn-sm" style="margin-top:5px" onclick="toggleAI_d();askAI('Génère un contrat de maîtrise d\'œuvre pour une rénovation de bâtiment existant, avec clauses patrimoine.')">↗ Générer</button></div></div></div>
+              <div class="tl-item"><div class="tl-dot tl-done"><i class="ti ti-file-text"></i></div><div class="tl-content"><div class="tl-title">Contrat MOE — Local professionnel (ERP)</div><div class="tl-sub"><button class="btn btn-sm" style="margin-top:5px" onclick="toggleAI_d();askAI('Génère un contrat de maîtrise d\'œuvre pour un local professionnel ou ERP.')">↗ Générer</button></div></div></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">🛠️ Outils</div></div>
+            <div class="timeline">
+              <div class="tl-item"><div class="tl-dot tl-active"><i class="ti ti-calculator"></i></div><div class="tl-line"></div><div class="tl-content"><div class="tl-title">Calculateur d'honoraires</div><div class="tl-sub"><button class="btn btn-sm" style="margin-top:5px" onclick="openCalcModal()">Ouvrir</button></div></div></div>
+              <div class="tl-item"><div class="tl-dot tl-active"><i class="ti ti-receipt-2"></i></div><div class="tl-line"></div><div class="tl-content"><div class="tl-title">Modèle de devis d'honoraires</div><div class="tl-sub"><button class="btn btn-sm" style="margin-top:5px" onclick="toggleAI_d();askAI('Génère un modèle de devis d\'honoraires d\'architecte décomposé par phase MOP.')">↗ Générer</button></div></div></div>
+              <div class="tl-item"><div class="tl-dot tl-active"><i class="ti ti-checklist"></i></div><div class="tl-content"><div class="tl-title">Compte-rendu de chantier</div><div class="tl-sub"><button class="btn btn-sm" style="margin-top:5px" onclick="toggleAI_d();askAI('Crée un modèle de compte-rendu de réunion de chantier pour un architecte maître d\'œuvre.')">↗ Générer</button></div></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="two-col">
+          <div class="card">
+            <div class="card-header"><div class="card-title">✉️ Courriers types</div></div>
+            <div class="timeline">
+              <div class="tl-item"><div class="tl-dot tl-active"><i class="ti ti-mail"></i></div><div class="tl-line"></div><div class="tl-content"><div class="tl-title">Lettre de mission</div><div class="tl-sub"><button class="btn btn-sm" style="margin-top:5px" onclick="toggleAI_d();askAI('Rédige une lettre de mission et de présentation de mes honoraires.')">↗ Générer</button></div></div></div>
+              <div class="tl-item"><div class="tl-dot tl-active"><i class="ti ti-mail"></i></div><div class="tl-line"></div><div class="tl-content"><div class="tl-title">Courrier de dépôt PC</div><div class="tl-sub"><button class="btn btn-sm" style="margin-top:5px" onclick="toggleAI_d();askAI('Rédige un courrier d\'accompagnement pour le dépôt d\'un permis de construire.')">↗ Générer</button></div></div></div>
+              <div class="tl-item"><div class="tl-dot tl-active"><i class="ti ti-mail"></i></div><div class="tl-content"><div class="tl-title">Relance facture impayée</div><div class="tl-sub"><button class="btn btn-sm" style="margin-top:5px" onclick="toggleAI_d();askAI('Rédige une lettre de relance professionnelle pour une facture d\'honoraires impayée.')">↗ Générer</button></div></div></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">📐 Aide réglementaire</div></div>
+            <div class="timeline">
+              <div class="tl-item"><div class="tl-dot tl-active"><i class="ti ti-info-circle"></i></div><div class="tl-line"></div><div class="tl-content"><div class="tl-title">Règles d'urbanisme PLU</div><div class="tl-sub"><button class="btn btn-sm" style="margin-top:5px" onclick="toggleAI_d();askAI('Explique les principales règles d\'un PLU à vérifier pour un projet de construction en zone UD.')">↗ Consulter IA</button></div></div></div>
+              <div class="tl-item"><div class="tl-dot tl-active"><i class="ti ti-info-circle"></i></div><div class="tl-line"></div><div class="tl-content"><div class="tl-title">RE2020 &amp; normes</div><div class="tl-sub"><button class="btn btn-sm" style="margin-top:5px" onclick="toggleAI_d();askAI('Points clés de la RE2020 à intégrer dès la phase esquisse pour un logement individuel neuf.')">↗ Consulter IA</button></div></div></div>
+              <div class="tl-item"><div class="tl-dot tl-active"><i class="ti ti-info-circle"></i></div><div class="tl-content"><div class="tl-title">Accessibilité PMR</div><div class="tl-sub"><button class="btn btn-sm" style="margin-top:5px" onclick="toggleAI_d();askAI('Obligations d\'accessibilité PMR pour un local professionnel ERP en France.')">↗ Consulter IA</button></div></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ NOUVEAU PROJET ═══ -->
+      <div class="page" id="page-new">
+        <div class="page-header"><div><div class="page-title">Nouveau projet</div><div class="page-subtitle">Saisissez les informations pour créer la fiche projet</div></div></div>
+        <div class="card" style="max-width:720px">
+          <div class="form-section">Informations générales</div>
+          <div class="form-grid">
+            <div class="form-group"><label>Nom du projet *</label><input type="text" id="np-nom" placeholder="Ex. Maison Martin"></div>
+            <div class="form-group"><label>Référence interne</label><input type="text" id="np-ref" placeholder="Auto-générée si vide"></div>
+          </div>
+          <div class="form-grid">
+            <div class="form-group"><label>Type de projet *</label>
+              <select id="np-type">
+                <option value="">-- Sélectionner --</option>
+                <option>Logement individuel neuf</option><option>Rénovation / Réhabilitation</option>
+                <option>Extension / Surélévation</option><option>Bureau / Local professionnel</option>
+                <option>Logement collectif</option><option>ERP</option><option>Industriel / Agricole</option>
+              </select>
+            </div>
+            <div class="form-group"><label>Type de mission *</label>
+              <select id="np-mission">
+                <option>Complète (ESQ → AOR)</option><option>Partielle (à préciser)</option>
+                <option>Études seules (ESQ, APS, APD)</option><option>DET / Direction de travaux</option><option>À définir</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-section">Client</div>
+          <div class="form-grid">
+            <div class="form-group"><label>Nom / Raison sociale *</label><input type="text" id="np-client" placeholder="Nom complet ou société"></div>
+            <div class="form-group"><label>Email</label><input type="email" id="np-email" placeholder="client@email.fr"></div>
+          </div>
+          <div class="form-grid">
+            <div class="form-group"><label>Téléphone</label><input type="tel" id="np-tel" placeholder="06 XX XX XX XX"></div>
+            <div class="form-group"><label>Type de client</label>
+              <select id="np-ctype"><option>Particulier</option><option>Société / SCI</option><option>Promoteur</option><option>Collectivité</option></select>
+            </div>
+          </div>
+          <div class="form-section">Localisation &amp; budget</div>
+          <div class="form-grid">
+            <div class="form-group"><label>Adresse du projet</label><input type="text" id="np-adresse" placeholder="Adresse, commune, code postal"></div>
+            <div class="form-group"><label>Budget travaux estimé (€ HT)</label><input type="number" id="np-budget" placeholder="Ex. 350 000" oninput="previewHonoraires()"></div>
+          </div>
+          <div class="form-grid">
+            <div class="form-group"><label>Date de démarrage prévue</label><input type="date" id="np-date"></div>
+            <div class="form-group"><label>Surface estimée (m²)</label><input type="number" id="np-surface" placeholder="Ex. 180"></div>
+          </div>
+          <div id="budgetPreview" style="display:none;background:var(--accent-bg);border:1px solid var(--accent);border-radius:var(--r-md);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--accent)"></div>
+          <div class="form-section">Phase &amp; statut</div>
+          <div class="form-grid">
+            <div class="form-group"><label>Phase actuelle</label>
+              <select id="np-phase">
+                <option value="ESQ">ESQ — Esquisse</option><option value="APS">APS</option>
+                <option value="APD">APD</option><option value="PC">PC</option>
+                <option value="DCE">DCE</option><option value="ACT">ACT</option>
+                <option value="DET">DET</option><option value="AOR">AOR</option>
+              </select>
+            </div>
+            <div class="form-group"><label>Statut</label>
+              <select id="np-statut">
+                <option value="actif">Actif</option><option value="demarrage">Démarrage</option>
+                <option value="etude">Étude préalable</option><option value="cloture">Clôturé</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-grid">
+            <div class="form-group"><label>Honoraires HT (€)</label><input type="number" id="np-honoraires" placeholder="Ex. 52 000" oninput="previewCA()"></div>
+            <div class="form-group"><label>Commissions HT (€)</label><input type="number" id="np-commissions" placeholder="Ex. 8 000" oninput="previewCA()"></div>
+          </div>
+          <div id="caPreview" style="display:none;background:var(--accent-bg);border:1px solid var(--accent);border-radius:var(--r-md);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--accent)"></div>
+          <div class="form-grid">
+            <div class="form-group"><label>Avancement (%)</label><input type="number" id="np-avancement" placeholder="0" min="0" max="100"></div>
+            <div class="form-group"></div>
+          </div>
+          <div class="form-section">Notes</div>
+          <div class="form-group" style="margin-bottom:1.25rem">
+            <label>Contexte, contraintes particulières…</label>
+            <textarea id="np-notes" rows="3" placeholder="Contexte du projet, contraintes particulières, intervenants pressentis…"></textarea>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center">
+            <button class="btn btn-primary" onclick="createProject()"><i class="ti ti-check"></i> Créer le projet</button>
+            <button class="btn" onclick="toggleAI_d();askAI('Aide-moi à rédiger la lettre de mission et l\'offre d\'honoraires pour mon nouveau projet.')">↗ Lettre de mission IA</button>
+            <button class="btn" onclick="show_d('dashboard',document.querySelector('.nav-item'))">Annuler</button>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main-area -->
+</div><!-- /app -->
+</div>
+
 
 
 
@@ -4502,7 +5972,6 @@ function viewPdf(factureId) {
 // ════════════════════════════════════════════════════════════
 
 </script>
-
 <script>
 
 // ═══════════════════════════════════════════════════════════════
@@ -5927,7 +7396,6 @@ initCommissionsFirebase();
 })();
 
 </script>
-
 <script>
 // ══ MODULE VOCAL ═══════════════════════════════════════════════
 
@@ -6232,13 +7700,10 @@ function nextWeekday(targetDay) {
 }
 
 </script>
-
 <script>
-// ── Navigation vers l'accueil ──────────────────────────────
-function goHome() {
-  window.location.href = 'index.html';
+function switchApp(target) {
+  if (target === 'chantier') window.location.href = 'phenix_chantier.html';
 }
 </script>
-
 </body>
 </html>

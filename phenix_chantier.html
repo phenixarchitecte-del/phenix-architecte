@@ -630,7 +630,6 @@ tr:last-child td{border-bottom:none} tr:hover td{background:var(--accent-bg)}
 </style>
 </head>
 <body>
-
 <div id="app-chantier">
 
 
@@ -1405,7 +1404,6 @@ tr:last-child td{border-bottom:none} tr:hover td{background:var(--accent-bg)}
 <!-- ═══════════════════════════════════════════════
      MODULE 2 · GESTION DE DOSSIER
      ═══════════════════════════════════════════════ -->
-
 
 <script>
 // ═══════════════════════════════════════════════════════════
@@ -4622,7 +4620,6 @@ document.querySelectorAll('.color-swatch').forEach(s => {
   s.addEventListener('click', () => setIntervColor(s.dataset.color));
 });
 </script>
-
 <script>
 
 // ── Mobile sidebar — Module Chantier ─────────────────────────
@@ -4642,20 +4639,10 @@ document.querySelectorAll('#chantierSidebar .nav-item').forEach(el => {
 });
 
 </script>
-
 <script>
-// ── Navigation vers l'accueil ──────────────────────────────
-function goHome() {
-  window.location.href = 'index.html';
+function switchApp(target) {
+  if (target === 'dossier') window.location.href = 'phenix_dossier.html';
 }
-// ── Restore scroll & init ─────────────────────────────────
-window.addEventListener('DOMContentLoaded', function() {
-  loadLocal();
-  loadSharedHonoraires();
-  refreshAll();
-  initChantierFirebase();
-});
 </script>
-
 </body>
 </html>
