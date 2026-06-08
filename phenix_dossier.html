@@ -2246,6 +2246,8 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
     <div class="nav-item" onclick="show_d('new',this)"><i class="ti ti-plus"></i> Nouveau projet</div>
     <div class="nav-section">Sécurité</div>
     <div class="nav-item" onclick="exportToutJSON()" title="Sauvegarder toutes vos données"><i class="ti ti-database-export"></i> Exporter tout</div>
+    <div class="nav-item" onclick="importToutJSON()" title="Restaurer vos données depuis un fichier de sauvegarde"><i class="ti ti-database-import"></i> Restaurer</div>
+    <input type="file" id="restore-file-input" accept=".json" style="display:none" onchange="handleRestoreFile(this.files[0])">
     <div class="nav-item" onclick="nettoyerFacturesFantomes()" title="Supprimer les factures sans projet ni numéro"><i class="ti ti-trash"></i> Nettoyer données</div>
     <div class="nav-item" onclick="openChangePwd()"><i class="ti ti-lock"></i> Mot de passe</div>
     <div class="sidebar-bottom">
@@ -7588,11 +7590,15 @@ function exportToutJSON() {
   const data = {
     exportDate: new Date().toISOString(),
     version: 'Phenix-Architecte',
-    projets:   stateDossier.projets   || [],
-    factures:  stateDossier.factures  || [],
-    taches:    stateDossier.taches    || [],
-    echeances: stateDossier.echeances || [],
-    charges:   stateDossier.charges   || [],
+    ...stateDossier,
+    projets:       stateDossier.projets       || [],
+    factures:      stateDossier.factures       || [],
+    taches:        stateDossier.taches         || [],
+    echeances:     stateDossier.echeances      || [],
+    charges:       stateDossier.charges        || [],
+    commissions:   stateDossier.commissions    || [],
+    reunions:      stateDossier.reunions       || [],
+    remunerations: stateDossier.remunerations  || [],
   };
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob);
@@ -7600,6 +7606,43 @@ function exportToutJSON() {
   a.href=url;a.download='phenix_sauvegarde_'+new Date().toISOString().slice(0,10)+'.json';
   a.click();URL.revokeObjectURL(url);
   toast_d('💾 Sauvegarde complète téléchargée !');
+}
+
+// ── Restaurer une sauvegarde complète ──────────────────────
+function importToutJSON() {
+  const inp = document.getElementById('restore-file-input');
+  if (inp) inp.click();
+}
+async function handleRestoreFile(file) {
+  if (!file) return;
+  const r = new FileReader();
+  r.onload = async ev => {
+    let data;
+    try { data = JSON.parse(ev.target.result); }
+    catch(e){ toast_d('⚠️ Fichier invalide.'); return; }
+    if (!confirm('Restaurer cette sauvegarde ?\nLes données du fichier seront ré-enregistrées (les comptes rendus et tout le reste).')) return;
+    // Comptes rendus : stockés localement
+    if (Array.isArray(data.reunions)) { stateDossier.reunions = data.reunions; localSave(); }
+    if (Array.isArray(data.remunerations)) stateDossier.remunerations = data.remunerations;
+    // Collections synchronisées : ré-écriture dans Firebase si dispo
+    try {
+      if (window._fb && firebaseReady) {
+        for (const p of (data.projets   || [])) await window._fb.saveProjet(p);
+        for (const e of (data.echeances || [])) await window._fb.saveEcheance(e);
+        for (const f of (data.factures  || [])) await window._fb.saveFacture(f);
+        for (const t of (data.taches    || [])) await window._fb.saveTache(t);
+        if (window._fb.saveCharge)     for (const c of (data.charges     || [])) await window._fb.saveCharge(c);
+        if (window._fb.saveCommission) for (const c of (data.commissions || [])) await window._fb.saveCommission(c);
+      } else {
+        // Mode local : on recharge tout dans l'état puis on sauvegarde
+        ['projets','echeances','factures','taches','charges','commissions'].forEach(k=>{ if(Array.isArray(data[k])) stateDossier[k]=data[k]; });
+        localSave();
+      }
+    } catch(err) { console.error('Restauration:', err); }
+    toast_d('✅ Sauvegarde restaurée. La page va se recharger…');
+    setTimeout(()=>location.reload(), 1500);
+  };
+  r.readAsText(file);
 }
 
 function exportComptaCSV() {

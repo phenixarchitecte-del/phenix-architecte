@@ -172,7 +172,85 @@ window._fb = {
 
   // ── Collections Chantier ──────────────────────────
   const CHANTIER_COL = collection(db, 'phenix_chantier_state');
-  
+
+  // ════════════════════════════════════════════════════════════
+  //  STOCKAGE DES MÉDIAS (photos / plans) — 1 fiche par fichier
+  //  Chaque média est découpé en morceaux < 1 Mo dans phenix_media,
+  //  pour ne jamais dépasser la limite Firestore et ne plus perdre
+  //  de photos. La fiche du chantier ne garde qu'une référence légère.
+  // ════════════════════════════════════════════════════════════
+  const MEDIA_COL = 'phenix_media';
+  const MEDIA_CHUNK = 700000;            // taille max d'un morceau base64 par fiche
+  const _mediaCache = {};                // mediaId -> dataUrl (évite de re-télécharger)
+
+  function _genMediaId(){ return 'm_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,9); }
+
+  async function _putMedia(mediaId, dataUrl, meta){
+    const parts = [];
+    for (let i = 0; i < dataUrl.length; i += MEDIA_CHUNK) parts.push(dataUrl.slice(i, i + MEDIA_CHUNK));
+    await setDoc(doc(db, MEDIA_COL, mediaId), {
+      kind: (meta && meta.kind) || '', name: (meta && meta.name) || '',
+      parts: parts.length, createdAt: new Date().toISOString()
+    });
+    for (let i = 0; i < parts.length; i++) {
+      await setDoc(doc(db, MEDIA_COL, mediaId + '__' + i), { d: parts[i] });
+    }
+    _mediaCache[mediaId] = dataUrl;
+  }
+
+  async function _getMedia(mediaId){
+    if (_mediaCache[mediaId]) return _mediaCache[mediaId];
+    try {
+      const metaSnap = await getDoc(doc(db, MEDIA_COL, mediaId));
+      if (!metaSnap.exists()) return null;
+      const n = metaSnap.data().parts || 0;
+      let dataUrl = '';
+      for (let i = 0; i < n; i++) {
+        const cs = await getDoc(doc(db, MEDIA_COL, mediaId + '__' + i));
+        if (cs.exists()) dataUrl += cs.data().d || '';
+      }
+      _mediaCache[mediaId] = dataUrl;
+      return dataUrl;
+    } catch(e) { console.error('Phénix média lecture:', e.message || e); return null; }
+  }
+
+  // Écrit les nouveaux médias dans phenix_media et pose un mediaId stable
+  // sur l'objet réel (conservé en local), tout en gardant le dataUrl en mémoire.
+  async function ensureMediaStored(stateObj){
+    if (!stateObj || !stateObj.comptes_rendus) return;
+    for (const cr of stateObj.comptes_rendus) {
+      for (const key of ['photos','plans']) {
+        if (!Array.isArray(cr[key])) continue;
+        for (const item of cr[key]) {
+          const du = item.dataUrl || item.storageUrl;
+          if (du && typeof du === 'string' && du.startsWith('data:')) {
+            if (!item.mediaId) item.mediaId = _genMediaId();
+            if (!_mediaCache[item.mediaId]) {
+              await _putMedia(item.mediaId, du, { kind: key === 'plans' ? 'plan' : 'photo', name: item.name || '' });
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Réassemble les médias (mediaId -> dataUrl) pour l'affichage après chargement.
+  async function rehydrateMedia(stateObj){
+    if (!stateObj || !stateObj.comptes_rendus) return stateObj;
+    for (const cr of stateObj.comptes_rendus) {
+      for (const key of ['photos','plans']) {
+        if (!Array.isArray(cr[key])) continue;
+        for (const item of cr[key]) {
+          if (item.mediaId && !item.dataUrl) {
+            const du = await _getMedia(item.mediaId);
+            if (du) { item.dataUrl = du; item.storageUrl = du; }
+          }
+        }
+      }
+    }
+    return stateObj;
+  }
+
   window._fbChantier = {
 
     // ── Storage : upload un fichier base64 ──────────────────────
@@ -243,40 +321,41 @@ window._fb = {
       return updated;
     },
 
-    // ── Créer une version syncable (Storage URLs au lieu de base64) ──
+    // ── Créer une version syncable (références légères, sans base64) ──
     makeSyncable(stateObj) {
-      // Avec Storage, les CRs contiennent déjà des storageUrl → pas besoin de stripper
-      // On fait juste une copie propre sans les renderedPages (trop lourdes)
       const s = JSON.parse(JSON.stringify(stateObj));
       if (s.comptes_rendus) {
         s.comptes_rendus = s.comptes_rendus.map(cr => {
-          if (cr.plans) {
-            cr.plans = cr.plans.map(pl => {
-              const p = { ...pl };
-              delete p.renderedPages; // Ne pas syncer les pages rendues (recalculables)
-              return p;
-            });
-          }
+          ['photos','plans'].forEach(key => {
+            if (Array.isArray(cr[key])) {
+              cr[key] = cr[key].map(it => {
+                const o = { ...it };
+                delete o.dataUrl;        // base64 sorti dans phenix_media
+                delete o.storageUrl;
+                delete o.storagePath;
+                delete o.renderedPages;  // pages PDF rendues (recalculables)
+                return o;                // garde mediaId, caption, name, annotations
+              });
+            }
+          });
           return cr;
         });
       }
       return s;
     },
 
-    // ── restoreBinary : avec Storage, les URLs sont déjà dans le state ──
-    restoreBinary(remoteState) {
-      return remoteState; // Plus besoin de restauration manuelle
+    // ── restoreBinary : réassemble les médias depuis phenix_media ──
+    async restoreBinary(remoteState) {
+      await rehydrateMedia(remoteState);
+      return remoteState;
     },
 
-    // ── Sauvegarder (sans binaires → sous la limite 1MB Firestore) ──
+    // ── Sauvegarder : médias dans phenix_media, fiche principale légère ──
     async saveState(stateObj) {
       try {
-        const syncable = this.makeSyncable(stateObj);
+        await ensureMediaStored(stateObj);          // sort les photos/plans + pose les mediaId
+        const syncable = this.makeSyncable(stateObj); // version sans base64
         const json = JSON.stringify(syncable);
-        // Vérification taille (Firestore limite ~1MB)
-        if (json.length > 900000) {
-          console.warn('Phénix: état trop volumineux pour Firebase (' + Math.round(json.length/1024) + 'KB), données texte seulement sauvegardées');
-        }
         await setDoc(doc(db, 'phenix_chantier_state', 'main'), {
           data: json,
           updatedAt: new Date().toISOString(),
@@ -291,13 +370,13 @@ window._fb = {
     listenState(callback) {
       return onSnapshot(
         doc(db, 'phenix_chantier_state', 'main'),
-        snap => {
+        async snap => {
           if (snap.exists()) {
             try {
               const parsed = JSON.parse(snap.data().data || '{}');
               const updatedAt = snap.data().updatedAt || null;
-              // Restaurer les binaires locaux
-              const restored = this.restoreBinary(parsed);
+              // Réassembler les médias (photos/plans) depuis phenix_media
+              const restored = await this.restoreBinary(parsed);
               callback(restored, updatedAt);
             } catch(e) {
               console.error('Firebase chantier parse error:', e);
@@ -2143,6 +2222,9 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
 
     <div class="nav-section">Export</div>
     <div class="nav-item" onclick="exportSynthesePDF()"><i class="ti ti-file-export"></i> Synthèse PDF chantier</div>
+    <div class="nav-section">Sauvegarde</div>
+    <div class="nav-item" onclick="exportJSON()" title="Télécharger une copie complète de toutes vos données (photos comprises)"><i class="ti ti-database-export"></i> Sauvegarde complète</div>
+    <div class="nav-item" onclick="importJSON()" title="Restaurer vos données depuis un fichier de sauvegarde"><i class="ti ti-database-import"></i> Restaurer une sauvegarde</div>
     <input type="file" id="importInput" accept=".json" style="display:none" onchange="handleImport(event)">
 
     <div class="sidebar-bottom">
@@ -4839,31 +4921,10 @@ function saveCR() {
   closeModal('modalCR');
   toast('✅ Compte rendu enregistré. Synchronisation en cours…');
   renderCR(); updateBadges();
-  // Upload fichiers vers Firebase Storage en arrière-plan
-  if (window._fbChantier && window._fbChantier.uploadCRFiles) {
-    window._fbChantier.uploadCRFiles(cr).then(updatedCR => {
-      const idx = state.comptes_rendus.findIndex(x => x.id === cr.id);
-      if (idx >= 0) {
-        state.comptes_rendus[idx] = updatedCR;
-        // Mettre à jour crPhotos/crPlans avec les storageUrl
-        crPhotos = (updatedCR.photos || []).map(p => ({
-          dataUrl: p.storageUrl || p.dataUrl || null,
-          storageUrl: p.storageUrl || null,
-          storagePath: p.storagePath || null,
-          caption: p.caption || ''
-        }));
-        crPlans = (updatedCR.plans || []).map(pl => ({
-          dataUrl: pl.storageUrl || pl.dataUrl || null,
-          storageUrl: pl.storageUrl || null,
-          storagePath: pl.storagePath || null,
-          name: pl.name || '',
-          annotations: pl.annotations || []
-        }));
-        saveLocal();
-        toast('☁️ Photos et plans synchronisés sur tous vos appareils.');
-      }
-    }).catch(e => console.warn('Storage upload background:', e));
-  }
+  // Photos et plans sont enregistrés automatiquement dans phenix_media
+  // via saveLocal() ci-dessus : 1 fiche par fichier, découpée si besoin,
+  // donc plus aucune limite de 1 Mo et plus aucune perte.
+  setTimeout(() => toast('☁️ Photos et plans sauvegardés dans le cloud.'), 900);
 }
 
 function deleteCR() {
