@@ -183,14 +183,16 @@ function renderSync(){const el=$('#syncCard');if(!el)return;const T='<div class=
   $('#syUp').addEventListener('click',()=>window._auth.signup($('#syEmail').value.trim(),$('#syPwd').value).catch(e=>alert('Création : '+(e.message||e.code))));}}
 function renderStamp(){$('#stamp').textContent=state.updated?('Dernière mise à jour : '+state.updated):'';}
 function accTot(a){return(a.positions&&a.positions.length)?a.positions.reduce((s,p)=>s+(+p.amount||0),0):(+a.amount||0);}
-function totals(){const by={};let tot=0;const add=(c,v)=>{by[c]=(by[c]||0)+v;tot+=v};
- state.accounts.forEach(a=>add(a.cat,accTot(a)));state.props.forEach(p=>add('immobilier',Math.max(0,(+p.value||0)-(+p.debt||0))));state.companies.forEach(c=>add('societes',+c.valeur||0));return{by,tot};}
-function renderOverview(){const{by,tot}=totals();$('#total').textContent=fmt(tot)+' €';const svg=$('#donut');svg.innerHTML='';const C=2*Math.PI*42;let off=0;
+function totals(){const by={};let assets=0,debt=0;const add=(c,v)=>{by[c]=(by[c]||0)+v;assets+=v};
+ state.accounts.forEach(a=>add(a.cat,accTot(a)));state.props.forEach(p=>{add('immobilier',+p.value||0);debt+=(+p.debt||0);});state.companies.forEach(c=>add('societes',+c.valeur||0));return{by,assets,debt,net:assets-debt};}
+function renderOverview(){const{by,assets,debt,net}=totals();$('#total').textContent=fmt(net)+' €';const svg=$('#donut');svg.innerHTML='';const C=2*Math.PI*42;let off=0;
  const ent=Object.keys(CATS).filter(k=>by[k]>0).map(k=>({k,v:by[k]}));
- if(!ent.length)svg.innerHTML='<circle cx="60" cy="60" r="42" fill="none" stroke="#EAE2D4" stroke-width="16"/>';
- ent.forEach(e=>{const len=e.v/tot*C;svg.innerHTML+=`<circle cx="60" cy="60" r="42" fill="none" stroke="${CATS[e.k].hex}" stroke-width="16" stroke-dasharray="${len} ${C-len}" stroke-dashoffset="${-off}" transform="rotate(-90 60 60)"/>`;off+=len;});
- const leg=$('#legend');leg.innerHTML='';ent.sort((a,b)=>b.v-a.v).forEach(e=>{const r=ce('div','leg-row');r.innerHTML=`<span class="dot" style="background:${CATS[e.k].hex}"></span><span class="leg-name">${CATS[e.k].name}</span><span class="leg-amt">${fmt(e.v)} €</span><span class="leg-pct">${Math.round(e.v/tot*100)}%</span>`;leg.appendChild(r);});
- if(!ent.length)leg.innerHTML='<div class="leg-row" style="color:var(--soft)">Renseigne les onglets pour voir la répartition.</div>';}
+ if(!ent.length){svg.innerHTML='<circle cx="60" cy="60" r="42" fill="none" stroke="#EAE2D4" stroke-width="16"/>';$('#legend').innerHTML='<div class="leg-row" style="color:var(--soft)">Renseigne les onglets pour voir la répartition.</div>';return;}
+ ent.forEach(e=>{const len=e.v/assets*C;svg.innerHTML+=`<circle cx="60" cy="60" r="42" fill="none" stroke="${CATS[e.k].hex}" stroke-width="16" stroke-dasharray="${len} ${C-len}" stroke-dashoffset="${-off}" transform="rotate(-90 60 60)"/>`;off+=len;});
+ const leg=$('#legend');leg.innerHTML='';ent.sort((a,b)=>b.v-a.v).forEach(e=>{const r=ce('div','leg-row');r.innerHTML=`<span class="dot" style="background:${CATS[e.k].hex}"></span><span class="leg-name">${CATS[e.k].name}</span><span class="leg-amt">${fmt(e.v)} €</span><span class="leg-pct">${Math.round(e.v/assets*100)}%</span>`;leg.appendChild(r);});
+ const sep=ce('div','leg-row');sep.style.cssText='border-top:1px solid var(--line);margin-top:6px;padding-top:8px';sep.innerHTML=`<span class="leg-name">Actifs bruts</span><span class="leg-amt">${fmt(assets)} €</span><span class="leg-pct"></span>`;leg.appendChild(sep);
+ if(debt>0){const dr=ce('div','leg-row');dr.innerHTML=`<span class="leg-name" style="color:var(--terra)">− Crédits immobiliers</span><span class="leg-amt" style="color:var(--terra)">−${fmt(debt)} €</span><span class="leg-pct"></span>`;leg.appendChild(dr);}
+ const nr=ce('div','leg-row');nr.style.cssText='font-weight:700';nr.innerHTML=`<span class="leg-name">= Patrimoine net</span><span class="leg-amt">${fmt(net)} €</span><span class="leg-pct"></span>`;leg.appendChild(nr);}
 function catSelHtml(s){return Object.keys(CATS).map(k=>`<option value="${k}" ${k===s?'selected':''}>${CATS[k].name}</option>`).join('');}
 
 function renderAccounts(){const box=$('#accounts');box.innerHTML='';state.accounts.forEach(a=>{const cat=CATS[a.cat]||CATS.bourse,tot=accTot(a),hasPos=a.positions&&a.positions.length;
