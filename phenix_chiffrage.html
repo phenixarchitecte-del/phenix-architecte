@@ -1,0 +1,950 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+--nav:#1B2D5B;--nav2:#0F1E3D;
+--accent:#4A9CC7;--accent2:#2A5298;--accent-bg:#E8F4FB;
+--bg:#F0F4F8;--surface:#FFFFFF;--surface2:#E4ECF3;
+--text:#0F1E3D;--text2:#4A6080;--text3:#8BA5C0;
+--border:#C8D8E8;--border2:#A8C0D8;
+--success:#2D7A4F;--success-bg:#E3F5EC;--danger:#C0392B;--danger-bg:#FDECEB;--info:#2A5298;
+--font-serif:'DM Serif Display',Georgia,serif;
+--font-sans:'DM Sans',sans-serif;
+--shadow:0 1px 4px rgba(15,30,61,.07),0 1px 2px rgba(15,30,61,.04);
+--shadow-md:0 4px 16px rgba(15,30,61,.1),0 2px 6px rgba(15,30,61,.06);
+--r-sm:5px;--r-md:8px;--r-lg:12px;
+}
+body{font-family:var(--font-sans);background:var(--bg);color:var(--text);min-height:600px;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased}
+
+/* NAV */
+.topbar{background:var(--nav);color:white;padding:0 24px;height:56px;display:flex;align-items:center;gap:16px;flex-shrink:0}
+.topbar-actions{display:flex;gap:8px;align-items:center}
+.topbar-btn{background:rgba(74,156,199,.15);border:1px solid rgba(74,156,199,.35);color:#7DC6E8;padding:5px 12px;border-radius:var(--r-sm);font-size:12px;font-family:var(--font-sans);cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:all .15s;font-weight:500}
+.topbar-btn:hover{background:rgba(74,156,199,.28);border-color:var(--accent)}
+.logo{font-family:var(--font-serif);font-size:18px;font-weight:400;color:#fff;letter-spacing:.02em;white-space:nowrap;line-height:1.1}
+.logo span{font-size:9.5px;font-weight:400;color:rgba(74,156,199,.85);display:block;letter-spacing:.12em;text-transform:uppercase;margin-top:2px}
+.topbar-sep{flex:1}
+.topbar-info{font-size:12px;color:rgba(255,255,255,.45)}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:#4A6080;display:inline-block;margin-right:5px;transition:background .3s}
+
+/* LAYOUT */
+.layout{display:flex;flex:1;overflow:hidden;min-height:550px}
+
+/* SIDEBAR */
+.sidebar{width:220px;background:linear-gradient(180deg,#0F1E3D 0%,#1B2D5B 60%,#1a3060 100%);color:white;display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto}
+.sidebar-section{padding:20px 16px 8px;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:rgba(74,156,199,.5);font-weight:600}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;font-size:13px;color:rgba(255,255,255,.5);cursor:pointer;border-left:2.5px solid transparent;transition:all .15s}
+.nav-item:hover{color:white;background:rgba(255,255,255,.06)}
+.nav-item.active{color:#fff;border-left-color:#4A9CC7;background:rgba(74,156,199,.18);font-weight:600}
+.nav-item i{font-size:15px;width:18px;text-align:center}
+.nav-badge{margin-left:auto;background:rgba(74,156,199,.25);color:#7DC6E8;font-size:10px;font-weight:600;padding:1px 6px;border-radius:10px}
+
+/* MAIN */
+.main{flex:1;overflow-y:auto;display:flex;flex-direction:column}
+
+/* PAGES */
+.page{display:none;flex:1;flex-direction:column}
+.page.active{display:flex}
+
+/* PAGE HEADER */
+.page-header{padding:24px 28px 16px;border-bottom:1px solid var(--border);background:var(--surface)}
+.page-title{font-family:var(--font-serif);font-size:26px;font-weight:400;color:var(--nav)}
+.page-sub{font-size:13px;color:var(--text2);margin-top:2px}
+.page-actions{display:flex;gap:10px;margin-top:12px}
+
+/* BUTTONS */
+.btn{padding:8px 16px;border-radius:var(--r-md);font-size:13px;font-weight:500;cursor:pointer;border:1.5px solid var(--border);font-family:var(--font-sans);display:inline-flex;align-items:center;gap:7px;transition:all .15s;background:var(--surface);color:var(--text)}
+.btn:hover{background:var(--bg);border-color:var(--accent);color:var(--nav)}
+.btn-primary{background:linear-gradient(135deg,#1B2D5B,#2A5298);color:#fff;border-color:#1B2D5B}
+.btn-primary:hover{background:linear-gradient(135deg,#4A9CC7,#2A5298);border-color:#4A9CC7}
+.btn-accent{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn-accent:hover{background:var(--accent2);border-color:var(--accent2)}
+.btn-outline{background:transparent;border:1.5px solid var(--border);color:var(--text)}
+.btn-outline:hover{background:var(--accent-bg);border-color:var(--accent);color:var(--nav)}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn-danger{background:var(--danger-bg);border:1.5px solid var(--danger);color:var(--danger)}
+.btn-danger:hover{background:#FDDCDB}
+
+/* STATS CARDS */
+.stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;padding:20px 28px}
+.stat-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r-lg);padding:16px 20px;box-shadow:var(--shadow);border-top:3px solid var(--accent)}
+.stat-label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);font-weight:600}
+.stat-value{font-family:var(--font-serif);font-size:30px;font-weight:400;color:var(--nav);margin-top:4px}
+.stat-value.accent{color:var(--accent)}
+.stat-sub{font-size:11px;color:var(--text3);margin-top:2px}
+
+/* TABLE */
+.table-wrap{padding:0 28px 28px}
+.table-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r-lg);overflow:hidden;box-shadow:var(--shadow)}
+.table-toolbar{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--surface)}
+.table-toolbar input{flex:1;padding:6px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:var(--font-sans);background:var(--bg)}
+.table-toolbar input:focus{outline:none;border-color:var(--accent)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{padding:10px 16px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--nav);background:var(--surface2);border-bottom:2px solid var(--accent)}
+td{padding:11px 16px;border-bottom:1px solid var(--surface2);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--accent-bg)}
+.lot-num{font-weight:700;color:var(--accent);font-size:12px;width:60px}
+.lot-name{font-weight:500}
+.lot-cat{font-size:11px;color:var(--text3)}
+.ht-val{font-weight:600;font-family:var(--font-serif);font-size:15px;color:var(--nav)}
+.ttc-val{font-weight:600;font-family:var(--font-serif);font-size:15px;color:var(--accent2)}
+.status-badge{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;display:inline-block}
+.s-chiffrage{background:var(--amber-bg,#FDF3DC);color:#8A6020}
+.s-valide{background:var(--success-bg);color:var(--success)}
+.s-revision{background:var(--danger-bg);color:var(--danger)}
+.row-actions{display:flex;gap:6px;justify-content:flex-end}
+
+/* DETAIL LOT */
+.lot-detail-header{padding:20px 28px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border);background:var(--surface)}
+.back-btn{cursor:pointer;color:var(--text2);font-size:13px;display:flex;align-items:center;gap:5px;padding:6px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);background:transparent;font-family:var(--font-sans)}
+.back-btn:hover{background:var(--accent-bg);border-color:var(--accent);color:var(--nav)}
+.lot-title-detail{font-family:var(--font-serif);font-size:22px;font-weight:400;color:var(--nav)}
+.detail-body{padding:20px 28px;flex:1}
+.detail-grid{display:grid;grid-template-columns:1fr 340px;gap:20px}
+.detail-section-title{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--text2);font-weight:700;margin-bottom:12px}
+.poste-table{width:100%;border-collapse:collapse;font-size:13px}
+.poste-table th{padding:8px 12px;background:var(--surface2);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--nav);border-bottom:2px solid var(--accent)}
+.poste-table td{padding:8px 12px;border-bottom:1px solid var(--surface2);vertical-align:middle}
+.poste-table input[type=number]{width:80px;padding:4px 8px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:13px;font-family:var(--font-sans);background:var(--bg);text-align:right}
+.poste-table input[type=text]{width:100%;padding:4px 8px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:13px;font-family:var(--font-sans);background:var(--bg)}
+.poste-table input:focus{outline:none;border-color:var(--accent);background:white}
+.poste-total{font-weight:600;font-family:var(--font-serif);font-size:14px;text-align:right;color:var(--nav)}
+.add-poste-row td{padding:8px 12px}
+.side-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r-lg);padding:20px;box-shadow:var(--shadow)}
+.side-param{margin-bottom:16px}
+.side-param label{font-size:12px;color:var(--text2);display:block;margin-bottom:4px;font-weight:500}
+.side-param select,.side-param input{width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:var(--font-sans);background:var(--bg)}
+.side-param select:focus,.side-param input:focus{outline:none;border-color:var(--accent)}
+.total-block{background:linear-gradient(135deg,#1B2D5B,#0F1E3D);color:white;border-radius:var(--r-lg);padding:16px;margin-top:8px}
+.total-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:13px}
+.total-row.main{font-family:var(--font-serif);font-size:20px;font-weight:400;border-top:1px solid rgba(255,255,255,.15);margin-top:8px;padding-top:12px}
+.total-row .lbl{color:rgba(74,156,199,.75)}
+.total-row.main .lbl{color:#4A9CC7}
+.total-row.main .val{color:#fff}
+
+/* CHANTIERS PAGE */
+.chantier-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;padding:24px 28px}
+.chantier-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r-lg);padding:20px;cursor:pointer;transition:all .15s;box-shadow:var(--shadow)}
+.chantier-card:hover{border-color:var(--accent);box-shadow:0 2px 12px rgba(74,156,199,.2)}
+.chantier-card.selected{border-color:var(--accent);background:var(--accent-bg)}
+.chantier-card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+.chantier-name{font-family:var(--font-serif);font-size:18px;font-weight:400;color:var(--nav)}
+.chantier-type{font-size:11px;padding:3px 8px;border-radius:20px;background:var(--accent-bg);color:var(--accent2);font-weight:600}
+.chantier-info{font-size:12px;color:var(--text2);margin-top:4px}
+.chantier-ht{font-family:var(--font-serif);font-size:22px;font-weight:400;color:var(--nav);margin-top:12px}
+.chantier-progress{margin-top:8px;height:3px;background:var(--border);border-radius:2px;overflow:hidden}
+.chantier-progress-inner{height:100%;background:linear-gradient(90deg,#4A9CC7,#2A5298);border-radius:2px}
+.empty-state{text-align:center;padding:60px 28px;color:var(--text3)}
+.empty-state i{font-size:40px;margin-bottom:12px;display:block;color:var(--accent)}
+.empty-state p{font-size:14px}
+
+/* MODAL */
+.modal-overlay{position:absolute;inset:0;background:rgba(15,30,61,.6);display:none;align-items:center;justify-content:center;z-index:100}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border-radius:var(--r-lg);padding:28px;width:440px;max-width:90%;box-shadow:var(--shadow-md)}
+.modal-title{font-family:var(--font-serif);font-size:22px;font-weight:400;color:var(--nav);margin-bottom:20px}
+.form-group{margin-bottom:16px}
+.form-group label{font-size:12px;color:var(--text2);display:block;margin-bottom:5px;font-weight:600}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:var(--font-sans);background:var(--bg)}
+.form-group input:focus,.form-group select:focus{outline:none;border-color:var(--accent)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
+
+/* EXPORT */
+.export-section{padding:24px 28px}
+.export-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r-lg);padding:24px;max-width:600px;margin-bottom:20px;box-shadow:var(--shadow)}
+.export-title{font-family:var(--font-serif);font-size:18px;font-weight:400;color:var(--nav);margin-bottom:6px}
+.export-desc{font-size:13px;color:var(--text2);margin-bottom:16px}
+
+/* TOAST */
+.toast{position:absolute;bottom:20px;right:20px;background:linear-gradient(135deg,#1B2D5B,#0F1E3D);color:white;padding:12px 20px;border-radius:var(--r-md);font-size:13px;display:none;align-items:center;gap:8px;z-index:200;border-left:3px solid #4A9CC7;box-shadow:var(--shadow-md)}
+.toast.show{display:flex}
+
+/* LOADING */
+.loading{text-align:center;padding:40px;color:var(--text3);font-size:13px}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">Phénix-Architecte<span>Maître d'Œuvre · Architecte DE</span></div>
+  <div class="topbar-sep"></div>
+  <div class="topbar-actions">
+    <button class="topbar-btn" onclick="exportData()" title="Exporter les données (sauvegarde)"><i class="ti ti-cloud-upload" aria-hidden="true"></i>Sauvegarder</button>
+    <label class="topbar-btn" title="Importer des données depuis un autre appareil" style="cursor:pointer"><i class="ti ti-cloud-download" aria-hidden="true"></i>Importer<input type="file" accept=".json" onchange="importData(event)" style="display:none"></label>
+  </div>
+  <div class="topbar-info" id="sync-info"><span class="sync-dot" id="sync-dot"></span><span id="sync-label">Prêt</span></div>
+</div>
+
+<div class="layout" style="position:relative">
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <div style="padding:20px 16px 8px">
+    <div style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:rgba(74,156,199,.5);font-weight:600">Navigation</div>
+  </div>
+  <div class="nav-item active" onclick="showPage('chantiers')" id="nav-chantiers">
+    <i class="ti ti-building-2" aria-hidden="true"></i> Chantiers
+  </div>
+  <div class="nav-item" onclick="showPage('chiffrage')" id="nav-chiffrage">
+    <i class="ti ti-calculator" aria-hidden="true"></i> Lots & Chiffrage
+  </div>
+  <div class="nav-item" onclick="showPage('export')" id="nav-export">
+    <i class="ti ti-file-export" aria-hidden="true"></i> Export
+  </div>
+  <div style="flex:1"></div>
+  <div style="padding:16px;border-top:1px solid rgba(255,255,255,.06)">
+    <div style="font-size:11px;color:rgba(74,156,199,.5)">Prix base : Auvergne 2025</div>
+    <div style="font-size:11px;color:rgba(74,156,199,.5);margin-top:2px">v3.0 — Phénix-Architecte</div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main" id="main">
+
+  <!-- PAGE CHANTIERS -->
+  <div class="page active" id="page-chantiers">
+    <div class="page-header">
+      <div class="page-title">Chantiers</div>
+      <div class="page-sub">Gestion de vos projets</div>
+      <div class="page-actions">
+        <button class="btn btn-primary" onclick="openNewChantierModal()"><i class="ti ti-plus" aria-hidden="true"></i>Nouveau chantier</button>
+      </div>
+    </div>
+    <div id="chantier-grid-wrap" class="chantier-grid"><div class="loading">Chargement…</div></div>
+  </div>
+
+  <!-- PAGE CHIFFRAGE -->
+  <div class="page" id="page-chiffrage">
+    <div class="page-header">
+      <div class="page-title">Lots & Chiffrage</div>
+      <div class="page-sub" id="chiffrage-sub">Décomposition par corps d'état</div>
+      <div class="page-actions" style="flex-wrap:wrap;gap:8px">
+        <select id="chantier-select" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;background:var(--surface2)" onchange="onChantierSelect()">
+          <option value="">— Sélectionner un chantier —</option>
+        </select>
+        <button class="btn btn-primary" onclick="openNewLotModal()"><i class="ti ti-plus" aria-hidden="true"></i>Nouveau lot</button>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row" id="stats-row">
+      <div class="stat-card"><div class="stat-label">Nombre de lots</div><div class="stat-value" id="stat-lots">0</div><div class="stat-sub">0 terminé(s)</div></div>
+      <div class="stat-card"><div class="stat-label">Total HT</div><div class="stat-value accent" id="stat-ht">0 €</div></div>
+      <div class="stat-card"><div class="stat-label">Total TTC</div><div class="stat-value" id="stat-ttc">0 €</div><div class="stat-sub">TVA 20%</div></div>
+    </div>
+
+    <!-- Table lots -->
+    <div class="table-wrap" id="lots-table-wrap">
+      <div class="table-card">
+        <div class="table-toolbar">
+          <input type="text" placeholder="Rechercher un lot…" id="lot-search" oninput="renderLotsTable()">
+          <button class="btn btn-sm btn-outline" onclick="exportCSV()"><i class="ti ti-download" aria-hidden="true"></i>CSV</button>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width:70px">LOT</th>
+              <th>Désignation</th>
+              <th style="width:110px">HT</th>
+              <th style="width:110px">TTC</th>
+              <th style="width:90px">Statut</th>
+              <th style="width:100px;text-align:right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="lots-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- LOT DETAIL (hidden by default) -->
+    <div id="lot-detail" style="display:none;flex-direction:column;flex:1">
+      <div class="lot-detail-header">
+        <button class="back-btn" onclick="closeLotDetail()"><i class="ti ti-arrow-left" aria-hidden="true"></i>Retour</button>
+        <div>
+          <div class="lot-title-detail" id="detail-title">LOT 01 — VRD / Terrassement</div>
+          <div style="font-size:12px;color:var(--text3)" id="detail-chantier-name"></div>
+        </div>
+        <div style="margin-left:auto;display:flex;gap:8px">
+          <select id="detail-prestation" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;background:var(--surface2)" onchange="onPrestationChange()">
+            <option value="eco">Économique</option>
+            <option value="std" selected>Standard</option>
+            <option value="haut">Haut de gamme</option>
+          </select>
+          <select id="detail-tva" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;background:var(--surface2)" onchange="computeLotTotal()">
+            <option value="20">TVA 20%</option>
+            <option value="10">TVA 10% (rénov.)</option>
+            <option value="5.5">TVA 5.5% (énergie)</option>
+            <option value="0">Exonéré</option>
+          </select>
+        </div>
+      </div>
+      <div class="detail-body">
+        <div class="detail-grid">
+          <div>
+            <div class="detail-section-title">Postes du lot</div>
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden">
+              <table class="poste-table">
+                <thead>
+                  <tr>
+                    <th style="width:35%">Désignation</th>
+                    <th style="width:55px">Qté</th>
+                    <th style="width:40px">Unité</th>
+                    <th style="width:80px">PU HT (€)</th>
+                    <th style="width:90px;text-align:right">Total HT</th>
+                    <th style="width:36px"></th>
+                  </tr>
+                </thead>
+                <tbody id="postes-tbody"></tbody>
+                <tfoot>
+                  <tr class="add-poste-row">
+                    <td colspan="6">
+                      <button class="btn btn-sm btn-outline" onclick="addPoste()"><i class="ti ti-plus" aria-hidden="true"></i>Ajouter un poste</button>
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+          <div>
+            <div class="detail-section-title">Paramètres & Totaux</div>
+            <div class="side-card">
+              <div class="side-param">
+                <label>Aléas / imprévus (%)</label>
+                <input type="number" id="param-aleas" value="5" min="0" max="30" step="1" oninput="computeLotTotal()">
+              </div>
+              <div class="side-param">
+                <label>Honoraires MOE (%)</label>
+                <input type="number" id="param-honoraires" value="12" min="0" max="30" step="0.5" oninput="computeLotTotal()">
+              </div>
+              <div class="side-param">
+                <label>Statut du lot</label>
+                <select id="param-statut" onchange="saveLot()">
+                  <option value="Chiffrage">En cours de chiffrage</option>
+                  <option value="Valide">Validé</option>
+                  <option value="Revision">En révision</option>
+                </select>
+              </div>
+              <div class="side-param">
+                <label>Notes internes</label>
+                <textarea id="param-notes" rows="3" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;background:var(--surface2);resize:vertical" placeholder="Observations, variantes…" oninput="saveLot()"></textarea>
+              </div>
+              <div class="total-block">
+                <div class="total-row"><span class="lbl">Travaux HT</span><span id="tot-travaux">0 €</span></div>
+                <div class="total-row"><span class="lbl">Aléas</span><span id="tot-aleas">0 €</span></div>
+                <div class="total-row"><span class="lbl">Honoraires MOE</span><span id="tot-honoraires">0 €</span></div>
+                <div class="total-row"><span class="lbl">TVA</span><span id="tot-tva">0 €</span></div>
+                <div class="total-row main"><span class="lbl">TOTAL TTC</span><span id="tot-ttc">0 €</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE EXPORT -->
+  <div class="page" id="page-export">
+    <div class="page-header">
+      <div class="page-title">Export</div>
+      <div class="page-sub">Synthèses et documents de chiffrage</div>
+    </div>
+    <div class="export-section">
+      <div class="export-card">
+        <div class="export-title"><i class="ti ti-cloud-upload" style="color:var(--accent);margin-right:6px" aria-hidden="true"></i>Sauvegarde des données</div>
+        <div class="export-desc">Exportez l'ensemble de vos chantiers dans un fichier <strong>.json</strong>. Transférez ce fichier sur un autre appareil (clé USB, cloud, email) et importez-le pour retrouver toutes vos données. Vos données sont aussi sauvegardées automatiquement sur cet appareil (stockage local du navigateur).</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn btn-accent" onclick="exportData()"><i class="ti ti-cloud-upload" aria-hidden="true"></i>Exporter la sauvegarde (.json)</button>
+          <label class="btn btn-outline" style="cursor:pointer"><i class="ti ti-cloud-download" aria-hidden="true"></i>Importer une sauvegarde<input type="file" accept=".json" onchange="importData(event)" style="display:none"></label>
+        </div>
+      </div>
+      <div class="export-card">
+        <div class="export-title">Synthèse CSV — Tous lots</div>
+        <div class="export-desc">Export tableur de l'ensemble des lots du chantier sélectionné, avec postes détaillés, PU et totaux HT/TTC. Importable dans Excel ou LibreOffice.</div>
+        <div style="margin-bottom:12px">
+          <select id="export-chantier-select" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;background:var(--surface2);width:100%">
+            <option value="">— Sélectionner un chantier —</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" onclick="exportCSVFull()"><i class="ti ti-table-export" aria-hidden="true"></i>Exporter CSV complet</button>
+      </div>
+      <div class="export-card">
+        <div class="export-title">Récapitulatif PDF — Estimation APS/APD</div>
+        <div class="export-desc">Génère un récapitulatif professionnel en-tête Phénix-Conception avec décomposition par lots, paramètres (aléas, honoraires) et total général TTC.</div>
+        <button class="btn btn-accent" onclick="exportPDF()"><i class="ti ti-file-type-pdf" aria-hidden="true"></i>Générer PDF de synthèse</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- MODAL NOUVEAU CHANTIER -->
+<div class="modal-overlay" id="modal-chantier">
+  <div class="modal">
+    <div class="modal-title" id="modal-chantier-title">Nouveau chantier</div>
+    <div class="form-group"><label>Nom du chantier *</label><input type="text" id="f-nom" placeholder="Ex: Maison Dupont — Rénovation"></div>
+    <div class="form-row">
+      <div class="form-group"><label>Type de projet</label>
+        <select id="f-type">
+          <option>Rénovation complète</option>
+          <option>Extension / Surélévation</option>
+          <option>Construction neuve</option>
+          <option>Réhabilitation</option>
+          <option>Aménagement intérieur</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Surface (m²)</label><input type="number" id="f-surface" placeholder="0" min="0"></div>
+    </div>
+    <div class="form-group"><label>Adresse / Localisation</label><input type="text" id="f-adresse" placeholder="63 — Puy-de-Dôme…"></div>
+    <div class="form-row">
+      <div class="form-group"><label>Client / Maître d'ouvrage</label><input type="text" id="f-client" placeholder="Nom du client"></div>
+      <div class="form-group"><label>Phase</label>
+        <select id="f-phase">
+          <option>Esquisse</option>
+          <option>APS</option>
+          <option>APD</option>
+          <option>DCE</option>
+          <option>Travaux</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('modal-chantier')">Annuler</button>
+      <button class="btn btn-primary" onclick="saveNewChantier()">Créer le chantier</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NOUVEAU LOT -->
+<div class="modal-overlay" id="modal-lot">
+  <div class="modal">
+    <div class="modal-title">Nouveau lot de travaux</div>
+    <div class="form-row">
+      <div class="form-group"><label>N° de lot</label><input type="text" id="fl-num" placeholder="LOT 01"></div>
+      <div class="form-group"><label>Désignation *</label><input type="text" id="fl-nom" placeholder="Ex: Gros œuvre / Maçonnerie"></div>
+    </div>
+    <div class="form-group"><label>Modèle de départ</label>
+      <select id="fl-modele">
+        <option value="">— Aucun (lot vide) —</option>
+        <option value="vrd">VRD / Terrassement</option>
+        <option value="go">Gros œuvre / Maçonnerie</option>
+        <option value="charpente">Charpente / Couverture</option>
+        <option value="menuext">Menuiseries extérieures</option>
+        <option value="isolation">Isolation / Cloisons</option>
+        <option value="elec">Électricité</option>
+        <option value="plomberie">Plomberie / Sanitaire</option>
+        <option value="menuint">Menuiseries intérieures</option>
+        <option value="carrelage">Carrelage / Revêtements</option>
+        <option value="peinture">Peinture / Enduits</option>
+        <option value="chauffage">Chauffage / VMC</option>
+        <option value="cuisine">Cuisine / Équipements</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('modal-lot')">Annuler</button>
+      <button class="btn btn-primary" onclick="saveNewLot()">Créer le lot</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"><i class="ti ti-check" aria-hidden="true"></i><span id="toast-msg"></span></div>
+
+</div>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+
+<script>
+const STORAGE_KEY='phenix-chantiers-v2';
+const LOT_TEMPLATES={
+  vrd:[{n:'Débroussaillage / nettoyage',q:1,u:'ff',pu:{eco:800,std:1200,haut:1800}},{n:'Terrassement général (excav.)',q:50,u:'m³',pu:{eco:35,std:50,haut:70}},{n:'Remblai et compactage',q:30,u:'m³',pu:{eco:20,std:30,haut:45}},{n:'Réseau EP (tranchées + fourreaux)',q:1,u:'ff',pu:{eco:1500,std:2500,haut:4000}}],
+  go:[{n:'Fondations (semelles filantes)',q:20,u:'ml',pu:{eco:180,std:260,haut:380}},{n:'Murs en parpaing 20cm',q:80,u:'m²',pu:{eco:85,std:120,haut:165}},{n:'Dalle béton armé ep. 20cm',q:60,u:'m²',pu:{eco:90,std:130,haut:180}},{n:'Chaînages + linteaux',q:1,u:'ff',pu:{eco:2000,std:3200,haut:5000}}],
+  charpente:[{n:'Charpente traditionnelle bois',q:80,u:'m²',pu:{eco:55,std:85,haut:130}},{n:'Couverture tuile canal',q:80,u:'m²',pu:{eco:55,std:90,haut:140}},{n:'Gouttières PVC + descentes',q:20,u:'ml',pu:{eco:22,std:35,haut:55}},{n:'Velux + raccord étanchéité',q:2,u:'u',pu:{eco:900,std:1400,haut:2200}}],
+  menuext:[{n:'Fenêtre PVC DV 100×120cm',q:4,u:'u',pu:{eco:650,std:950,haut:1600}},{n:'Porte-fenêtre PVC 2vx 215cm',q:2,u:'u',pu:{eco:1200,std:1800,haut:2800}},{n:'Porte d\'entrée sécurisée',q:1,u:'u',pu:{eco:1800,std:2800,haut:5000}},{n:'Volets roulants électriques',q:4,u:'u',pu:{eco:600,std:950,haut:1500}}],
+  isolation:[{n:'Isolation combles (ouate 30cm)',q:60,u:'m²',pu:{eco:25,std:40,haut:65}},{n:'Doublage intérieur TH38',q:80,u:'m²',pu:{eco:28,std:45,haut:70}},{n:'Cloisons plâtre 72/48',q:40,u:'m²',pu:{eco:32,std:52,haut:80}},{n:'Isolation sous-sol (ITE 14cm)',q:40,u:'m²',pu:{eco:55,std:85,haut:130}}],
+  elec:[{n:'Tableau électrique 13 circuits',q:1,u:'u',pu:{eco:800,std:1400,haut:2200}},{n:'Prises + interrupteurs (lot)',q:1,u:'ff',pu:{eco:2000,std:3500,haut:5500}},{n:'Luminaires + câblage (lot)',q:1,u:'ff',pu:{eco:1500,std:2800,haut:4500}},{n:'Alarme intrusion base',q:1,u:'ff',pu:{eco:800,std:1500,haut:3000}}],
+  plomberie:[{n:'Salle de bain complète',q:1,u:'ff',pu:{eco:4500,std:7500,haut:14000}},{n:'WC suspendu avec bâti',q:1,u:'u',pu:{eco:900,std:1500,haut:2800}},{n:'Cuisine (alimentation + évac.)',q:1,u:'ff',pu:{eco:1500,std:2500,haut:4000}},{n:'Chauffe-eau thermodynamique',q:1,u:'u',pu:{eco:1800,std:2800,haut:4200}}],
+  menuint:[{n:'Portes intérieures (lot)',q:8,u:'u',pu:{eco:280,std:450,haut:800}},{n:'Escalier bois sur mesure',q:1,u:'ff',pu:{eco:4500,std:7500,haut:14000}},{n:'Placards / dressing',q:6,u:'ml',pu:{eco:350,std:600,haut:1100}},{n:'Seuils + habillages',q:1,u:'ff',pu:{eco:400,std:700,haut:1200}}],
+  carrelage:[{n:'Carrelage sol 60×60 (pose)',q:60,u:'m²',pu:{eco:45,std:70,haut:110}},{n:'Carrelage mural salle de bain',q:20,u:'m²',pu:{eco:48,std:78,haut:130}},{n:'Parquet stratifié 12mm',q:40,u:'m²',pu:{eco:28,std:48,haut:85}},{n:'Faïence cuisine crédence',q:6,u:'m²',pu:{eco:55,std:85,haut:150}}],
+  peinture:[{n:'Préparation murs + plafonds',q:120,u:'m²',pu:{eco:8,std:14,haut:22}},{n:'Peinture 2 couches (murs)',q:120,u:'m²',pu:{eco:12,std:20,haut:35}},{n:'Enduit de lissage',q:60,u:'m²',pu:{eco:18,std:30,haut:50}},{n:'Peinture menuiseries intérieures',q:1,u:'ff',pu:{eco:800,std:1500,haut:2800}}],
+  chauffage:[{n:'Pompe à chaleur air/eau',q:1,u:'u',pu:{eco:5500,std:8500,haut:14000}},{n:'Radiateurs connectés (lot)',q:6,u:'u',pu:{eco:350,std:600,haut:1100}},{n:'VMC double flux',q:1,u:'u',pu:{eco:2800,std:4500,haut:7500}},{n:'Sol chauffant (tuyauterie)',q:60,u:'m²',pu:{eco:45,std:70,haut:110}}],
+  cuisine:[{n:'Cuisine équipée (fournis+posé)',q:1,u:'ff',pu:{eco:5000,std:10000,haut:22000}},{n:'Électroménager encastrable (lot)',q:1,u:'ff',pu:{eco:2000,std:4000,haut:9000}},{n:'Plan de travail pierre naturelle',q:3,u:'ml',pu:{eco:400,std:800,haut:1800}},{n:'Crédence verre/carrelage',q:2,u:'m²',pu:{eco:200,std:400,haut:900}}]
+};
+
+let state={chantiers:[],currentChantier:null,currentLot:null,editingChantierIdx:null};
+
+function loadState(){
+  try{
+    const saved=localStorage.getItem(STORAGE_KEY);
+    if(saved){state=JSON.parse(saved);if(!state.chantiers)state.chantiers=[];}
+  }catch(e){state={chantiers:[],currentChantier:null,currentLot:null,editingChantierIdx:null};}
+  initUI();
+  updateSyncStatus('ok');
+}
+
+function saveState(){
+  try{
+    localStorage.setItem(STORAGE_KEY,JSON.stringify({chantiers:state.chantiers}));
+    updateSyncStatus('saved');
+  }catch(e){updateSyncStatus('err');}
+}
+
+function updateSyncStatus(status){
+  const dot=document.getElementById('sync-dot');
+  const lbl=document.getElementById('sync-label');
+  if(!dot||!lbl)return;
+  const now=new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+  dot.className='sync-dot';
+  if(status==='saved'){dot.classList.add('ok');lbl.textContent='Sauvegardé à '+now;}
+  else if(status==='ok'){dot.classList.add('ok');lbl.textContent='Données chargées';}
+  else if(status==='err'){dot.style.background='#C0392B';lbl.textContent='Erreur sauvegarde';}
+}
+
+// === EXPORT / IMPORT DONNÉES ===
+function exportData(){
+  const json=JSON.stringify({version:3,date:new Date().toISOString(),chantiers:state.chantiers},null,2);
+  const blob=new Blob([json],{type:'application/json;charset=utf-8;'});
+  const a=document.createElement('a');
+  const date=new Date().toISOString().slice(0,10);
+  a.href=URL.createObjectURL(blob);
+  a.download='Phenix_Sauvegarde_'+date+'.json';
+  a.click();
+  showToast('Sauvegarde exportée — transférez ce fichier sur l\'autre appareil');
+}
+
+function importData(event){
+  const file=event.target.files[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const data=JSON.parse(e.target.result);
+      if(!data.chantiers)throw new Error('Format invalide');
+      const nb=data.chantiers.length;
+      if(!confirm('Importer '+nb+' chantier(s) ? Les données actuelles seront remplacées.'))return;
+      state.chantiers=data.chantiers;
+      state.currentChantier=null;
+      state.currentLot=null;
+      saveState();
+      initUI();
+      showToast(nb+' chantier(s) importé(s) avec succès');
+    }catch(err){alert('Fichier invalide ou corrompu.');}
+  };
+  reader.readAsText(file);
+  event.target.value='';
+}
+
+function showToast(msg){
+  const t=document.getElementById('toast');
+  document.getElementById('toast-msg').textContent=msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2500);
+}
+
+function showPage(page){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
+  document.getElementById('nav-'+page).classList.add('active');
+  if(page==='chiffrage'){renderChiffrage();}
+  if(page==='export'){renderExportSelects();}
+}
+
+function initUI(){
+  renderChantierGrid();
+  renderChantierSelects();
+}
+
+// === CHANTIERS ===
+function renderChantierGrid(){
+  const wrap=document.getElementById('chantier-grid-wrap');
+  if(!state.chantiers.length){
+    wrap.innerHTML='<div class="empty-state" style="grid-column:1/-1"><i class="ti ti-building-2" aria-hidden="true"></i><p>Aucun chantier — créez votre premier projet.</p></div>';
+    return;
+  }
+  wrap.innerHTML='';
+  state.chantiers.forEach((c,i)=>{
+    const ht=computeChantierHT(c);
+    const el=document.createElement('div');
+    el.className='chantier-card'+(state.currentChantier===i?' selected':'');
+    el.innerHTML=`
+      <div class="chantier-card-header">
+        <div class="chantier-name">${c.nom||'Sans nom'}</div>
+        <span class="chantier-type">${c.type||''}</span>
+      </div>
+      <div class="chantier-info">${c.client?c.client+' — ':''} ${c.adresse||''}${c.surface?' · '+c.surface+' m²':''}</div>
+      <div class="chantier-info" style="margin-top:2px">${c.phase||''}</div>
+      <div class="chantier-ht">${fmt(ht)} € HT</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:2px">${(c.lots||[]).length} lot(s) • ${fmt(ht*1.2)} € TTC</div>
+      <div class="chantier-progress"><div class="chantier-progress-inner" style="width:${getProgress(c)}%"></div></div>
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button class="btn btn-sm btn-primary" onclick="selectChantier(${i})"><i class="ti ti-calculator" aria-hidden="true"></i>Chiffrer</button>
+        <button class="btn btn-sm btn-outline" onclick="editChantier(${i})"><i class="ti ti-edit" aria-hidden="true"></i></button>
+        <button class="btn btn-sm btn-danger" onclick="deleteChantier(${i})"><i class="ti ti-trash" aria-hidden="true"></i></button>
+      </div>`;
+    wrap.appendChild(el);
+  });
+}
+
+function getProgress(c){
+  if(!(c.lots||[]).length)return 0;
+  const v=c.lots.filter(l=>l.statut==='Valide').length;
+  return Math.round((v/c.lots.length)*100);
+}
+
+function computeChantierHT(c){
+  return (c.lots||[]).reduce((s,l)=>{
+    const travHT=(l.postes||[]).reduce((a,p)=>a+(parseFloat(p.q)||0)*(parseFloat(p.pu)||0),0);
+    const aleas=travHT*(parseFloat(l.aleas||5)/100);
+    const hon=travHT*(parseFloat(l.honoraires||12)/100);
+    return s+travHT+aleas+hon;
+  },0);
+}
+
+function selectChantier(i){
+  state.currentChantier=i;
+  document.getElementById('chantier-select').value=i;
+  showPage('chiffrage');
+  renderChiffrage();
+}
+
+function openNewChantierModal(){state.editingChantierIdx=null;clearChantierForm();document.getElementById('modal-chantier-title').textContent='Nouveau chantier';document.getElementById('modal-chantier').classList.add('open');}
+function editChantier(i){
+  state.editingChantierIdx=i;
+  const c=state.chantiers[i];
+  document.getElementById('f-nom').value=c.nom||'';
+  document.getElementById('f-type').value=c.type||'Rénovation complète';
+  document.getElementById('f-surface').value=c.surface||'';
+  document.getElementById('f-adresse').value=c.adresse||'';
+  document.getElementById('f-client').value=c.client||'';
+  document.getElementById('f-phase').value=c.phase||'APS';
+  document.getElementById('modal-chantier-title').textContent='Modifier le chantier';
+  document.getElementById('modal-chantier').classList.add('open');
+}
+function deleteChantier(i){
+  if(!confirm('Supprimer ce chantier et tous ses lots ?'))return;
+  state.chantiers.splice(i,1);
+  if(state.currentChantier===i)state.currentChantier=null;
+  else if(state.currentChantier>i)state.currentChantier--;
+  saveState();renderChantierGrid();renderChantierSelects();showToast('Chantier supprimé');
+}
+function clearChantierForm(){['f-nom','f-surface','f-adresse','f-client'].forEach(id=>document.getElementById(id).value='');}
+function saveNewChantier(){
+  const nom=document.getElementById('f-nom').value.trim();
+  if(!nom){alert('Nom requis');return;}
+  const data={nom,type:document.getElementById('f-type').value,surface:document.getElementById('f-surface').value,adresse:document.getElementById('f-adresse').value,client:document.getElementById('f-client').value,phase:document.getElementById('f-phase').value,lots:[]};
+  if(state.editingChantierIdx!==null){Object.assign(state.chantiers[state.editingChantierIdx],data);data.lots=state.chantiers[state.editingChantierIdx].lots;}
+  else{state.chantiers.push(data);}
+  saveState();renderChantierGrid();renderChantierSelects();closeModal('modal-chantier');showToast(state.editingChantierIdx!==null?'Chantier mis à jour':'Chantier créé');
+}
+
+function renderChantierSelects(){
+  ['chantier-select','export-chantier-select'].forEach(id=>{
+    const sel=document.getElementById(id);
+    if(!sel)return;
+    const cur=sel.value;
+    sel.innerHTML='<option value="">— Sélectionner un chantier —</option>';
+    state.chantiers.forEach((c,i)=>sel.add(new Option(c.nom,i)));
+    if(cur!=='')sel.value=cur;
+  });
+}
+
+// === CHIFFRAGE ===
+function onChantierSelect(){
+  const v=document.getElementById('chantier-select').value;
+  state.currentChantier=v===''?null:parseInt(v);
+  state.currentLot=null;
+  closeLotDetail();
+  renderChiffrage();
+}
+
+function renderChiffrage(){
+  const idx=state.currentChantier;
+  if(idx===null||!state.chantiers[idx]){
+    document.getElementById('chiffrage-sub').textContent='Sélectionnez un chantier';
+    document.getElementById('lots-tbody').innerHTML='<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text3)">Aucun chantier sélectionné</td></tr>';
+    updateStats([]);return;
+  }
+  const c=state.chantiers[idx];
+  document.getElementById('chiffrage-sub').textContent=c.nom+(c.client?' — '+c.client:'');
+  document.getElementById('chantier-select').value=idx;
+  renderLotsTable();
+}
+
+function renderLotsTable(){
+  const idx=state.currentChantier;
+  if(idx===null)return;
+  const lots=state.chantiers[idx].lots||[];
+  const q=(document.getElementById('lot-search').value||'').toLowerCase();
+  const filtered=q?lots.filter(l=>l.nom.toLowerCase().includes(q)||l.num.toLowerCase().includes(q)):lots;
+  const tb=document.getElementById('lots-tbody');
+  if(!filtered.length){tb.innerHTML='<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text3)">Aucun lot — cliquez sur « Nouveau lot »</td></tr>';updateStats(lots);return;}
+  tb.innerHTML='';
+  filtered.forEach((lot,ri)=>{
+    const li=lots.indexOf(lot);
+    const travHT=(lot.postes||[]).reduce((a,p)=>a+(parseFloat(p.q)||0)*(parseFloat(p.pu)||0),0);
+    const aleas=travHT*(parseFloat(lot.aleas||5)/100);
+    const hon=travHT*(parseFloat(lot.honoraires||12)/100);
+    const ht=travHT+aleas+hon;
+    const tva=parseFloat(lot.tva||20)/100;
+    const ttc=ht*(1+tva);
+    const sc={Chiffrage:'s-chiffrage',Valide:'s-valide',Revision:'s-revision'}[lot.statut||'Chiffrage']||'s-chiffrage';
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td class="lot-num">${lot.num||''}</td>
+      <td><div class="lot-name">${lot.nom}</div></td>
+      <td class="ht-val">${fmt(ht)} €</td>
+      <td class="ttc-val">${fmt(ttc)} €</td>
+      <td><span class="status-badge ${sc}">${lot.statut||'Chiffrage'}</span></td>
+      <td class="row-actions">
+        <button class="btn btn-sm btn-outline" onclick="openLotDetail(${li})"><i class="ti ti-edit" aria-hidden="true"></i>Détail</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteLot(${li})"><i class="ti ti-trash" aria-hidden="true"></i></button>
+      </td>`;
+    tb.appendChild(tr);
+  });
+  updateStats(lots);
+}
+
+function updateStats(lots){
+  let totalHT=0;
+  lots.forEach(lot=>{
+    const travHT=(lot.postes||[]).reduce((a,p)=>a+(parseFloat(p.q)||0)*(parseFloat(p.pu)||0),0);
+    const aleas=travHT*(parseFloat(lot.aleas||5)/100);
+    const hon=travHT*(parseFloat(lot.honoraires||12)/100);
+    const ht=travHT+aleas+hon;
+    totalHT+=ht;
+  });
+  const valide=lots.filter(l=>l.statut==='Valide').length;
+  document.getElementById('stat-lots').textContent=lots.length;
+  document.getElementById('stat-lots').nextElementSibling.textContent=valide+' terminé(s)';
+  document.getElementById('stat-ht').textContent=fmt(totalHT)+' €';
+  document.getElementById('stat-ttc').textContent=fmt(totalHT*1.2)+' €';
+}
+
+function openNewLotModal(){
+  if(state.currentChantier===null){alert('Sélectionnez d\'abord un chantier.');return;}
+  const lots=state.chantiers[state.currentChantier].lots||[];
+  document.getElementById('fl-num').value='LOT '+(lots.length+1).toString().padStart(2,'0');
+  document.getElementById('fl-nom').value='';
+  document.getElementById('fl-modele').value='';
+  document.getElementById('modal-lot').classList.add('open');
+}
+
+function saveNewLot(){
+  const num=document.getElementById('fl-num').value.trim();
+  const nom=document.getElementById('fl-nom').value.trim();
+  if(!nom){alert('Désignation requise');return;}
+  const modele=document.getElementById('fl-modele').value;
+  const postes=modele&&LOT_TEMPLATES[modele]?LOT_TEMPLATES[modele].map(p=>({n:p.n,q:p.q,u:p.u,pu:p.pu.std})):[];
+  const lot={num,nom,postes,aleas:5,honoraires:12,tva:20,statut:'Chiffrage',prestation:'std',notes:''};
+  if(!state.chantiers[state.currentChantier].lots)state.chantiers[state.currentChantier].lots=[];
+  state.chantiers[state.currentChantier].lots.push(lot);
+  saveState();renderLotsTable();renderChantierGrid();closeModal('modal-lot');showToast('Lot créé');
+}
+
+function deleteLot(li){
+  if(!confirm('Supprimer ce lot ?'))return;
+  state.chantiers[state.currentChantier].lots.splice(li,1);
+  saveState();renderLotsTable();renderChantierGrid();showToast('Lot supprimé');
+}
+
+// === DETAIL LOT ===
+function openLotDetail(li){
+  state.currentLot=li;
+  const lot=state.chantiers[state.currentChantier].lots[li];
+  const c=state.chantiers[state.currentChantier];
+  document.getElementById('detail-title').textContent=(lot.num?lot.num+' — ':'')+lot.nom;
+  document.getElementById('detail-chantier-name').textContent=c.nom+(c.client?' — '+c.client:'');
+  document.getElementById('param-aleas').value=lot.aleas||5;
+  document.getElementById('param-honoraires').value=lot.honoraires||12;
+  document.getElementById('param-statut').value=lot.statut||'Chiffrage';
+  document.getElementById('param-notes').value=lot.notes||'';
+  document.getElementById('detail-prestation').value=lot.prestation||'std';
+  document.getElementById('detail-tva').value=lot.tva||20;
+  document.getElementById('stats-row').style.display='none';
+  document.getElementById('lots-table-wrap').style.display='none';
+  document.getElementById('lot-detail').style.display='flex';
+  renderPostes();
+  computeLotTotal();
+}
+
+function closeLotDetail(){
+  state.currentLot=null;
+  document.getElementById('lot-detail').style.display='none';
+  document.getElementById('stats-row').style.display='';
+  document.getElementById('lots-table-wrap').style.display='';
+}
+
+function onPrestationChange(){
+  const li=state.currentLot;
+  if(li===null)return;
+  const lot=state.chantiers[state.currentChantier].lots[li];
+  const prest=document.getElementById('detail-prestation').value;
+  lot.prestation=prest;
+  lot.postes=(lot.postes||[]).map(p=>{
+    const modKey=Object.keys(LOT_TEMPLATES).find(k=>LOT_TEMPLATES[k].some(t=>t.n===p.n));
+    if(modKey){const tmpl=LOT_TEMPLATES[modKey].find(t=>t.n===p.n);if(tmpl&&tmpl.pu[prest])p.pu=tmpl.pu[prest];}
+    return p;
+  });
+  saveState();renderPostes();computeLotTotal();
+}
+
+function renderPostes(){
+  const li=state.currentLot;
+  if(li===null)return;
+  const lot=state.chantiers[state.currentChantier].lots[li];
+  const tb=document.getElementById('postes-tbody');
+  tb.innerHTML='';
+  (lot.postes||[]).forEach((p,pi)=>{
+    const total=(parseFloat(p.q)||0)*(parseFloat(p.pu)||0);
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td><input type="text" value="${p.n||''}" onchange="updatePoste(${pi},'n',this.value)"></td>
+      <td><input type="number" value="${p.q||0}" min="0" step="0.1" style="width:65px" onchange="updatePoste(${pi},'q',this.value)"></td>
+      <td><input type="text" value="${p.u||'u'}" style="width:38px" onchange="updatePoste(${pi},'u',this.value)"></td>
+      <td><input type="number" value="${p.pu||0}" min="0" step="1" onchange="updatePoste(${pi},'pu',this.value)"></td>
+      <td class="poste-total">${fmt(total)} €</td>
+      <td><button class="btn btn-sm btn-danger" onclick="deletePoste(${pi})" style="padding:3px 7px"><i class="ti ti-trash" aria-hidden="true" style="font-size:13px"></i></button></td>`;
+    tb.appendChild(tr);
+  });
+}
+
+function updatePoste(pi,field,val){
+  const lot=state.chantiers[state.currentChantier].lots[state.currentLot];
+  lot.postes[pi][field]=field==='q'||field==='pu'?parseFloat(val)||0:val;
+  renderPostes();computeLotTotal();saveLot();
+}
+
+function deletePoste(pi){
+  const lot=state.chantiers[state.currentChantier].lots[state.currentLot];
+  lot.postes.splice(pi,1);
+  renderPostes();computeLotTotal();saveLot();
+}
+
+function addPoste(){
+  const lot=state.chantiers[state.currentChantier].lots[state.currentLot];
+  if(!lot.postes)lot.postes=[];
+  lot.postes.push({n:'Nouveau poste',q:1,u:'u',pu:0});
+  renderPostes();computeLotTotal();saveLot();
+}
+
+function computeLotTotal(){
+  const li=state.currentLot;
+  if(li===null)return;
+  const lot=state.chantiers[state.currentChantier].lots[li];
+  const travHT=(lot.postes||[]).reduce((a,p)=>a+(parseFloat(p.q)||0)*(parseFloat(p.pu)||0),0);
+  lot.aleas=parseFloat(document.getElementById('param-aleas').value)||0;
+  lot.honoraires=parseFloat(document.getElementById('param-honoraires').value)||0;
+  lot.tva=parseFloat(document.getElementById('detail-tva').value)||20;
+  const aleas=travHT*(lot.aleas/100);
+  const hon=travHT*(lot.honoraires/100);
+  const ht=travHT+aleas+hon;
+  const tvaAmt=ht*(lot.tva/100);
+  const ttc=ht+tvaAmt;
+  document.getElementById('tot-travaux').textContent=fmt(travHT)+' €';
+  document.getElementById('tot-aleas').textContent=fmt(aleas)+' €';
+  document.getElementById('tot-honoraires').textContent=fmt(hon)+' €';
+  document.getElementById('tot-tva').textContent=fmt(tvaAmt)+' € ('+lot.tva+'%)';
+  document.getElementById('tot-ttc').textContent=fmt(ttc)+' €';
+  saveLot();
+}
+
+function saveLot(){
+  const li=state.currentLot;
+  if(li===null)return;
+  const lot=state.chantiers[state.currentChantier].lots[li];
+  lot.statut=document.getElementById('param-statut').value;
+  lot.notes=document.getElementById('param-notes').value;
+  saveState();renderLotsTable();renderChantierGrid();
+}
+
+// === EXPORT ===
+function renderExportSelects(){renderChantierSelects();}
+
+function exportCSV(){
+  const idx=state.currentChantier;
+  if(idx===null){alert('Sélectionnez un chantier');return;}
+  exportCSVForChantier(idx);
+}
+
+function exportCSVFull(){
+  const v=document.getElementById('export-chantier-select').value;
+  if(v===''){alert('Sélectionnez un chantier');return;}
+  exportCSVForChantier(parseInt(v));
+}
+
+function exportCSVForChantier(idx){
+  const c=state.chantiers[idx];
+  let csv='LOT;Désignation;Poste;Qté;Unité;PU HT;Total HT poste;Total HT lot;TVA%;Total TTC lot\n';
+  (c.lots||[]).forEach(lot=>{
+    const travHT=(lot.postes||[]).reduce((a,p)=>a+(parseFloat(p.q)||0)*(parseFloat(p.pu)||0),0);
+    const aleas=travHT*(parseFloat(lot.aleas||5)/100);
+    const hon=travHT*(parseFloat(lot.honoraires||12)/100);
+    const ht=travHT+aleas+hon;
+    const tva=parseFloat(lot.tva||20);
+    const ttc=ht*(1+tva/100);
+    (lot.postes||[]).forEach((p,i)=>{
+      const ptot=(parseFloat(p.q)||0)*(parseFloat(p.pu)||0);
+      csv+=`"${lot.num||''}";"${lot.nom}";"${p.n||''}";${p.q||0};"${p.u||'u'}";${p.pu||0};${ptot.toFixed(2)};${i===0?ht.toFixed(2):''};"${i===0?tva+'%':''}";"${i===0?ttc.toFixed(2):''}"\n`;
+    });
+  });
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='Phenix_'+c.nom.replace(/\s+/g,'_')+'_Chiffrage.csv';a.click();
+  showToast('Export CSV généré');
+}
+
+function exportPDF(){
+  const idx=state.currentChantier;
+  const selIdx=document.getElementById('export-chantier-select').value;
+  const ci=idx!==null?idx:(selIdx!==''?parseInt(selIdx):null);
+  if(ci===null){alert('Sélectionnez un chantier');return;}
+  const c=state.chantiers[ci];
+  let totalHT=0;let totalTTC=0;
+  let lotsHTML=(c.lots||[]).map(lot=>{
+    const travHT=(lot.postes||[]).reduce((a,p)=>a+(parseFloat(p.q)||0)*(parseFloat(p.pu)||0),0);
+    const aleas=travHT*(parseFloat(lot.aleas||5)/100);
+    const hon=travHT*(parseFloat(lot.honoraires||12)/100);
+    const ht=travHT+aleas+hon;
+    const tva=parseFloat(lot.tva||20);
+    const ttc=ht*(1+tva/100);
+    totalHT+=ht;totalTTC+=ttc;
+    return `<tr><td>${lot.num||''}</td><td>${lot.nom}</td><td style="text-align:right">${fmt(travHT)} €</td><td style="text-align:right">${lot.aleas||5}%</td><td style="text-align:right">${lot.honoraires||12}%</td><td style="text-align:right">${tva}%</td><td style="text-align:right"><strong>${fmt(ttc)} €</strong></td></tr>`;
+  }).join('');
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Estimation — ${c.nom}</title><style>
+body{font-family:Georgia,serif;color:#0F1E3D;margin:0;padding:30px 40px;font-size:13px}
+h1{font-size:26px;color:#1B2D5B;margin-bottom:2px}.sub{color:#4A6080;font-size:12px;margin-bottom:20px}
+.header{border-bottom:2px solid #4A9CC7;padding-bottom:16px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:flex-end}
+.logo{font-size:20px;color:#1B2D5B;font-weight:bold}.logo-sub{font-size:10px;color:#4A6080;letter-spacing:2px;text-transform:uppercase}
+table{width:100%;border-collapse:collapse;font-size:12px;margin-top:16px}
+th{background:#1B2D5B;color:#4A9CC7;padding:8px 10px;text-align:left;font-size:11px}
+td{padding:8px 10px;border-bottom:1px solid #C8D8E8}tr:nth-child(even) td{background:#F0F4F8}
+.total-row{background:#1B2D5B!important;color:white;font-size:14px;font-weight:bold}
+.total-row td{color:white;border:none;padding:12px 10px}
+.info{margin-bottom:20px;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.info-item{font-size:12px}.info-label{color:#4A6080;font-size:10px;text-transform:uppercase;letter-spacing:1px}
+.footer{margin-top:40px;border-top:1px solid #C8D8E8;padding-top:12px;font-size:10px;color:#8BA5C0;text-align:center}
+</style></head><body>
+<div class="header"><div><div class="logo">Phénix-Architecte</div><div class="logo-sub">Maître d'œuvre · Architecte DE</div></div><div style="text-align:right;font-size:11px;color:#8a8a8a">Estimation APS/APD<br>${new Date().toLocaleDateString('fr-FR')}</div></div>
+<h1>${c.nom}</h1><div class="sub">${c.client?'Client : '+c.client+' — ':''}${c.adresse||''}${c.surface?' · '+c.surface+' m²':''} · Phase : ${c.phase||'APS'}</div>
+<table><thead><tr><th>Lot</th><th>Désignation</th><th>Travaux HT</th><th>Aléas</th><th>Honoraires</th><th>TVA</th><th>Total TTC</th></tr></thead>
+<tbody>${lotsHTML}<tr class="total-row"><td colspan="6">TOTAL GÉNÉRAL</td><td>${fmt(totalTTC)} €</td></tr></tbody></table>
+<div class="footer">Phénix-Architecte — Estimation indicative, non contractuelle — ${new Date().toLocaleDateString('fr-FR')} — Prix base Auvergne 2025</div>
+</body></html>`;
+  const w=window.open('','_blank');w.document.write(html);w.document.close();
+  setTimeout(()=>w.print(),500);
+  showToast('PDF généré — impression ouverte');
+}
+
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+function fmt(n){return Math.round(n).toLocaleString('fr-FR');}
+
+loadState();
+</script>
+</body>
+</html>
