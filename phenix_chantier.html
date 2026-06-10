@@ -15,6 +15,8 @@ import { getFirestore,
          onSnapshot,
          setDoc, deleteDoc,
          getDoc }              from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { getAuth, signInWithEmailAndPassword, signOut,
+         onAuthStateChanged }  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import { getStorage, ref,
          uploadString,
          getDownloadURL,
@@ -394,8 +396,41 @@ window._fb = {
     }
   };
 
-// Signal que Firebase est prêt
-window.dispatchEvent(new Event('firebase-ready'));
+// ════════════════════════════════════════════════════════════
+//  AUTHENTIFICATION — l'appli ne charge les données qu'une fois connecté
+// ════════════════════════════════════════════════════════════
+const auth = getAuth(app);
+window._auth = {
+  login:  (e, p) => signInWithEmailAndPassword(auth, e, p),
+  logout: () => signOut(auth),
+  current: () => auth.currentUser
+};
+window.phenixDoLogin = function(){
+  const email = (document.getElementById('pl-email').value || '').trim();
+  const pwd   = document.getElementById('pl-pwd').value || '';
+  const err   = document.getElementById('pl-err'); if (err) err.textContent = '';
+  const btn   = document.getElementById('pl-btn'); if (btn) btn.disabled = true;
+  window._auth.login(email, pwd).catch(e => {
+    const c = (e && e.code) || '';
+    if (err) err.textContent =
+      (c.indexOf('invalid-credential')>=0 || c.indexOf('wrong-password')>=0 || c.indexOf('user-not-found')>=0) ? 'E-mail ou mot de passe incorrect.' :
+      c.indexOf('operation-not-allowed')>=0 ? "Activez « E-mail/Mot de passe » dans Firebase → Authentication." :
+      c.indexOf('invalid-email')>=0 ? 'E-mail invalide.' :
+      c.indexOf('too-many-requests')>=0 ? 'Trop de tentatives, réessayez plus tard.' :
+      c.indexOf('network')>=0 ? 'Pas de connexion internet.' :
+      ('Erreur : ' + (c || (e && e.message) || ''));
+  }).finally(() => { if (btn) btn.disabled = false; });
+};
+let _phenixDispatched = false;
+onAuthStateChanged(auth, user => {
+  const ov = document.getElementById('phenix-login');
+  if (user) {
+    if (ov) ov.style.display = 'none';
+    if (!_phenixDispatched) { _phenixDispatched = true; window.dispatchEvent(new Event('firebase-ready')); }
+  } else {
+    if (ov) ov.style.display = 'flex';
+  }
+});
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>
@@ -1712,6 +1747,16 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
 </style>
 </head>
 <body>
+<div id="phenix-login" style="display:flex;position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#0F1E3D,#1B2D5B,#2A5298);align-items:center;justify-content:center;padding:20px;font-family:'DM Sans',system-ui,sans-serif">
+  <div style="background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.18);border-radius:16px;padding:34px 28px;max-width:360px;width:100%;text-align:center">
+    <div style="font-family:'DM Serif Display',Georgia,serif;font-size:30px;color:#fff;margin-bottom:4px">Phénix<span style="color:#7DC6E8">-Architecte</span></div>
+    <div style="font-size:11px;color:rgba(255,255,255,.5);letter-spacing:.12em;text-transform:uppercase;margin-bottom:26px">Connexion sécurisée</div>
+    <input id="pl-email" type="email" autocomplete="username" placeholder="E-mail" style="width:100%;padding:12px 14px;margin-bottom:10px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.95);font-size:14px;outline:none">
+    <input id="pl-pwd" type="password" autocomplete="current-password" placeholder="Mot de passe" onkeydown="if(event.key==='Enter')phenixDoLogin()" style="width:100%;padding:12px 14px;margin-bottom:14px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.95);font-size:14px;outline:none">
+    <button id="pl-btn" onclick="phenixDoLogin()" style="width:100%;padding:12px;border:none;border-radius:9px;background:linear-gradient(135deg,#4A9CC7,#2A5298);color:#fff;font-size:15px;font-weight:600;cursor:pointer">Se connecter</button>
+    <div id="pl-err" style="color:#FFB4A8;font-size:12.5px;margin-top:12px;min-height:16px"></div>
+  </div>
+</div>
 <div id="app-chantier">
 
 
@@ -2226,6 +2271,8 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
     <div class="nav-item" onclick="exportJSON()" title="Télécharger une copie complète de toutes vos données (photos comprises)"><i class="ti ti-database-export"></i> Sauvegarde complète</div>
     <div class="nav-item" onclick="importJSON()" title="Restaurer vos données depuis un fichier de sauvegarde"><i class="ti ti-database-import"></i> Restaurer une sauvegarde</div>
     <input type="file" id="importInput" accept=".json" style="display:none" onchange="handleImport(event)">
+    <div class="nav-section">Compte</div>
+    <div class="nav-item" onclick="if(window._auth)window._auth.logout()"><i class="ti ti-logout"></i> Déconnexion</div>
 
     <div class="sidebar-bottom">
       <div style="font-size:11px;color:rgba(255,255,255,.4);display:flex;align-items:center">
