@@ -169,8 +169,31 @@ tr:hover td{background:var(--accent-bg)}
 /* LOADING */
 .loading{text-align:center;padding:40px;color:var(--text3);font-size:13px}
 </style>
+<script type="module">
+import{initializeApp}from'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import{getFirestore,doc,onSnapshot,setDoc}from'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import{getAuth,signInWithEmailAndPassword,createUserWithEmailAndPassword,signOut,onAuthStateChanged}from'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+const db=getFirestore(initializeApp({apiKey:"AIzaSyCjNKNvS6p3nqE6-_Gw9I397ZtXm2FG1ew",authDomain:"phenix-architecte-9151b.firebaseapp.com",projectId:"phenix-architecte-9151b",storageBucket:"phenix-architecte-9151b.firebasestorage.app",messagingSenderId:"811231684720",appId:"1:811231684720:web:413fa324ae43c07607acb5"}));
+const ref=doc(db,'phenix_chiffrage','data');
+window._fb={save:(json)=>setDoc(ref,{json,updated:Date.now()}),listen:(cb)=>onSnapshot(ref,s=>cb(s.exists()?s.data():null))};
+const authI=getAuth();
+window._auth={login:(e,p)=>signInWithEmailAndPassword(authI,e,p),signup:(e,p)=>createUserWithEmailAndPassword(authI,e,p),logout:()=>signOut(authI),current:()=>authI.currentUser,onChange:(cb)=>onAuthStateChanged(authI,cb)};
+onAuthStateChanged(authI,u=>{const ov=document.getElementById('patri-login');if(ov)ov.style.display=u?'none':'flex';});
+window.dispatchEvent(new Event('fbready'));
+</script>
 </head>
 <body>
+<div id="patri-login" style="position:fixed;inset:0;background:rgba(15,30,61,.55);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;font-family:'DM Sans',sans-serif">
+ <div style="background:#fff;border-radius:18px;box-shadow:0 18px 44px rgba(15,30,61,.3);padding:28px 24px;max-width:360px;width:100%;text-align:center">
+  <div style="font-family:'DM Serif Display',serif;font-size:1.5rem;color:#1B2D5B;margin-bottom:4px">Phénix · Chiffrage</div>
+  <div style="color:#4A6080;font-size:.9rem;margin-bottom:16px">Connecte-toi pour retrouver tes chantiers sur tous tes appareils.</div>
+  <input id="pl-email" type="email" placeholder="Email" autocomplete="username" style="width:100%;padding:10px 12px;border:1px solid #C8D8E8;border-radius:9px;margin-bottom:9px;font-family:inherit;font-size:.95rem">
+  <input id="pl-pwd" type="password" placeholder="Mot de passe" autocomplete="current-password" style="width:100%;padding:10px 12px;border:1px solid #C8D8E8;border-radius:9px;margin-bottom:6px;font-family:inherit;font-size:.95rem">
+  <div id="pl-err" style="color:#C0392B;font-size:.83rem;min-height:18px;margin-bottom:6px"></div>
+  <button id="pl-btn" style="width:100%;padding:11px;border:none;border-radius:9px;background:#2A5298;color:#fff;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:8px">Se connecter</button>
+  <button id="pl-signup" style="width:100%;padding:11px;border:1px solid #C8D8E8;border-radius:9px;background:#fff;color:#1B2D5B;font-weight:600;cursor:pointer;font-family:inherit">Créer le compte</button>
+  <button id="pl-offline" style="background:none;border:none;color:#8BA5C0;font-size:.82rem;text-decoration:underline;cursor:pointer;margin-top:10px;font-family:inherit">Continuer hors connexion (cet appareil)</button>
+ </div></div>
 
 <div class="topbar">
   <div class="logo">Phénix-Architecte<span>Maître d'Œuvre · Architecte DE</span></div>
@@ -945,6 +968,31 @@ function closeModal(id){document.getElementById(id).classList.remove('open');}
 function fmt(n){return Math.round(n).toLocaleString('fr-FR');}
 
 loadState();
+/* ===== Synchronisation cloud (Firestore) ===== */
+let _uid=null,_unsub=null,_lastJson=null,_first=true;
+function _cloudChantiers(d){try{return d&&d.json?(JSON.parse(d.json).chantiers||[]):[];}catch(e){return[];}}
+function _applyCloud(d){if(d&&d.json&&d.json!==_lastJson){_lastJson=d.json;try{const o=JSON.parse(d.json);state.chantiers=o.chantiers||[];initUI();updateSyncStatus('ok');}catch(e){}}}
+function _pushCloud(){if(_uid&&window._fb){const j=JSON.stringify({chantiers:state.chantiers});_lastJson=j;window._fb.save(j);updateSyncStatus('ok');}}
+function initCloud(){if(!window._auth)return;window._auth.onChange(u=>{_uid=u||null;
+  if(_unsub){_unsub();_unsub=null;}_first=true;
+  if(!u)return;
+  _unsub=window._fb.listen(d=>{
+   if(_first){_first=false;
+    const cloudFull=_cloudChantiers(d).length>0,localFull=(state.chantiers||[]).length>0;
+    if(cloudFull&&localFull&&d.json!==JSON.stringify({chantiers:state.chantiers})){
+      if(confirm('Des données existent sur cet appareil ET dans le cloud.\n\nOK : charger le cloud (remplace cet appareil).\nAnnuler : garder cet appareil et l\'envoyer au cloud.'))_applyCloud(d);else _pushCloud();
+    }else if(cloudFull){_applyCloud(d);}
+    else if(localFull){_pushCloud();}
+   }else _applyCloud(d);
+  });
+});}
+window.addEventListener('fbready',initCloud);if(window._auth)initCloud();
+var _origSave=saveState;saveState=function(){_origSave.apply(this,arguments);_pushCloud();};
+function _authMsg(x){const c=(x&&x.code)||'';return (c.includes('invalid-credential')||c.includes('wrong-password')||c.includes('user-not-found'))?'E-mail ou mot de passe incorrect.':c.includes('operation-not-allowed')?'Active « E-mail/Mot de passe » dans Firebase → Authentication.':c.includes('invalid-email')?'E-mail invalide.':c.includes('too-many-requests')?'Trop de tentatives, réessaie plus tard.':c.includes('network')?'Pas de connexion internet.':('Erreur : '+(c||(x&&x.message)||''));}
+(function(){const g=id=>document.getElementById(id);
+ const lb=g('pl-btn');if(lb)lb.onclick=()=>{const e=g('pl-email').value.trim(),p=g('pl-pwd').value,er=g('pl-err');if(er)er.textContent='';if(!window._auth){if(er)er.textContent='Firebase indisponible (hors ligne ou domaine non autorisé).';return;}window._auth.login(e,p).catch(x=>{if(er)er.textContent=_authMsg(x);});};
+ const su=g('pl-signup');if(su)su.onclick=()=>{const e=g('pl-email').value.trim(),p=g('pl-pwd').value,er=g('pl-err');if(er)er.textContent='';if(!window._auth)return;window._auth.signup(e,p).catch(x=>{if(er)er.textContent=_authMsg(x);});};
+ const off=g('pl-offline');if(off)off.onclick=()=>{const ov=g('patri-login');if(ov)ov.style.display='none';};})();
 </script>
 </body>
 </html>
