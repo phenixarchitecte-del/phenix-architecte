@@ -16,6 +16,7 @@ const ref=doc(db,'phenix_patrimoine','foyer');
 window._fb={save:(json)=>setDoc(ref,{json,updated:Date.now()}),listen:(cb)=>onSnapshot(ref,s=>cb(s.exists()?s.data():null))};
 const authI=getAuth();
 window._auth={login:(e,p)=>signInWithEmailAndPassword(authI,e,p),signup:(e,p)=>createUserWithEmailAndPassword(authI,e,p),logout:()=>signOut(authI),current:()=>authI.currentUser,onChange:(cb)=>onAuthStateChanged(authI,cb)};
+onAuthStateChanged(authI,u=>{const ov=document.getElementById('patri-login');if(ov)ov.style.display=u?'none':'flex';});
 window.dispatchEvent(new Event('fbready'));
 </script>
 <style>
@@ -82,10 +83,28 @@ window.dispatchEvent(new Event('fbready'));
   .infonote{background:#F4EFE4;border-radius:14px;padding:13px 15px;color:var(--soft);font-size:.9rem;margin-top:16px;display:flex;gap:10px;align-items:flex-start}.infonote b{color:var(--ink)}
   .saved{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--deep);color:#fff;padding:10px 20px;border-radius:999px;font-size:.85rem;font-weight:600;opacity:0;transition:.3s;pointer-events:none;box-shadow:var(--lift)}.saved.show{opacity:1;transform:translateX(-50%) translateY(0)}
   @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  #patri-login{position:fixed;inset:0;background:rgba(43,39,36,.55);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px}
+  #patri-login .lcard{background:var(--paper);border-radius:22px;box-shadow:var(--lift);padding:30px 26px;max-width:380px;width:100%;text-align:center;animation:rise .5s ease both}
+  #patri-login h2{font-family:'Fraunces',serif;font-weight:500;font-size:1.6rem;margin-bottom:4px}
+  #patri-login p{color:var(--soft);font-size:.92rem;margin-bottom:18px}
+  #patri-login input{width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:11px;background:var(--cream);font-family:'Mulish';font-size:.95rem;margin-bottom:10px}
+  #patri-login .lerr{color:var(--terra);font-size:.85rem;min-height:18px;margin:0 0 8px}
+  #patri-login .lwide{width:100%;justify-content:center;margin-bottom:8px}
+  #patri-login .loff{color:var(--soft);font-size:.82rem;background:none;border:none;cursor:pointer;text-decoration:underline;margin-top:8px}
   @media(max-width:560px){.wrap{padding:18px 14px 70px}.gloss{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}.donut-box{width:200px;height:200px}}
 </style>
 </head>
 <body>
+<div id="patri-login"><div class="lcard">
+  <h2>Notre patrimoine</h2>
+  <p>Connecte-toi pour retrouver tes données sur tous tes appareils.</p>
+  <input id="pl-email" type="email" placeholder="Email" autocomplete="username">
+  <input id="pl-pwd" type="password" placeholder="Mot de passe" autocomplete="current-password">
+  <div class="lerr" id="pl-err"></div>
+  <button class="btn go lwide" id="pl-btn">Se connecter</button>
+  <button class="btn lwide" id="pl-signup">Créer le compte</button>
+  <button class="loff" id="pl-offline">Continuer hors connexion (cet appareil seulement)</button>
+</div></div>
 <div class="wrap">
   <header class="top">
     <div class="kicker">Patrimoine familial</div><h1>Notre patrimoine</h1>
@@ -164,10 +183,21 @@ function normalize(){['accounts','props','companies'].forEach(k=>(state[k]||[]).
 function renderAll(){renderOverview();renderStamp();renderAccounts();renderProps();renderCompanies();renderContacts();}
 async function load(){let raw=null;try{raw=await store.get(KEY);}catch(e){}if(raw){try{state=JSON.parse(raw);}catch(e){}}
  if(!state)state=JSON.parse(JSON.stringify(DEF));normalize();}
+function sumState(s){let t=0;(s.accounts||[]).forEach(a=>{t+=(a.positions&&a.positions.length)?a.positions.reduce((x,p)=>x+(+p.amount||0),0):(+a.amount||0);});(s.props||[]).forEach(p=>{t+=(+p.value||0);});(s.companies||[]).forEach(c=>{t+=(+c.valeur||0);});return t;}
 function applyCloud(d){if(d&&d.json&&d.json!==fb.lastJson){fb.lastJson=d.json;try{state=JSON.parse(d.json);normalize();renderAll();}catch(e){}}}
-function initSync(){if(!window._auth)return;window._auth.onChange(u=>{fb.uid=u||null;renderSync();
+function pushNow(){if(fb.uid&&window._fb){fb.lastJson=JSON.stringify(state);window._fb.save(fb.lastJson);}}
+function initSync(){if(!window._auth)return;window._auth.onChange(u=>{fb.uid=u||null;fb.first=true;renderSync();
   if(fb.unsub){fb.unsub();fb.unsub=null;}
-  if(u){fb.unsub=window._fb.listen(d=>{if(d)applyCloud(d);else{fb.lastJson=JSON.stringify(state);window._fb.save(fb.lastJson);}});}});}
+  if(!u)return;
+  fb.unsub=window._fb.listen(d=>{
+   if(fb.first){fb.first=false;const localFull=sumState(state)>0;
+    if(d&&d.json){if(d.json===JSON.stringify(state)){fb.lastJson=d.json;return;}
+      if(localFull){if(confirm('Des données existent à la fois sur cet appareil ET dans le cloud.\n\nOK : charger les données du cloud (remplace cet appareil).\nAnnuler : garder cet appareil et envoyer ses données au cloud.'))applyCloud(d);else pushNow();}
+      else applyCloud(d);}
+    else{if(localFull)pushNow();}
+   }else applyCloud(d);
+  });
+ });}
 let tT;async function save(){state.updated=new Date().toLocaleDateString('fr-FR');const ok=await store.set(KEY,JSON.stringify(state));
  if(fb.uid&&window._fb){const j=JSON.stringify(state);fb.lastJson=j;window._fb.save(j);}
  const t=$('#toast');t.textContent=(fb.uid?'Synchronisé ☁︎':(ok?'Enregistré ✓':'⚠ Sauvegarde auto indisponible — utilise « Sauvegarder une copie »'));t.classList.add('show');clearTimeout(tT);tT=setTimeout(()=>t.classList.remove('show'),ok?1300:3000);renderStamp();}
@@ -312,6 +342,11 @@ $('#impBtn').addEventListener('click',()=>$('#impFile').click());
 $('#impFile').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{try{const d=JSON.parse(rd.result);if(!d||!d.accounts)throw 0;state=d;normalize();save();renderOverview();renderAccounts();renderProps();renderCompanies();renderContacts();renderStamp();alert('Données restaurées.');}catch(err){alert('Fichier de sauvegarde invalide.');}e.target.value='';};rd.readAsText(f,'utf-8');});
 document.querySelectorAll('[data-preset]').forEach(b=>b.addEventListener('click',()=>{const[type,cat]=b.dataset.preset.split('|');state.accounts.push({id:nid++,plat:type,type:type,cat:cat,url:"",rendement:0,amount:0,positions:[]});renderAccounts();renderOverview();openLast('#accounts');}));
 document.querySelectorAll('[data-cpreset]').forEach(b=>b.addEventListener('click',()=>{const[name,type,fl,fr]=b.dataset.cpreset.split('|');const root=state.companies.find(c=>c.parent==null);state.companies.push({id:nid++,name,type,parent:root?root.id:null,ca:0,benefice:0,valeur:0,fricLabel:fl,fricRate:+fr});renderCompanies();renderOverview();openLast('#companies');}));
+function authMsg(x){const c=(x&&x.code)||'';return (c.includes('invalid-credential')||c.includes('wrong-password')||c.includes('user-not-found'))?'E-mail ou mot de passe incorrect.':c.includes('operation-not-allowed')?'Active « E-mail/Mot de passe » dans Firebase → Authentication.':c.includes('invalid-email')?'E-mail invalide.':c.includes('too-many-requests')?'Trop de tentatives, réessaie plus tard.':c.includes('network')?'Pas de connexion internet.':('Erreur : '+(c||(x&&x.message)||''));}
+(function(){const g=id=>document.getElementById(id);
+ const lb=g('pl-btn');if(lb)lb.addEventListener('click',()=>{const e=g('pl-email').value.trim(),p=g('pl-pwd').value,er=g('pl-err');if(er)er.textContent='';if(!window._auth){if(er)er.textContent='Connexion à Firebase indisponible (hors ligne ou domaine non autorisé).';return;}window._auth.login(e,p).catch(x=>{if(er)er.textContent=authMsg(x);});});
+ const su=g('pl-signup');if(su)su.addEventListener('click',()=>{const e=g('pl-email').value.trim(),p=g('pl-pwd').value,er=g('pl-err');if(er)er.textContent='';if(!window._auth){if(er)er.textContent='Connexion à Firebase indisponible.';return;}window._auth.signup(e,p).catch(x=>{if(er)er.textContent=authMsg(x);});});
+ const off=g('pl-offline');if(off)off.addEventListener('click',()=>{const ov=g('patri-login');if(ov)ov.style.display='none';});})();
 window.addEventListener('fbready',initSync);
 (async()=>{await load();renderOverview();renderStamp();renderAccounts();renderProps();renderCompanies();renderGloss();renderContacts();renderSync();if(window._auth)initSync();})();
 </script>
