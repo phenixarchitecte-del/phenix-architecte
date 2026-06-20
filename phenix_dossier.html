@@ -5424,7 +5424,7 @@ async function askAI(question) {
   msgs.innerHTML+=`<div class="ai-msg" id="${loadId}"><div class="ai-msg-avatar ai-avatar-ai">P</div><div class="ai-msg-bubble ai-bubble-ai"><div class="ai-loading"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div></div></div></div>`;
   msgs.scrollTop=msgs.scrollHeight;
   try {
-    const res=await fetch('https://phenix-proxy.phenixarchitecte.workers.dev',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1000,system:`Tu es l'assistant intégré de Phénix-Architecte, une agence de maîtrise d'œuvre française. Tu aides l'architecte avec : contrats MOE, devis, comptes-rendus, lettres de mission, réglementation (PLU, RE2020, PMR, loi MOP). Réponds en français, professionnellement. Honoraires typiques 10-15% des travaux HT.`,messages:[{role:'user',content:question}]})});
+    const res=await fetch('https://phenix-proxy.phenixarchitecte.workers.dev',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1000,metadata:{user_id:'dossier-chatbot'},system:`Tu es l'assistant intégré de Phénix-Architecte, une agence de maîtrise d'œuvre française. Tu aides l'architecte avec : contrats MOE, devis, comptes-rendus, lettres de mission, réglementation (PLU, RE2020, PMR, loi MOP). Réponds en français, professionnellement. Honoraires typiques 10-15% des travaux HT.`,messages:[{role:'user',content:question}]})});
     const data=await res.json();
     const text=data.content?.map(b=>b.text||'').join('')||'Désolé, pas de réponse.';
     document.getElementById(loadId).outerHTML=`<div class="ai-msg"><div class="ai-msg-avatar ai-avatar-ai">P</div><div class="ai-msg-bubble ai-bubble-ai" style="white-space:pre-wrap">${text.replace(/</g,'&lt;')}</div></div>`;
@@ -6187,6 +6187,7 @@ async function analyzeWithAI(base64) {
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 1000,
+        metadata: {user_id: 'dossier-pdf-facture'},
         system: `Analyse cette facture et retourne UNIQUEMENT ce JSON valide, sans markdown :
 {"type":"facture","numero":"","objet":"","dateEmission":"","dateEcheance":"","montantHt":0,"tva":20,"montantPaye":0,"statut":"emise","notes":"","clientNom":"","projetNom":"","pourcentage":0,"baseHonoraires":0,"prixUnitaireHt":0}
 
@@ -7549,6 +7550,7 @@ function handleCommPdf(file) {
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
           max_tokens: 800,
+          metadata: {user_id: 'dossier-pdf-artisan'},
           system: `Tu analyses des factures ou devis d'artisans du bâtiment.
 Extrais UNIQUEMENT en JSON valide, sans markdown :
 {
