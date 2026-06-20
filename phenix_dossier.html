@@ -447,11 +447,11 @@ async function phenixBioLogin(){
 }
 
 // Enrôlement (après connexion email réussie)
-async function phenixBioEnroll(){
+async function phenixBioEnroll(userOverride){
   const err = document.getElementById('pl-err');
   const wrap = document.getElementById('pl-enroll-wrap');
-  const user = auth.currentUser;
-  if(!user){ err.textContent = 'Connectez-vous d\'abord.'; return; }
+  const user = userOverride || auth.currentUser;
+  if(!user){ err.textContent = 'Session non reconnue — réessayez dans quelques secondes.'; return; }
 
   try {
     const encoder = new TextEncoder();
@@ -494,11 +494,18 @@ window.phenixDoLogin = function(){
   const pwd   = document.getElementById('pl-pwd').value || '';
   const err   = document.getElementById('pl-err'); if(err) err.style.color='#FFB4A8'; if(err) err.textContent='';
   const btn   = document.getElementById('pl-btn'); if(btn) btn.disabled=true;
-  window._auth.login(email, pwd).then(()=>{
+  window._auth.login(email, pwd).then((cred)=>{
+    const user = cred.user;
     // Succès — proposer l'enrôlement si pas encore fait
     if(!localStorage.getItem(BIO_KEY) && window.PublicKeyCredential){
       PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(ok=>{
-        if(ok) document.getElementById('pl-enroll-wrap').style.display='block';
+        if(ok){
+          const wrap = document.getElementById('pl-enroll-wrap');
+          wrap.style.display='block';
+          // Passer l'utilisateur directement au bouton Activer
+          const btn = wrap.querySelector('button');
+          if(btn) btn.onclick = () => phenixBioEnroll(user);
+        }
       });
     }
   }).catch(e => {
