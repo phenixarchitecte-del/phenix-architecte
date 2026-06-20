@@ -396,6 +396,7 @@ function phenixBioReset(){
   if(!confirm('Supprimer l\'empreinte enregistrée ? Vous devrez la ré-enregistrer après votre prochaine connexion.')) return;
   localStorage.removeItem(BIO_KEY);
   localStorage.removeItem(BIO_EMAIL_KEY);
+  localStorage.removeItem('phenix_bio_creds');
   // Changer le bouton en mode "non enrôlé"
   document.getElementById('pl-bio-label').textContent = 'Activer l\'empreinte après connexion';
   document.getElementById('pl-bio-btn').onclick = () => document.getElementById('pl-pwd').focus();
@@ -409,13 +410,8 @@ async function phenixBioLogin(){
   const btn = document.getElementById('pl-bio-btn');
   const err = document.getElementById('pl-err');
   const credId = localStorage.getItem(BIO_KEY);
-  const savedEmail = localStorage.getItem(BIO_EMAIL_KEY);
-  err.textContent = '';
-  if(!credId || !savedEmail){
-    // Pas encore enrôlé → afficher formulaire email
-    document.getElementById('pl-email-form').style.display = 'block';
-    return;
-  }
+  err.textContent = ''; err.style.color = '#FFB4A8';
+  if(!credId){ document.getElementById('pl-pwd').focus(); return; }
 
   btn.disabled = true;
   btn.innerHTML = '<span style="font-size:18px">⏳</span> <span>Vérification empreinte…</span>';
@@ -428,20 +424,35 @@ async function phenixBioLogin(){
         timeout: 60000
       }
     });
-    // ✅ Empreinte validée — pré-remplir l'email et focus mot de passe
-    const emailInput = document.getElementById('pl-email');
-    emailInput.value = savedEmail;
-    emailInput.style.background = '#e8f5e9';
-    emailInput.readOnly = true;
-    err.style.color = '#7DC6E8';
+    // ✅ Empreinte validée — connexion Firebase automatique
+    const savedCreds = localStorage.getItem('phenix_bio_creds');
+    if(savedCreds && window._auth){
+      const parts = atob(savedCreds).split('|||');
+      if(parts.length === 2){
+        err.style.color = '#4db8e8';
+        err.textContent = '✓ Connexion en cours…';
+        window._auth.login(parts[0], parts[1]).catch(() => {
+          err.style.color = '#FFB4A8';
+          err.textContent = 'Session expirée — saisissez votre mot de passe.';
+          const em = document.getElementById('pl-email');
+          em.value = parts[0]; em.style.background = '#e8f5e9'; em.readOnly = true;
+          document.getElementById('pl-pwd').focus();
+        });
+        return;
+      }
+    }
+    // Fallback : pré-remplir email
+    const savedEmail = localStorage.getItem(BIO_EMAIL_KEY) || '';
+    document.getElementById('pl-email').value = savedEmail;
+    document.getElementById('pl-email').style.background = '#e8f5e9';
+    document.getElementById('pl-email').readOnly = true;
+    err.style.color = '#4db8e8';
     err.textContent = '✓ Empreinte reconnue — saisissez votre mot de passe.';
     document.getElementById('pl-pwd').focus();
   } catch(e){
-    const err = document.getElementById('pl-err');
-    err.style.color = '#FFB4A8';
-    if(e.name === 'NotAllowedError') err.textContent = 'Reconnaissance annulée ou échouée.';
-    else if(e.name === 'InvalidStateError') err.textContent = 'Empreinte invalide — cliquez sur 🔄 Réinitialiser et ré-enregistrez.';
-    else err.textContent = '⚠️ ' + (e.name||'') + ' : ' + e.message;
+    if(e.name === 'NotAllowedError') err.textContent = 'Reconnaissance annulée.';
+    else if(e.name === 'InvalidStateError') err.textContent = 'Empreinte invalide — cliquez sur 🔄 Réinitialiser.';
+    else err.textContent = '⚠️ ' + e.name + ' : ' + e.message;
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<span style="font-size:24px">☝️</span> <span>Se connecter avec empreinte</span>';
@@ -484,7 +495,10 @@ async function phenixBioEnroll(userOverride){
     // Stocker l'ID du credential et l'email
     localStorage.setItem(BIO_KEY, _b64u(credential.rawId));
     localStorage.setItem(BIO_EMAIL_KEY, user.email);
-    wrap.innerHTML = '<div style="color:#7DC6E8;font-size:13px;font-weight:600">✓ Empreinte enregistrée — active dès la prochaine connexion !</div>';
+    // Stocker credentials pour connexion automatique (déverrouillés par l'empreinte)
+    const pwd = document.getElementById('pl-pwd').value;
+    if(pwd) localStorage.setItem('phenix_bio_creds', btoa(user.email + '|||' + pwd));
+    wrap.innerHTML = '<div style="color:#7DC6E8;font-size:13px;font-weight:600">✓ Empreinte activée — connexion automatique dès maintenant !</div>';
     setTimeout(()=>{ wrap.style.display='none'; }, 3000);
   } catch(e){
     if(e.name === 'NotAllowedError') err.textContent = 'Enrôlement annulé.';
