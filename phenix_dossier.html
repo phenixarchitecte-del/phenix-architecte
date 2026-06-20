@@ -525,6 +525,12 @@ window.phenixDoLogin = function(){
 
 // Lancer l'init biométrie au chargement
 document.addEventListener('DOMContentLoaded', phenixBioInit);
+
+// Exposition globale — <script type="module"> isole le scope, les onclick HTML ne voient pas les fonctions sans ça
+window.phenixBioLogin  = phenixBioLogin;
+window.phenixBioEnroll = phenixBioEnroll;
+window.phenixBioReset  = phenixBioReset;
+window.phenixToggleEmailForm = phenixToggleEmailForm;
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>
