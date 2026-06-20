@@ -109,6 +109,12 @@ function patriBioReset(){
 }
 
 document.addEventListener('DOMContentLoaded',patriBioInit);
+
+// Exposition globale — nécessaire car ce fichier utilise <script type="module">
+// Les onclick HTML ne voient pas le scope module sans ça
+window.patriBioLogin  = patriBioLogin;
+window.patriBioReset  = patriBioReset;
+window.patriBioEnroll = patriBioEnroll;
 window.dispatchEvent(new Event('fbready'));
 </script>
 <style>
