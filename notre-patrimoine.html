@@ -17,104 +17,6 @@ window._fb={save:(json)=>setDoc(ref,{json,updated:Date.now()}),listen:(cb)=>onSn
 const authI=getAuth();
 window._auth={login:(e,p)=>signInWithEmailAndPassword(authI,e,p),signup:(e,p)=>createUserWithEmailAndPassword(authI,e,p),logout:()=>signOut(authI),current:()=>authI.currentUser,onChange:(cb)=>onAuthStateChanged(authI,cb)};
 onAuthStateChanged(authI,u=>{const ov=document.getElementById('patri-login');if(ov)ov.style.display=u?'none':'flex';});
-
-// ════════════════════════════════════════════════════
-//  WEBAUTHN — Empreinte digitale (Notre Patrimoine)
-// ════════════════════════════════════════════════════
-const PATRI_BIO_KEY='patri_bio_credId';
-const PATRI_BIO_EMAIL='patri_bio_email';
-
-function _pb64u(buf){return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');}
-function _pfromb64u(s){s=s.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';return Uint8Array.from(atob(s),c=>c.charCodeAt(0)).buffer;}
-
-async function patriBioInit(){
-  if(!window.PublicKeyCredential)return;
-  const ok=await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().catch(()=>false);
-  if(!ok)return;
-  document.getElementById('patri-bio-wrap').style.display='block';
-  if(!localStorage.getItem(PATRI_BIO_KEY)){
-    document.getElementById('patri-bio-label').textContent='Activer l\'empreinte après connexion';
-    document.getElementById('patri-bio-btn').onclick=()=>document.getElementById('pl-pwd').focus();
-  }
-}
-
-async function patriBioLogin(){
-  const btn=document.getElementById('patri-bio-btn');
-  const err=document.getElementById('pl-err');
-  const credId=localStorage.getItem(PATRI_BIO_KEY);
-  const savedEmail=localStorage.getItem(PATRI_BIO_EMAIL);
-  err.textContent='';
-  if(!credId||!savedEmail){document.getElementById('pl-pwd').focus();return;}
-  btn.disabled=true;
-  btn.innerHTML='<span class="ai-dot-p"></span><span class="ai-dot-p"></span><span class="ai-dot-p"></span>';
-  try{
-    await navigator.credentials.get({publicKey:{
-      challenge:crypto.getRandomValues(new Uint8Array(32)),
-      allowCredentials:[{type:'public-key',id:_pfromb64u(credId),transports:['internal']}],
-      userVerification:'required',timeout:60000
-    }});
-    document.getElementById('pl-email').value=savedEmail;
-    document.getElementById('pl-email').style.background='#f0f7ee';
-    document.getElementById('pl-email').readOnly=true;
-    err.style.color='#5a8a60';
-    err.textContent='✓ Empreinte reconnue — saisissez votre mot de passe.';
-    document.getElementById('pl-pwd').focus();
-  }catch(e){
-    err.style.color='var(--terra)';
-    if(e.name==='NotAllowedError')err.textContent='Reconnaissance annulée.';
-    else if(e.name==='InvalidStateError')err.textContent='Empreinte invalide — cliquez sur 🔄 Réinitialiser.';
-    else err.textContent='⚠️ '+e.name+' : '+e.message;
-  }finally{
-    btn.disabled=false;
-    btn.innerHTML='<span style="font-size:22px">☝️</span><span id="patri-bio-label">Se connecter avec empreinte</span>';
-  }
-}
-
-async function patriBioEnroll(user){
-  const err=document.getElementById('pl-err');
-  const wrap=document.getElementById('patri-enroll-wrap');
-  if(!user){err.style.color='var(--terra)';err.textContent='Session non reconnue — réessayez.';return;}
-  try{
-    const cred=await navigator.credentials.create({publicKey:{
-      challenge:crypto.getRandomValues(new Uint8Array(32)),
-      rp:{name:'Notre Patrimoine',id:location.hostname},
-      user:{id:new TextEncoder().encode(user.uid),name:user.email,displayName:'Patrimoine'},
-      pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],
-      authenticatorSelection:{authenticatorAttachment:'platform',userVerification:'required',residentKey:'discouraged',requireResidentKey:false},
-      timeout:60000,attestation:'none'
-    }});
-    localStorage.setItem(PATRI_BIO_KEY,_pb64u(cred.rawId));
-    localStorage.setItem(PATRI_BIO_EMAIL,user.email);
-    wrap.innerHTML='<strong style="color:var(--terra)">✓ Empreinte activée !</strong><p>Active dès la prochaine connexion.</p>';
-    setTimeout(()=>wrap.style.display='none',3000);
-  }catch(e){
-    err.style.color='var(--terra)';
-    if(e.name==='NotAllowedError')err.textContent='Enrôlement annulé.';
-    else err.textContent='Erreur enrôlement : '+e.message;
-  }
-}
-
-function patriBioReset(){
-  if(!confirm('Supprimer l\'empreinte enregistrée ?'))return;
-  localStorage.removeItem(PATRI_BIO_KEY);
-  localStorage.removeItem(PATRI_BIO_EMAIL);
-  document.getElementById('patri-bio-label').textContent='Activer l\'empreinte après connexion';
-  document.getElementById('patri-bio-btn').onclick=()=>document.getElementById('pl-pwd').focus();
-  const err=document.getElementById('pl-err');
-  err.style.color='#5a8a60';
-  err.textContent='✓ Empreinte supprimée — reconnectez-vous pour la ré-activer.';
-  // Reset email field if it was locked
-  const em=document.getElementById('pl-email');
-  em.value='';em.readOnly=false;em.style.background='';
-}
-
-document.addEventListener('DOMContentLoaded',patriBioInit);
-
-// Exposition globale — nécessaire car ce fichier utilise <script type="module">
-// Les onclick HTML ne voient pas le scope module sans ça
-window.patriBioLogin  = patriBioLogin;
-window.patriBioReset  = patriBioReset;
-window.patriBioEnroll = patriBioEnroll;
 window.dispatchEvent(new Event('fbready'));
 </script>
 <style>
@@ -478,11 +380,126 @@ document.querySelectorAll('[data-preset]').forEach(b=>b.addEventListener('click'
 document.querySelectorAll('[data-cpreset]').forEach(b=>b.addEventListener('click',()=>{const[name,type,fl,fr]=b.dataset.cpreset.split('|');const root=state.companies.find(c=>c.parent==null);state.companies.push({id:nid++,name,type,parent:root?root.id:null,ca:0,benefice:0,valeur:0,fricLabel:fl,fricRate:+fr});renderCompanies();renderOverview();openLast('#companies');}));
 function authMsg(x){const c=(x&&x.code)||'';return (c.includes('invalid-credential')||c.includes('wrong-password')||c.includes('user-not-found'))?'E-mail ou mot de passe incorrect.':c.includes('operation-not-allowed')?'Active « E-mail/Mot de passe » dans Firebase → Authentication.':c.includes('invalid-email')?'E-mail invalide.':c.includes('too-many-requests')?'Trop de tentatives, réessaie plus tard.':c.includes('network')?'Pas de connexion internet.':('Erreur : '+(c||(x&&x.message)||''));}
 (function(){const g=id=>document.getElementById(id);
- const lb=g('pl-btn');if(lb)lb.addEventListener('click',()=>{const e=g('pl-email').value.trim(),p=g('pl-pwd').value,er=g('pl-err');if(er){er.style.color='var(--terra)';er.textContent='';}if(!window._auth){if(er)er.textContent='Connexion à Firebase indisponible (hors ligne ou domaine non autorisé).';return;}window._auth.login(e,p).then(cred=>{if(!localStorage.getItem(PATRI_BIO_KEY)&&window.PublicKeyCredential){PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(ok=>{if(ok){const wrap=document.getElementById('patri-enroll-wrap');wrap.style.display='block';document.getElementById('patri-enroll-btn').onclick=()=>patriBioEnroll(cred.user);}});}}).catch(x=>{if(er)er.textContent=authMsg(x);});});
+ const lb=g('pl-btn');if(lb)lb.addEventListener('click',()=>{const e=g('pl-email').value.trim(),p=g('pl-pwd').value,er=g('pl-err');if(er){er.style.color='var(--terra)';er.textContent='';}if(!window._auth){if(er)er.textContent='Connexion à Firebase indisponible (hors ligne ou domaine non autorisé).';return;}window._auth.login(e,p).then(cred=>{if(!localStorage.getItem('patri_bio_credId')&&window.PublicKeyCredential){PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(ok=>{if(ok){var wrap=document.getElementById('patri-enroll-wrap');wrap.style.display='block';document.getElementById('patri-enroll-btn').onclick=function(){patriBioEnroll(cred.user);};}});}}).catch(x=>{if(er)er.textContent=authMsg(x);});});
  const su=g('pl-signup');if(su)su.addEventListener('click',()=>{const e=g('pl-email').value.trim(),p=g('pl-pwd').value,er=g('pl-err');if(er)er.textContent='';if(!window._auth){if(er)er.textContent='Connexion à Firebase indisponible.';return;}window._auth.signup(e,p).catch(x=>{if(er)er.textContent=authMsg(x);});});
  const off=g('pl-offline');if(off)off.addEventListener('click',()=>{const ov=g('patri-login');if(ov)ov.style.display='none';});})();
 window.addEventListener('fbready',initSync);
 (async()=>{await load();renderOverview();renderStamp();renderAccounts();renderProps();renderCompanies();renderGloss();renderContacts();renderSync();if(window._auth)initSync();})();
+</script>
+
+<script>
+// ════════════════════════════════════════════════════
+//  WEBAUTHN — Empreinte digitale (Notre Patrimoine)
+//  Dans <script> classique pour accès global garanti
+// ════════════════════════════════════════════════════
+var PATRI_BIO_KEY   = 'patri_bio_credId';
+var PATRI_BIO_EMAIL = 'patri_bio_email';
+var PATRI_BIO_CREDS = 'patri_bio_creds';
+
+function _pb64u(buf){return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');}
+function _pfromb64u(s){s=s.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';return Uint8Array.from(atob(s),c=>c.charCodeAt(0)).buffer;}
+
+async function patriBioInit(){
+  if(!window.PublicKeyCredential)return;
+  var ok=await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().catch(function(){return false;});
+  if(!ok)return;
+  document.getElementById('patri-bio-wrap').style.display='block';
+  if(!localStorage.getItem(PATRI_BIO_KEY)){
+    document.getElementById('patri-bio-label').textContent="Activer l'empreinte après connexion";
+    document.getElementById('patri-bio-btn').onclick=function(){document.getElementById('pl-pwd').focus();};
+  }
+}
+
+async function patriBioLogin(){
+  var btn=document.getElementById('patri-bio-btn');
+  var err=document.getElementById('pl-err');
+  var credId=localStorage.getItem(PATRI_BIO_KEY);
+  var savedCreds=localStorage.getItem(PATRI_BIO_CREDS);
+  err.textContent=''; err.style.color='var(--terra)';
+  if(!credId){document.getElementById('pl-pwd').focus();return;}
+  btn.disabled=true;
+  btn.innerHTML='<span class="ai-dot-p"></span><span class="ai-dot-p"></span><span class="ai-dot-p"></span>';
+  try{
+    await navigator.credentials.get({publicKey:{
+      challenge:crypto.getRandomValues(new Uint8Array(32)),
+      allowCredentials:[{type:'public-key',id:_pfromb64u(credId),transports:['internal']}],
+      userVerification:'required',timeout:60000
+    }});
+    // Empreinte OK — connexion Firebase automatique
+    if(savedCreds && window._auth){
+      var parts=atob(savedCreds).split('|||');
+      if(parts.length===2){
+        err.style.color='#5a8a60';
+        err.textContent='✓ Connexion en cours…';
+        window._auth.login(parts[0],parts[1]).catch(function(e){
+          err.style.color='var(--terra)';
+          err.textContent='Session expirée — saisissez votre mot de passe.';
+          var em=document.getElementById('pl-email');
+          em.value=parts[0]; em.style.background='#f0f7ee'; em.readOnly=true;
+          document.getElementById('pl-pwd').focus();
+        });
+        return;
+      }
+    }
+    // Fallback : pré-remplir l'email
+    var savedEmail=localStorage.getItem(PATRI_BIO_EMAIL)||'';
+    document.getElementById('pl-email').value=savedEmail;
+    document.getElementById('pl-email').style.background='#f0f7ee';
+    document.getElementById('pl-email').readOnly=true;
+    err.style.color='#5a8a60';
+    err.textContent='✓ Empreinte reconnue — saisissez votre mot de passe.';
+    document.getElementById('pl-pwd').focus();
+  }catch(e){
+    if(e.name==='NotAllowedError')err.textContent='Reconnaissance annulée.';
+    else if(e.name==='InvalidStateError')err.textContent="Empreinte invalide — cliquez sur 🔄 Réinitialiser.";
+    else err.textContent='⚠️ '+e.name+' : '+e.message;
+  }finally{
+    btn.disabled=false;
+    btn.innerHTML='<span style="font-size:22px">☝️</span><span id="patri-bio-label">Se connecter avec empreinte</span>';
+  }
+}
+
+async function patriBioEnroll(user){
+  var err=document.getElementById('pl-err');
+  var wrap=document.getElementById('patri-enroll-wrap');
+  if(!user){err.style.color='var(--terra)';err.textContent='Session non reconnue — réessayez.';return;}
+  try{
+    var cred=await navigator.credentials.create({publicKey:{
+      challenge:crypto.getRandomValues(new Uint8Array(32)),
+      rp:{name:'Notre Patrimoine',id:location.hostname},
+      user:{id:new TextEncoder().encode(user.uid),name:user.email,displayName:'Patrimoine'},
+      pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],
+      authenticatorSelection:{authenticatorAttachment:'platform',userVerification:'required',residentKey:'discouraged',requireResidentKey:false},
+      timeout:60000,attestation:'none'
+    }});
+    localStorage.setItem(PATRI_BIO_KEY,_pb64u(cred.rawId));
+    localStorage.setItem(PATRI_BIO_EMAIL,user.email);
+    // Stocker les credentials pour connexion automatique
+    var pwd=document.getElementById('pl-pwd').value;
+    if(pwd) localStorage.setItem(PATRI_BIO_CREDS,btoa(user.email+'|||'+pwd));
+    wrap.innerHTML='<strong style="color:var(--terra)">✓ Empreinte activée !</strong><p>Connexion automatique active dès maintenant.</p>';
+    setTimeout(function(){wrap.style.display='none';},3000);
+  }catch(e){
+    err.style.color='var(--terra)';
+    if(e.name==='NotAllowedError')err.textContent='Enrôlement annulé.';
+    else err.textContent='Erreur enrôlement : '+e.message;
+  }
+}
+
+function patriBioReset(){
+  if(!confirm("Supprimer l'empreinte enregistrée ?"))return;
+  localStorage.removeItem(PATRI_BIO_KEY);
+  localStorage.removeItem(PATRI_BIO_EMAIL);
+  localStorage.removeItem(PATRI_BIO_CREDS);
+  document.getElementById('patri-bio-wrap').style.display='none';
+  var err=document.getElementById('pl-err');
+  err.style.color='#5a8a60';
+  err.textContent="✓ Empreinte supprimée — reconnectez-vous pour la ré-activer.";
+  var em=document.getElementById('pl-email');
+  em.value=''; em.readOnly=false; em.style.background='';
+}
+
+document.addEventListener('DOMContentLoaded', patriBioInit);
 </script>
 </body>
 </html>
