@@ -365,28 +365,22 @@ function _fromb64u(s){ s=s.replace(/-/g,'+').replace(/_/g,'/'); while(s.length%4
 
 // Init : vérifie si WebAuthn dispo + credential déjà enrôlé
 async function phenixBioInit(){
-  if(!window.PublicKeyCredential){ return; } // navigateur non compatible
+  if(!window.PublicKeyCredential) return;
   const hasPlatform = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().catch(()=>false);
   if(!hasPlatform) return;
 
   const bioWrap = document.getElementById('pl-bio-wrap');
-  const emailForm = document.getElementById('pl-email-form');
-  const credId = localStorage.getItem(BIO_KEY);
-
   bioWrap.style.display = 'block';
-  if(credId){
-    // Credential déjà enrôlé → formulaire email masqué par défaut
-    emailForm.style.display = 'none';
-    document.getElementById('pl-bio-label').textContent = 'Se connecter avec empreinte';
-  } else {
-    // Pas encore enrôlé → montrer formulaire email, bouton bio pour enrôler après
-    document.getElementById('pl-bio-label').textContent = 'Activer la connexion par empreinte';
+
+  const credId = localStorage.getItem(BIO_KEY);
+  if(!credId){
+    // Pas encore enrôlé : bouton bio déclenche juste un scroll vers le formulaire email
+    document.getElementById('pl-bio-label').textContent = 'Activer l\'empreinte après connexion';
     document.getElementById('pl-bio-btn').onclick = () => {
-      document.getElementById('pl-email-form').style.display = 'block';
-      document.getElementById('pl-bio-wrap').style.display = 'none';
-      document.getElementById('pl-err').textContent = 'Connectez-vous d\'abord pour activer l\'empreinte.';
+      document.getElementById('pl-pwd').focus();
     };
   }
+  // Si enrôlé : bouton pointe vers phenixBioLogin (déjà en place via onclick HTML)
 }
 
 // Bascule affichage formulaire email
@@ -421,13 +415,13 @@ async function phenixBioLogin(){
         timeout: 60000
       }
     });
-    // ✅ Empreinte validée — pré-remplir l'email et demander uniquement le mot de passe
-    document.getElementById('pl-email-form').style.display = 'block';
-    document.getElementById('pl-email').value = savedEmail;
-    document.getElementById('pl-email').style.background = '#e8f5e9';
-    document.getElementById('pl-email').readOnly = true;
+    // ✅ Empreinte validée — pré-remplir l'email et focus mot de passe
+    const emailInput = document.getElementById('pl-email');
+    emailInput.value = savedEmail;
+    emailInput.style.background = '#e8f5e9';
+    emailInput.readOnly = true;
     err.style.color = '#7DC6E8';
-    err.textContent = '✓ Empreinte reconnue — saisissez votre mot de passe pour continuer.';
+    err.textContent = '✓ Empreinte reconnue — saisissez votre mot de passe.';
     document.getElementById('pl-pwd').focus();
   } catch(e){
     if(e.name === 'NotAllowedError') err.textContent = 'Reconnaissance annulée ou échouée.';
@@ -499,9 +493,7 @@ window.phenixDoLogin = function(){
         if(ok){
           const wrap = document.getElementById('pl-enroll-wrap');
           wrap.style.display='block';
-          // Passer l'utilisateur directement au bouton Activer
-          const btn = wrap.querySelector('button');
-          if(btn) btn.onclick = () => phenixBioEnroll(user);
+          document.getElementById('pl-enroll-btn').onclick = () => phenixBioEnroll(user);
         }
       });
     }
@@ -1841,22 +1833,19 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
     <div style="font-size:11px;color:rgba(255,255,255,.5);letter-spacing:.12em;text-transform:uppercase;margin-bottom:26px">Connexion sécurisée</div>
 
     <!-- BOUTON BIOMÉTRIE (affiché seulement si disponible) -->
-    <div id="pl-bio-wrap" style="display:none;margin-bottom:18px">
-      <button id="pl-bio-btn" onclick="phenixBioLogin()" style="width:100%;padding:14px;border:2px solid rgba(77,184,232,.6);border-radius:9px;background:rgba(77,184,232,.12);color:#7DC6E8;font-size:15px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;transition:all .2s">
+    <div id="pl-bio-wrap" style="display:none;margin-bottom:16px">
+      <button id="pl-bio-btn" onclick="phenixBioLogin()" style="width:100%;padding:14px;border:2px solid rgba(77,184,232,.6);border-radius:9px;background:rgba(77,184,232,.12);color:#7DC6E8;font-size:15px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px">
         <span style="font-size:24px">☝️</span>
         <span id="pl-bio-label">Se connecter avec empreinte</span>
       </button>
-      <div style="display:flex;align-items:center;gap:10px;margin-top:16px;margin-bottom:4px">
+      <div style="display:flex;align-items:center;gap:10px;margin-top:14px;margin-bottom:14px">
         <div style="flex:1;height:1px;background:rgba(255,255,255,.15)"></div>
-        <span style="font-size:11px;color:rgba(255,255,255,.35);letter-spacing:.08em">ou</span>
+        <span style="font-size:11px;color:rgba(255,255,255,.35);letter-spacing:.08em">ou par mot de passe</span>
         <div style="flex:1;height:1px;background:rgba(255,255,255,.15)"></div>
       </div>
-      <button onclick="phenixToggleEmailForm()" style="width:100%;padding:10px;background:transparent;border:none;color:rgba(255,255,255,.45);font-size:12px;cursor:pointer;font-family:inherit">
-        <span id="pl-email-toggle">▼ Connexion email / mot de passe</span>
-      </button>
     </div>
 
-    <!-- FORMULAIRE EMAIL (toujours visible si pas de bio, rétractable sinon) -->
+    <!-- FORMULAIRE EMAIL — toujours visible -->
     <div id="pl-email-form">
       <input id="pl-email" type="email" autocomplete="username" placeholder="E-mail" style="width:100%;padding:12px 14px;margin-bottom:10px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.95);font-size:14px;outline:none">
       <input id="pl-pwd" type="password" autocomplete="current-password" placeholder="Mot de passe" onkeydown="if(event.key==='Enter')phenixDoLogin()" style="width:100%;padding:12px 14px;margin-bottom:14px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.95);font-size:14px;outline:none">
@@ -1870,7 +1859,7 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
       <div style="font-size:13px;color:#7DC6E8;font-weight:600;margin-bottom:6px">☝️ Activer la connexion par empreinte ?</div>
       <div style="font-size:11px;color:rgba(255,255,255,.55);margin-bottom:12px">Votre empreinte restera stockée uniquement sur cet appareil.</div>
       <div style="display:flex;gap:8px">
-        <button onclick="phenixBioEnroll()" style="flex:1;padding:9px;border:none;border-radius:7px;background:linear-gradient(135deg,#4A9CC7,#2A5298);color:#fff;font-size:13px;font-weight:600;cursor:pointer">Activer</button>
+        <button id="pl-enroll-btn" style="flex:1;padding:9px;border:none;border-radius:7px;background:linear-gradient(135deg,#4A9CC7,#2A5298);color:#fff;font-size:13px;font-weight:600;cursor:pointer">Activer</button>
         <button onclick="document.getElementById('pl-enroll-wrap').style.display='none'" style="flex:1;padding:9px;border:1.5px solid rgba(255,255,255,.2);border-radius:7px;background:transparent;color:rgba(255,255,255,.6);font-size:13px;cursor:pointer">Plus tard</button>
       </div>
     </div>
