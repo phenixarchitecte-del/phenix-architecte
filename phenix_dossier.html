@@ -391,6 +391,19 @@ function phenixToggleEmailForm(){
   document.getElementById('pl-email-toggle').textContent = isHidden ? '▲ Masquer' : '▼ Connexion email / mot de passe';
 }
 
+// Réinitialise le credential biométrique stocké
+function phenixBioReset(){
+  if(!confirm('Supprimer l\'empreinte enregistrée ? Vous devrez la ré-enregistrer après votre prochaine connexion.')) return;
+  localStorage.removeItem(BIO_KEY);
+  localStorage.removeItem(BIO_EMAIL_KEY);
+  // Changer le bouton en mode "non enrôlé"
+  document.getElementById('pl-bio-label').textContent = 'Activer l\'empreinte après connexion';
+  document.getElementById('pl-bio-btn').onclick = () => document.getElementById('pl-pwd').focus();
+  const err = document.getElementById('pl-err');
+  err.style.color = '#7DC6E8';
+  err.textContent = '✓ Empreinte supprimée — connectez-vous avec email/mdp pour la ré-activer.';
+}
+
 // Connexion via empreinte (assertion WebAuthn)
 async function phenixBioLogin(){
   const btn = document.getElementById('pl-bio-btn');
@@ -424,10 +437,11 @@ async function phenixBioLogin(){
     err.textContent = '✓ Empreinte reconnue — saisissez votre mot de passe.';
     document.getElementById('pl-pwd').focus();
   } catch(e){
+    const err = document.getElementById('pl-err');
+    err.style.color = '#FFB4A8';
     if(e.name === 'NotAllowedError') err.textContent = 'Reconnaissance annulée ou échouée.';
-    else err.textContent = 'Erreur biométrie : ' + e.message;
-    // Afficher le formulaire email complet en fallback
-    document.getElementById('pl-email-form').style.display = 'block';
+    else if(e.name === 'InvalidStateError') err.textContent = 'Empreinte invalide — cliquez sur 🔄 Réinitialiser et ré-enregistrez.';
+    else err.textContent = '⚠️ ' + (e.name||'') + ' : ' + e.message;
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<span style="font-size:24px">☝️</span> <span>Se connecter avec empreinte</span>';
@@ -1853,6 +1867,13 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
     </div>
 
     <div id="pl-err" style="color:#FFB4A8;font-size:12.5px;margin-top:12px;min-height:16px"></div>
+
+    <!-- RESET empreinte (toujours accessible) -->
+    <div style="margin-top:14px;text-align:center">
+      <button onclick="phenixBioReset()" style="background:none;border:none;color:rgba(255,255,255,.25);font-size:11px;cursor:pointer;font-family:inherit;padding:6px">
+        🔄 Réinitialiser l'empreinte enregistrée
+      </button>
+    </div>
 
     <!-- ENRÔLEMENT (affiché après une connexion email réussie si pas encore enrôlé) -->
     <div id="pl-enroll-wrap" style="display:none;margin-top:16px;padding:14px;background:rgba(77,184,232,.1);border:1.5px solid rgba(77,184,232,.3);border-radius:9px">
