@@ -404,12 +404,16 @@ async function phenixBioLogin(){
   const credId = localStorage.getItem(BIO_KEY);
   const savedEmail = localStorage.getItem(BIO_EMAIL_KEY);
   err.textContent = '';
-  if(!credId || !savedEmail){ err.textContent = 'Empreinte non enrôlée. Connectez-vous avec votre email d\'abord.'; return; }
+  if(!credId || !savedEmail){
+    // Pas encore enrôlé → afficher formulaire email
+    document.getElementById('pl-email-form').style.display = 'block';
+    return;
+  }
 
   btn.disabled = true;
-  btn.innerHTML = '<span style="font-size:18px">⏳</span> Vérification…';
+  btn.innerHTML = '<span style="font-size:18px">⏳</span> <span>Vérification empreinte…</span>';
   try {
-    const assertion = await navigator.credentials.get({
+    await navigator.credentials.get({
       publicKey: {
         challenge: crypto.getRandomValues(new Uint8Array(32)),
         allowCredentials: [{ type: 'public-key', id: _fromb64u(credId), transports: ['internal'] }],
@@ -417,29 +421,19 @@ async function phenixBioLogin(){
         timeout: 60000
       }
     });
-    // Empreinte vérifiée localement — Firebase Auth via token stocké
-    const savedToken = localStorage.getItem('phenix_bio_token');
-    if(savedToken){
-      // Utiliser signInWithCustomToken si dispo, sinon re-login transparent
-      const { signInWithCustomToken } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
-      await signInWithCustomToken(auth, savedToken).catch(async ()=>{
-        // Token expiré → re-demander email/mdp silencieusement impossible, afficher formulaire
-        err.textContent = 'Session expirée. Reconnectez-vous avec votre mot de passe.';
-        localStorage.removeItem('phenix_bio_token');
-        document.getElementById('pl-email-form').style.display = 'block';
-        document.getElementById('pl-email').value = savedEmail;
-      });
-    } else {
-      // Pas de token custom → afficher email pré-rempli, demander mdp
-      document.getElementById('pl-email-form').style.display = 'block';
-      document.getElementById('pl-email').value = savedEmail;
-      document.getElementById('pl-pwd').focus();
-      err.style.color = '#7DC6E8';
-      err.textContent = '✓ Empreinte reconnue — saisissez votre mot de passe pour cette session.';
-    }
+    // ✅ Empreinte validée — pré-remplir l'email et demander uniquement le mot de passe
+    document.getElementById('pl-email-form').style.display = 'block';
+    document.getElementById('pl-email').value = savedEmail;
+    document.getElementById('pl-email').style.background = '#e8f5e9';
+    document.getElementById('pl-email').readOnly = true;
+    err.style.color = '#7DC6E8';
+    err.textContent = '✓ Empreinte reconnue — saisissez votre mot de passe pour continuer.';
+    document.getElementById('pl-pwd').focus();
   } catch(e){
     if(e.name === 'NotAllowedError') err.textContent = 'Reconnaissance annulée ou échouée.';
     else err.textContent = 'Erreur biométrie : ' + e.message;
+    // Afficher le formulaire email complet en fallback
+    document.getElementById('pl-email-form').style.display = 'block';
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<span style="font-size:24px">☝️</span> <span>Se connecter avec empreinte</span>';
@@ -1857,9 +1851,9 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
         <span style="font-size:11px;color:rgba(255,255,255,.35);letter-spacing:.08em">ou</span>
         <div style="flex:1;height:1px;background:rgba(255,255,255,.15)"></div>
       </div>
-      <div style="font-size:11px;color:rgba(255,255,255,.35);margin-bottom:12px;cursor:pointer" onclick="phenixToggleEmailForm()">
+      <button onclick="phenixToggleEmailForm()" style="width:100%;padding:10px;background:transparent;border:none;color:rgba(255,255,255,.45);font-size:12px;cursor:pointer;font-family:inherit">
         <span id="pl-email-toggle">▼ Connexion email / mot de passe</span>
-      </div>
+      </button>
     </div>
 
     <!-- FORMULAIRE EMAIL (toujours visible si pas de bio, rétractable sinon) -->
