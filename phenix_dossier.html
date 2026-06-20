@@ -352,6 +352,169 @@ onAuthStateChanged(auth, user => {
     if (ov) ov.style.display = 'flex';
   }
 });
+
+// ════════════════════════════════════════════════════════════
+//  WEBAUTHN — Authentification biométrique (empreinte / Face ID)
+// ════════════════════════════════════════════════════════════
+const BIO_KEY      = 'phenix_bio_credId';   // localStorage : credential ID encodé base64
+const BIO_EMAIL_KEY= 'phenix_bio_email';     // localStorage : email associé
+
+// Encode/décode ArrayBuffer <-> base64url
+function _b64u(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,''); }
+function _fromb64u(s){ s=s.replace(/-/g,'+').replace(/_/g,'/'); while(s.length%4) s+='='; return Uint8Array.from(atob(s),c=>c.charCodeAt(0)).buffer; }
+
+// Init : vérifie si WebAuthn dispo + credential déjà enrôlé
+async function phenixBioInit(){
+  if(!window.PublicKeyCredential){ return; } // navigateur non compatible
+  const hasPlatform = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().catch(()=>false);
+  if(!hasPlatform) return;
+
+  const bioWrap = document.getElementById('pl-bio-wrap');
+  const emailForm = document.getElementById('pl-email-form');
+  const credId = localStorage.getItem(BIO_KEY);
+
+  bioWrap.style.display = 'block';
+  if(credId){
+    // Credential déjà enrôlé → formulaire email masqué par défaut
+    emailForm.style.display = 'none';
+    document.getElementById('pl-bio-label').textContent = 'Se connecter avec empreinte';
+  } else {
+    // Pas encore enrôlé → montrer formulaire email, bouton bio pour enrôler après
+    document.getElementById('pl-bio-label').textContent = 'Activer la connexion par empreinte';
+    document.getElementById('pl-bio-btn').onclick = () => {
+      document.getElementById('pl-email-form').style.display = 'block';
+      document.getElementById('pl-bio-wrap').style.display = 'none';
+      document.getElementById('pl-err').textContent = 'Connectez-vous d\'abord pour activer l\'empreinte.';
+    };
+  }
+}
+
+// Bascule affichage formulaire email
+function phenixToggleEmailForm(){
+  const f = document.getElementById('pl-email-form');
+  const isHidden = f.style.display === 'none';
+  f.style.display = isHidden ? 'block' : 'none';
+  document.getElementById('pl-email-toggle').textContent = isHidden ? '▲ Masquer' : '▼ Connexion email / mot de passe';
+}
+
+// Connexion via empreinte (assertion WebAuthn)
+async function phenixBioLogin(){
+  const btn = document.getElementById('pl-bio-btn');
+  const err = document.getElementById('pl-err');
+  const credId = localStorage.getItem(BIO_KEY);
+  const savedEmail = localStorage.getItem(BIO_EMAIL_KEY);
+  err.textContent = '';
+  if(!credId || !savedEmail){ err.textContent = 'Empreinte non enrôlée. Connectez-vous avec votre email d\'abord.'; return; }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span style="font-size:18px">⏳</span> Vérification…';
+  try {
+    const assertion = await navigator.credentials.get({
+      publicKey: {
+        challenge: crypto.getRandomValues(new Uint8Array(32)),
+        allowCredentials: [{ type: 'public-key', id: _fromb64u(credId), transports: ['internal'] }],
+        userVerification: 'required',
+        timeout: 60000
+      }
+    });
+    // Empreinte vérifiée localement — Firebase Auth via token stocké
+    const savedToken = localStorage.getItem('phenix_bio_token');
+    if(savedToken){
+      // Utiliser signInWithCustomToken si dispo, sinon re-login transparent
+      const { signInWithCustomToken } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
+      await signInWithCustomToken(auth, savedToken).catch(async ()=>{
+        // Token expiré → re-demander email/mdp silencieusement impossible, afficher formulaire
+        err.textContent = 'Session expirée. Reconnectez-vous avec votre mot de passe.';
+        localStorage.removeItem('phenix_bio_token');
+        document.getElementById('pl-email-form').style.display = 'block';
+        document.getElementById('pl-email').value = savedEmail;
+      });
+    } else {
+      // Pas de token custom → afficher email pré-rempli, demander mdp
+      document.getElementById('pl-email-form').style.display = 'block';
+      document.getElementById('pl-email').value = savedEmail;
+      document.getElementById('pl-pwd').focus();
+      err.style.color = '#7DC6E8';
+      err.textContent = '✓ Empreinte reconnue — saisissez votre mot de passe pour cette session.';
+    }
+  } catch(e){
+    if(e.name === 'NotAllowedError') err.textContent = 'Reconnaissance annulée ou échouée.';
+    else err.textContent = 'Erreur biométrie : ' + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<span style="font-size:24px">☝️</span> <span>Se connecter avec empreinte</span>';
+  }
+}
+
+// Enrôlement (après connexion email réussie)
+async function phenixBioEnroll(){
+  const err = document.getElementById('pl-err');
+  const wrap = document.getElementById('pl-enroll-wrap');
+  const user = auth.currentUser;
+  if(!user){ err.textContent = 'Connectez-vous d\'abord.'; return; }
+
+  try {
+    const encoder = new TextEncoder();
+    const credential = await navigator.credentials.create({
+      publicKey: {
+        challenge: crypto.getRandomValues(new Uint8Array(32)),
+        rp: { name: 'Phénix-Architecte', id: location.hostname },
+        user: {
+          id: encoder.encode(user.uid),
+          name: user.email,
+          displayName: 'Maxime — Phénix'
+        },
+        pubKeyCredParams: [
+          { type: 'public-key', alg: -7  },  // ES256
+          { type: 'public-key', alg: -257 }  // RS256
+        ],
+        authenticatorSelection: {
+          authenticatorAttachment: 'platform',
+          userVerification: 'required',
+          residentKey: 'preferred'
+        },
+        timeout: 60000
+      }
+    });
+    // Stocker l'ID du credential et l'email
+    localStorage.setItem(BIO_KEY, _b64u(credential.rawId));
+    localStorage.setItem(BIO_EMAIL_KEY, user.email);
+    wrap.innerHTML = '<div style="color:#7DC6E8;font-size:13px;font-weight:600">✓ Empreinte enregistrée — active dès la prochaine connexion !</div>';
+    setTimeout(()=>{ wrap.style.display='none'; }, 3000);
+  } catch(e){
+    if(e.name === 'NotAllowedError') err.textContent = 'Enrôlement annulé.';
+    else err.textContent = 'Erreur enrôlement : ' + e.message;
+  }
+}
+
+// Override phenixDoLogin pour proposer l'enrôlement après succès email
+const _origDoLogin = window.phenixDoLogin;
+window.phenixDoLogin = function(){
+  const email = (document.getElementById('pl-email').value || '').trim();
+  const pwd   = document.getElementById('pl-pwd').value || '';
+  const err   = document.getElementById('pl-err'); if(err) err.style.color='#FFB4A8'; if(err) err.textContent='';
+  const btn   = document.getElementById('pl-btn'); if(btn) btn.disabled=true;
+  window._auth.login(email, pwd).then(()=>{
+    // Succès — proposer l'enrôlement si pas encore fait
+    if(!localStorage.getItem(BIO_KEY) && window.PublicKeyCredential){
+      PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(ok=>{
+        if(ok) document.getElementById('pl-enroll-wrap').style.display='block';
+      });
+    }
+  }).catch(e => {
+    const c = (e && e.code) || '';
+    if(err) err.textContent =
+      (c.indexOf('invalid-credential')>=0||c.indexOf('wrong-password')>=0||c.indexOf('user-not-found')>=0) ? 'E-mail ou mot de passe incorrect.' :
+      c.indexOf('operation-not-allowed')>=0 ? "Activez « E-mail/Mot de passe » dans Firebase → Authentication." :
+      c.indexOf('invalid-email')>=0 ? 'E-mail invalide.' :
+      c.indexOf('too-many-requests')>=0 ? 'Trop de tentatives, réessayez plus tard.' :
+      c.indexOf('network')>=0 ? 'Pas de connexion internet.' :
+      ('Erreur : ' + (c || (e && e.message) || ''));
+  }).finally(()=>{ if(btn) btn.disabled=false; });
+};
+
+// Lancer l'init biométrie au chargement
+document.addEventListener('DOMContentLoaded', phenixBioInit);
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>
@@ -1672,10 +1835,41 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
   <div style="background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.18);border-radius:16px;padding:34px 28px;max-width:360px;width:100%;text-align:center">
     <div style="font-family:'DM Serif Display',Georgia,serif;font-size:30px;color:#fff;margin-bottom:4px">Phénix<span style="color:#7DC6E8">-Architecte</span></div>
     <div style="font-size:11px;color:rgba(255,255,255,.5);letter-spacing:.12em;text-transform:uppercase;margin-bottom:26px">Connexion sécurisée</div>
-    <input id="pl-email" type="email" autocomplete="username" placeholder="E-mail" style="width:100%;padding:12px 14px;margin-bottom:10px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.95);font-size:14px;outline:none">
-    <input id="pl-pwd" type="password" autocomplete="current-password" placeholder="Mot de passe" onkeydown="if(event.key==='Enter')phenixDoLogin()" style="width:100%;padding:12px 14px;margin-bottom:14px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.95);font-size:14px;outline:none">
-    <button id="pl-btn" onclick="phenixDoLogin()" style="width:100%;padding:12px;border:none;border-radius:9px;background:linear-gradient(135deg,#4A9CC7,#2A5298);color:#fff;font-size:15px;font-weight:600;cursor:pointer">Se connecter</button>
+
+    <!-- BOUTON BIOMÉTRIE (affiché seulement si disponible) -->
+    <div id="pl-bio-wrap" style="display:none;margin-bottom:18px">
+      <button id="pl-bio-btn" onclick="phenixBioLogin()" style="width:100%;padding:14px;border:2px solid rgba(77,184,232,.6);border-radius:9px;background:rgba(77,184,232,.12);color:#7DC6E8;font-size:15px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;transition:all .2s">
+        <span style="font-size:24px">☝️</span>
+        <span id="pl-bio-label">Se connecter avec empreinte</span>
+      </button>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:16px;margin-bottom:4px">
+        <div style="flex:1;height:1px;background:rgba(255,255,255,.15)"></div>
+        <span style="font-size:11px;color:rgba(255,255,255,.35);letter-spacing:.08em">ou</span>
+        <div style="flex:1;height:1px;background:rgba(255,255,255,.15)"></div>
+      </div>
+      <div style="font-size:11px;color:rgba(255,255,255,.35);margin-bottom:12px;cursor:pointer" onclick="phenixToggleEmailForm()">
+        <span id="pl-email-toggle">▼ Connexion email / mot de passe</span>
+      </div>
+    </div>
+
+    <!-- FORMULAIRE EMAIL (toujours visible si pas de bio, rétractable sinon) -->
+    <div id="pl-email-form">
+      <input id="pl-email" type="email" autocomplete="username" placeholder="E-mail" style="width:100%;padding:12px 14px;margin-bottom:10px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.95);font-size:14px;outline:none">
+      <input id="pl-pwd" type="password" autocomplete="current-password" placeholder="Mot de passe" onkeydown="if(event.key==='Enter')phenixDoLogin()" style="width:100%;padding:12px 14px;margin-bottom:14px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.95);font-size:14px;outline:none">
+      <button id="pl-btn" onclick="phenixDoLogin()" style="width:100%;padding:12px;border:none;border-radius:9px;background:linear-gradient(135deg,#4A9CC7,#2A5298);color:#fff;font-size:15px;font-weight:600;cursor:pointer">Se connecter</button>
+    </div>
+
     <div id="pl-err" style="color:#FFB4A8;font-size:12.5px;margin-top:12px;min-height:16px"></div>
+
+    <!-- ENRÔLEMENT (affiché après une connexion email réussie si pas encore enrôlé) -->
+    <div id="pl-enroll-wrap" style="display:none;margin-top:16px;padding:14px;background:rgba(77,184,232,.1);border:1.5px solid rgba(77,184,232,.3);border-radius:9px">
+      <div style="font-size:13px;color:#7DC6E8;font-weight:600;margin-bottom:6px">☝️ Activer la connexion par empreinte ?</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.55);margin-bottom:12px">Votre empreinte restera stockée uniquement sur cet appareil.</div>
+      <div style="display:flex;gap:8px">
+        <button onclick="phenixBioEnroll()" style="flex:1;padding:9px;border:none;border-radius:7px;background:linear-gradient(135deg,#4A9CC7,#2A5298);color:#fff;font-size:13px;font-weight:600;cursor:pointer">Activer</button>
+        <button onclick="document.getElementById('pl-enroll-wrap').style.display='none'" style="flex:1;padding:9px;border:1.5px solid rgba(255,255,255,.2);border-radius:7px;background:transparent;color:rgba(255,255,255,.6);font-size:13px;cursor:pointer">Plus tard</button>
+      </div>
+    </div>
   </div>
 </div>
 <div id="app-dossier">
@@ -5424,7 +5618,7 @@ async function askAI(question) {
   msgs.innerHTML+=`<div class="ai-msg" id="${loadId}"><div class="ai-msg-avatar ai-avatar-ai">P</div><div class="ai-msg-bubble ai-bubble-ai"><div class="ai-loading"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div></div></div></div>`;
   msgs.scrollTop=msgs.scrollHeight;
   try {
-    const res=await fetch('https://phenix-proxy.phenixarchitecte.workers.dev',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1000,metadata:{user_id:'dossier-chatbot'},system:`Tu es l'assistant intégré de Phénix-Architecte, une agence de maîtrise d'œuvre française. Tu aides l'architecte avec : contrats MOE, devis, comptes-rendus, lettres de mission, réglementation (PLU, RE2020, PMR, loi MOP). Réponds en français, professionnellement. Honoraires typiques 10-15% des travaux HT.`,messages:[{role:'user',content:question}]})});
+    const res=await fetch('https://phenix-proxy.phenixarchitecte.workers.dev',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1000,system:`Tu es l'assistant intégré de Phénix-Architecte, une agence de maîtrise d'œuvre française. Tu aides l'architecte avec : contrats MOE, devis, comptes-rendus, lettres de mission, réglementation (PLU, RE2020, PMR, loi MOP). Réponds en français, professionnellement. Honoraires typiques 10-15% des travaux HT.`,messages:[{role:'user',content:question}]})});
     const data=await res.json();
     const text=data.content?.map(b=>b.text||'').join('')||'Désolé, pas de réponse.';
     document.getElementById(loadId).outerHTML=`<div class="ai-msg"><div class="ai-msg-avatar ai-avatar-ai">P</div><div class="ai-msg-bubble ai-bubble-ai" style="white-space:pre-wrap">${text.replace(/</g,'&lt;')}</div></div>`;
@@ -6187,7 +6381,6 @@ async function analyzeWithAI(base64) {
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 1000,
-        metadata: {user_id: 'dossier-pdf-facture'},
         system: `Analyse cette facture et retourne UNIQUEMENT ce JSON valide, sans markdown :
 {"type":"facture","numero":"","objet":"","dateEmission":"","dateEcheance":"","montantHt":0,"tva":20,"montantPaye":0,"statut":"emise","notes":"","clientNom":"","projetNom":"","pourcentage":0,"baseHonoraires":0,"prixUnitaireHt":0}
 
@@ -7550,7 +7743,6 @@ function handleCommPdf(file) {
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
           max_tokens: 800,
-          metadata: {user_id: 'dossier-pdf-artisan'},
           system: `Tu analyses des factures ou devis d'artisans du bâtiment.
 Extrais UNIQUEMENT en JSON valide, sans markdown :
 {
