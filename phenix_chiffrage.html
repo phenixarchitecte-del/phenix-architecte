@@ -168,35 +168,40 @@ tr:hover td{background:var(--accent-bg)}
 
 /* LOADING */
 .loading{text-align:center;padding:40px;color:var(--text3);font-size:13px}
+
+/* MARGE / IMPORT ARTISAN */
+.pu-artisan{font-size:12px;color:var(--text3);text-decoration:line-through}
+.pu-client-cell input{background:#fff9e6;border-color:#e6c34d!important}
+.marge-badge{display:inline-block;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;background:#e3f5ec;color:#2D7A4F}
+.marge-badge.neg{background:#fdeceb;color:#C0392B}
+.import-zone{border:2px dashed var(--border2);border-radius:var(--r-md);padding:20px;text-align:center;color:var(--text3);font-size:13px;cursor:pointer;transition:all .15s;margin-bottom:12px}
+.import-zone:hover{border-color:var(--accent);background:var(--accent-bg);color:var(--nav)}
+.import-zone.drag{border-color:var(--accent);background:var(--accent-bg)}
+.tab-btns{display:flex;gap:6px;margin-bottom:14px}
+.tab-btn{padding:5px 14px;border-radius:var(--r-sm);font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid var(--border);background:var(--bg);color:var(--text2);font-family:var(--font-sans)}
+.tab-btn.active{background:var(--nav);color:white;border-color:var(--nav)}
+textarea.import-txt{width:100%;height:140px;padding:10px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:12px;font-family:monospace;background:var(--bg);resize:vertical}
+textarea.import-txt:focus{outline:none;border-color:var(--accent)}
+.preview-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px;max-height:200px;overflow-y:auto;display:block}
+.preview-table th{background:var(--surface2);padding:5px 8px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--nav);position:sticky;top:0}
+.preview-table td{padding:5px 8px;border-bottom:1px solid var(--surface2)}
+.modal.modal-lg{width:640px;max-width:95%}
+.marge-bar{background:var(--surface2);border-radius:var(--r-md);padding:10px 14px;display:flex;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap}
+.marge-bar label{font-size:12px;color:var(--text2);font-weight:600;white-space:nowrap}
+.marge-bar input[type=number]{width:70px;padding:5px 8px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:13px;font-family:var(--font-sans);background:var(--bg);text-align:right}
+.marge-bar input:focus{outline:none;border-color:var(--accent)}
+/* AI loading dots */
+.ai-loading{display:inline-flex;gap:4px;align-items:center}
+.ai-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:ai-bounce 1.2s infinite ease-in-out}
+.ai-dot:nth-child(2){animation-delay:.2s}
+.ai-dot:nth-child(3){animation-delay:.4s}
+@keyframes ai-bounce{0%,80%,100%{transform:scale(0)}40%{transform:scale(1)}}
 </style>
-<script type="module">
-import{initializeApp}from'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-import{getFirestore,doc,onSnapshot,setDoc}from'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-import{getAuth,signInWithEmailAndPassword,createUserWithEmailAndPassword,signOut,onAuthStateChanged}from'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-const db=getFirestore(initializeApp({apiKey:"AIzaSyCjNKNvS6p3nqE6-_Gw9I397ZtXm2FG1ew",authDomain:"phenix-architecte-9151b.firebaseapp.com",projectId:"phenix-architecte-9151b",storageBucket:"phenix-architecte-9151b.firebasestorage.app",messagingSenderId:"811231684720",appId:"1:811231684720:web:413fa324ae43c07607acb5"}));
-const ref=doc(db,'phenix_chiffrage','data');
-window._fb={save:(json)=>setDoc(ref,{json,updated:Date.now()}),listen:(cb)=>onSnapshot(ref,s=>cb(s.exists()?s.data():null))};
-const authI=getAuth();
-window._auth={login:(e,p)=>signInWithEmailAndPassword(authI,e,p),signup:(e,p)=>createUserWithEmailAndPassword(authI,e,p),logout:()=>signOut(authI),current:()=>authI.currentUser,onChange:(cb)=>onAuthStateChanged(authI,cb)};
-onAuthStateChanged(authI,u=>{const ov=document.getElementById('patri-login');if(ov)ov.style.display=u?'none':'flex';});
-window.dispatchEvent(new Event('fbready'));
-</script>
 </head>
 <body>
-<div id="patri-login" style="position:fixed;inset:0;background:rgba(15,30,61,.55);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;font-family:'DM Sans',sans-serif">
- <div style="background:#fff;border-radius:18px;box-shadow:0 18px 44px rgba(15,30,61,.3);padding:28px 24px;max-width:360px;width:100%;text-align:center">
-  <div style="font-family:'DM Serif Display',serif;font-size:1.5rem;color:#1B2D5B;margin-bottom:4px">Phénix · Chiffrage</div>
-  <div style="color:#4A6080;font-size:.9rem;margin-bottom:16px">Connecte-toi pour retrouver tes chantiers sur tous tes appareils.</div>
-  <input id="pl-email" type="email" placeholder="Email" autocomplete="username" style="width:100%;padding:10px 12px;border:1px solid #C8D8E8;border-radius:9px;margin-bottom:9px;font-family:inherit;font-size:.95rem">
-  <input id="pl-pwd" type="password" placeholder="Mot de passe" autocomplete="current-password" style="width:100%;padding:10px 12px;border:1px solid #C8D8E8;border-radius:9px;margin-bottom:6px;font-family:inherit;font-size:.95rem">
-  <div id="pl-err" style="color:#C0392B;font-size:.83rem;min-height:18px;margin-bottom:6px"></div>
-  <button id="pl-btn" style="width:100%;padding:11px;border:none;border-radius:9px;background:#2A5298;color:#fff;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:8px">Se connecter</button>
-  <button id="pl-signup" style="width:100%;padding:11px;border:1px solid #C8D8E8;border-radius:9px;background:#fff;color:#1B2D5B;font-weight:600;cursor:pointer;font-family:inherit">Créer le compte</button>
-  <button id="pl-offline" style="background:none;border:none;color:#8BA5C0;font-size:.82rem;text-decoration:underline;cursor:pointer;margin-top:10px;font-family:inherit">Continuer hors connexion (cet appareil)</button>
- </div></div>
 
 <div class="topbar">
-  <div class="logo">Phénix-Architecte<span>Maître d'Œuvre · Architecte DE</span></div>
+  <div class="logo">Phénix-Conception<span>Contractant Général · Maître d'Œuvre</span></div>
   <div class="topbar-sep"></div>
   <div class="topbar-actions">
     <button class="topbar-btn" onclick="exportData()" title="Exporter les données (sauvegarde)"><i class="ti ti-cloud-upload" aria-hidden="true"></i>Sauvegarder</button>
@@ -313,14 +318,22 @@ window.dispatchEvent(new Event('fbready'));
           <div>
             <div class="detail-section-title">Postes du lot</div>
             <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden">
+              <div class="marge-bar">
+                <label>Marge globale (%)</label>
+                <input type="number" id="param-marge" value="20" min="0" max="100" step="1" oninput="applyMargeGlobale()">
+                <button class="btn btn-sm btn-accent" onclick="applyMargeGlobale()" style="padding:4px 12px"><i class="ti ti-refresh" aria-hidden="true"></i>Appliquer</button>
+                <button class="btn btn-sm btn-outline" onclick="openImportArtisanModal()" style="padding:4px 12px"><i class="ti ti-file-import" aria-hidden="true"></i>Importer devis artisan</button>
+              </div>
               <table class="poste-table">
                 <thead>
                   <tr>
-                    <th style="width:35%">Désignation</th>
-                    <th style="width:55px">Qté</th>
-                    <th style="width:40px">Unité</th>
-                    <th style="width:80px">PU HT (€)</th>
-                    <th style="width:90px;text-align:right">Total HT</th>
+                    <th style="width:30%">Désignation</th>
+                    <th style="width:50px">Qté</th>
+                    <th style="width:38px">Unité</th>
+                    <th style="width:80px">PU artisan HT</th>
+                    <th style="width:80px">PU client HT</th>
+                    <th style="width:55px">Marge</th>
+                    <th style="width:90px;text-align:right">Total client HT</th>
                     <th style="width:36px"></th>
                   </tr>
                 </thead>
@@ -343,8 +356,8 @@ window.dispatchEvent(new Event('fbready'));
                 <input type="number" id="param-aleas" value="5" min="0" max="30" step="1" oninput="computeLotTotal()">
               </div>
               <div class="side-param">
-                <label>Honoraires MOE (%)</label>
-                <input type="number" id="param-honoraires" value="12" min="0" max="30" step="0.5" oninput="computeLotTotal()">
+                <label>Frais généraux / MOE (%)</label>
+                <input type="number" id="param-honoraires" value="5" min="0" max="30" step="0.5" oninput="computeLotTotal()">
               </div>
               <div class="side-param">
                 <label>Statut du lot</label>
@@ -359,9 +372,10 @@ window.dispatchEvent(new Event('fbready'));
                 <textarea id="param-notes" rows="3" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;background:var(--surface2);resize:vertical" placeholder="Observations, variantes…" oninput="saveLot()"></textarea>
               </div>
               <div class="total-block">
-                <div class="total-row"><span class="lbl">Travaux HT</span><span id="tot-travaux">0 €</span></div>
+                <div class="total-row"><span class="lbl">Travaux client HT</span><span id="tot-travaux">0 €</span></div>
+                <div class="total-row"><span class="lbl">Marge brute</span><span id="tot-marge-brute" style="color:#4db8e8">0 €</span></div>
                 <div class="total-row"><span class="lbl">Aléas</span><span id="tot-aleas">0 €</span></div>
-                <div class="total-row"><span class="lbl">Honoraires MOE</span><span id="tot-honoraires">0 €</span></div>
+                <div class="total-row"><span class="lbl">Frais généraux</span><span id="tot-honoraires">0 €</span></div>
                 <div class="total-row"><span class="lbl">TVA</span><span id="tot-tva">0 €</span></div>
                 <div class="total-row main"><span class="lbl">TOTAL TTC</span><span id="tot-ttc">0 €</span></div>
               </div>
@@ -476,6 +490,67 @@ window.dispatchEvent(new Event('fbready'));
   </div>
 </div>
 
+<!-- MODAL IMPORT DEVIS ARTISAN -->
+<div class="modal-overlay" id="modal-import-artisan">
+  <div class="modal modal-lg">
+    <div class="modal-title"><i class="ti ti-file-import" style="color:var(--accent);margin-right:8px" aria-hidden="true"></i>Importer un devis artisan</div>
+    <div class="tab-btns">
+      <button class="tab-btn" onclick="switchImportTab('pdf')" id="tab-pdf">🤖 PDF (IA)</button>
+      <button class="tab-btn active" onclick="switchImportTab('csv')" id="tab-csv">📄 CSV / Tableur</button>
+      <button class="tab-btn" onclick="switchImportTab('text')" id="tab-text">📋 Coller du texte</button>
+    </div>
+
+    <!-- Tab PDF IA -->
+    <div id="import-tab-pdf" style="display:none">
+      <div id="pdf-artisan-drop" class="import-zone" onclick="document.getElementById('pdf-artisan-input').click()">
+        <i class="ti ti-file-type-pdf" style="font-size:28px;display:block;margin-bottom:8px;color:#e74c3c" aria-hidden="true"></i>
+        Glissez le PDF du devis artisan ici<br>
+        <span style="font-size:11px;margin-top:4px;display:block">ou cliquez pour parcourir — analyse automatique par IA</span>
+      </div>
+      <input type="file" id="pdf-artisan-input" accept=".pdf" style="display:none" onchange="handlePdfArtisan(this.files[0])">
+      <div id="pdf-artisan-status" style="display:none;margin-top:10px"></div>
+    </div>
+
+    <!-- Tab CSV -->
+    <div id="import-tab-csv">
+      <div class="import-zone" id="drop-zone" onclick="document.getElementById('file-artisan').click()">
+        <i class="ti ti-upload" style="font-size:24px;display:block;margin-bottom:8px" aria-hidden="true"></i>
+        Cliquez ou glissez un fichier CSV / Excel ici<br>
+        <span style="font-size:11px;margin-top:4px;display:block">Colonnes attendues : Désignation | Qté | Unité | PU HT</span>
+      </div>
+      <input type="file" id="file-artisan" accept=".csv,.txt,.xlsx,.xls" style="display:none" onchange="handleImportFile(event)">
+    </div>
+
+    <!-- Tab Texte -->
+    <div id="import-tab-text" style="display:none">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Collez le tableau du devis artisan (séparé par tabulations, points-virgules ou espaces) :</div>
+      <textarea class="import-txt" id="import-txt-area" placeholder="Exemple :&#10;Charpente traditionnelle bois&#9;80&#9;m²&#9;65&#10;Couverture tuile&#9;80&#9;m²&#9;55&#10;Gouttières PVC&#9;20&#9;ml&#9;28"></textarea>
+      <button class="btn btn-accent btn-sm" onclick="parseTextImport()" style="margin-top:8px"><i class="ti ti-table-import" aria-hidden="true"></i>Analyser</button>
+    </div>
+
+    <!-- Preview -->
+    <div id="import-preview" style="display:none;margin-top:14px">
+      <div style="font-size:12px;font-weight:700;color:var(--nav);margin-bottom:6px">Aperçu — <span id="preview-count">0</span> lignes détectées</div>
+      <div style="overflow-x:auto;max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r-md)">
+        <table class="preview-table" id="preview-table">
+          <thead><tr><th>#</th><th>Désignation</th><th>Qté</th><th>Unité</th><th>PU artisan HT (€)</th></tr></thead>
+          <tbody id="preview-tbody"></tbody>
+        </table>
+      </div>
+      <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <label style="font-size:12px;color:var(--text2);font-weight:600">Marge à appliquer (%)</label>
+        <input type="number" id="import-marge" value="20" min="0" max="200" step="1" style="width:70px;padding:5px 8px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:13px;font-family:var(--font-sans);background:var(--bg);text-align:right">
+        <span style="font-size:12px;color:var(--text2)">→ PU client = PU artisan × (1 + marge%)</span>
+      </div>
+    </div>
+
+    <div class="modal-actions" style="margin-top:16px">
+      <button class="btn btn-outline" onclick="closeModal('modal-import-artisan')">Annuler</button>
+      <button class="btn btn-primary" id="btn-confirm-import" onclick="confirmImportArtisan()" style="display:none"><i class="ti ti-check" aria-hidden="true"></i>Importer <span id="import-count-btn">0</span> postes</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"><i class="ti ti-check" aria-hidden="true"></i><span id="toast-msg"></span></div>
 
@@ -484,7 +559,7 @@ window.dispatchEvent(new Event('fbready'));
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
 
 <script>
-const STORAGE_KEY='phenix-chantiers-v2';
+const STORAGE_KEY='phenix-chantiers-v3';
 const LOT_TEMPLATES={
   vrd:[{n:'Débroussaillage / nettoyage',q:1,u:'ff',pu:{eco:800,std:1200,haut:1800}},{n:'Terrassement général (excav.)',q:50,u:'m³',pu:{eco:35,std:50,haut:70}},{n:'Remblai et compactage',q:30,u:'m³',pu:{eco:20,std:30,haut:45}},{n:'Réseau EP (tranchées + fourreaux)',q:1,u:'ff',pu:{eco:1500,std:2500,haut:4000}}],
   go:[{n:'Fondations (semelles filantes)',q:20,u:'ml',pu:{eco:180,std:260,haut:380}},{n:'Murs en parpaing 20cm',q:80,u:'m²',pu:{eco:85,std:120,haut:165}},{n:'Dalle béton armé ep. 20cm',q:60,u:'m²',pu:{eco:90,std:130,haut:180}},{n:'Chaînages + linteaux',q:1,u:'ff',pu:{eco:2000,std:3200,haut:5000}}],
@@ -501,11 +576,18 @@ const LOT_TEMPLATES={
 };
 
 let state={chantiers:[],currentChantier:null,currentLot:null,editingChantierIdx:null};
+let importPreviewData=[];
 
 function loadState(){
   try{
     const saved=localStorage.getItem(STORAGE_KEY);
-    if(saved){state=JSON.parse(saved);if(!state.chantiers)state.chantiers=[];}
+    // Migrate from old key
+    if(!saved){
+      const old=localStorage.getItem('phenix-chantiers-v2');
+      if(old){state=JSON.parse(old);if(!state.chantiers)state.chantiers=[];}
+    } else {
+      state=JSON.parse(saved);if(!state.chantiers)state.chantiers=[];
+    }
   }catch(e){state={chantiers:[],currentChantier:null,currentLot:null,editingChantierIdx:null};}
   initUI();
   updateSyncStatus('ok');
@@ -538,7 +620,7 @@ function exportData(){
   a.href=URL.createObjectURL(blob);
   a.download='Phenix_Sauvegarde_'+date+'.json';
   a.click();
-  showToast('Sauvegarde exportée — transférez ce fichier sur l\'autre appareil');
+  showToast('Sauvegarde exportée');
 }
 
 function importData(event){
@@ -556,7 +638,7 @@ function importData(event){
       state.currentLot=null;
       saveState();
       initUI();
-      showToast(nb+' chantier(s) importé(s) avec succès');
+      showToast(nb+' chantier(s) importé(s)');
     }catch(err){alert('Fichier invalide ou corrompu.');}
   };
   reader.readAsText(file);
@@ -593,7 +675,9 @@ function renderChantierGrid(){
   }
   wrap.innerHTML='';
   state.chantiers.forEach((c,i)=>{
-    const ht=computeChantierHT(c);
+    const {htArtisan,htClient}=computeChantierTotals(c);
+    const margeEur=htClient-htArtisan;
+    const margePct=htArtisan>0?Math.round((margeEur/htArtisan)*100):0;
     const el=document.createElement('div');
     el.className='chantier-card'+(state.currentChantier===i?' selected':'');
     el.innerHTML=`
@@ -603,8 +687,8 @@ function renderChantierGrid(){
       </div>
       <div class="chantier-info">${c.client?c.client+' — ':''} ${c.adresse||''}${c.surface?' · '+c.surface+' m²':''}</div>
       <div class="chantier-info" style="margin-top:2px">${c.phase||''}</div>
-      <div class="chantier-ht">${fmt(ht)} € HT</div>
-      <div style="font-size:11px;color:var(--text3);margin-top:2px">${(c.lots||[]).length} lot(s) • ${fmt(ht*1.2)} € TTC</div>
+      <div class="chantier-ht">${fmt(htClient)} € HT <span style="font-size:13px;color:var(--text3)">client</span></div>
+      <div style="font-size:11px;color:var(--text3);margin-top:2px">${(c.lots||[]).length} lot(s) · Achat artisan : ${fmt(htArtisan)} € · Marge : <strong style="color:${margeEur>=0?'#2D7A4F':'#C0392B'}">${margePct}%</strong></div>
       <div class="chantier-progress"><div class="chantier-progress-inner" style="width:${getProgress(c)}%"></div></div>
       <div style="display:flex;gap:8px;margin-top:14px">
         <button class="btn btn-sm btn-primary" onclick="selectChantier(${i})"><i class="ti ti-calculator" aria-hidden="true"></i>Chiffrer</button>
@@ -621,14 +705,24 @@ function getProgress(c){
   return Math.round((v/c.lots.length)*100);
 }
 
-function computeChantierHT(c){
-  return (c.lots||[]).reduce((s,l)=>{
-    const travHT=(l.postes||[]).reduce((a,p)=>a+(parseFloat(p.q)||0)*(parseFloat(p.pu)||0),0);
-    const aleas=travHT*(parseFloat(l.aleas||5)/100);
-    const hon=travHT*(parseFloat(l.honoraires||12)/100);
-    return s+travHT+aleas+hon;
-  },0);
+function computeChantierTotals(c){
+  let htArtisan=0,htClient=0;
+  (c.lots||[]).forEach(l=>{
+    (l.postes||[]).forEach(p=>{
+      const q=parseFloat(p.q)||0;
+      htArtisan+=q*(parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
+      htClient+=q*(parseFloat(p.puClient)||parseFloat(p.pu)||0);
+    });
+    const base=htClient;
+    const aleas=base*(parseFloat(l.aleas||5)/100);
+    const hon=base*(parseFloat(l.honoraires||5)/100);
+    htClient+=aleas+hon;
+  });
+  return {htArtisan,htClient};
 }
+
+// Legacy compat
+function computeChantierHT(c){return computeChantierTotals(c).htClient;}
 
 function selectChantier(i){
   state.currentChantier=i;
@@ -691,7 +785,7 @@ function renderChiffrage(){
   const idx=state.currentChantier;
   if(idx===null||!state.chantiers[idx]){
     document.getElementById('chiffrage-sub').textContent='Sélectionnez un chantier';
-    document.getElementById('lots-tbody').innerHTML='<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text3)">Aucun chantier sélectionné</td></tr>';
+    document.getElementById('lots-tbody').innerHTML='<tr><td colspan="7" style="padding:24px;text-align:center;color:var(--text3)">Aucun chantier sélectionné</td></tr>';
     updateStats([]);return;
   }
   const c=state.chantiers[idx];
@@ -707,22 +801,29 @@ function renderLotsTable(){
   const q=(document.getElementById('lot-search').value||'').toLowerCase();
   const filtered=q?lots.filter(l=>l.nom.toLowerCase().includes(q)||l.num.toLowerCase().includes(q)):lots;
   const tb=document.getElementById('lots-tbody');
-  if(!filtered.length){tb.innerHTML='<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text3)">Aucun lot — cliquez sur « Nouveau lot »</td></tr>';updateStats(lots);return;}
+  if(!filtered.length){tb.innerHTML='<tr><td colspan="7" style="padding:24px;text-align:center;color:var(--text3)">Aucun lot — cliquez sur « Nouveau lot »</td></tr>';updateStats(lots);return;}
   tb.innerHTML='';
   filtered.forEach((lot,ri)=>{
     const li=lots.indexOf(lot);
-    const travHT=(lot.postes||[]).reduce((a,p)=>a+(parseFloat(p.q)||0)*(parseFloat(p.pu)||0),0);
-    const aleas=travHT*(parseFloat(lot.aleas||5)/100);
-    const hon=travHT*(parseFloat(lot.honoraires||12)/100);
-    const ht=travHT+aleas+hon;
+    let travArtisan=0,travClient=0;
+    (lot.postes||[]).forEach(p=>{
+      const q=parseFloat(p.q)||0;
+      travArtisan+=q*(parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
+      travClient+=q*(parseFloat(p.puClient)||parseFloat(p.pu)||0);
+    });
+    const aleas=travClient*(parseFloat(lot.aleas||5)/100);
+    const hon=travClient*(parseFloat(lot.honoraires||5)/100);
+    const ht=travClient+aleas+hon;
     const tva=parseFloat(lot.tva||20)/100;
     const ttc=ht*(1+tva);
+    const margeEur=travClient-travArtisan;
+    const margePct=travArtisan>0?Math.round((margeEur/travArtisan)*100):0;
     const sc={Chiffrage:'s-chiffrage',Valide:'s-valide',Revision:'s-revision'}[lot.statut||'Chiffrage']||'s-chiffrage';
     const tr=document.createElement('tr');
     tr.innerHTML=`
       <td class="lot-num">${lot.num||''}</td>
-      <td><div class="lot-name">${lot.nom}</div></td>
-      <td class="ht-val">${fmt(ht)} €</td>
+      <td><div class="lot-name">${lot.nom}</div><div style="font-size:10px;color:var(--text3)">Achat artisan : ${fmt(travArtisan)} € HT</div></td>
+      <td class="ht-val">${fmt(ht)} €<br><span class="marge-badge${margeEur<0?' neg':''}">${margePct>=0?'+':''}${margePct}%</span></td>
       <td class="ttc-val">${fmt(ttc)} €</td>
       <td><span class="status-badge ${sc}">${lot.statut||'Chiffrage'}</span></td>
       <td class="row-actions">
@@ -735,19 +836,22 @@ function renderLotsTable(){
 }
 
 function updateStats(lots){
-  let totalHT=0;
+  let totalArtisan=0,totalClient=0;
   lots.forEach(lot=>{
-    const travHT=(lot.postes||[]).reduce((a,p)=>a+(parseFloat(p.q)||0)*(parseFloat(p.pu)||0),0);
-    const aleas=travHT*(parseFloat(lot.aleas||5)/100);
-    const hon=travHT*(parseFloat(lot.honoraires||12)/100);
-    const ht=travHT+aleas+hon;
-    totalHT+=ht;
+    (lot.postes||[]).forEach(p=>{
+      const q=parseFloat(p.q)||0;
+      totalArtisan+=q*(parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
+      totalClient+=q*(parseFloat(p.puClient)||parseFloat(p.pu)||0);
+    });
+    const aleas=totalClient*(parseFloat(lot.aleas||5)/100);
+    const hon=totalClient*(parseFloat(lot.honoraires||5)/100);
+    totalClient+=aleas+hon;
   });
   const valide=lots.filter(l=>l.statut==='Valide').length;
   document.getElementById('stat-lots').textContent=lots.length;
   document.getElementById('stat-lots').nextElementSibling.textContent=valide+' terminé(s)';
-  document.getElementById('stat-ht').textContent=fmt(totalHT)+' €';
-  document.getElementById('stat-ttc').textContent=fmt(totalHT*1.2)+' €';
+  document.getElementById('stat-ht').textContent=fmt(totalClient)+' €';
+  document.getElementById('stat-ttc').textContent=fmt(totalClient*1.2)+' €';
 }
 
 function openNewLotModal(){
@@ -764,8 +868,8 @@ function saveNewLot(){
   const nom=document.getElementById('fl-nom').value.trim();
   if(!nom){alert('Désignation requise');return;}
   const modele=document.getElementById('fl-modele').value;
-  const postes=modele&&LOT_TEMPLATES[modele]?LOT_TEMPLATES[modele].map(p=>({n:p.n,q:p.q,u:p.u,pu:p.pu.std})):[];
-  const lot={num,nom,postes,aleas:5,honoraires:12,tva:20,statut:'Chiffrage',prestation:'std',notes:''};
+  const postes=modele&&LOT_TEMPLATES[modele]?LOT_TEMPLATES[modele].map(p=>({n:p.n,q:p.q,u:p.u,puArtisan:p.pu.std,puClient:Math.round(p.pu.std*1.2),pu:p.pu.std})):[];
+  const lot={num,nom,postes,aleas:5,honoraires:5,tva:20,statut:'Chiffrage',prestation:'std',notes:'',marge:20};
   if(!state.chantiers[state.currentChantier].lots)state.chantiers[state.currentChantier].lots=[];
   state.chantiers[state.currentChantier].lots.push(lot);
   saveState();renderLotsTable();renderChantierGrid();closeModal('modal-lot');showToast('Lot créé');
@@ -785,11 +889,12 @@ function openLotDetail(li){
   document.getElementById('detail-title').textContent=(lot.num?lot.num+' — ':'')+lot.nom;
   document.getElementById('detail-chantier-name').textContent=c.nom+(c.client?' — '+c.client:'');
   document.getElementById('param-aleas').value=lot.aleas||5;
-  document.getElementById('param-honoraires').value=lot.honoraires||12;
+  document.getElementById('param-honoraires').value=lot.honoraires||5;
   document.getElementById('param-statut').value=lot.statut||'Chiffrage';
   document.getElementById('param-notes').value=lot.notes||'';
   document.getElementById('detail-prestation').value=lot.prestation||'std';
   document.getElementById('detail-tva').value=lot.tva||20;
+  document.getElementById('param-marge').value=lot.marge||20;
   document.getElementById('stats-row').style.display='none';
   document.getElementById('lots-table-wrap').style.display='none';
   document.getElementById('lot-detail').style.display='flex';
@@ -812,10 +917,34 @@ function onPrestationChange(){
   lot.prestation=prest;
   lot.postes=(lot.postes||[]).map(p=>{
     const modKey=Object.keys(LOT_TEMPLATES).find(k=>LOT_TEMPLATES[k].some(t=>t.n===p.n));
-    if(modKey){const tmpl=LOT_TEMPLATES[modKey].find(t=>t.n===p.n);if(tmpl&&tmpl.pu[prest])p.pu=tmpl.pu[prest];}
+    if(modKey){
+      const tmpl=LOT_TEMPLATES[modKey].find(t=>t.n===p.n);
+      if(tmpl&&tmpl.pu[prest]){
+        p.puArtisan=tmpl.pu[prest];
+        p.pu=p.puArtisan;
+        const marge=parseFloat(lot.marge||20)/100;
+        p.puClient=Math.round(p.puArtisan*(1+marge));
+      }
+    }
     return p;
   });
   saveState();renderPostes();computeLotTotal();
+}
+
+function applyMargeGlobale(){
+  const li=state.currentLot;
+  if(li===null)return;
+  const lot=state.chantiers[state.currentChantier].lots[li];
+  const marge=parseFloat(document.getElementById('param-marge').value)||0;
+  lot.marge=marge;
+  const coef=1+(marge/100);
+  (lot.postes||[]).forEach(p=>{
+    const artisan=parseFloat(p.puArtisan)||parseFloat(p.pu)||0;
+    p.puArtisan=artisan;
+    p.puClient=Math.round(artisan*coef*100)/100;
+  });
+  saveState();renderPostes();computeLotTotal();
+  showToast('Marge '+marge+'% appliquée sur tous les postes');
 }
 
 function renderPostes(){
@@ -825,14 +954,27 @@ function renderPostes(){
   const tb=document.getElementById('postes-tbody');
   tb.innerHTML='';
   (lot.postes||[]).forEach((p,pi)=>{
-    const total=(parseFloat(p.q)||0)*(parseFloat(p.pu)||0);
+    const artisan=parseFloat(p.puArtisan)||parseFloat(p.pu)||0;
+    const client=parseFloat(p.puClient)||artisan;
+    const q=parseFloat(p.q)||0;
+    const totalClient=q*client;
+    const margeEur=q*(client-artisan);
+    const margePct=artisan>0?Math.round(((client-artisan)/artisan)*100):0;
     const tr=document.createElement('tr');
     tr.innerHTML=`
-      <td><input type="text" value="${p.n||''}" onchange="updatePoste(${pi},'n',this.value)"></td>
-      <td><input type="number" value="${p.q||0}" min="0" step="0.1" style="width:65px" onchange="updatePoste(${pi},'q',this.value)"></td>
-      <td><input type="text" value="${p.u||'u'}" style="width:38px" onchange="updatePoste(${pi},'u',this.value)"></td>
-      <td><input type="number" value="${p.pu||0}" min="0" step="1" onchange="updatePoste(${pi},'pu',this.value)"></td>
-      <td class="poste-total">${fmt(total)} €</td>
+      <td><input type="text" value="${p.n||''}" onchange="updatePoste(${pi},'n',this.value)" style="width:100%"></td>
+      <td><input type="number" value="${q}" min="0" step="0.1" style="width:60px" onchange="updatePoste(${pi},'q',this.value)"></td>
+      <td><input type="text" value="${p.u||'u'}" style="width:36px" onchange="updatePoste(${pi},'u',this.value)"></td>
+      <td style="text-align:right">
+        <input type="number" value="${artisan}" min="0" step="1" style="width:75px;text-align:right;background:var(--surface2)" onchange="updatePoste(${pi},'puArtisan',this.value)" title="Prix achat artisan HT">
+      </td>
+      <td class="pu-client-cell">
+        <input type="number" value="${client}" min="0" step="1" style="width:75px;text-align:right" onchange="updatePoste(${pi},'puClient',this.value)" title="Prix de vente client HT">
+      </td>
+      <td style="text-align:center">
+        <span class="marge-badge${margePct<0?' neg':''}">${margePct>=0?'+':''}${margePct}%</span>
+      </td>
+      <td class="poste-total">${fmt(totalClient)} €</td>
       <td><button class="btn btn-sm btn-danger" onclick="deletePoste(${pi})" style="padding:3px 7px"><i class="ti ti-trash" aria-hidden="true" style="font-size:13px"></i></button></td>`;
     tb.appendChild(tr);
   });
@@ -840,7 +982,17 @@ function renderPostes(){
 
 function updatePoste(pi,field,val){
   const lot=state.chantiers[state.currentChantier].lots[state.currentLot];
-  lot.postes[pi][field]=field==='q'||field==='pu'?parseFloat(val)||0:val;
+  const p=lot.postes[pi];
+  if(field==='q'){p.q=parseFloat(val)||0;}
+  else if(field==='puArtisan'){
+    p.puArtisan=parseFloat(val)||0;
+    p.pu=p.puArtisan;
+    // Auto-update client price based on current marge
+    const marge=parseFloat(lot.marge||20)/100;
+    p.puClient=Math.round(p.puArtisan*(1+marge)*100)/100;
+  }
+  else if(field==='puClient'){p.puClient=parseFloat(val)||0;}
+  else{p[field]=val;}
   renderPostes();computeLotTotal();saveLot();
 }
 
@@ -853,7 +1005,8 @@ function deletePoste(pi){
 function addPoste(){
   const lot=state.chantiers[state.currentChantier].lots[state.currentLot];
   if(!lot.postes)lot.postes=[];
-  lot.postes.push({n:'Nouveau poste',q:1,u:'u',pu:0});
+  const marge=parseFloat(lot.marge||20)/100;
+  lot.postes.push({n:'Nouveau poste',q:1,u:'u',puArtisan:0,puClient:0,pu:0});
   renderPostes();computeLotTotal();saveLot();
 }
 
@@ -861,16 +1014,24 @@ function computeLotTotal(){
   const li=state.currentLot;
   if(li===null)return;
   const lot=state.chantiers[state.currentChantier].lots[li];
-  const travHT=(lot.postes||[]).reduce((a,p)=>a+(parseFloat(p.q)||0)*(parseFloat(p.pu)||0),0);
+  let travArtisan=0,travClient=0;
+  (lot.postes||[]).forEach(p=>{
+    const q=parseFloat(p.q)||0;
+    travArtisan+=q*(parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
+    travClient+=q*(parseFloat(p.puClient)||parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
+  });
   lot.aleas=parseFloat(document.getElementById('param-aleas').value)||0;
   lot.honoraires=parseFloat(document.getElementById('param-honoraires').value)||0;
   lot.tva=parseFloat(document.getElementById('detail-tva').value)||20;
-  const aleas=travHT*(lot.aleas/100);
-  const hon=travHT*(lot.honoraires/100);
-  const ht=travHT+aleas+hon;
+  lot.marge=parseFloat(document.getElementById('param-marge').value)||20;
+  const aleas=travClient*(lot.aleas/100);
+  const hon=travClient*(lot.honoraires/100);
+  const ht=travClient+aleas+hon;
   const tvaAmt=ht*(lot.tva/100);
   const ttc=ht+tvaAmt;
-  document.getElementById('tot-travaux').textContent=fmt(travHT)+' €';
+  const margeEur=travClient-travArtisan;
+  document.getElementById('tot-travaux').textContent=fmt(travClient)+' €';
+  document.getElementById('tot-marge-brute').textContent=fmt(margeEur)+' € (achat : '+fmt(travArtisan)+' €)';
   document.getElementById('tot-aleas').textContent=fmt(aleas)+' €';
   document.getElementById('tot-honoraires').textContent=fmt(hon)+' €';
   document.getElementById('tot-tva').textContent=fmt(tvaAmt)+' € ('+lot.tva+'%)';
@@ -885,6 +1046,232 @@ function saveLot(){
   lot.statut=document.getElementById('param-statut').value;
   lot.notes=document.getElementById('param-notes').value;
   saveState();renderLotsTable();renderChantierGrid();
+}
+
+// === IMPORT DEVIS ARTISAN ===
+function openImportArtisanModal(){
+  if(state.currentLot===null){alert('Ouvrez d\'abord un lot.');return;}
+  importPreviewData=[];
+  document.getElementById('import-preview').style.display='none';
+  document.getElementById('btn-confirm-import').style.display='none';
+  document.getElementById('import-txt-area').value='';
+  document.getElementById('file-artisan').value='';
+  document.getElementById('pdf-artisan-status').style.display='none';
+  // Reset PDF drop zone
+  document.getElementById('pdf-artisan-drop').innerHTML=`<i class="ti ti-file-type-pdf" style="font-size:28px;display:block;margin-bottom:8px;color:#e74c3c" aria-hidden="true"></i>Glissez le PDF du devis artisan ici<br><span style="font-size:11px;margin-top:4px;display:block">ou cliquez pour parcourir — analyse automatique par IA</span>`;
+  switchImportTab('pdf');
+  document.getElementById('modal-import-artisan').classList.add('open');
+
+  // Drag & drop CSV zone
+  const zone=document.getElementById('drop-zone');
+  if(zone){
+    zone.ondragover=(e)=>{e.preventDefault();zone.classList.add('drag');};
+    zone.ondragleave=()=>zone.classList.remove('drag');
+    zone.ondrop=(e)=>{e.preventDefault();zone.classList.remove('drag');const f=e.dataTransfer.files[0];if(f)processImportFile(f);};
+  }
+  // Drag & drop PDF zone
+  const pdfZone=document.getElementById('pdf-artisan-drop');
+  if(pdfZone){
+    pdfZone.ondragover=(e)=>{e.preventDefault();pdfZone.classList.add('drag');};
+    pdfZone.ondragleave=()=>pdfZone.classList.remove('drag');
+    pdfZone.ondrop=(e)=>{e.preventDefault();pdfZone.classList.remove('drag');const f=e.dataTransfer.files[0];if(f)handlePdfArtisan(f);};
+  }
+}
+
+// === IMPORT PDF ARTISAN (IA) ===
+const PROXY_URL = 'https://phenix-proxy.phenixarchitecte.workers.dev';
+
+function handlePdfArtisan(file){
+  if(!file||file.type!=='application/pdf'){showToast('⚠️ Sélectionnez un fichier PDF');return;}
+  const zone=document.getElementById('pdf-artisan-drop');
+  zone.innerHTML=`<i class="ti ti-file-type-pdf" style="font-size:24px;color:#e74c3c;display:block;margin-bottom:6px"></i><strong>${file.name}</strong><br><span style="font-size:11px;color:var(--text3)">${(file.size/1024).toFixed(0)} Ko · <span style="cursor:pointer;color:var(--accent)" onclick="document.getElementById('pdf-artisan-input').click()">Changer</span></span><input type="file" id="pdf-artisan-input" accept=".pdf" style="display:none" onchange="handlePdfArtisan(this.files[0])">`;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const base64=e.target.result.split(',')[1];
+    analyzePdfArtisan(base64);
+  };
+  reader.readAsDataURL(file);
+}
+
+async function analyzePdfArtisan(base64){
+  const status=document.getElementById('pdf-artisan-status');
+  document.getElementById('import-preview').style.display='none';
+  document.getElementById('btn-confirm-import').style.display='none';
+  importPreviewData=[];
+  status.style.display='block';
+  status.innerHTML=`<div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--accent2);background:var(--accent-bg);border:1.5px solid var(--accent);border-radius:var(--r-md);padding:12px 14px"><div class="ai-loading"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div></div> Analyse du devis artisan en cours…</div>`;
+  try{
+    const res=await fetch(PROXY_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-haiku-4-5-20251001',
+        max_tokens:4000,
+        metadata:{user_id:'chiffrage-import-pdf'},
+        system:`Tu es un assistant spécialisé dans l'analyse de devis du bâtiment français.
+Analyse le devis artisan fourni et extrais TOUTES les lignes de prestations.
+Retourne UNIQUEMENT un JSON valide, sans markdown, sans texte avant ou après :
+{"postes":[{"n":"Désignation complète de la prestation","q":1.0,"u":"m²","pu":150.00},...]}
+
+RÈGLES STRICTES :
+- "n" : désignation complète (libellé de la ligne)
+- "q" : quantité numérique (ex: 80, 12.5) — si non trouvée mettre 1
+- "u" : unité (m², ml, m³, u, ff, h, kg, ens, forfait…) — normaliser en minuscules
+- "pu" : prix unitaire HT en euros (nombre décimal, ex: 65.00) — si non trouvé mettre 0
+- Ignorer les lignes de titre/sous-total/total/TVA/mentions légales
+- Inclure TOUTES les lignes de prestations, même celles sans prix
+- Si une ligne a un montant total mais pas de PU : diviser montant/qté pour obtenir PU
+- Utiliser le point comme séparateur décimal`,
+        messages:[{
+          role:'user',
+          content:[
+            {type:'document',source:{type:'base64',media_type:'application/pdf',data:base64}},
+            {type:'text',text:'Extrais toutes les lignes de prestations de ce devis artisan au format JSON demandé.'}
+          ]
+        }]
+      })
+    });
+    if(!res.ok){const err=await res.text().catch(()=>'');throw new Error(`Proxy HTTP ${res.status}: ${err.slice(0,200)}`);}
+    const data=await res.json();
+    if(data.error)throw new Error(data.error.message||JSON.stringify(data.error));
+    const text=(data.content||[]).map(b=>b.text||'').join('');
+    let parsed;
+    try{parsed=JSON.parse(text.replace(/```json|```/g,'').trim());}
+    catch(pe){throw new Error('Réponse IA non parseable : '+text.slice(0,200));}
+    if(!parsed.postes||!parsed.postes.length)throw new Error('Aucun poste détecté dans le PDF');
+    status.style.display='none';
+    showImportPreview(parsed.postes.map(p=>({
+      n:p.n||'',
+      q:parseFloat(p.q)||1,
+      u:p.u||'u',
+      puArtisan:parseFloat(p.pu)||0
+    })));
+    showToast('✓ '+parsed.postes.length+' postes extraits par l\'IA');
+  }catch(err){
+    console.error('analyzePdfArtisan error:',err);
+    status.innerHTML=`<div style="background:var(--danger-bg);border:1.5px solid var(--danger);border-radius:var(--r-md);padding:12px 14px;font-size:13px;color:var(--danger)">
+      ⚠️ Erreur d'analyse : ${err.message}<br>
+      <span style="font-size:11px;margin-top:4px;display:block;color:var(--text2)">Essayez l'onglet CSV ou Coller du texte.</span>
+    </div>`;
+  }
+}
+
+function switchImportTab(tab){
+  document.getElementById('import-tab-pdf').style.display=tab==='pdf'?'':'none';
+  document.getElementById('import-tab-csv').style.display=tab==='csv'?'':'none';
+  document.getElementById('import-tab-text').style.display=tab==='text'?'':'none';
+  document.getElementById('tab-pdf').className='tab-btn'+(tab==='pdf'?' active':'');
+  document.getElementById('tab-csv').className='tab-btn'+(tab==='csv'?' active':'');
+  document.getElementById('tab-text').className='tab-btn'+(tab==='text'?' active':'');
+}
+
+function handleImportFile(event){
+  const f=event.target.files[0];
+  if(f)processImportFile(f);
+}
+
+function processImportFile(file){
+  const reader=new FileReader();
+  reader.onload=function(e){
+    const text=e.target.result;
+    const rows=parseRawText(text);
+    showImportPreview(rows);
+  };
+  reader.readAsText(file,'UTF-8');
+}
+
+function parseTextImport(){
+  const text=document.getElementById('import-txt-area').value;
+  if(!text.trim()){alert('Collez du texte d\'abord.');return;}
+  const rows=parseRawText(text);
+  showImportPreview(rows);
+}
+
+function parseRawText(text){
+  // Detect separator: tab, semicolon, comma
+  const lines=text.split(/\r?\n/).filter(l=>l.trim());
+  const rows=[];
+  for(const line of lines){
+    let parts;
+    if(line.includes('\t'))parts=line.split('\t');
+    else if(line.includes(';'))parts=line.split(';');
+    else if(line.includes(','))parts=line.split(',');
+    else parts=line.split(/\s{2,}/); // multi-space
+    parts=parts.map(p=>p.trim().replace(/^"|"$/g,'').trim());
+    if(parts.length<1||!parts[0])continue;
+
+    // Try to extract numbers from parts
+    const nums=parts.map(p=>parseFloat(p.replace(/\s/g,'').replace(',','.'))).filter(v=>!isNaN(v)&&v>0);
+    const texts=parts.filter(p=>isNaN(parseFloat(p.replace(/\s/g,'').replace(',','.')))&&p.length>0);
+    
+    // Skip header-like lines
+    const firstLower=parts[0].toLowerCase();
+    if(['désignation','description','libellé','poste','n°','ref','qty','qté','pu','prix'].some(h=>firstLower===h))continue;
+
+    let designation=texts[0]||parts[0]||'';
+    let qte=1,unite='u',pu=0;
+
+    // Heuristic: last number is usually PU, second-to-last is QTE
+    // Units: m², ml, m, ff, u, h, kg, etc.
+    const unitPatterns=['m²','m2','ml','m','ff','u','h','kg','l','t','st','m3','m³','ens','ens.','forfait','lot'];
+    let unitIdx=-1;
+    for(let i=0;i<parts.length;i++){
+      if(unitPatterns.includes(parts[i].toLowerCase())){unitIdx=i;break;}
+    }
+    if(unitIdx>-1){unite=parts[unitIdx];}
+
+    if(nums.length>=2){
+      qte=nums[0];
+      pu=nums[nums.length-1];
+    } else if(nums.length===1){
+      pu=nums[0];
+    }
+
+    if(!designation||designation.length<2)continue;
+    rows.push({n:designation,q:qte,u:unite,puArtisan:pu});
+  }
+  return rows;
+}
+
+function showImportPreview(rows){
+  importPreviewData=rows;
+  const marge=parseFloat(document.getElementById('import-marge').value)||20;
+  document.getElementById('preview-count').textContent=rows.length;
+  const tb=document.getElementById('preview-tbody');
+  tb.innerHTML='';
+  rows.forEach((r,i)=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td style="color:var(--text3)">${i+1}</td>
+      <td><input type="text" value="${r.n}" onchange="importPreviewData[${i}].n=this.value" style="width:100%;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit"></td>
+      <td><input type="number" value="${r.q}" min="0" step="0.1" style="width:55px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit" onchange="importPreviewData[${i}].q=parseFloat(this.value)||0"></td>
+      <td><input type="text" value="${r.u}" style="width:38px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit" onchange="importPreviewData[${i}].u=this.value"></td>
+      <td><input type="number" value="${r.puArtisan}" min="0" step="0.01" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;text-align:right" onchange="importPreviewData[${i}].puArtisan=parseFloat(this.value)||0"></td>`;
+    tb.appendChild(tr);
+  });
+  document.getElementById('import-preview').style.display=rows.length?'':'none';
+  document.getElementById('btn-confirm-import').style.display=rows.length?'':'none';
+  document.getElementById('import-count-btn').textContent=rows.length;
+  if(!rows.length)showToast('Aucune ligne détectée — vérifiez le format');
+}
+
+function confirmImportArtisan(){
+  const marge=parseFloat(document.getElementById('import-marge').value)||20;
+  const coef=1+(marge/100);
+  const lot=state.chantiers[state.currentChantier].lots[state.currentLot];
+  const newPostes=importPreviewData.map(r=>({
+    n:r.n,q:r.q||1,u:r.u||'u',
+    puArtisan:r.puArtisan||0,
+    puClient:Math.round((r.puArtisan||0)*coef*100)/100,
+    pu:r.puArtisan||0
+  }));
+  lot.postes=[...(lot.postes||[]),...newPostes];
+  lot.marge=marge;
+  document.getElementById('param-marge').value=marge;
+  saveState();
+  renderPostes();
+  computeLotTotal();
+  closeModal('modal-import-artisan');
+  showToast(newPostes.length+' postes importés — marge '+marge+'% appliquée');
 }
 
 // === EXPORT ===
@@ -904,17 +1291,27 @@ function exportCSVFull(){
 
 function exportCSVForChantier(idx){
   const c=state.chantiers[idx];
-  let csv='LOT;Désignation;Poste;Qté;Unité;PU HT;Total HT poste;Total HT lot;TVA%;Total TTC lot\n';
+  let csv='LOT;Désignation;Poste;Qté;Unité;PU Artisan HT;PU Client HT;Total Client HT poste;Marge%;Total Client HT lot;TVA%;Total TTC lot\n';
   (c.lots||[]).forEach(lot=>{
-    const travHT=(lot.postes||[]).reduce((a,p)=>a+(parseFloat(p.q)||0)*(parseFloat(p.pu)||0),0);
-    const aleas=travHT*(parseFloat(lot.aleas||5)/100);
-    const hon=travHT*(parseFloat(lot.honoraires||12)/100);
-    const ht=travHT+aleas+hon;
+    let travArtisan=0,travClient=0;
+    (lot.postes||[]).forEach(p=>{
+      const q=parseFloat(p.q)||0;
+      travArtisan+=q*(parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
+      travClient+=q*(parseFloat(p.puClient)||parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
+    });
+    const aleas=travClient*(parseFloat(lot.aleas||5)/100);
+    const hon=travClient*(parseFloat(lot.honoraires||5)/100);
+    const ht=travClient+aleas+hon;
     const tva=parseFloat(lot.tva||20);
     const ttc=ht*(1+tva/100);
+    const margePct=travArtisan>0?Math.round(((travClient-travArtisan)/travArtisan)*100):0;
     (lot.postes||[]).forEach((p,i)=>{
-      const ptot=(parseFloat(p.q)||0)*(parseFloat(p.pu)||0);
-      csv+=`"${lot.num||''}";"${lot.nom}";"${p.n||''}";${p.q||0};"${p.u||'u'}";${p.pu||0};${ptot.toFixed(2)};${i===0?ht.toFixed(2):''};"${i===0?tva+'%':''}";"${i===0?ttc.toFixed(2):''}"\n`;
+      const q=parseFloat(p.q)||0;
+      const art=parseFloat(p.puArtisan)||parseFloat(p.pu)||0;
+      const cli=parseFloat(p.puClient)||art;
+      const ptot=q*cli;
+      const pmarge=art>0?Math.round(((cli-art)/art)*100):0;
+      csv+=`"${lot.num||''}";"${lot.nom}";"${p.n||''}";${q};"${p.u||'u'}";${art.toFixed(2)};${cli.toFixed(2)};${ptot.toFixed(2)};${pmarge}%;${i===0?ht.toFixed(2):''};"${i===0?tva+'%':''}";${i===0?ttc.toFixed(2):''}\n`;
     });
   });
   const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
@@ -928,71 +1325,57 @@ function exportPDF(){
   const ci=idx!==null?idx:(selIdx!==''?parseInt(selIdx):null);
   if(ci===null){alert('Sélectionnez un chantier');return;}
   const c=state.chantiers[ci];
-  let totalHT=0;let totalTTC=0;
+  let totalArtisan=0,totalClient=0,totalTTC=0;
   let lotsHTML=(c.lots||[]).map(lot=>{
-    const travHT=(lot.postes||[]).reduce((a,p)=>a+(parseFloat(p.q)||0)*(parseFloat(p.pu)||0),0);
-    const aleas=travHT*(parseFloat(lot.aleas||5)/100);
-    const hon=travHT*(parseFloat(lot.honoraires||12)/100);
-    const ht=travHT+aleas+hon;
+    let travArtisan=0,travClient=0;
+    (lot.postes||[]).forEach(p=>{
+      const q=parseFloat(p.q)||0;
+      travArtisan+=q*(parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
+      travClient+=q*(parseFloat(p.puClient)||parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
+    });
+    const aleas=travClient*(parseFloat(lot.aleas||5)/100);
+    const hon=travClient*(parseFloat(lot.honoraires||5)/100);
+    const ht=travClient+aleas+hon;
     const tva=parseFloat(lot.tva||20);
     const ttc=ht*(1+tva/100);
-    totalHT+=ht;totalTTC+=ttc;
-    return `<tr><td>${lot.num||''}</td><td>${lot.nom}</td><td style="text-align:right">${fmt(travHT)} €</td><td style="text-align:right">${lot.aleas||5}%</td><td style="text-align:right">${lot.honoraires||12}%</td><td style="text-align:right">${tva}%</td><td style="text-align:right"><strong>${fmt(ttc)} €</strong></td></tr>`;
+    const margePct=travArtisan>0?Math.round(((travClient-travArtisan)/travArtisan)*100):0;
+    totalArtisan+=travArtisan;totalClient+=ht;totalTTC+=ttc;
+    // Postes détail
+    const postesRows=(lot.postes||[]).map(p=>{
+      const q=parseFloat(p.q)||0;
+      const cli=parseFloat(p.puClient)||parseFloat(p.puArtisan)||parseFloat(p.pu)||0;
+      return `<tr style="font-size:11px"><td style="padding:4px 8px;padding-left:20px;color:#4A6080">${p.n||''}</td><td style="text-align:right;padding:4px 8px">${q} ${p.u||''}</td><td style="text-align:right;padding:4px 8px">${fmt(cli)} €</td><td style="text-align:right;padding:4px 8px">${fmt(q*cli)} €</td></tr>`;
+    }).join('');
+    return `<tr style="background:#1B2D5B;color:white"><td style="padding:8px 10px;font-weight:bold">${lot.num||''} — ${lot.nom}</td><td colspan="2" style="text-align:right;padding:8px 10px;font-size:11px">Marge : +${margePct}%</td><td style="text-align:right;padding:8px 10px;font-weight:bold">${fmt(ttc)} € TTC</td></tr>${postesRows}`;
   }).join('');
-  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Estimation — ${c.nom}</title><style>
+
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Devis Client — ${c.nom}</title><style>
 body{font-family:Georgia,serif;color:#0F1E3D;margin:0;padding:30px 40px;font-size:13px}
 h1{font-size:26px;color:#1B2D5B;margin-bottom:2px}.sub{color:#4A6080;font-size:12px;margin-bottom:20px}
 .header{border-bottom:2px solid #4A9CC7;padding-bottom:16px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:flex-end}
 .logo{font-size:20px;color:#1B2D5B;font-weight:bold}.logo-sub{font-size:10px;color:#4A6080;letter-spacing:2px;text-transform:uppercase}
-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:16px}
+table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
 th{background:#1B2D5B;color:#4A9CC7;padding:8px 10px;text-align:left;font-size:11px}
-td{padding:8px 10px;border-bottom:1px solid #C8D8E8}tr:nth-child(even) td{background:#F0F4F8}
-.total-row{background:#1B2D5B!important;color:white;font-size:14px;font-weight:bold}
-.total-row td{color:white;border:none;padding:12px 10px}
-.info{margin-bottom:20px;display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.info-item{font-size:12px}.info-label{color:#4A6080;font-size:10px;text-transform:uppercase;letter-spacing:1px}
+td{padding:6px 10px;border-bottom:1px solid #C8D8E8}tr:nth-child(even) td{background:#F0F4F8}
+.total-row td{background:#1B2D5B;color:white;font-size:14px;font-weight:bold;border:none;padding:12px 10px}
 .footer{margin-top:40px;border-top:1px solid #C8D8E8;padding-top:12px;font-size:10px;color:#8BA5C0;text-align:center}
+@media print{body{padding:15px 20px}}
 </style></head><body>
-<div class="header"><div><div class="logo">Phénix-Architecte</div><div class="logo-sub">Maître d'œuvre · Architecte DE</div></div><div style="text-align:right;font-size:11px;color:#8a8a8a">Estimation APS/APD<br>${new Date().toLocaleDateString('fr-FR')}</div></div>
+<div class="header"><div><div class="logo">Phénix-Conception</div><div class="logo-sub">Contractant Général · Maître d'Œuvre</div></div><div style="text-align:right;font-size:11px;color:#8a8a8a">DEVIS CLIENT<br>${new Date().toLocaleDateString('fr-FR')}</div></div>
 <h1>${c.nom}</h1><div class="sub">${c.client?'Client : '+c.client+' — ':''}${c.adresse||''}${c.surface?' · '+c.surface+' m²':''} · Phase : ${c.phase||'APS'}</div>
-<table><thead><tr><th>Lot</th><th>Désignation</th><th>Travaux HT</th><th>Aléas</th><th>Honoraires</th><th>TVA</th><th>Total TTC</th></tr></thead>
-<tbody>${lotsHTML}<tr class="total-row"><td colspan="6">TOTAL GÉNÉRAL</td><td>${fmt(totalTTC)} €</td></tr></tbody></table>
-<div class="footer">Phénix-Architecte — Estimation indicative, non contractuelle — ${new Date().toLocaleDateString('fr-FR')} — Prix base Auvergne 2025</div>
+<table><thead><tr><th>Désignation</th><th style="text-align:right">Qté / Unité</th><th style="text-align:right">PU HT</th><th style="text-align:right">Total HT</th></tr></thead>
+<tbody>${lotsHTML}<tr class="total-row"><td colspan="3">TOTAL GÉNÉRAL TTC</td><td style="text-align:right">${fmt(totalTTC)} €</td></tr><tr class="total-row" style="font-size:12px"><td colspan="3" style="opacity:.8">dont Total HT</td><td style="text-align:right;opacity:.8">${fmt(totalClient)} €</td></tr></tbody></table>
+<div class="footer">Phénix-Conception — Devis indicatif — ${new Date().toLocaleDateString('fr-FR')} — Valable 3 mois</div>
 </body></html>`;
   const w=window.open('','_blank');w.document.write(html);w.document.close();
   setTimeout(()=>w.print(),500);
-  showToast('PDF généré — impression ouverte');
+  showToast('Devis client PDF généré');
 }
 
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 function fmt(n){return Math.round(n).toLocaleString('fr-FR');}
 
 loadState();
-/* ===== Synchronisation cloud (Firestore) ===== */
-let _uid=null,_unsub=null,_lastJson=null,_first=true;
-function _cloudChantiers(d){try{return d&&d.json?(JSON.parse(d.json).chantiers||[]):[];}catch(e){return[];}}
-function _applyCloud(d){if(d&&d.json&&d.json!==_lastJson){_lastJson=d.json;try{const o=JSON.parse(d.json);state.chantiers=o.chantiers||[];initUI();updateSyncStatus('ok');}catch(e){}}}
-function _pushCloud(){if(_uid&&window._fb){const j=JSON.stringify({chantiers:state.chantiers});_lastJson=j;window._fb.save(j);updateSyncStatus('ok');}}
-function initCloud(){if(!window._auth)return;window._auth.onChange(u=>{_uid=u||null;
-  if(_unsub){_unsub();_unsub=null;}_first=true;
-  if(!u)return;
-  _unsub=window._fb.listen(d=>{
-   if(_first){_first=false;
-    const cloudFull=_cloudChantiers(d).length>0,localFull=(state.chantiers||[]).length>0;
-    if(cloudFull&&localFull&&d.json!==JSON.stringify({chantiers:state.chantiers})){
-      if(confirm('Des données existent sur cet appareil ET dans le cloud.\n\nOK : charger le cloud (remplace cet appareil).\nAnnuler : garder cet appareil et l\'envoyer au cloud.'))_applyCloud(d);else _pushCloud();
-    }else if(cloudFull){_applyCloud(d);}
-    else if(localFull){_pushCloud();}
-   }else _applyCloud(d);
-  });
-});}
-window.addEventListener('fbready',initCloud);if(window._auth)initCloud();
-var _origSave=saveState;saveState=function(){_origSave.apply(this,arguments);_pushCloud();};
-function _authMsg(x){const c=(x&&x.code)||'';return (c.includes('invalid-credential')||c.includes('wrong-password')||c.includes('user-not-found'))?'E-mail ou mot de passe incorrect.':c.includes('operation-not-allowed')?'Active « E-mail/Mot de passe » dans Firebase → Authentication.':c.includes('invalid-email')?'E-mail invalide.':c.includes('too-many-requests')?'Trop de tentatives, réessaie plus tard.':c.includes('network')?'Pas de connexion internet.':('Erreur : '+(c||(x&&x.message)||''));}
-(function(){const g=id=>document.getElementById(id);
- const lb=g('pl-btn');if(lb)lb.onclick=()=>{const e=g('pl-email').value.trim(),p=g('pl-pwd').value,er=g('pl-err');if(er)er.textContent='';if(!window._auth){if(er)er.textContent='Firebase indisponible (hors ligne ou domaine non autorisé).';return;}window._auth.login(e,p).catch(x=>{if(er)er.textContent=_authMsg(x);});};
- const su=g('pl-signup');if(su)su.onclick=()=>{const e=g('pl-email').value.trim(),p=g('pl-pwd').value,er=g('pl-err');if(er)er.textContent='';if(!window._auth)return;window._auth.signup(e,p).catch(x=>{if(er)er.textContent=_authMsg(x);});};
- const off=g('pl-offline');if(off)off.onclick=()=>{const ov=g('patri-login');if(ov)ov.style.display='none';};})();
 </script>
 </body>
 </html>
