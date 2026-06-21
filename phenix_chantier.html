@@ -408,30 +408,28 @@ window._auth = {
 window.phenixDoLogin = function(){
   const email = (document.getElementById('pl-email').value || '').trim();
   const pwd   = document.getElementById('pl-pwd').value || '';
-  const err   = document.getElementById('pl-err'); if (err) { err.style.color='#FFB4A8'; err.textContent = ''; }
-  const btn   = document.getElementById('pl-btn'); if (btn) btn.disabled = true;
+  const err   = document.getElementById('pl-err'); if(err){err.style.color='#FFB4A8';err.textContent='';}
+  const btn   = document.getElementById('pl-btn'); if(btn) btn.disabled = true;
   window._auth.login(email, pwd).then(cred => {
-    // Stocker credentials pour connexion auto par empreinte
-    if(pwd) localStorage.setItem('chantier_bio_creds', btoa(email + '|||' + pwd));
-    // Proposer enrôlement si dispo et pas encore fait
+    if(pwd) localStorage.setItem('chantier_bio_creds', btoa(email+'|||'+pwd));
     if(!localStorage.getItem('chantier_bio_credId') && window.PublicKeyCredential){
-      PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(ok => {
+      PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(ok=>{
         if(ok){
-          const wrap = document.getElementById('pl-enroll-wrap');
-          if(wrap){ wrap.style.display='block'; document.getElementById('pl-enroll-btn').onclick = () => chantierBioEnroll(cred.user); }
+          const wrap=document.getElementById('pl-enroll-wrap');
+          if(wrap){wrap.style.display='block';document.getElementById('pl-enroll-btn').onclick=()=>chantierBioEnroll(cred.user);}
         }
       });
     }
   }).catch(e => {
     const c = (e && e.code) || '';
-    if (err) err.textContent =
-      (c.indexOf('invalid-credential')>=0 || c.indexOf('wrong-password')>=0 || c.indexOf('user-not-found')>=0) ? 'E-mail ou mot de passe incorrect.' :
-      c.indexOf('operation-not-allowed')>=0 ? "Activez « E-mail/Mot de passe » dans Firebase → Authentication." :
+    if(err) err.textContent =
+      (c.indexOf('invalid-credential')>=0||c.indexOf('wrong-password')>=0||c.indexOf('user-not-found')>=0) ? 'E-mail ou mot de passe incorrect.' :
+      c.indexOf('operation-not-allowed')>=0 ? "Activez E-mail/Mot de passe dans Firebase." :
       c.indexOf('invalid-email')>=0 ? 'E-mail invalide.' :
       c.indexOf('too-many-requests')>=0 ? 'Trop de tentatives, réessayez plus tard.' :
       c.indexOf('network')>=0 ? 'Pas de connexion internet.' :
-      ('Erreur : ' + (c || (e && e.message) || ''));
-  }).finally(() => { if (btn) btn.disabled = false; });
+      ('Erreur : '+(c||(e&&e.message)||''));
+  }).finally(()=>{ if(btn) btn.disabled=false; });
 };
 let _phenixDispatched = false;
 onAuthStateChanged(auth, user => {
@@ -1763,37 +1761,29 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
   <div style="background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.18);border-radius:16px;padding:34px 28px;max-width:360px;width:100%;text-align:center">
     <div style="font-family:'DM Serif Display',Georgia,serif;font-size:30px;color:#fff;margin-bottom:4px">Phénix<span style="color:#7DC6E8">-Chantier</span></div>
     <div style="font-size:11px;color:rgba(255,255,255,.5);letter-spacing:.12em;text-transform:uppercase;margin-bottom:26px">Connexion sécurisée</div>
-
-    <!-- BOUTON BIOMÉTRIE -->
     <div id="pl-bio-wrap" style="display:none;margin-bottom:16px">
       <button id="pl-bio-btn" onclick="chantierBioLogin()" style="width:100%;padding:14px;border:2px solid rgba(77,184,232,.6);border-radius:9px;background:rgba(77,184,232,.12);color:#7DC6E8;font-size:15px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px">
-        <span style="font-size:24px">☝️</span>
-        <span id="pl-bio-label">Se connecter avec empreinte</span>
+        <span style="font-size:24px">☝️</span><span id="pl-bio-label">Se connecter avec empreinte</span>
       </button>
-      <div style="display:flex;align-items:center;gap:10px;margin-top:14px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:10px;margin:14px 0">
         <div style="flex:1;height:1px;background:rgba(255,255,255,.15)"></div>
-        <span style="font-size:11px;color:rgba(255,255,255,.35);letter-spacing:.08em">ou par mot de passe</span>
+        <span style="font-size:11px;color:rgba(255,255,255,.35)">ou par mot de passe</span>
         <div style="flex:1;height:1px;background:rgba(255,255,255,.15)"></div>
       </div>
     </div>
-
-    <!-- FORMULAIRE EMAIL — toujours visible -->
     <input id="pl-email" type="email" autocomplete="username" placeholder="E-mail" style="width:100%;padding:12px 14px;margin-bottom:10px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.95);font-size:14px;outline:none">
-    <input id="pl-pwd" type="password" autocomplete="current-password" placeholder="Mot de passe" onkeydown="if(event.key==='Enter')phenixDoLogin()" style="width:100%;padding:12px 14px;margin-bottom:14px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.95);font-size:14px;outline:none">
+    <input id="pl-pwd" type="password" autocomplete="current-password" placeholder="Mot de passe" onkeydown="if(event.key===&quot;Enter&quot;)phenixDoLogin()" style="width:100%;padding:12px 14px;margin-bottom:14px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.95);font-size:14px;outline:none">
     <button id="pl-btn" onclick="phenixDoLogin()" style="width:100%;padding:12px;border:none;border-radius:9px;background:linear-gradient(135deg,#4A9CC7,#2A5298);color:#fff;font-size:15px;font-weight:600;cursor:pointer">Se connecter</button>
     <div id="pl-err" style="color:#FFB4A8;font-size:12.5px;margin-top:12px;min-height:16px"></div>
-
-    <!-- ENRÔLEMENT -->
     <div id="pl-enroll-wrap" style="display:none;margin-top:16px;padding:14px;background:rgba(77,184,232,.1);border:1.5px solid rgba(77,184,232,.3);border-radius:9px;text-align:left">
       <div style="font-size:13px;color:#7DC6E8;font-weight:600;margin-bottom:6px">☝️ Activer la connexion par empreinte ?</div>
       <div style="font-size:11px;color:rgba(255,255,255,.55);margin-bottom:12px">Votre empreinte restera stockée uniquement sur cet appareil.</div>
       <div style="display:flex;gap:8px">
         <button id="pl-enroll-btn" style="flex:1;padding:9px;border:none;border-radius:7px;background:linear-gradient(135deg,#4A9CC7,#2A5298);color:#fff;font-size:13px;font-weight:600;cursor:pointer">Activer</button>
-        <button onclick="document.getElementById('pl-enroll-wrap').style.display='none'" style="flex:1;padding:9px;border:1.5px solid rgba(255,255,255,.2);border-radius:7px;background:transparent;color:rgba(255,255,255,.6);font-size:13px;cursor:pointer">Plus tard</button>
+        <button onclick="document.getElementById(&quot;pl-enroll-wrap&quot;).style.display=&quot;none&quot;" style="flex:1;padding:9px;border:1.5px solid rgba(255,255,255,.2);border-radius:7px;background:transparent;color:rgba(255,255,255,.6);font-size:13px;cursor:pointer">Plus tard</button>
       </div>
     </div>
-
-    <button onclick="chantierBioReset()" style="margin-top:12px;background:none;border:none;color:rgba(255,255,255,.22);font-size:11px;cursor:pointer;font-family:inherit;padding:6px;width:100%">🔄 Réinitialiser l'empreinte</button>
+    <button onclick="chantierBioReset()" style="margin-top:12px;background:none;border:none;color:rgba(255,255,255,.22);font-size:11px;cursor:pointer;font-family:inherit;padding:6px;width:100%">🔄 Réinitialiser l&apos;empreinte</button>
   </div>
 </div>
 <div id="app-chantier">
@@ -3133,7 +3123,7 @@ function _buildMissionText() {
 // ── Envoi ────────────────────────────────────────────────────
 function sendMissionWhatsApp() {
   const m = _getActiveMission();
-  if (!m) { toast('⚠️ Enregistrez d'abord la fiche.'); return; }
+  if (!m) { toast('⚠️ Enregistrez d\'abord la fiche.'); return; }
   const inv = state.intervenants.find(i => i.id == m.intervId);
   const tel = (inv && inv.tel || '').replace(/[\s.\-()]/g, '');
   const encoded = encodeURIComponent(_buildMissionText());
@@ -3142,7 +3132,7 @@ function sendMissionWhatsApp() {
 
 function sendMissionEmail() {
   const m = _getActiveMission();
-  if (!m) { toast('⚠️ Enregistrez d'abord la fiche.'); return; }
+  if (!m) { toast('⚠️ Enregistrez d\'abord la fiche.'); return; }
   const inv = state.intervenants.find(i => i.id == m.intervId);
   const ch  = m.chantierId ? state.chantiers.find(c => c.id == m.chantierId) : null;
   const subject = encodeURIComponent(`Fiche Mission — ${m.libelle} — ${ch ? ch.nom : ''}`);
@@ -3152,7 +3142,7 @@ function sendMissionEmail() {
 
 function copyMissionText() {
   const text = _buildMissionText();
-  if (!text) { toast('⚠️ Enregistrez d'abord la fiche.'); return; }
+  if (!text) { toast('⚠️ Enregistrez d\'abord la fiche.'); return; }
   navigator.clipboard.writeText(text)
     .then(() => toast('✅ Message copié !'))
     .catch(() => {
@@ -3165,7 +3155,7 @@ function copyMissionText() {
 
 function printMission() {
   const m = _getActiveMission();
-  if (!m) { toast('⚠️ Enregistrez d'abord la fiche.'); return; }
+  if (!m) { toast('⚠️ Enregistrez d\'abord la fiche.'); return; }
   const win = window.open('', '_blank', 'width=600,height=700');
   win.document.write(`<!DOCTYPE html><html lang="fr"><head>
     <meta charset="UTF-8"><title>Fiche Mission</title>
@@ -3176,122 +3166,7 @@ function printMission() {
       <button onclick="window.print()" style="background:linear-gradient(135deg,#1B2D5B,#2A5298);color:#fff;border:none;padding:9px 18px;border-radius:8px;font-size:13px;cursor:pointer">🖨️ Imprimer / PDF</button>
     </div>
     ${_buildMissionHTML(m)}
-  
-<script>
-// ════════════════════════════════════════════════════════
-//  WEBAUTHN — Empreinte digitale (Phénix Chantier)
-//  Script classique global — pas dans le module Firebase
-// ════════════════════════════════════════════════════════
-var CHANTIER_BIO_KEY   = 'chantier_bio_credId';
-var CHANTIER_BIO_EMAIL = 'chantier_bio_email';
-var CHANTIER_BIO_CREDS = 'chantier_bio_creds';
-
-function _cb64u(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,''); }
-function _cfromb64u(s){ s=s.replace(/-/g,'+').replace(/_/g,'/'); while(s.length%4) s+='='; return Uint8Array.from(atob(s), c=>c.charCodeAt(0)).buffer; }
-
-async function chantierBioInit(){
-  if(!window.PublicKeyCredential) return;
-  var ok = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().catch(function(){ return false; });
-  if(!ok) return;
-  document.getElementById('pl-bio-wrap').style.display = 'block';
-  if(!localStorage.getItem(CHANTIER_BIO_KEY)){
-    document.getElementById('pl-bio-label').textContent = "Activer l'empreinte après connexion";
-    document.getElementById('pl-bio-btn').onclick = function(){ document.getElementById('pl-pwd').focus(); };
-  }
-}
-
-async function chantierBioLogin(){
-  var btn     = document.getElementById('pl-bio-btn');
-  var err     = document.getElementById('pl-err');
-  var credId  = localStorage.getItem(CHANTIER_BIO_KEY);
-  err.textContent = ''; err.style.color = '#FFB4A8';
-  if(!credId){ document.getElementById('pl-pwd').focus(); return; }
-
-  btn.disabled = true;
-  btn.innerHTML = '<span style="font-size:18px">⏳</span><span>Vérification…</span>';
-  try {
-    await navigator.credentials.get({ publicKey:{
-      challenge: crypto.getRandomValues(new Uint8Array(32)),
-      allowCredentials: [{ type:'public-key', id:_cfromb64u(credId), transports:['internal'] }],
-      userVerification: 'required', timeout: 60000
-    }});
-    // ✅ Empreinte OK — connexion Firebase automatique
-    var savedCreds = localStorage.getItem(CHANTIER_BIO_CREDS);
-    if(savedCreds && window._auth){
-      var parts = atob(savedCreds).split('|||');
-      if(parts.length === 2){
-        err.style.color = '#4db8e8';
-        err.textContent = '✓ Connexion en cours…';
-        window._auth.login(parts[0], parts[1]).catch(function(){
-          err.style.color = '#FFB4A8';
-          err.textContent = 'Session expirée — saisissez votre mot de passe.';
-          var em = document.getElementById('pl-email');
-          em.value = parts[0]; em.style.background = '#e8f5e9'; em.readOnly = true;
-          document.getElementById('pl-pwd').focus();
-        });
-        return;
-      }
-    }
-    // Fallback
-    var savedEmail = localStorage.getItem(CHANTIER_BIO_EMAIL) || '';
-    document.getElementById('pl-email').value = savedEmail;
-    document.getElementById('pl-email').style.background = '#e8f5e9';
-    document.getElementById('pl-email').readOnly = true;
-    err.style.color = '#4db8e8';
-    err.textContent = '✓ Empreinte reconnue — saisissez votre mot de passe.';
-    document.getElementById('pl-pwd').focus();
-  } catch(e){
-    if(e.name==='NotAllowedError')       err.textContent = 'Reconnaissance annulée.';
-    else if(e.name==='InvalidStateError') err.textContent = 'Empreinte invalide — cliquez sur 🔄 Réinitialiser.';
-    else err.textContent = '⚠️ ' + e.name + ' : ' + e.message;
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = '<span style="font-size:24px">☝️</span><span id="pl-bio-label">Se connecter avec empreinte</span>';
-  }
-}
-
-async function chantierBioEnroll(user){
-  var err  = document.getElementById('pl-err');
-  var wrap = document.getElementById('pl-enroll-wrap');
-  if(!user){ err.style.color='#FFB4A8'; err.textContent='Session non reconnue — réessayez.'; return; }
-  try {
-    var cred = await navigator.credentials.create({ publicKey:{
-      challenge: crypto.getRandomValues(new Uint8Array(32)),
-      rp: { name:'Phénix-Chantier', id:location.hostname },
-      user: { id:new TextEncoder().encode(user.uid), name:user.email, displayName:'Phénix Chantier' },
-      pubKeyCredParams: [{ type:'public-key', alg:-7 },{ type:'public-key', alg:-257 }],
-      authenticatorSelection: { authenticatorAttachment:'platform', userVerification:'required', residentKey:'discouraged', requireResidentKey:false },
-      timeout: 60000, attestation: 'none'
-    }});
-    localStorage.setItem(CHANTIER_BIO_KEY,   _cb64u(cred.rawId));
-    localStorage.setItem(CHANTIER_BIO_EMAIL,  user.email);
-    var pwd = document.getElementById('pl-pwd').value;
-    if(pwd) localStorage.setItem(CHANTIER_BIO_CREDS, btoa(user.email + '|||' + pwd));
-    wrap.innerHTML = '<div style="color:#7DC6E8;font-size:13px;font-weight:600">✓ Empreinte activée — connexion automatique dès maintenant !</div>';
-    setTimeout(function(){ wrap.style.display='none'; }, 3000);
-  } catch(e){
-    err.style.color = '#FFB4A8';
-    if(e.name==='NotAllowedError') err.textContent = 'Enrôlement annulé.';
-    else err.textContent = 'Erreur enrôlement : ' + e.message;
-  }
-}
-
-function chantierBioReset(){
-  if(!confirm("Supprimer l'empreinte enregistrée ?")) return;
-  localStorage.removeItem(CHANTIER_BIO_KEY);
-  localStorage.removeItem(CHANTIER_BIO_EMAIL);
-  localStorage.removeItem(CHANTIER_BIO_CREDS);
-  document.getElementById('pl-bio-wrap').style.display = 'none';
-  var em = document.getElementById('pl-email');
-  em.value=''; em.readOnly=false; em.style.background='';
-  var err = document.getElementById('pl-err');
-  err.style.color = '#4db8e8';
-  err.textContent = "✓ Empreinte supprimée — reconnectez-vous pour la ré-activer.";
-}
-
-document.addEventListener('DOMContentLoaded', chantierBioInit);
-</script>
-</body></html>`);
+  </body></html>`);
   win.document.close();
 }
 
@@ -3315,7 +3190,7 @@ const CRV_STEPS = [
     id:      'date',
     name:    'Date',
     question:'Quelle est la date de la réunion ?',
-    hint:    'Dites "aujourd'hui", "hier", ou une date. Ex : "lundi 12 juin"',
+    hint:    'Dites "aujourd\'hui", "hier", ou une date. Ex : "lundi 12 juin"',
     type:    'date',
     skippable: false,
   },
@@ -3338,7 +3213,7 @@ const CRV_STEPS = [
   {
     id:      'avancement',
     name:    'Avancement',
-    question:'Décrivez l'avancement des travaux.',
+    question:'Décrivez l\'avancement des travaux.',
     hint:    'Parlez librement. Ex : "La charpente est posée, les menuiseries extérieures sont en cours"',
     type:    'textarea',
     skippable: true,
@@ -3347,7 +3222,7 @@ const CRV_STEPS = [
     id:      'reserves',
     name:    'Réserves',
     question:'Y a-t-il des réserves ou points à lever ?',
-    hint:    'Dites "aucune" s'il n'y en a pas. Sinon décrivez les problèmes constatés.',
+    hint:    'Dites "aucune" s\'il n\'y en a pas. Sinon décrivez les problèmes constatés.',
     type:    'textarea',
     skippable: true,
   },
@@ -3600,13 +3475,13 @@ function _crvProcessAnswer(text) {
     parsed = _crvParseChantier(t);
     if (!parsed) {
       _crvSetStatus('Chantier non trouvé. Réessayez avec le nom exact.');
-      _crvSpeak('Je n'ai pas trouvé ce chantier. Répétez le nom du chantier.');
+      _crvSpeak('Je n\'ai pas trouvé ce chantier. Répétez le nom du chantier.');
       return;
     }
   } else if (s.type === 'date') {
     parsed = _crvParseDate(t);
     if (!parsed && !s.skippable) {
-      _crvSetStatus('Date non comprise. Dites par exemple "aujourd'hui" ou "lundi 15 juin".');
+      _crvSetStatus('Date non comprise. Dites par exemple "aujourd\'hui" ou "lundi 15 juin".');
       _crvSpeak('Date non comprise. Réessayez.');
       return;
     }
@@ -3789,7 +3664,7 @@ function crvConfirmSave() {
 
   // Proposer d'ouvrir le CR pour compléter
   setTimeout(() => {
-    if (confirm('CR vocal enregistré ✓\n\nVoulez-vous l'ouvrir pour ajouter des photos ou des plans ?')) {
+    if (confirm('CR vocal enregistré ✓\n\nVoulez-vous l\'ouvrir pour ajouter des photos ou des plans ?')) {
       openModalCR(cr.id);
     }
   }, 800);
@@ -3893,7 +3768,7 @@ function statChantierBadge(s) {
 }
 function statLotBadge(s) {
   const m = { chiffrage:'badge-gray', ao:'badge-navy', attribue:'badge-blue', en_cours:'badge-amber', termine:'badge-green', reserve:'badge-red' };
-  const l = { chiffrage:'Chiffrage', ao:'Appel d'offres', attribue:'Attribué', en_cours:'En cours', termine:'Terminé', reserve:'Réserves' };
+  const l = { chiffrage:'Chiffrage', ao:'Appel d\'offres', attribue:'Attribué', en_cours:'En cours', termine:'Terminé', reserve:'Réserves' };
   return `<span class="badge ${m[s]||'badge-gray'}">${l[s]||s}</span>`;
 }
 function statFacBadge(s) {
@@ -4167,7 +4042,7 @@ function openModalInterv(id) {
   if (id) {
     const i = state.intervenants.find(x => x.id == id);
     if (!i) return;
-    document.getElementById('mIntervTitle').textContent = 'Modifier l'intervenant';
+    document.getElementById('mIntervTitle').textContent = 'Modifier l\'intervenant';
     document.getElementById('int-nom').value = i.nom;
     document.getElementById('int-metier').value = i.metier;
     document.getElementById('int-contact').value = i.contact || '';
@@ -5286,7 +5161,7 @@ async function exportCRPdfById(id) {
   const cr = state.comptes_rendus.find(x => x.id == id);
   if (!cr) return;
   const ch = state.chantiers.find(c => c.id == cr.chantierId);
-  toast('⏳ Préparation de l'export…');
+  toast('⏳ Préparation de l\'export…');
   // Rendre les pages PDF à la volée si besoin
   if (cr.plans && cr.plans.length && typeof pdfjsLib !== 'undefined') {
     for (const plan of cr.plans) {
@@ -5316,7 +5191,7 @@ async function exportCRPdfById(id) {
 function exportCRPdf() {
   const id = document.getElementById('cr-edit-id').value;
   const cr = id ? state.comptes_rendus.find(x => x.id == id) : null;
-  if (!cr) { toast('⚠️ Enregistrez d'abord le CR.'); return; }
+  if (!cr) { toast('⚠️ Enregistrez d\'abord le CR.'); return; }
   saveCR();
   exportCRPdfById(parseInt(id));
 }
@@ -5717,7 +5592,7 @@ function exportSynthesePDF() {
       svg2 += '</svg>';
       o += svg2;
       o += '<div style="display:flex;gap:12px;font-size:9px;color:#4A6080;margin-top:5px">';
-      o += '<span style="color:#4A9CC7">▬ En cours</span><span style="color:#2D7A4F">▬ Terminé</span><span style="color:#C0392B">▬ En retard</span><span style="color:#4A9CC7">┆ Aujourd'hui</span>';
+      o += '<span style="color:#4A9CC7">▬ En cours</span><span style="color:#2D7A4F">▬ Terminé</span><span style="color:#C0392B">▬ En retard</span><span style="color:#4A9CC7">┆ Aujourd\'hui</span>';
       o += '</div></div>';
     }
 
@@ -5908,6 +5783,70 @@ document.querySelectorAll('#chantierSidebar .nav-item').forEach(el => {
 function switchApp(target) {
   if (target === 'dossier') window.location.href = 'phenix_dossier.html';
 }
+</script>
+
+<script>
+/* WebAuthn biométrie — Phénix Chantier */
+var CHANTIER_BIO_KEY='chantier_bio_credId',CHANTIER_BIO_EMAIL='chantier_bio_email',CHANTIER_BIO_CREDS='chantier_bio_creds';
+function _cb64u(b){return btoa(String.fromCharCode(...new Uint8Array(b))).replace(/[+]/g,'-').replace(/[/]/g,'_').replace(/=/g,'');}
+function _cfromb64u(s){s=s.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';return Uint8Array.from(atob(s),c=>c.charCodeAt(0)).buffer;}
+async function chantierBioInit(){
+  if(!window.PublicKeyCredential)return;
+  var ok=await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().catch(()=>false);
+  if(!ok)return;
+  var w=document.getElementById('pl-bio-wrap');if(w)w.style.display='block';
+  if(!localStorage.getItem(CHANTIER_BIO_KEY)){
+    var l=document.getElementById('pl-bio-label');if(l)l.textContent="Activer l'empreinte après connexion";
+    var b=document.getElementById('pl-bio-btn');if(b)b.onclick=()=>{var p=document.getElementById('pl-pwd');if(p)p.focus();};
+  }
+}
+async function chantierBioLogin(){
+  var btn=document.getElementById('pl-bio-btn'),err=document.getElementById('pl-err');
+  var credId=localStorage.getItem(CHANTIER_BIO_KEY);
+  if(err){err.textContent='';err.style.color='#FFB4A8';}
+  if(!credId){var p=document.getElementById('pl-pwd');if(p)p.focus();return;}
+  if(btn){btn.disabled=true;btn.innerHTML='<span style="font-size:18px">⏳</span><span>Vérification…</span>';}
+  try{
+    await navigator.credentials.get({publicKey:{challenge:crypto.getRandomValues(new Uint8Array(32)),allowCredentials:[{type:'public-key',id:_cfromb64u(credId),transports:['internal']}],userVerification:'required',timeout:60000}});
+    var sc=localStorage.getItem(CHANTIER_BIO_CREDS);
+    if(sc&&window._auth){var pts=atob(sc).split('|||');if(pts.length===2){if(err){err.style.color='#4db8e8';err.textContent='✓ Connexion en cours…';}window._auth.login(pts[0],pts[1]).catch(()=>{if(err){err.style.color='#FFB4A8';err.textContent='Session expirée — saisissez votre mot de passe.';}var em=document.getElementById('pl-email');if(em){em.value=pts[0];em.style.background='#e8f5e9';em.readOnly=true;}});return;}}
+    var se=localStorage.getItem(CHANTIER_BIO_EMAIL)||'';
+    var em2=document.getElementById('pl-email');if(em2){em2.value=se;em2.style.background='#e8f5e9';em2.readOnly=true;}
+    if(err){err.style.color='#4db8e8';err.textContent='✓ Empreinte reconnue — saisissez votre mot de passe.';}
+    var pw=document.getElementById('pl-pwd');if(pw)pw.focus();
+  }catch(e){
+    if(!err)return;
+    if(e.name==='NotAllowedError')err.textContent='Reconnaissance annulée.';
+    else if(e.name==='InvalidStateError')err.textContent='Empreinte invalide — réinitialisez.';
+    else err.textContent='⚠️ '+e.name+' : '+e.message;
+  }finally{
+    if(btn){btn.disabled=false;btn.innerHTML='<span style="font-size:24px">☝️</span><span id="pl-bio-label">Se connecter avec empreinte</span>';}
+  }
+}
+async function chantierBioEnroll(user){
+  var err=document.getElementById('pl-err'),wrap=document.getElementById('pl-enroll-wrap');
+  if(!user){if(err){err.style.color='#FFB4A8';err.textContent='Session non reconnue.';}return;}
+  try{
+    var cred=await navigator.credentials.create({publicKey:{challenge:crypto.getRandomValues(new Uint8Array(32)),rp:{name:'Phénix-Chantier',id:location.hostname},user:{id:new TextEncoder().encode(user.uid),name:user.email,displayName:'Phénix'},pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],authenticatorSelection:{authenticatorAttachment:'platform',userVerification:'required',residentKey:'discouraged',requireResidentKey:false},timeout:60000,attestation:'none'}});
+    localStorage.setItem(CHANTIER_BIO_KEY,_cb64u(cred.rawId));
+    localStorage.setItem(CHANTIER_BIO_EMAIL,user.email);
+    var pw=document.getElementById('pl-pwd');if(pw&&pw.value)localStorage.setItem(CHANTIER_BIO_CREDS,btoa(user.email+'|||'+pw.value));
+    if(wrap)wrap.innerHTML='<div style="color:#7DC6E8;font-size:13px;font-weight:600">✓ Empreinte activée !</div>';
+    setTimeout(()=>{if(wrap)wrap.style.display='none';},3000);
+  }catch(e){
+    if(!err)return;
+    err.style.color='#FFB4A8';
+    err.textContent=e.name==='NotAllowedError'?'Enrôlement annulé.':'Erreur: '+e.message;
+  }
+}
+function chantierBioReset(){
+  if(!confirm("Supprimer l'empreinte ?"))return;
+  ['chantier_bio_credId','chantier_bio_email','chantier_bio_creds'].forEach(k=>localStorage.removeItem(k));
+  var w=document.getElementById('pl-bio-wrap');if(w)w.style.display='none';
+  var em=document.getElementById('pl-email');if(em){em.value='';em.readOnly=false;em.style.background='';}
+  var err=document.getElementById('pl-err');if(err){err.style.color='#4db8e8';err.textContent='Empreinte supprimée.';}
+}
+document.addEventListener('DOMContentLoaded',chantierBioInit);
 </script>
 </body>
 </html>
