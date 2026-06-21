@@ -298,7 +298,7 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
 <!-- LOGIN GATE -->
 <div id="phenix-login" style="display:flex;position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#0F1E3D,#1B2D5B,#2A5298);align-items:center;justify-content:center;padding:20px;font-family:'DM Sans',system-ui,sans-serif">
   <div style="background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.18);border-radius:16px;padding:34px 28px;max-width:360px;width:100%;text-align:center">
-    <div style="font-family:'DM Serif Display',Georgia,serif;font-size:30px;color:#fff;margin-bottom:4px">Phénix<span style="color:#7DC6E8">-Conception</span></div>
+    <div style="font-family:'DM Serif Display',Georgia,serif;font-size:30px;color:#fff;margin-bottom:4px">Phénix<span style="color:#7DC6E8">-Architecture</span></div>
     <div style="font-size:11px;color:rgba(255,255,255,.5);letter-spacing:.12em;text-transform:uppercase;margin-bottom:26px">Chiffrage · Connexion</div>
     <input id="pl-email" type="email" autocomplete="username" placeholder="E-mail" style="width:100%;padding:12px 14px;margin-bottom:10px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.95);font-size:14px;outline:none">
     <input id="pl-pwd" type="password" autocomplete="current-password" placeholder="Mot de passe" onkeydown="if(event.key===&quot;Enter&quot;)phenixDoLogin()" style="width:100%;padding:12px 14px;margin-bottom:14px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.95);font-size:14px;outline:none">
@@ -308,7 +308,7 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
 </div>
 
 <div class="topbar">
-  <div class="logo">Phénix-Conception<span>Contractant Général · Maître d'Œuvre</span></div>
+  <div class="logo">Phénix-Architecture<span>Maître d'Œuvre · Architecture</span></div>
   <div class="topbar-sep"></div>
   <div class="topbar-actions">
     <button class="topbar-btn" onclick="exportData()" title="Exporter les données (sauvegarde)"><i class="ti ti-cloud-upload" aria-hidden="true"></i>Sauvegarder</button>
@@ -336,7 +336,7 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
   <div style="flex:1"></div>
   <div style="padding:16px;border-top:1px solid rgba(255,255,255,.06)">
     <div style="font-size:11px;color:rgba(74,156,199,.5)">Prix base : Auvergne 2025</div>
-    <div style="font-size:11px;color:rgba(74,156,199,.5);margin-top:2px">v3.0 — Phénix-Architecte</div>
+    <div style="font-size:11px;color:rgba(74,156,199,.5);margin-top:2px">v3.0 — Phénix-Architecture</div>
   </div>
 </div>
 
@@ -521,7 +521,7 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
       </div>
       <div class="export-card">
         <div class="export-title">Récapitulatif PDF — Estimation APS/APD</div>
-        <div class="export-desc">Génère un récapitulatif professionnel en-tête Phénix-Conception avec décomposition par lots, paramètres (aléas, honoraires) et total général TTC.</div>
+        <div class="export-desc">Génère un récapitulatif professionnel en-tête Phénix-Architecture avec décomposition par lots, paramètres (aléas, honoraires) et total général TTC.</div>
         <button class="btn btn-accent" onclick="exportPDF()"><i class="ti ti-file-type-pdf" aria-hidden="true"></i>Générer PDF de synthèse</button>
       </div>
     </div>
@@ -1553,11 +1553,11 @@ td{padding:6px 10px;border-bottom:1px solid #C8D8E8}tr:nth-child(even) td{backgr
 .footer{margin-top:40px;border-top:1px solid #C8D8E8;padding-top:12px;font-size:10px;color:#8BA5C0;text-align:center}
 @media print{body{padding:15px 20px}}
 </style></head><body>
-<div class="header"><div><div class="logo">Phénix-Conception</div><div class="logo-sub">Contractant Général · Maître d'Œuvre</div></div><div style="text-align:right;font-size:11px;color:#8a8a8a">DEVIS CLIENT<br>${new Date().toLocaleDateString('fr-FR')}</div></div>
+<div class="header"><div><div class="logo">Phénix-Architecture</div><div class="logo-sub">Maître d'Œuvre · Architecture</div></div><div style="text-align:right;font-size:11px;color:#8a8a8a">DEVIS CLIENT<br>${new Date().toLocaleDateString('fr-FR')}</div></div>
 <h1>${c.nom}</h1><div class="sub">${c.client?'Client : '+c.client+' — ':''}${c.adresse||''}${c.surface?' · '+c.surface+' m²':''} · Phase : ${c.phase||'APS'}</div>
 <table><thead><tr><th>Désignation</th><th style="text-align:right">Qté / Unité</th><th style="text-align:right">PU HT</th><th style="text-align:right">Total HT</th></tr></thead>
 <tbody>${lotsHTML}<tr class="total-row"><td colspan="3">TOTAL GÉNÉRAL TTC</td><td style="text-align:right">${fmt(totalTTC)} €</td></tr><tr class="total-row" style="font-size:12px"><td colspan="3" style="opacity:.8">dont Total HT</td><td style="text-align:right;opacity:.8">${fmt(totalClient)} €</td></tr></tbody></table>
-<div class="footer">Phénix-Conception — Devis indicatif — ${new Date().toLocaleDateString('fr-FR')} — Valable 3 mois</div>
+<div class="footer">Phénix-Architecture — Devis indicatif — ${new Date().toLocaleDateString('fr-FR')} — Valable 3 mois</div>
 </body></html>`;
   const w=window.open('','_blank');w.document.write(html);w.document.close();
   setTimeout(()=>w.print(),500);

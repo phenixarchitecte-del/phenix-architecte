@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
-<title>Phénix-Architecte · Gestion de Chantier</title>
+<title>Phénix-Architecture · Gestion de Chantier</title>
 <script type="module">
 import { initializeApp }       from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import { getFirestore,
@@ -1759,7 +1759,7 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
 <body>
 <div id="phenix-login" style="display:flex;position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#0F1E3D,#1B2D5B,#2A5298);align-items:center;justify-content:center;padding:20px;font-family:'DM Sans',system-ui,sans-serif">
   <div style="background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.18);border-radius:16px;padding:34px 28px;max-width:360px;width:100%;text-align:center">
-    <div style="font-family:'DM Serif Display',Georgia,serif;font-size:30px;color:#fff;margin-bottom:4px">Phénix<span style="color:#7DC6E8">-Chantier</span></div>
+    <div style="font-family:'DM Serif Display',Georgia,serif;font-size:30px;color:#fff;margin-bottom:4px">Phénix<span style="color:#7DC6E8">-Architecture</span></div>
     <div style="font-size:11px;color:rgba(255,255,255,.5);letter-spacing:.12em;text-transform:uppercase;margin-bottom:26px">Connexion sécurisée</div>
     <div id="pl-bio-wrap" style="display:none;margin-bottom:16px">
       <button id="pl-bio-btn" onclick="chantierBioLogin()" style="width:100%;padding:14px;border:2px solid rgba(77,184,232,.6);border-radius:9px;background:rgba(77,184,232,.12);color:#7DC6E8;font-size:15px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px">
@@ -1886,7 +1886,7 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
     <!-- Header -->
     <div style="background:linear-gradient(135deg,#0F1E3D,#1B2D5B);padding:18px 24px;color:#fff;display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
       <div>
-        <div style="font-size:11px;opacity:.6;text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px">Phénix-Architecte · Maître d'Œuvre</div>
+        <div style="font-size:11px;opacity:.6;text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px">Phénix-Architecture · Maître d'Œuvre</div>
         <div style="font-size:17px;font-weight:600" id="mission-modal-title">📋 Fiches Mission</div>
       </div>
       <button class="btn btn-sm" onclick="closeModal('modalMission')" style="background:rgba(255,255,255,.15);color:#fff;border-color:transparent">✕</button>
@@ -2125,7 +2125,7 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
     <!-- Header -->
     <div style="background:linear-gradient(135deg,#7B0000,#C0392B);padding:16px 22px;color:#fff;display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
       <div>
-        <div style="font-size:11px;opacity:.65;text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px">Phénix-Architecte · Mode Mains Libres</div>
+        <div style="font-size:11px;opacity:.65;text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px">Phénix-Architecture · Mode Mains Libres</div>
         <div style="font-size:17px;font-weight:600">🎙️ Compte Rendu Vocal</div>
       </div>
       <button class="btn btn-sm" onclick="stopCRVocal(true)" style="background:rgba(255,255,255,.15);color:#fff;border-color:transparent">✕</button>
@@ -2205,7 +2205,7 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
       <div class="form-grid">
         <div class="form-group"><label>Chantier *</label><select id="cr-chantier"></select></div>
         <div class="form-group"><label>Date de réunion *</label><input id="cr-date" type="date"></div>
-        <div class="form-group"><label>Rédigé par</label><input id="cr-auteur" value="Phénix-Architecte" placeholder="Rédacteur"></div>
+        <div class="form-group"><label>Rédigé par</label><input id="cr-auteur" value="Phénix-Architecture" placeholder="Rédacteur"></div>
         <div class="form-group"><label>N° CR</label><input id="cr-num" placeholder="CR-001" readonly style="background:var(--bg3)"></div>
         <div class="form-group" style="grid-column:1/-1">
           <label>Participants présents</label>
@@ -2272,7 +2272,7 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
     <div class="sidebar-logo" onclick="switchApp('dossier')" style="cursor:pointer" title="→ Gestion de Dossier">
       <div class="logo-icon"><i class="ti ti-crane"></i></div>
       <div>
-        <div class="logo-phoenix">Phénix-Architecte</div>
+        <div class="logo-phoenix">Phénix-Architecture</div>
         <div class="logo-sub" style="display:flex;align-items:center;gap:4px">Chantier&nbsp;<i class="ti ti-arrows-exchange" style="font-size:9px;opacity:.8"></i>&nbsp;Dossier</div>
       </div>
     </div>
@@ -2308,7 +2308,7 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
         <span class="sync-dot ok" id="syncDot"></span>
         <span id="syncLabel">Données locales</span>
       </div>
-      <div style="font-size:12px;color:rgba(255,255,255,.55);margin-top:4px">Phénix-Architecte © 2025</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.55);margin-top:4px">Phénix-Architecture © 2025</div>
     </div>
   </aside>
 
@@ -3088,7 +3088,7 @@ function _buildMissionHTML(m) {
     <div style="background:linear-gradient(135deg,#0F1E3D,#1B2D5B);border-radius:10px;padding:13px 16px;color:#fff;display:flex;justify-content:space-between;align-items:center">
       <div>
         <div style="font-size:10px;opacity:.6;text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px">Contact Maître d'Œuvre</div>
-        <div style="font-size:13px;font-weight:700">Phénix-Architecte</div>
+        <div style="font-size:13px;font-weight:700">Phénix-Architecture</div>
         <div style="font-size:11px;opacity:.7;margin-top:1px">Émis le ${today}</div>
       </div>
       <div style="font-size:30px;opacity:.25">🏛</div>
@@ -3105,7 +3105,7 @@ function _buildMissionText() {
   const finFmt   = m.fin   ? new Date(m.fin).toLocaleDateString('fr-FR',   { weekday:'long', day:'numeric', month:'long', year:'numeric' }) : null;
   const prio = m.priorite === 'urgente' ? '🔴 URGENTE — ' : m.priorite === 'haute' ? '🟡 Haute priorité — ' : '';
 
-  let msg = `📋 FICHE MISSION — Phénix-Architecte\n${'═'.repeat(35)}\n\n`;
+  let msg = `📋 FICHE MISSION — Phénix-Architecture\n${'═'.repeat(35)}\n\n`;
   msg += `Bonjour ${inv ? inv.nom : ''},\n\n`;
   msg += `${prio}Voici votre fiche mission :\n\n`;
   if (ch) { msg += `🏗 CHANTIER\n${ch.nom}\n`; if (ch.adresse) msg += `📍 ${ch.adresse}\n`; if (ch.client) msg += `👤 M.O. : ${ch.client}\n`; msg += '\n'; }
@@ -3116,7 +3116,7 @@ function _buildMissionText() {
   if (finFmt)   msg += `⏹ Fin prévue : ${finFmt}\n`;
   if (!debutFmt) msg += `Dates à confirmer\n`;
   if (m.montant > 0) msg += `\n💰 Montant : ${fmtEur(m.montant)} HT\n`;
-  msg += `\n${'─'.repeat(35)}\nPhénix-Architecte · Maître d'Œuvre\n${new Date().toLocaleDateString('fr-FR')}`;
+  msg += `\n${'─'.repeat(35)}\nPhénix-Architecture · Maître d'Œuvre\n${new Date().toLocaleDateString('fr-FR')}`;
   return msg;
 }
 
@@ -3640,7 +3640,7 @@ function crvConfirmSave() {
     num:          nextNum,
     chantierId:   parseInt(d.chantier),
     date:         d.date,
-    auteur:       'Phénix-Architecte',
+    auteur:       'Phénix-Architecture',
     presents:     d.presents || '',
     avancement:   d.avancement || '',
     reserves:     d.reserves === 'aucune' ? '' : (d.reserves || ''),
@@ -4948,7 +4948,7 @@ function openModalCR(id) {
     const nextNum = 'CR-' + String(state.comptes_rendus.length + 1).padStart(3, '0');
     document.getElementById('cr-num').value = nextNum;
     document.getElementById('cr-date').value = new Date().toISOString().split('T')[0];
-    document.getElementById('cr-auteur').value = 'Phénix-Architecte';
+    document.getElementById('cr-auteur').value = 'Phénix-Architecture';
     crPresentsSet = [];
     crRefreshChips();
     ['cr-avancement','cr-reserves','cr-decisions','cr-prochaine'].forEach(f => document.getElementById(f).value = '');
@@ -5314,7 +5314,7 @@ body{font-family:'DM Sans',sans-serif;font-size:12px;color:#0F1E3D;background:#f
   <button onclick="window.print()" style="background:linear-gradient(135deg,#1B2D5B,#2A5298);color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif">🖨️ Imprimer / PDF</button>
 </div>
 <div class="cover">
-  <div class="cover-brand">🏛 Phénix-Architecte · Maître d'Œuvre</div>
+  <div class="cover-brand">🏛 Phénix-Architecture · Maître d'Œuvre</div>
   <div class="cover-title">${cr.num} ${cr.meteo ? cr.meteo.split(' ')[0] : ''}</div>
   <div class="cover-sub">Compte Rendu de Chantier · ${dateStr}</div>
   <div class="cover-meta">
@@ -5352,12 +5352,12 @@ ${plansHtml}
   <div style="font-size:24px;opacity:.4">📅</div>
 </div>
 <div class="signatures">
-  <div class="sig-block"><div style="font-size:10px;color:#4A6080">Le Maître d'Œuvre</div><div class="sig-blank">${cr.auteur || 'Phénix-Architecte'}</div></div>
+  <div class="sig-block"><div style="font-size:10px;color:#4A6080">Le Maître d'Œuvre</div><div class="sig-blank">${cr.auteur || 'Phénix-Architecture'}</div></div>
   <div class="sig-block"><div style="font-size:10px;color:#4A6080">Le Maître d'Ouvrage</div><div class="sig-blank">${ch && ch.client ? ch.client : '—'}</div></div>
   <div class="sig-block"><div style="font-size:10px;color:#4A6080">Entreprise principale</div><div class="sig-blank">&nbsp;</div></div>
 </div>
 <div class="footer">
-  <div style="font-family:'DM Serif Display',serif;color:#1B2D5B;font-size:12px">Phénix-Architecte</div>
+  <div style="font-family:'DM Serif Display',serif;color:#1B2D5B;font-size:12px">Phénix-Architecture</div>
   <div>${cr.num} · ${ch ? ch.nom : '—'} · ${dateStr}</div>
   <div>Généré le ${today}</div>
 </div>
@@ -5656,7 +5656,7 @@ function exportSynthesePDF() {
   const fullHtml = `<!DOCTYPE html>
 <html lang="fr"><head>
 <meta charset="UTF-8">
-<title>Synthèse Chantiers — Phénix-Architecte</title>
+<title>Synthèse Chantiers — Phénix-Architecture</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,600&display=swap" rel="stylesheet">
 <style>${CSS}
   .page-break{page-break-before:always;padding-top:20px}
@@ -5666,7 +5666,7 @@ function exportSynthesePDF() {
   <button onclick="window.print()" style="background:linear-gradient(135deg,#1B2D5B,#2A5298);color:#fff;border:none;padding:10px 22px;border-radius:8px;font-size:13px;cursor:pointer;font-family:sans-serif">🖨️ Imprimer / Enregistrer en PDF</button>
 </div>
 <div class="cover">
-  <div class="cover-brand">🏛 Phénix-Architecte · Maître d'Œuvre</div>
+  <div class="cover-brand">🏛 Phénix-Architecture · Maître d'Œuvre</div>
   <div class="cover-title">Synthèse ${chantiersList.length>1?'des '+chantiersList.length+' Chantiers':chantiersList[0].nom}</div>
   <div class="cover-date">Généré le ${today}</div>
   <div class="cover-stats">
@@ -5679,7 +5679,7 @@ function exportSynthesePDF() {
 </div>
 ${body}
 <div style="border-top:2px solid #E4ECF3;padding-top:14px;display:flex;justify-content:space-between;font-size:10px;color:#8BA5C0;margin-top:16px">
-  <div style="font-size:12px;font-weight:600;color:#1B2D5B">Phénix-Architecte · Maître d'Œuvre</div>
+  <div style="font-size:12px;font-weight:600;color:#1B2D5B">Phénix-Architecture · Maître d'Œuvre</div>
   <div>Document confidentiel · ${today}</div>
 </div>
 </div></body></html>`;
@@ -5786,7 +5786,7 @@ function switchApp(target) {
 </script>
 
 <script>
-/* WebAuthn biométrie — Phénix Chantier */
+/* WebAuthn biométrie — Phénix-Architecture */
 var CHANTIER_BIO_KEY='chantier_bio_credId',CHANTIER_BIO_EMAIL='chantier_bio_email',CHANTIER_BIO_CREDS='chantier_bio_creds';
 function _cb64u(b){return btoa(String.fromCharCode(...new Uint8Array(b))).replace(/[+]/g,'-').replace(/[/]/g,'_').replace(/=/g,'');}
 function _cfromb64u(s){s=s.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';return Uint8Array.from(atob(s),c=>c.charCodeAt(0)).buffer;}
@@ -5827,7 +5827,7 @@ async function chantierBioEnroll(user){
   var err=document.getElementById('pl-err'),wrap=document.getElementById('pl-enroll-wrap');
   if(!user){if(err){err.style.color='#FFB4A8';err.textContent='Session non reconnue.';}return;}
   try{
-    var cred=await navigator.credentials.create({publicKey:{challenge:crypto.getRandomValues(new Uint8Array(32)),rp:{name:'Phénix-Chantier',id:location.hostname},user:{id:new TextEncoder().encode(user.uid),name:user.email,displayName:'Phénix'},pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],authenticatorSelection:{authenticatorAttachment:'platform',userVerification:'required',residentKey:'discouraged',requireResidentKey:false},timeout:60000,attestation:'none'}});
+    var cred=await navigator.credentials.create({publicKey:{challenge:crypto.getRandomValues(new Uint8Array(32)),rp:{name:'Phénix-Architecture',id:location.hostname},user:{id:new TextEncoder().encode(user.uid),name:user.email,displayName:'Phénix'},pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],authenticatorSelection:{authenticatorAttachment:'platform',userVerification:'required',residentKey:'discouraged',requireResidentKey:false},timeout:60000,attestation:'none'}});
     localStorage.setItem(CHANTIER_BIO_KEY,_cb64u(cred.rawId));
     localStorage.setItem(CHANTIER_BIO_EMAIL,user.email);
     var pw=document.getElementById('pl-pwd');if(pw&&pw.value)localStorage.setItem(CHANTIER_BIO_CREDS,btoa(user.email+'|||'+pw.value));

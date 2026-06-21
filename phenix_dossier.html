@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
-<title>Phénix-Architecte · Gestion de Dossier</title>
+<title>Phénix-Architecture · Gestion de Dossier</title>
 <script type="module">
 import { initializeApp }       from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import { getFirestore,
@@ -471,7 +471,7 @@ async function phenixBioEnroll(userOverride){
     const credential = await navigator.credentials.create({
       publicKey: {
         challenge: crypto.getRandomValues(new Uint8Array(32)),
-        rp: { name: 'Phénix-Architecte', id: location.hostname },
+        rp: { name: 'Phénix-Architecture', id: location.hostname },
         user: {
           id: encoder.encode(user.uid),
           name: user.email,
@@ -1863,7 +1863,7 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
 <body>
 <div id="phenix-login" style="display:flex;position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#0F1E3D,#1B2D5B,#2A5298);align-items:center;justify-content:center;padding:20px;font-family:'DM Sans',system-ui,sans-serif">
   <div style="background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.18);border-radius:16px;padding:34px 28px;max-width:360px;width:100%;text-align:center">
-    <div style="font-family:'DM Serif Display',Georgia,serif;font-size:30px;color:#fff;margin-bottom:4px">Phénix<span style="color:#7DC6E8">-Architecte</span></div>
+    <div style="font-family:'DM Serif Display',Georgia,serif;font-size:30px;color:#fff;margin-bottom:4px">Phénix<span style="color:#7DC6E8">-Architecture</span></div>
     <div style="font-size:11px;color:rgba(255,255,255,.5);letter-spacing:.12em;text-transform:uppercase;margin-bottom:26px">Connexion sécurisée</div>
 
     <!-- BOUTON BIOMÉTRIE (affiché seulement si disponible) -->
@@ -1921,7 +1921,7 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
   <div class="ai-messages" id="aiMessages_d">
     <div class="ai-msg">
       <div class="ai-msg-avatar ai-avatar-ai">P</div>
-      <div class="ai-msg-bubble ai-bubble-ai">Bonjour ! Je suis votre assistant Phénix-Architecte. Je peux vous aider à rédiger des contrats, devis, comptes-rendus ou répondre à vos questions MOE.</div>
+      <div class="ai-msg-bubble ai-bubble-ai">Bonjour ! Je suis votre assistant Phénix-Architecture. Je peux vous aider à rédiger des contrats, devis, comptes-rendus ou répondre à vos questions MOE.</div>
     </div>
   </div>
   <div class="ai-suggestions-title">Suggestions rapides</div>
@@ -2266,7 +2266,7 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
       <!-- Onglet JSON -->
       <div id="importView-json">
         <div style="background:var(--accent-bg);border:1.5px solid var(--accent);border-radius:var(--r-md);padding:12px 14px;margin-bottom:1rem;font-size:13px;color:var(--accent2)">
-          <strong>Format JSON Phénix-Architecte</strong><br>Importez un fichier exporté depuis ce logiciel. Toutes les factures et devis seront restaurés avec leurs données complètes.
+          <strong>Format JSON Phénix-Architecture</strong><br>Importez un fichier exporté depuis ce logiciel. Toutes les factures et devis seront restaurés avec leurs données complètes.
         </div>
         <div id="json-drop-zone" style="border:2px dashed var(--border);border-radius:var(--r-lg);padding:2.5rem;text-align:center;cursor:pointer;transition:all .2s;background:var(--bg)" onclick="document.getElementById('json-file-input').click()" ondragover="event.preventDefault();this.style.borderColor='#4A9CC7';this.style.background='var(--accent-bg)'" ondragleave="this.style.borderColor='var(--border)';this.style.background='var(--bg)'" ondrop="handleJsonDrop(event)">
           <div style="font-size:32px;color:var(--accent);margin-bottom:8px"><i class="ti ti-file-code"></i></div>
@@ -2371,7 +2371,7 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
         <div class="form-group"><label>Prochain RDV</label><input type="date" id="reun-prochaine"></div>
 
         <!-- Rédacteur -->
-        <div class="form-group"><label>Rédigé par</label><input type="text" id="reun-auteur" placeholder="Phénix-Architecte"></div>
+        <div class="form-group"><label>Rédigé par</label><input type="text" id="reun-auteur" placeholder="Phénix-Architecture"></div>
 
         <!-- Participants (saisie libre — différent du CR chantier) -->
         <div class="form-group" style="grid-column:1/-1">
@@ -2448,7 +2448,7 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
   <div class="modal" style="max-width:520px;padding:0;overflow:hidden;max-height:90vh;display:flex;flex-direction:column">
     <div style="background:linear-gradient(135deg,#7B0000,#C0392B);padding:16px 22px;color:#fff;display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
       <div>
-        <div style="font-size:11px;opacity:.65;text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px">Phénix-Architecte · Mode Mains Libres</div>
+        <div style="font-size:11px;opacity:.65;text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px">Phénix-Architecture · Mode Mains Libres</div>
         <div style="font-size:17px;font-weight:600">🎙️ CR Réunion Vocal</div>
       </div>
       <button class="btn btn-sm" onclick="stopReunionVocal(true)" style="background:rgba(255,255,255,.15);color:#fff;border-color:transparent">✕</button>
@@ -3528,7 +3528,7 @@ function openModalReunion(id) {
     ['reun-prochaine','reun-auteur','reun-avancement','reun-decisions','reun-reserves'].forEach(id => {
       document.getElementById(id).value = '';
     });
-    document.getElementById('reun-auteur').value = 'Phénix-Architecte';
+    document.getElementById('reun-auteur').value = 'Phénix-Architecture';
   }
 
   reunRenderPhotos();
@@ -4041,7 +4041,7 @@ function printReunionHtml(r, proj) {
   <button onclick="window.print()" style="background:linear-gradient(135deg,#1B2D5B,#2A5298);color:#fff;border:none;padding:9px 18px;border-radius:8px;font-size:13px;cursor:pointer">🖨️ Imprimer / PDF</button>
 </div>
 <div class="cover">
-  <div class="cover-brand">🏛 Phénix-Architecte · Maître d'Œuvre</div>
+  <div class="cover-brand">🏛 Phénix-Architecture · Maître d'Œuvre</div>
   <div class="cover-title">${r.num}</div>
   <div class="cover-sub">Compte Rendu de Réunion · ${dateStr}</div>
   <div class="cover-meta">
@@ -4072,7 +4072,7 @@ ${plansHtml}
   <div style="font-size:24px;opacity:.4">📅</div>
 </div>
 <div class="footer">
-  <div style="font-family:'DM Serif Display',serif;color:#1B2D5B;font-size:12px">Phénix-Architecte · Maître d'Œuvre</div>
+  <div style="font-family:'DM Serif Display',serif;color:#1B2D5B;font-size:12px">Phénix-Architecture · Maître d'Œuvre</div>
   <div>${r.num} · ${proj?proj.nom||proj.ref:'—'} · ${dateStr}</div>
   <div>Généré le ${today}</div>
 </div>
@@ -4290,7 +4290,7 @@ function rvocalConfirmSave() {
   const reunion = {
     id: 'reun-'+Date.now(), projetId: d.projet||null, num,
     date: d.date, prochaine: d.prochaine||'',
-    auteur: 'Phénix-Architecte',
+    auteur: 'Phénix-Architecture',
     presents: d.presents ? d.presents.split(/[,;]+/).map(s=>s.trim()).filter(Boolean) : [],
     avancement: d.avancement||'', decisions: d.decisions||'',
     reserves: d.reserves==='aucune'?'':(d.reserves||''),
@@ -5652,7 +5652,7 @@ async function askAI(question) {
   msgs.innerHTML+=`<div class="ai-msg" id="${loadId}"><div class="ai-msg-avatar ai-avatar-ai">P</div><div class="ai-msg-bubble ai-bubble-ai"><div class="ai-loading"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div></div></div></div>`;
   msgs.scrollTop=msgs.scrollHeight;
   try {
-    const res=await fetch('https://phenix-proxy.phenixarchitecte.workers.dev',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1000,system:`Tu es l'assistant intégré de Phénix-Architecte, une agence de maîtrise d'œuvre française. Tu aides l'architecte avec : contrats MOE, devis, comptes-rendus, lettres de mission, réglementation (PLU, RE2020, PMR, loi MOP). Réponds en français, professionnellement. Honoraires typiques 10-15% des travaux HT.`,messages:[{role:'user',content:question}]})});
+    const res=await fetch('https://phenix-proxy.phenixarchitecte.workers.dev',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1000,system:`Tu es l'assistant intégré de Phénix-Architecture, une agence de maîtrise d'œuvre française. Tu aides l'architecte avec : contrats MOE, devis, comptes-rendus, lettres de mission, réglementation (PLU, RE2020, PMR, loi MOP). Réponds en français, professionnellement. Honoraires typiques 10-15% des travaux HT.`,messages:[{role:'user',content:question}]})});
     const data=await res.json();
     const text=data.content?.map(b=>b.text||'').join('')||'Désolé, pas de réponse.';
     document.getElementById(loadId).outerHTML=`<div class="ai-msg"><div class="ai-msg-avatar ai-avatar-ai">P</div><div class="ai-msg-bubble ai-bubble-ai" style="white-space:pre-wrap">${text.replace(/</g,'&lt;')}</div></div>`;
@@ -6181,7 +6181,7 @@ function handleJsonFile(file) {
       } else if (Array.isArray(data)) {
         factures = data;
       } else {
-        toast_d('⚠️ Format JSON non reconnu. Utilisez un export Phénix-Architecte.');
+        toast_d('⚠️ Format JSON non reconnu. Utilisez un export Phénix-Architecture.');
         return;
       }
       _importJsonData = { factures, projets: data.projets||null, echeances: data.echeances||null };
@@ -6611,7 +6611,7 @@ function switchApp(target) {
   }
 }
 // ════════════════════════════════════════════════════════════
-//  MODULE COMPTABILITÉ — Phénix-Architecte
+//  MODULE COMPTABILITÉ — Phénix-Architecture
 // ════════════════════════════════════════════════════════════
 
 // État comptabilité
@@ -7863,7 +7863,7 @@ function confirmDeleteComm(id) {
 function exportToutJSON() {
   const data = {
     exportDate: new Date().toISOString(),
-    version: 'Phenix-Architecte',
+    version: 'Phénix-Architecture',
     ...stateDossier,
     projets:       stateDossier.projets       || [],
     factures:      stateDossier.factures       || [],
@@ -8056,7 +8056,7 @@ initCommissionsFirebase();
 // ══ MODULE VOCAL ═══════════════════════════════════════════════
 
 // ══════════════════════════════════════════════════════════════
-//  MODULE VOCAL — Phénix-Architecte
+//  MODULE VOCAL — Phénix-Architecture
 //  Reconnaissance vocale native Chrome (Android & Desktop)
 //  + Analyse par mots-clés pour créer des tâches Firebase
 // ══════════════════════════════════════════════════════════════

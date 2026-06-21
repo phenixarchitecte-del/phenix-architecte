@@ -1,0 +1,1349 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guide Maîtrise d'Œuvre — Phénix-Architecte</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0a1628;
+    --deep: #0d1f3c;
+    --cyan: #00d4e8;
+    --cyan-dim: #00a8bb;
+    --amber: #f0a500;
+    --cream: #f5f0e8;
+    --light: #e8f4f6;
+    --text: #1a2a3a;
+    --muted: #6b7f93;
+    --white: #ffffff;
+    --card-bg: #ffffff;
+    --border: #d0dde8;
+    --phase-pro: #1a7a6b;
+    --phase-dce: #1a4e8a;
+    --phase-det: #7a1a3a;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--cream);
+    color: var(--text);
+    line-height: 1.6;
+  }
+
+  /* ===== HERO ===== */
+  .hero {
+    background: var(--navy);
+    color: white;
+    padding: 60px 40px 80px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -60px; right: -80px;
+    width: 400px; height: 400px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(0,212,232,0.15) 0%, transparent 70%);
+  }
+  .hero::after {
+    content: '';
+    position: absolute;
+    bottom: -40px; left: 10%;
+    width: 250px; height: 250px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(240,165,0,0.1) 0%, transparent 70%);
+  }
+  .hero-badge {
+    display: inline-block;
+    background: rgba(0,212,232,0.15);
+    border: 1px solid rgba(0,212,232,0.4);
+    color: var(--cyan);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 6px 14px;
+    border-radius: 20px;
+    margin-bottom: 20px;
+  }
+  .hero h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(30px, 6vw, 52px);
+    font-weight: 900;
+    line-height: 1.1;
+    margin-bottom: 16px;
+  }
+  .hero h1 span { color: var(--cyan); }
+  .hero p {
+    font-size: 16px;
+    color: rgba(255,255,255,0.7);
+    max-width: 600px;
+    margin-bottom: 32px;
+  }
+  .hero-phases {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .phase-pill {
+    padding: 8px 18px;
+    border-radius: 30px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .pill-pro { background: rgba(26,122,107,0.25); border: 1px solid rgba(26,122,107,0.5); color: #5de6d0; }
+  .pill-dce { background: rgba(26,78,138,0.25); border: 1px solid rgba(26,78,138,0.5); color: #7eb8f7; }
+  .pill-det { background: rgba(122,26,58,0.25); border: 1px solid rgba(122,26,58,0.5); color: #f78cb5; }
+
+  /* ===== SOURCE NOTE ===== */
+  .source-note {
+    background: linear-gradient(135deg, #0d1f3c, #1a3050);
+    color: rgba(255,255,255,0.75);
+    padding: 16px 40px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 2px solid var(--cyan);
+  }
+  .source-note strong { color: var(--cyan); }
+
+  /* ===== NAV ===== */
+  .nav {
+    background: white;
+    border-bottom: 1px solid var(--border);
+    padding: 0 20px;
+    display: flex;
+    gap: 0;
+    overflow-x: auto;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  }
+  .nav a {
+    text-decoration: none;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 500;
+    padding: 14px 16px;
+    white-space: nowrap;
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s;
+  }
+  .nav a:hover { color: var(--text); border-bottom-color: var(--cyan); }
+  .nav a.pro { border-bottom-color: transparent; }
+  .nav a.pro:hover { border-bottom-color: var(--phase-pro); }
+
+  /* ===== LAYOUT ===== */
+  .container { max-width: 900px; margin: 0 auto; padding: 0 20px; }
+  .section { padding: 48px 0; }
+  .section-header {
+    margin-bottom: 36px;
+  }
+  .phase-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 5px 12px;
+    border-radius: 4px;
+    margin-bottom: 12px;
+  }
+  .tag-pro { background: rgba(26,122,107,0.12); color: var(--phase-pro); }
+  .tag-dce { background: rgba(26,78,138,0.12); color: var(--phase-dce); }
+  .tag-det { background: rgba(122,26,58,0.12); color: var(--phase-det); }
+  .tag-common { background: rgba(10,22,40,0.08); color: var(--navy); }
+
+  .section-header h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(22px, 4vw, 32px);
+    font-weight: 700;
+    line-height: 1.2;
+    margin-bottom: 8px;
+    color: var(--navy);
+  }
+  .section-header p {
+    color: var(--muted);
+    font-size: 15px;
+    max-width: 620px;
+  }
+
+  /* ===== TIMELINE ===== */
+  .timeline {
+    position: relative;
+    padding-left: 32px;
+    margin: 32px 0;
+  }
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 11px; top: 0; bottom: 0;
+    width: 2px;
+    background: linear-gradient(to bottom, var(--phase-pro), var(--phase-dce), var(--phase-det));
+  }
+  .tl-item {
+    position: relative;
+    margin-bottom: 28px;
+  }
+  .tl-item::before {
+    content: '';
+    position: absolute;
+    left: -25px; top: 4px;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--cyan);
+    border: 2px solid white;
+    box-shadow: 0 0 0 3px var(--cyan);
+  }
+  .tl-item.pro::before { background: var(--phase-pro); box-shadow: 0 0 0 3px var(--phase-pro); }
+  .tl-item.dce::before { background: var(--phase-dce); box-shadow: 0 0 0 3px var(--phase-dce); }
+  .tl-item.det::before { background: var(--phase-det); box-shadow: 0 0 0 3px var(--phase-det); }
+
+  .tl-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 3px;
+  }
+  .tl-label.pro { color: var(--phase-pro); }
+  .tl-label.dce { color: var(--phase-dce); }
+  .tl-label.det { color: var(--phase-det); }
+
+  .tl-title {
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--text);
+    margin-bottom: 3px;
+  }
+  .tl-desc { font-size: 13px; color: var(--muted); }
+
+  /* ===== CARDS ===== */
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin: 24px 0; }
+
+  .card {
+    background: white;
+    border-radius: 12px;
+    padding: 22px;
+    border: 1px solid var(--border);
+    transition: transform 0.2s, box-shadow 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.08); }
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+  }
+  .card.pro::before { background: var(--phase-pro); }
+  .card.dce::before { background: var(--phase-dce); }
+  .card.det::before { background: var(--phase-det); }
+  .card.amber::before { background: var(--amber); }
+
+  .card-icon {
+    font-size: 28px;
+    margin-bottom: 12px;
+    display: block;
+  }
+  .card h3 {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--navy);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .card p { font-size: 13px; color: var(--muted); line-height: 1.5; }
+
+  /* ===== CHECKLIST ===== */
+  .checklist {
+    background: white;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+    margin: 24px 0;
+  }
+  .checklist-header {
+    padding: 16px 22px;
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: white;
+  }
+  .ch-pro { background: var(--phase-pro); }
+  .ch-dce { background: var(--phase-dce); }
+  .ch-det { background: var(--phase-det); }
+  .ch-amber { background: linear-gradient(135deg, #c07800, var(--amber)); }
+
+  .checklist-body { padding: 8px 0; }
+  .cl-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 22px;
+    border-bottom: 1px solid #f0f0f0;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .cl-item:last-child { border-bottom: none; }
+  .cl-item:hover { background: #f8fbfc; }
+  .cl-check {
+    width: 18px; height: 18px;
+    border-radius: 4px;
+    border: 2px solid var(--border);
+    flex-shrink: 0;
+    margin-top: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    transition: all 0.2s;
+    cursor: pointer;
+  }
+  .cl-item.checked .cl-check {
+    background: var(--phase-pro);
+    border-color: var(--phase-pro);
+    color: white;
+  }
+  .cl-item.checked .cl-check::after { content: '✓'; }
+  .cl-item.dce-check.checked .cl-check { background: var(--phase-dce); border-color: var(--phase-dce); }
+  .cl-item.det-check.checked .cl-check { background: var(--phase-det); border-color: var(--phase-det); }
+
+  .cl-content { flex: 1; }
+  .cl-title { font-size: 14px; font-weight: 500; color: var(--text); }
+  .cl-note { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .cl-item.checked .cl-title { text-decoration: line-through; color: var(--muted); }
+
+  /* ===== WARNING / TIP BOXES ===== */
+  .box {
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin: 20px 0;
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+  }
+  .box-icon { font-size: 22px; flex-shrink: 0; margin-top: 1px; }
+  .box h4 { font-size: 13px; font-weight: 700; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .box p, .box li { font-size: 13px; line-height: 1.6; }
+  .box ul { padding-left: 16px; }
+
+  .box-warning { background: #fff8e6; border: 1px solid #f5d87b; }
+  .box-warning h4 { color: #8a5c00; }
+  .box-warning p, .box-warning li { color: #6b4a00; }
+
+  .box-tip { background: #e8f7f5; border: 1px solid #9de4d8; }
+  .box-tip h4 { color: #1a6b5c; }
+  .box-tip p, .box-tip li { color: #1a5048; }
+
+  .box-alert { background: #fdf0f4; border: 1px solid #f0b0c8; }
+  .box-alert h4 { color: #7a1a3a; }
+  .box-alert p, .box-alert li { color: #5a1a2a; }
+
+  .box-info { background: #eef4ff; border: 1px solid #b0caf5; }
+  .box-info h4 { color: #1a3e8a; }
+  .box-info p, .box-info li { color: #1a2e6a; }
+
+  /* ===== DIVIDER ===== */
+  .phase-divider {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin: 48px 0 40px;
+  }
+  .phase-divider-line { flex: 1; height: 1px; background: var(--border); }
+  .phase-divider-label {
+    padding: 8px 20px;
+    border-radius: 30px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .divider-pro { background: var(--phase-pro); color: white; }
+  .divider-dce { background: var(--phase-dce); color: white; }
+  .divider-det { background: var(--phase-det); color: white; }
+
+  /* ===== TABLE ===== */
+  .table-wrap { overflow-x: auto; margin: 20px 0; border-radius: 10px; border: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; background: white; font-size: 13px; }
+  th {
+    background: var(--navy);
+    color: white;
+    padding: 12px 16px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  td { padding: 11px 16px; border-bottom: 1px solid #f0f0f0; color: var(--text); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #f8fbfc; }
+  .td-phase {
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .td-pro { color: var(--phase-pro); }
+  .td-dce { color: var(--phase-dce); }
+  .td-det { color: var(--phase-det); }
+  .td-status {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .status-obli { background: #ffeaea; color: #c00; }
+  .status-rec { background: #e8f4ff; color: #0055aa; }
+
+  /* ===== ACCORDION ===== */
+  .accordion { margin: 16px 0; }
+  .acc-item {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 8px;
+    overflow: hidden;
+  }
+  .acc-header {
+    padding: 16px 20px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text);
+    user-select: none;
+    transition: background 0.15s;
+  }
+  .acc-header:hover { background: #f8fbfc; }
+  .acc-header.open { background: #f0f7ff; }
+  .acc-arrow { transition: transform 0.2s; font-size: 12px; color: var(--muted); }
+  .acc-header.open .acc-arrow { transform: rotate(180deg); }
+  .acc-body { display: none; padding: 0 20px 18px; }
+  .acc-body.open { display: block; }
+  .acc-body ul { padding-left: 18px; }
+  .acc-body li { font-size: 13px; color: var(--text); padding: 3px 0; line-height: 1.5; }
+  .acc-body p { font-size: 13px; color: var(--muted); line-height: 1.6; }
+
+  /* ===== MAF REFERENCE ===== */
+  .maf-ref {
+    background: linear-gradient(135deg, var(--navy), #1a3050);
+    color: white;
+    border-radius: 12px;
+    padding: 24px;
+    margin: 28px 0;
+    display: flex;
+    gap: 18px;
+    align-items: flex-start;
+  }
+  .maf-logo {
+    background: var(--cyan);
+    color: var(--navy);
+    font-weight: 900;
+    font-size: 14px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    flex-shrink: 0;
+    letter-spacing: 1px;
+  }
+  .maf-ref h4 { font-size: 14px; font-weight: 700; margin-bottom: 5px; color: white; }
+  .maf-ref p { font-size: 13px; color: rgba(255,255,255,0.7); line-height: 1.5; }
+  .maf-chapters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .maf-chapter {
+    background: rgba(0,212,232,0.15);
+    border: 1px solid rgba(0,212,232,0.3);
+    color: var(--cyan);
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+
+  /* ===== FOOTER ===== */
+  .footer {
+    background: var(--navy);
+    color: rgba(255,255,255,0.5);
+    text-align: center;
+    padding: 32px 20px;
+    font-size: 12px;
+    margin-top: 60px;
+  }
+  .footer strong { color: var(--cyan); }
+
+  /* ===== PROGRESS BAR ===== */
+  .progress-bar-wrap {
+    background: white;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    padding: 20px;
+    margin: 20px 0;
+  }
+  .progress-bar-wrap h4 { font-size: 13px; font-weight: 600; margin-bottom: 14px; color: var(--navy); }
+  .pb-row { margin-bottom: 10px; }
+  .pb-label { font-size: 12px; color: var(--muted); margin-bottom: 4px; display: flex; justify-content: space-between; }
+  .pb-label span { font-weight: 600; color: var(--text); }
+  .pb { height: 8px; background: #eef0f4; border-radius: 4px; overflow: hidden; }
+  .pb-fill { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
+  .pb-fill.pro { background: var(--phase-pro); }
+  .pb-fill.dce { background: var(--phase-dce); }
+  .pb-fill.det { background: var(--phase-det); }
+
+  @media (max-width: 600px) {
+    .hero { padding: 40px 20px 60px; }
+    .container { padding: 0 16px; }
+    .section { padding: 32px 0; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-badge">📐 Phénix-Architecte · Guide Opérationnel</div>
+  <h1>Guide<br><span>Maîtrise d'Œuvre</span><br>Phase par Phase</h1>
+  <p>De la rédaction du PRO jusqu'à la réception des travaux — gestion des dossiers, sélection des artisans et suivi de chantier selon les bonnes pratiques de la profession.</p>
+  <div class="hero-phases">
+    <span class="phase-pill pill-pro">🟢 PRO — Études de Projet</span>
+    <span class="phase-pill pill-dce">🔵 DCE — Consultation Entreprises</span>
+    <span class="phase-pill pill-det">🔴 DET — Direction des Travaux</span>
+  </div>
+</div>
+
+<!-- SOURCE NOTE -->
+<div class="source-note">
+  📚 Basé sur : <strong>Boîte à Outils Chantier MAF</strong> (24 chapitres, mise à jour jan. 2026) · Ordre des Architectes · Marchés privés (hors loi MOP) · Pratiques Phénix-Architecte
+</div>
+
+<!-- NAV -->
+<nav class="nav">
+  <a href="#vision">Vue d'ensemble</a>
+  <a href="#pro">Phase PRO</a>
+  <a href="#dce">Phase DCE</a>
+  <a href="#artisans">Sélection Artisans</a>
+  <a href="#det">Phase DET</a>
+  <a href="#reception">Réception</a>
+  <a href="#maf">Ressources MAF</a>
+</nav>
+
+<!-- SECTION 0 : VUE D'ENSEMBLE -->
+<div id="vision" class="container">
+  <div class="section">
+    <div class="section-header">
+      <div class="phase-tag tag-common">🗺️ Vue d'Ensemble</div>
+      <h2>Le fil conducteur d'une opération de maîtrise d'œuvre</h2>
+      <p>Trois phases clés, des livrables précis, une responsabilité continue de la conception jusqu'à la réception.</p>
+    </div>
+
+    <div class="timeline">
+      <div class="tl-item pro">
+        <div class="tl-label pro">Phase PRO</div>
+        <div class="tl-title">Études de Projet — Mise au point technique</div>
+        <div class="tl-desc">Plans d'exécution, détails constructifs, CCTP lot par lot, estimation définitive. Base du DCE.</div>
+      </div>
+      <div class="tl-item dce">
+        <div class="tl-label dce">Phase DCE</div>
+        <div class="tl-title">Dossier de Consultation des Entreprises</div>
+        <div class="tl-desc">CCTP, DPGF, CCAP, RC, Acte d'engagement — envoi aux artisans, analyse des offres, choix des entreprises.</div>
+      </div>
+      <div class="tl-item dce">
+        <div class="tl-label dce">Phase AMT</div>
+        <div class="tl-title">Assistance aux Marchés de Travaux</div>
+        <div class="tl-desc">Négociation, mise au point des contrats, notification aux entreprises retenues.</div>
+      </div>
+      <div class="tl-item det">
+        <div class="tl-label det">Préparation de chantier</div>
+        <div class="tl-title">Période de préparation (4 à 6 semaines)</div>
+        <div class="tl-desc">Planning, sous-traitance, PPSPS, assurances, implantation, réunion de lancement.</div>
+      </div>
+      <div class="tl-item det">
+        <div class="tl-label det">Phase DET</div>
+        <div class="tl-title">Direction de l'Exécution des Travaux</div>
+        <div class="tl-desc">Visas, réunions de chantier, comptes rendus, ordres de service, gestion financière (situations).</div>
+      </div>
+      <div class="tl-item det">
+        <div class="tl-label det">AOR + GPA</div>
+        <div class="tl-title">Réception & Garantie de Parfait Achèvement</div>
+        <div class="tl-desc">OPR, PV de réception, levée des réserves, DOE, DIUO, GPA 1 an.</div>
+      </div>
+    </div>
+
+    <div class="box box-info">
+      <span class="box-icon">⚖️</span>
+      <div>
+        <h4>Cadre légal — Marchés privés (hors loi MOP)</h4>
+        <p>En <strong>marché privé</strong>, la loi MOP ne s'applique pas. C'est le <strong>contrat de maîtrise d'œuvre signé avec le MOA</strong> qui définit précisément les missions confiées (PRO, DCE, DET, AOR…) et leurs limites. Aucune mission n'est automatiquement incluse : tout doit être contractualisé explicitement. La responsabilité décennale de l'architecte reste pleinement engagée sur les travaux suivis (art. 1792 Code civil).</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== PHASE PRO ===== -->
+<div id="pro">
+  <div class="phase-divider container">
+    <div class="phase-divider-line"></div>
+    <span class="phase-divider-label divider-pro">🟢 PHASE PRO — Études de Projet</span>
+    <div class="phase-divider-line"></div>
+  </div>
+  <div class="container">
+    <div class="section-header">
+      <div class="phase-tag tag-pro">PRO</div>
+      <h2>Constituer le Dossier Projet (PRO)</h2>
+      <p>La phase PRO finalise techniquement le projet et prépare tous les documents nécessaires à la consultation des entreprises. Chaque plan et chaque descriptif engage ta responsabilité décennale.</p>
+    </div>
+
+    <div class="cards">
+      <div class="card pro">
+        <span class="card-icon">📐</span>
+        <h3>Plans d'exécution</h3>
+        <p>Plans de masse, façades, coupes, plans de niveaux cotés, détails constructifs. Échelles 1/50 et 1/20 pour les détails.</p>
+      </div>
+      <div class="card pro">
+        <span class="card-icon">📋</span>
+        <h3>CCTP par lot</h3>
+        <p>Cahier des Clauses Techniques Particulières : description précise des ouvrages, matériaux, normes DTU applicables lot par lot.</p>
+      </div>
+      <div class="card pro">
+        <span class="card-icon">💶</span>
+        <h3>Estimation définitive</h3>
+        <p>Actualisation du budget global, décomposition par lot. Sert de base à la DPGF pour les entreprises.</p>
+      </div>
+      <div class="card pro">
+        <span class="card-icon">🏗️</span>
+        <h3>Coordination BET</h3>
+        <p>Intégration des plans techniques (fluides, structure, électricité). Vérification de la cohérence inter-lots.</p>
+      </div>
+    </div>
+
+    <div class="checklist">
+      <div class="checklist-header ch-pro">✅ Checklist PRO — Documents à produire</div>
+      <div class="checklist-body">
+        <div class="cl-item" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">Plans architecturaux cotés (masse, niveaux, coupes, façades)</div>
+            <div class="cl-note">Échelles 1/100 et 1/50 minimum</div>
+          </div>
+        </div>
+        <div class="cl-item" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">Détails constructifs critiques (jonctions, étanchéités, compribandes)</div>
+            <div class="cl-note">Échelle 1/20 ou 1/10 — référence aux DTU applicables</div>
+          </div>
+        </div>
+        <div class="cl-item" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">CCTP rédigé pour chaque lot</div>
+            <div class="cl-note">Gros-œuvre, charpente, couverture, menuiseries, plâtrerie, revêtements, électricité, plomberie…</div>
+          </div>
+        </div>
+        <div class="cl-item" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">Estimation définitive par lot (contrôle cohérence budget)</div>
+            <div class="cl-note">Validation avec le MOA avant envoi DCE</div>
+          </div>
+        </div>
+        <div class="cl-item" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">Plans BET intégrés (si BET mandaté)</div>
+            <div class="cl-note">Plans fluides, structure, électricité — vérification superposition avec plans archi</div>
+          </div>
+        </div>
+        <div class="cl-item" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">Validation finale MOA avec compte rendu signé</div>
+            <div class="cl-note">Toute modification post-validation = avenant au contrat</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="box box-warning">
+      <span class="box-icon">⚠️</span>
+      <div>
+        <h4>Point de vigilance — CCTP et responsabilité décennale</h4>
+        <p>Le CCTP engage ta responsabilité décennale (art. 1792 Code civil) quel que soit le type de marché. En marché privé, le MOA peut aussi engager ta responsabilité contractuelle si le descriptif est imprécis. Référence systématiquement les DTU applicables (ex. DTU 36.5 pour les menuiseries, DTU 20.1 pour la maçonnerie). Un CCTP vague = litiges en DET, réclamations d'entreprises et désordres non couverts.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== PHASE DCE ===== -->
+<div id="dce">
+  <div class="phase-divider container">
+    <div class="phase-divider-line"></div>
+    <span class="phase-divider-label divider-dce">🔵 PHASE DCE — Consultation Entreprises</span>
+    <div class="phase-divider-line"></div>
+  </div>
+  <div class="container">
+    <div class="section-header">
+      <div class="phase-tag tag-dce">DCE</div>
+      <h2>Constituer & Diffuser le DCE</h2>
+      <p>Le DCE est le document contractuel central. Il définit le cadre technique et juridique du chantier. Sa rigueur conditionne la qualité des offres reçues et ta protection en cas de litige.</p>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Pièce</th>
+            <th>Contenu</th>
+            <th>Marché privé</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>CCTP</strong><br><small>Cahier des Clauses Techniques Particulières</small></td>
+            <td>Description technique des ouvrages lot par lot, matériaux, DTU de référence</td>
+            <td><span class="td-status status-obli">Indispensable</span></td>
+          </tr>
+          <tr>
+            <td><strong>DPGF</strong><br><small>Décomposition du Prix Global et Forfaitaire</small></td>
+            <td>Tableau chiffré permettant aux entreprises de déposer leur offre poste par poste</td>
+            <td><span class="td-status status-obli">Indispensable</span></td>
+          </tr>
+          <tr>
+            <td><strong>CCAP</strong><br><small>Cahier des Clauses Administratives Particulières</small></td>
+            <td>Conditions d'exécution : délais, pénalités, modalités de paiement, garanties. En privé : souvent remplacé par les conditions générales du contrat d'entreprise.</td>
+            <td><span class="td-status status-rec">Recommandé</span></td>
+          </tr>
+          <tr>
+            <td><strong>RC</strong><br><small>Règlement de la Consultation</small></td>
+            <td>Conditions de remise des offres, critères de sélection, délai de validité. En privé : peut être allégé voire intégré dans une lettre de consultation.</td>
+            <td><span class="td-status status-rec">Recommandé</span></td>
+          </tr>
+          <tr>
+            <td><strong>Devis / Acte d'engagement</strong></td>
+            <td>En marché privé, c'est le devis signé par les deux parties qui tient lieu de contrat d'entreprise. Vérifier qu'il reprend bien les références au CCTP et aux plans.</td>
+            <td><span class="td-status status-obli">Indispensable</span></td>
+          </tr>
+          <tr>
+            <td><strong>Plans PRO</strong></td>
+            <td>Plans architecturaux et techniques constituant la base contractuelle des travaux</td>
+            <td><span class="td-status status-obli">Indispensable</span></td>
+          </tr>
+          <tr>
+            <td><strong>Planning prévisionnel</strong></td>
+            <td>Phasage des travaux, durée par lot, interventions coordonnées</td>
+            <td><span class="td-status status-rec">Recommandé</span></td>
+          </tr>
+          <tr>
+            <td><strong>DQE</strong><br><small>Détail Quantitatif Estimatif</small></td>
+            <td>Quantités estimées pour chaque poste (projets complexes)</td>
+            <td><span class="td-status status-rec">Selon projet</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="checklist">
+      <div class="checklist-header ch-dce">📤 Checklist DCE — Envoi & Suivi de la Consultation</div>
+      <div class="checklist-body">
+        <div class="cl-item dce-check" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">Liste des entreprises à consulter validée avec le MOA</div>
+            <div class="cl-note">Minimum 3 entreprises par lot recommandé</div>
+          </div>
+        </div>
+        <div class="cl-item dce-check" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">DCE complet structuré par lot (CCTP + DPGF + plans + CCAP + RC + AE)</div>
+            <div class="cl-note">Cohérence numérotation plans / CCTP vérifiée</div>
+          </div>
+        </div>
+        <div class="cl-item dce-check" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">Envoi DCE avec accusé de réception (email recommandé)</div>
+            <div class="cl-note">Conserver les preuves d'envoi — traçabilité essentielle</div>
+          </div>
+        </div>
+        <div class="cl-item dce-check" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">Visite de site organisée (si nécessaire)</div>
+            <div class="cl-note">Procès-verbal de visite signé par les participants</div>
+          </div>
+        </div>
+        <div class="cl-item dce-check" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">Questions/réponses centralisées et diffusées à toutes les entreprises</div>
+            <div class="cl-note">Équité de traitement entre soumissionnaires</div>
+          </div>
+        </div>
+        <div class="cl-item dce-check" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">Délai de remise des offres respecté (minimum 3 semaines)</div>
+            <div class="cl-note">Plus long pour les projets complexes ou multi-lots</div>
+          </div>
+        </div>
+        <div class="cl-item dce-check" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">Réception et ouverture des offres — tableau comparatif par lot</div>
+            <div class="cl-note">Comparer sur base identique : même DPGF pour tous</div>
+          </div>
+        </div>
+        <div class="cl-item dce-check" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">Rapport d'analyse des offres remis au MOA avec recommandation motivée</div>
+            <div class="cl-note">Critères : prix, références, délais, qualifications (RGE, Qualibat…)</div>
+          </div>
+        </div>
+        <div class="cl-item dce-check" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">Mise au point des marchés (négociation éventuelle)</div>
+            <div class="cl-note">Toute modification par rapport à l'offre = avenant ou nouveau devis signé</div>
+          </div>
+        </div>
+        <div class="cl-item dce-check" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">Notification aux entreprises retenues (OS de démarrage)</div>
+            <div class="cl-note">Les entreprises non retenues sont informées par courrier</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="box box-tip">
+      <span class="box-icon">💡</span>
+      <div>
+        <h4>Conseil terrain — Analyse des offres</h4>
+        <p>L'offre la moins chère n'est pas toujours la meilleure. Analyser : les références locales (Clermont-Ferrand / Puy-de-Dôme), les qualifications (Qualibat, RGE), les délais proposés et les réponses aux questions techniques du CCTP. Une offre anormalement basse est souvent signe d'oublis de postes — demande des explications avant de sélectionner.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SÉLECTION ARTISANS ===== -->
+<div id="artisans">
+  <div class="phase-divider container">
+    <div class="phase-divider-line"></div>
+    <span class="phase-divider-label" style="background: var(--amber); color: #3a2000;">🏆 Sélection des Artisans</span>
+    <div class="phase-divider-line"></div>
+  </div>
+  <div class="container">
+    <div class="section-header">
+      <div class="phase-tag" style="background: rgba(240,165,0,0.12); color: #8a5c00;">🏆 AMT / SÉLECTION</div>
+      <h2>Choisir & Valider ses Artisans</h2>
+      <p>La sélection des entreprises est un acte professionnel engageant ta responsabilité de conseil. Elle va au-delà du prix : qualification, assurance décennale, capacité à tenir les délais.</p>
+    </div>
+
+    <div class="cards">
+      <div class="card amber">
+        <span class="card-icon">🛡️</span>
+        <h3>Assurances obligatoires</h3>
+        <p>Réclamer l'attestation RC décennale en cours de validité pour les travaux concernés. Vérifier la garantie dommages-ouvrage (côté MOA).</p>
+      </div>
+      <div class="card amber">
+        <span class="card-icon">🏅</span>
+        <h3>Qualifications</h3>
+        <p>Qualibat, RGE (si travaux énergie), Qualifelec (électricité). Les qualifications attestent la compétence technique du lot.</p>
+      </div>
+      <div class="card amber">
+        <span class="card-icon">📍</span>
+        <h3>Proximité & réactivité</h3>
+        <p>Artisan local (Puy-de-Dôme) = meilleure réactivité en DET. Facteur important pour les petites opérations.</p>
+      </div>
+      <div class="card amber">
+        <span class="card-icon">📑</span>
+        <h3>Références vérifiées</h3>
+        <p>Demander 2-3 références de chantiers similaires. Contacter les MOA précédents si possible. Les photos seules ne suffisent pas.</p>
+      </div>
+    </div>
+
+    <div class="checklist">
+      <div class="checklist-header ch-amber">🔍 Checklist Sélection — Documents à collecter avant signature</div>
+      <div class="checklist-body">
+        <div class="cl-item" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">Attestation d'assurance RC décennale — valide, lot correspondant</div>
+            <div class="cl-note">Vérifier la date de validité ET les activités couvertes</div>
+          </div>
+        </div>
+        <div class="cl-item" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">Attestation RC exploitation (accidents sur chantier)</div>
+            <div class="cl-note">Obligatoire — protège en cas d'accident impliquant des tiers</div>
+          </div>
+        </div>
+        <div class="cl-item" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">Extrait K-bis ou équivalent (moins de 3 mois)</div>
+            <div class="cl-note">Vérifier la forme juridique et le représentant légal</div>
+          </div>
+        </div>
+        <div class="cl-item" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">Attestation de régularité fiscale et sociale (URSSAF)</div>
+            <div class="cl-note">Protège le MOA contre la solidarité de paiement</div>
+          </div>
+        </div>
+        <div class="cl-item" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">Qualification professionnelle (Qualibat, RGE, Qualifelec…)</div>
+            <div class="cl-note">Obligatoire si travaux de rénovation énergétique avec aide CEE/MaPrimeRénov</div>
+          </div>
+        </div>
+        <div class="cl-item" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">Devis signé correspondant exactement au CCTP / DPGF envoyé</div>
+            <div class="cl-note">Vérifier que rien n'a été exclu — se méfier des "non compris"</div>
+          </div>
+        </div>
+        <div class="cl-item" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">Planning d'intervention validé par l'entreprise</div>
+            <div class="cl-note">Date de démarrage + durée d'exécution + jalons intermédiaires</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="box box-alert">
+      <span class="box-icon">🚨</span>
+      <div>
+        <h4>Attention — Sous-traitance en marché privé</h4>
+        <ul>
+          <li>La Loi du 31/12/1975 sur la sous-traitance s'applique aussi aux marchés privés</li>
+          <li>Toute sous-traitance doit être <strong>acceptée et agréée par le MOA</strong> — exiger le formulaire d'agrément avant que le sous-traitant intervienne</li>
+          <li>En marché <strong>privé</strong>, le sous-traitant de 1er rang bénéficie d'une <strong>action directe</strong> contre le MOA si l'entreprise principale ne le paie pas — le MOA peut être tenu de payer deux fois</li>
+          <li>Le <strong>paiement direct</strong> obligatoire (marché public) n'existe pas en privé — mais l'action directe reste une protection forte</li>
+          <li>Conserver copies de tous les agréments dans le dossier marché</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== PHASE DET ===== -->
+<div id="det">
+  <div class="phase-divider container">
+    <div class="phase-divider-line"></div>
+    <span class="phase-divider-label divider-det">🔴 PHASE DET — Direction des Travaux</span>
+    <div class="phase-divider-line"></div>
+  </div>
+  <div class="container">
+    <div class="section-header">
+      <div class="phase-tag tag-det">DET</div>
+      <h2>Diriger l'Exécution des Travaux</h2>
+      <p>La DET couvre l'ensemble des aspects techniques, administratifs et financiers du chantier. En <strong>marché privé</strong>, les règles sont plus souples qu'en marché public mais la responsabilité de l'architecte est identique. La MAF insiste sur <strong>la sécurisation des écrits</strong> : des paroles n'ont aucune valeur devant les tribunaux.</p>
+    </div>
+
+    <div class="cards">
+      <div class="card det">
+        <span class="card-icon">🔬</span>
+        <h3>Contrôle technique</h3>
+        <p>Visa des plans d'exécution, vérification de la conformité aux pièces du marché, examens des matériaux avant mise en œuvre.</p>
+      </div>
+      <div class="card det">
+        <span class="card-icon">📝</span>
+        <h3>Gestion administrative</h3>
+        <p>Comptes rendus de chantier, ordres de service numérotés, gestion des travaux modificatifs, avenants.</p>
+      </div>
+      <div class="card det">
+        <span class="card-icon">💰</span>
+        <h3>Gestion financière</h3>
+        <p>Validation des situations mensuelles, états de paiement, contrôle du budget, Décompte Général et Définitif (DGD).</p>
+      </div>
+      <div class="card det">
+        <span class="card-icon">📅</span>
+        <h3>Planning & délais</h3>
+        <p>Suivi du planning, mise en demeure en cas de retard, calcul des pénalités de retard si nécessaire.</p>
+      </div>
+    </div>
+
+    <!-- Période de préparation -->
+    <div class="checklist">
+      <div class="checklist-header ch-det">🔧 Checklist Période de Préparation (avant OS de démarrage)</div>
+      <div class="checklist-body">
+        <div class="cl-item det-check" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">Vérification de toutes les assurances de chantier (entreprises + DO MOA)</div>
+            <div class="cl-note">Chapitre 6 MAF — attestations valides avant premier coup de pioche</div>
+          </div>
+        </div>
+        <div class="cl-item det-check" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">PPSPS remis par l'entreprise (si applicable)</div>
+            <div class="cl-note">Plan Particulier de Sécurité et de Protection de la Santé</div>
+          </div>
+        </div>
+        <div class="cl-item det-check" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">Planning d'exécution détaillé validé</div>
+            <div class="cl-note">Avec dates clés, jalons de contrôle, interventions coordonnées multi-lots</div>
+          </div>
+        </div>
+        <div class="cl-item det-check" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">Implantation du bâtiment vérifiée (géomètre ou méthode validée)</div>
+            <div class="cl-note">Chapitre 7 MAF — constat contradictoire, axes et trait de niveau</div>
+          </div>
+        </div>
+        <div class="cl-item det-check" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">Réunion de lancement organisée (CR signé par tous)</div>
+            <div class="cl-note">Présentation des intervenants, règles du chantier, points de contrôle</div>
+          </div>
+        </div>
+        <div class="cl-item det-check" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">Dossier marché archivé par lot (CCTP + plans + devis signé + assurances)</div>
+            <div class="cl-note">Conservation recommandée : 10 ans minimum (garantie décennale)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Compte rendu de chantier -->
+    <div style="margin: 32px 0 16px;">
+      <div class="phase-tag tag-det">📋 Comptes rendus de chantier</div>
+      <h3 style="font-size: 18px; font-weight: 700; color: var(--navy); margin-top: 8px;">Rédiger un compte rendu irréprochable</h3>
+    </div>
+
+    <div class="box box-alert">
+      <span class="box-icon">🚨</span>
+      <div>
+        <h4>Règle absolue (MAF) — L'écrit protège</h4>
+        <p>Les architectes doivent être <em>particulièrement attentifs à la rédaction des comptes rendus de chantier</em>. De simples paroles n'ont aucune valeur devant les tribunaux. Chaque décision, observation, réserve ou directive doit figurer par écrit dans le compte rendu ou un ordre de service numéroté.</p>
+      </div>
+    </div>
+
+    <div class="accordion">
+      <div class="acc-item">
+        <div class="acc-header" onclick="toggleAcc(this)">
+          📌 Structure du compte rendu de chantier
+          <span class="acc-arrow">▼</span>
+        </div>
+        <div class="acc-body">
+          <ul>
+            <li><strong>En-tête :</strong> N° de CR, date, heure, lieu, nom de l'opération, architecte responsable</li>
+            <li><strong>Présents / Absents :</strong> liste complète avec fonctions et entreprises représentées</li>
+            <li><strong>Avancement général :</strong> % d'avancement par lot, conformité au planning</li>
+            <li><strong>Constats techniques :</strong> observations par lot, non-conformités, points à corriger</li>
+            <li><strong>Décisions prises :</strong> responsable + délai pour chaque action</li>
+            <li><strong>Ordres de service :</strong> référence aux OS émis / en cours</li>
+            <li><strong>Questions financières :</strong> situations à valider, travaux supplémentaires</li>
+            <li><strong>Prochaine réunion :</strong> date + ordre du jour prévisible</li>
+            <li><strong>Distribution :</strong> à toutes les parties (MOA, entreprises, BET, bureau de contrôle)</li>
+          </ul>
+        </div>
+      </div>
+      <div class="acc-item">
+        <div class="acc-header" onclick="toggleAcc(this)">
+          📜 Ordres de service — Usage en marché privé
+          <span class="acc-arrow">▼</span>
+        </div>
+        <div class="acc-body">
+          <ul>
+            <li>L'OS est un document <strong>numéroté et daté</strong> adressé à l'entreprise (3 exemplaires : MOA, architecte, entreprise)</li>
+            <li>En <strong>marché privé</strong>, l'OS n'a pas la force contraignante du marché public — l'entreprise peut émettre des réserves ou refuser sans conséquence automatique</li>
+            <li>Usages pratiques : démarrage des travaux, modifications techniques convenues, constats formels de retard ou de non-conformité</li>
+            <li><strong>Préférer la confirmation écrite partagée</strong> (email avec AR, courrier) plutôt qu'un OS unilatéral — obtenir systématiquement la réponse écrite de l'entreprise</li>
+            <li>Pour les travaux supplémentaires : accord préalable du MOA + devis signé par l'entreprise AVANT exécution — l'OS seul ne suffit pas à créer l'obligation de payer</li>
+            <li>Utiliser le modèle MAF (REF 8A) en l'adaptant au contexte privé</li>
+          </ul>
+        </div>
+      </div>
+      <div class="acc-item">
+        <div class="acc-header" onclick="toggleAcc(this)">
+          💶 Gestion des situations de travaux en marché privé
+          <span class="acc-arrow">▼</span>
+        </div>
+        <div class="acc-body">
+          <ul>
+            <li>Les modalités de paiement sont fixées par le <strong>contrat d'entreprise (devis signé)</strong> — vérifier le rythme de facturation convenu (mensuel, par avancement, à l'achèvement)</li>
+            <li>L'architecte <strong>certifie l'avancement</strong> des travaux avant que le MOA règle — son visa protège le MOA contre les facturations abusives</li>
+            <li>En privé, il n'y a pas de procédure de DGD formalisée comme en marché public — prévoir dans le contrat les modalités de décompte final</li>
+            <li>La <strong>retenue de garantie</strong> (5% du marché) est légalement possible en marché privé — à prévoir contractuellement et à remplacer par une caution bancaire si l'entreprise le demande (Loi 71-584)</li>
+            <li>Tout travail supplémentaire = accord du MOA + devis signé AVANT exécution — sans cela, l'entreprise peut se voir refuser le paiement</li>
+            <li>Conserver toutes les factures, situations et états dans le dossier marché (10 ans minimum)</li>
+          </ul>
+        </div>
+      </div>
+      <div class="acc-item">
+        <div class="acc-header" onclick="toggleAcc(this)">
+          🔧 Gestion des travaux modificatifs (TM)
+          <span class="acc-arrow">▼</span>
+        </div>
+        <div class="acc-body">
+          <ul>
+            <li>Toute modification par rapport au marché initial doit être formalisée</li>
+            <li>Fiche de Travaux Modificatifs (FTM) : description, impact financier, accord MOA</li>
+            <li>Si impact > seuil contractuel : avenant au marché nécessaire</li>
+            <li>Ne jamais valider verbalement — toujours par écrit avec accord MOA</li>
+            <li>Chapitre 10 de la Boîte à Outils MAF pour la procédure complète</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- DET Checklist chantier courant -->
+    <div class="checklist" style="margin-top: 28px;">
+      <div class="checklist-header ch-det">📅 Routine DET — Checklist par visite de chantier</div>
+      <div class="checklist-body">
+        <div class="cl-item det-check" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">Contrôle visuel de l'avancement (conformité plans + CCTP)</div>
+            <div class="cl-note">Photos horodatées des points critiques à conserver</div>
+          </div>
+        </div>
+        <div class="cl-item det-check" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">Visa des plans d'exécution remis par les entreprises</div>
+            <div class="cl-note">Chapitres 13 MAF — visa = conformité au projet, pas validation d'exécution</div>
+          </div>
+        </div>
+        <div class="cl-item det-check" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">Vérification des matériaux avant mise en œuvre</div>
+            <div class="cl-note">Fiches techniques conformes au CCTP ? Conserver les fiches dans le dossier</div>
+          </div>
+        </div>
+        <div class="cl-item det-check" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">Compte rendu rédigé et diffusé dans les 48h</div>
+            <div class="cl-note">Délai court = moins de contestations sur les décisions prises</div>
+          </div>
+        </div>
+        <div class="cl-item det-check" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">Vérification du respect du planning</div>
+            <div class="cl-note">Retard > 1 semaine = mise en demeure formelle</div>
+          </div>
+        </div>
+        <div class="cl-item det-check" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">Contrôle de la sécurité sur site (EPI, balisage, échafaudages)</div>
+            <div class="cl-note">Signaler immédiatement par écrit tout danger constaté</div>
+          </div>
+        </div>
+        <div class="cl-item det-check" onclick="toggleCheck(this)">
+          <div class="cl-check"></div>
+          <div class="cl-content">
+            <div class="cl-title">Validation ou refus de la situation mensuelle dans le délai contractuel</div>
+            <div class="cl-note">Délai de vérification souvent 7 à 15 jours selon CCAP</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== RÉCEPTION ===== -->
+<div id="reception">
+  <div class="phase-divider container">
+    <div class="phase-divider-line"></div>
+    <span class="phase-divider-label" style="background: #4a2080; color: white;">🏁 Réception & GPA</span>
+    <div class="phase-divider-line"></div>
+  </div>
+  <div class="container">
+    <div class="section-header">
+      <div class="phase-tag" style="background: rgba(74,32,128,0.1); color: #4a2080;">🏁 AOR / GPA</div>
+      <h2>Réception des Travaux & Garantie de Parfait Achèvement</h2>
+      <p>La réception est l'acte juridique qui transfère la garde de l'ouvrage au MOA et fait courir les délais de garantie. Sa gestion rigoureuse est essentielle.</p>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Étape</th>
+            <th>Action</th>
+            <th>Précision marché privé</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>OPR</strong><br><small>Opérations Préalables à la Réception</small></td>
+            <td>Visite contradictoire avec les entreprises. Établissement de la liste des réserves.</td>
+            <td>Pas de procédure réglementée en privé — prévoir la méthode dans le CCAP ou le contrat d'entreprise. Convoquer par écrit avec délai de préavis.</td>
+          </tr>
+          <tr>
+            <td><strong>PV de réception</strong></td>
+            <td>Document signé MOA + architecte. Acte la réception avec ou sans réserves.</td>
+            <td>En privé, la réception peut être expresse (PV signé) ou tacite (prise de possession sans réserve). Toujours formaliser par un PV pour figer la date de départ des garanties.</td>
+          </tr>
+          <tr>
+            <td><strong>Levée des réserves</strong></td>
+            <td>Vérification de la correction des réserves par les entreprises. Constat contradictoire.</td>
+            <td>Délai fixé dans le PV. Relancer par écrit (email AR ou LRAR) si dépassé. La retenue de garantie est libérée à la levée des réserves.</td>
+          </tr>
+          <tr>
+            <td><strong>DOE</strong><br><small>Dossier des Ouvrages Exécutés</small></td>
+            <td>Plans conformes à l'exécution, fiches techniques, notices d'utilisation équipements.</td>
+            <td>En privé, obligation contractuelle si prévue dans le marché — à systématiquement inclure dans le CCAP. Conditionner les derniers paiements à sa remise.</td>
+          </tr>
+          <tr>
+            <td><strong>DIUO</strong><br><small>Dossier d'Intervention Ultérieure sur l'Ouvrage</small></td>
+            <td>Données utiles pour entretien et maintenance du bâtiment.</td>
+            <td>Obligatoire dès qu'un coordonnateur SPS est désigné (opération > 2 entreprises simultanées ou 500 000 € HT)</td>
+          </tr>
+          <tr>
+            <td><strong>GPA</strong><br><small>Garantie de Parfait Achèvement</small></td>
+            <td>Désordres signalés dans l'année. L'architecte assiste le MOA pour faire valoir ses droits.</td>
+            <td>1 an à compter de la réception (art. 1792-6 Code civil) — s'applique en marchés privés comme publics</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="box box-alert">
+      <span class="box-icon">🚨</span>
+      <div>
+        <h4>Vigilance — Réception tacite en marché privé</h4>
+        <p>En marché privé, si le MOA prend possession de l'ouvrage sans émettre de réserves, la <strong>réception tacite</strong> peut être constatée par les tribunaux — même sans PV. Cela fait courir les délais de garantie et efface les vices apparents non signalés. Toujours formaliser la réception par un PV écrit et signé, même pour un petit chantier.</p>
+      </div>
+    </div>
+        <p>La MAF recommande d'exiger la mise à jour des plans d'exécution par les entreprises <strong>au fur et à mesure du chantier</strong>, sans attendre la réception. Cette anticipation protège en cas de défaillance d'une entreprise avant la réception. Conditionner la validation des dernières situations à la remise des éléments DOE du lot concerné.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== RESSOURCES MAF ===== -->
+<div id="maf">
+  <div class="phase-divider container">
+    <div class="phase-divider-line"></div>
+    <span class="phase-divider-label" style="background: var(--navy); color: var(--cyan);">📚 Ressources MAF</span>
+    <div class="phase-divider-line"></div>
+  </div>
+  <div class="container">
+    <div class="section-header">
+      <div class="phase-tag tag-common">📚 MAF</div>
+      <h2>La Boîte à Outils Chantier — MAF</h2>
+      <p>La Mutuelle des Architectes Français a développé un guide numérique de référence en 24 chapitres avec des modèles de documents téléchargeables, mis à jour en permanence.</p>
+    </div>
+
+    <div class="maf-ref">
+      <div class="maf-logo">MAF</div>
+      <div>
+        <h4>Boîte à Outils Chantier — boiteaoutils.maf.fr</h4>
+        <p>24 chapitres rédigés par des architectes et 100 juristes MAF. Modèles téléchargeables de comptes rendus, ordres de service, fiches de travaux modificatifs, états de paiement. Mise à jour permanente (dernière : jan. 2026). Accessible sur smartphone, tablette, PC.</p>
+        <div class="maf-chapters">
+          <span class="maf-chapter">1. Les intervenants</span>
+          <span class="maf-chapter">2. Marchés de travaux</span>
+          <span class="maf-chapter">3. Période de préparation</span>
+          <span class="maf-chapter">5. Sous-traitance</span>
+          <span class="maf-chapter">6. Assurances</span>
+          <span class="maf-chapter">7. Implantation</span>
+          <span class="maf-chapter">8. Ordres de service</span>
+          <span class="maf-chapter">12. CR de chantier</span>
+          <span class="maf-chapter">13. Visa des plans</span>
+          <span class="maf-chapter">20. Délais & pénalités</span>
+          <span class="maf-chapter">21. Gestion financière</span>
+          <span class="maf-chapter">22. Réception</span>
+          <span class="maf-chapter">23. DOE - DIUO</span>
+          <span class="maf-chapter">24. GPA</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="box box-info">
+      <span class="box-icon">🔗</span>
+      <div>
+        <h4>Accès à la Boîte à Outils MAF</h4>
+        <p>La boîte à outils est accessible aux adhérents MAF via l'espace adhérent : <strong>boiteaoutils.maf.fr</strong>. Si tu n'es pas encore adhérent MAF, l'assurance professionnelle des architectes couvre obligatoirement la RC décennale et donne accès à ces ressources.</p>
+      </div>
+    </div>
+
+    <!-- Progress / Rappel phases -->
+    <div class="progress-bar-wrap" style="margin-top: 32px;">
+      <h4>📊 Complexité relative par phase</h4>
+      <div class="pb-row">
+        <div class="pb-label">Phase PRO — Études de Projet <span>Technique ★★★★☆</span></div>
+        <div class="pb"><div class="pb-fill pro" style="width: 75%"></div></div>
+      </div>
+      <div class="pb-row">
+        <div class="pb-label">Phase DCE — Consultation <span>Administratif ★★★★★</span></div>
+        <div class="pb"><div class="pb-fill dce" style="width: 85%"></div></div>
+      </div>
+      <div class="pb-row">
+        <div class="pb-label">Phase DET — Suivi chantier <span>Exposition risques ★★★★★</span></div>
+        <div class="pb"><div class="pb-fill det" style="width: 95%"></div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- FOOTER -->
+<div class="footer">
+  <strong>Phénix-Architecte</strong> · Guide Maîtrise d'Œuvre — Marchés Privés · Basé sur la Boîte à Outils MAF (jan. 2026) et les bonnes pratiques de la profession<br>
+  <span style="margin-top: 6px; display: block;">Saint-Georges-de-Mons (63780) · phenix-architecte.fr · Ce guide est un outil pratique, non un document contractuel.</span>
+</div>
+
+<script>
+  function toggleCheck(item) {
+    item.classList.toggle('checked');
+  }
+
+  function toggleAcc(header) {
+    const body = header.nextElementSibling;
+    header.classList.toggle('open');
+    body.classList.toggle('open');
+  }
+</script>
+</body>
+</html>

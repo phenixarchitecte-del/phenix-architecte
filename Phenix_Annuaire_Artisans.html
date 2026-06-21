@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Phénix-Architecte · Annuaire Artisans</title>
+<title>Phénix-Architecture · Annuaire Artisans</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
@@ -226,7 +226,7 @@ select.fs:focus{border-color:var(--acc)}
 <body>
 <div id="phenix-login" style="display:flex;position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#0F1E3D,#1B2D5B,#2A5298);align-items:center;justify-content:center;padding:20px;font-family:'DM Sans',system-ui,sans-serif">
   <div style="background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.18);border-radius:16px;padding:34px 28px;max-width:360px;width:100%;text-align:center">
-    <div style="font-family:'DM Serif Display',Georgia,serif;font-size:30px;color:#fff;margin-bottom:4px">Phénix<span style="color:#7DC6E8">-Architecte</span></div>
+    <div style="font-family:'DM Serif Display',Georgia,serif;font-size:30px;color:#fff;margin-bottom:4px">Phénix<span style="color:#7DC6E8">-Architecture</span></div>
     <div style="font-size:11px;color:rgba(255,255,255,.5);letter-spacing:.12em;text-transform:uppercase;margin-bottom:26px">Connexion sécurisée</div>
     <input id="pl-email" type="email" autocomplete="username" placeholder="E-mail" style="width:100%;padding:12px 14px;margin-bottom:10px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.95);font-size:14px;outline:none">
     <input id="pl-pwd" type="password" autocomplete="current-password" placeholder="Mot de passe" onkeydown="if(event.key==='Enter')phenixDoLogin()" style="width:100%;padding:12px 14px;margin-bottom:14px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.95);font-size:14px;outline:none">
@@ -236,7 +236,7 @@ select.fs:focus{border-color:var(--acc)}
 </div>
 <div class="app">
 <aside class="sb">
-  <div class="sb-logo"><div class="sb-icon">🏛</div><div><div class="sb-name">Phénix-Architecte</div><div class="sb-sub">Annuaire Artisans</div></div></div>
+  <div class="sb-logo"><div class="sb-icon">🏛</div><div><div class="sb-name">Phénix-Architecture</div><div class="sb-sub">Annuaire Artisans</div></div></div>
   <div class="sb-sep">Navigation</div>
   <div class="sb-it on" onclick="goPage('ann',this)"><i class="ti ti-address-book"></i> Annuaire <span class="sb-badge" id="nb-tot">0</span></div>
   <div class="sb-it" onclick="goPage('fav',this)"><i class="ti ti-star"></i> Favoris <span class="sb-badge" id="nb-fav">0</span></div>
@@ -249,7 +249,7 @@ select.fs:focus{border-color:var(--acc)}
   <div class="sb-it" onclick="document.getElementById('imp').click()"><i class="ti ti-upload"></i> Importer</div>
   <input type="file" id="imp" accept=".json" style="display:none" onchange="importJ(event)">
   <div class="sb-it" onclick="if(window._auth)window._auth.logout()"><i class="ti ti-logout"></i> Déconnexion</div>
-  <div class="sb-bot"><span class="sdot" id="sdot"></span><span id="slbl">Synchronisé</span><div style="margin-top:3px">Phénix-Architecte © 2025</div></div>
+  <div class="sb-bot"><span class="sdot" id="sdot"></span><span id="slbl">Synchronisé</span><div style="margin-top:3px">Phénix-Architecture © 2025</div></div>
 </aside>
 <div class="main">
   <div class="topbar"><div class="tb-title" id="tb-title">Annuaire Artisans</div><button class="btn btn-p" onclick="openAdd()"><i class="ti ti-plus"></i> Nouvel artisan</button></div>
