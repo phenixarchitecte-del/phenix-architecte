@@ -204,10 +204,13 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
 ═══════════════════════════════════════════════ */
 @media (max-width: 700px) {
   body { min-height: 100dvh; }
-  .topbar { padding: 0 12px; height: 52px; gap: 8px; }
-  .logo { font-size: 16px; }
-  .logo span { font-size: 8.5px; }
-  .topbar-btn { padding: 6px 8px; font-size: 11px; gap: 4px; }
+  .topbar { padding: 0 10px; height: 52px; gap: 6px; }
+  .logo { font-size: 15px; }
+  .logo span { font-size: 8px; }
+  /* Texte masqué, icône seule — fonctionne même sans <span> */
+  .topbar-btn { padding: 8px 10px; font-size: 0 !important; gap: 0; min-width: 40px; justify-content: center; line-height: 1; }
+  .topbar-btn i, .topbar-btn .ti { font-size: 18px !important; display: inline-block; }
+  .topbar-actions { gap: 6px; }
   .topbar-info { display: none; }
   .layout { flex-direction: column; overflow: visible; min-height: unset; }
   .sidebar {
@@ -218,8 +221,7 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
     border-top: 1px solid rgba(74,156,199,.2);
     background: linear-gradient(0deg, #0F1E3D, #1B2D5B);
   }
-  .sidebar-section { display: none; }
-  .sidebar > div:last-child { display: none; }
+  .sidebar > div:not(.nav-item) { display: none !important; }
   .nav-item {
     flex: 1; flex-direction: column; align-items: center; justify-content: center;
     padding: 6px 4px; font-size: 10px; gap: 3px;
@@ -654,6 +656,7 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
 
 <script>
 const STORAGE_KEY='phenix-chantiers-v3';
+const LEGACY_KEYS=['phenix-chantiers-v2','phenix-chantiers-v1','phenix-chantiers'];
 const LOT_TEMPLATES={
   vrd:[{n:'Débroussaillage / nettoyage',q:1,u:'ff',pu:{eco:800,std:1200,haut:1800}},{n:'Terrassement général (excav.)',q:50,u:'m³',pu:{eco:35,std:50,haut:70}},{n:'Remblai et compactage',q:30,u:'m³',pu:{eco:20,std:30,haut:45}},{n:'Réseau EP (tranchées + fourreaux)',q:1,u:'ff',pu:{eco:1500,std:2500,haut:4000}}],
   go:[{n:'Fondations (semelles filantes)',q:20,u:'ml',pu:{eco:180,std:260,haut:380}},{n:'Murs en parpaing 20cm',q:80,u:'m²',pu:{eco:85,std:120,haut:165}},{n:'Dalle béton armé ep. 20cm',q:60,u:'m²',pu:{eco:90,std:130,haut:180}},{n:'Chaînages + linteaux',q:1,u:'ff',pu:{eco:2000,std:3200,haut:5000}}],
@@ -675,12 +678,28 @@ let importPreviewData=[];
 function loadState(){
   try{
     const saved=localStorage.getItem(STORAGE_KEY);
-    // Migrate from old key
-    if(!saved){
-      const old=localStorage.getItem('phenix-chantiers-v2');
-      if(old){state=JSON.parse(old);if(!state.chantiers)state.chantiers=[];}
+    if(saved){
+      state=JSON.parse(saved);
+      if(!state.chantiers)state.chantiers=[];
     } else {
-      state=JSON.parse(saved);if(!state.chantiers)state.chantiers=[];
+      // Migration : cherche toutes les anciennes clés possibles
+      let migrated=false;
+      for(const key of LEGACY_KEYS){
+        const old=localStorage.getItem(key);
+        if(old){
+          try{
+            const parsed=JSON.parse(old);
+            state.chantiers=(parsed.chantiers||parsed||[]);
+            if(!Array.isArray(state.chantiers))state.chantiers=[];
+            // Sauvegarde immédiate sous la nouvelle clé
+            localStorage.setItem(STORAGE_KEY,JSON.stringify({chantiers:state.chantiers}));
+            migrated=true;
+            console.log('Migration depuis '+key+' : '+state.chantiers.length+' chantier(s)');
+            break;
+          }catch(e2){}
+        }
+      }
+      if(!migrated)state.chantiers=[];
     }
   }catch(e){state={chantiers:[],currentChantier:null,currentLot:null,editingChantierIdx:null};}
   initUI();
