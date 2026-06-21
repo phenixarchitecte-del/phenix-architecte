@@ -3,6 +3,8 @@
 <html>
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -196,6 +198,97 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
 .ai-dot:nth-child(2){animation-delay:.2s}
 .ai-dot:nth-child(3){animation-delay:.4s}
 @keyframes ai-bounce{0%,80%,100%{transform:scale(0)}40%{transform:scale(1)}}
+
+/* ═══════════════════════════════════════════════
+   RESPONSIVE MOBILE — Android / iOS
+═══════════════════════════════════════════════ */
+@media (max-width: 700px) {
+  body { min-height: 100dvh; }
+  .topbar { padding: 0 12px; height: 52px; gap: 8px; }
+  .logo { font-size: 16px; }
+  .logo span { font-size: 8.5px; }
+  .topbar-btn { padding: 6px 8px; font-size: 11px; gap: 4px; }
+  .topbar-info { display: none; }
+  .layout { flex-direction: column; overflow: visible; min-height: unset; }
+  .sidebar {
+    width: 100%; height: 60px; min-height: 60px;
+    flex-direction: row; align-items: center; justify-content: space-around;
+    order: 99; position: fixed; bottom: 0; left: 0; right: 0; z-index: 900;
+    padding: 0; overflow: visible;
+    border-top: 1px solid rgba(74,156,199,.2);
+    background: linear-gradient(0deg, #0F1E3D, #1B2D5B);
+  }
+  .sidebar-section { display: none; }
+  .sidebar > div:last-child { display: none; }
+  .nav-item {
+    flex: 1; flex-direction: column; align-items: center; justify-content: center;
+    padding: 6px 4px; font-size: 10px; gap: 3px;
+    border-left: none; border-top: 2.5px solid transparent; min-height: 56px;
+  }
+  .nav-item.active { border-left: none; border-top: 2.5px solid #4A9CC7; background: rgba(74,156,199,.15); }
+  .nav-item i { font-size: 20px; width: auto; }
+  .nav-badge { display: none; }
+  .main { padding-bottom: 68px; overflow-y: auto; }
+  .page-header { padding: 14px 14px 10px; }
+  .page-title { font-size: 20px; }
+  .page-sub { font-size: 12px; }
+  .page-actions { margin-top: 10px; }
+  .page-actions .btn { width: 100%; justify-content: center; padding: 12px; font-size: 14px; }
+  .chantier-grid { grid-template-columns: 1fr !important; gap: 10px; padding: 10px; }
+  .chantier-card { padding: 14px; }
+  .chantier-name { font-size: 16px; }
+  .chantier-ht { font-size: 20px; }
+  .chantier-card .btn { padding: 10px 12px; font-size: 13px; min-height: 42px; }
+  .stats-row { grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px; }
+  .stat-card { padding: 12px; }
+  .stat-value { font-size: 18px; }
+  .lot-detail { flex-direction: column !important; }
+  .detail-main { padding: 12px 10px; }
+  .detail-side { width: 100% !important; border-left: none !important; border-top: 1.5px solid var(--border); padding: 12px 10px !important; }
+  .marge-bar { flex-direction: column; align-items: stretch; gap: 8px; }
+  .marge-bar input[type=number] { width: 100%; }
+  .marge-bar .btn { width: 100%; justify-content: center; }
+  .poste-table-wrap, #postes-tbody { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .poste-table { min-width: 620px; font-size: 12px; }
+  .poste-table input[type=text] { font-size: 12px; }
+  .poste-table input[type=number] { font-size: 12px; }
+  .total-block { margin: 10px; }
+  .total-row { font-size: 13px; padding: 8px 0; }
+  .total-row.main { font-size: 16px; }
+  .modal-overlay { align-items: flex-end; padding: 0; }
+  .modal, .modal.modal-lg {
+    width: 100% !important; max-width: 100% !important;
+    border-radius: 16px 16px 0 0;
+    max-height: 92dvh; overflow-y: auto;
+    padding: 20px 16px 32px;
+  }
+  .modal-title { font-size: 16px; }
+  .modal input, .modal select, .modal textarea { font-size: 16px !important; padding: 12px !important; }
+  .modal .btn { min-height: 46px; font-size: 14px; }
+  .modal-actions { flex-direction: column; gap: 8px; }
+  .modal-actions .btn { width: 100%; justify-content: center; }
+  .tab-btns { flex-wrap: wrap; }
+  .tab-btn { flex: 1; min-width: 80px; padding: 8px 6px; font-size: 11px; text-align: center; }
+  .import-zone { padding: 16px; font-size: 13px; }
+  textarea.import-txt { height: 120px; font-size: 13px !important; }
+  .preview-table { font-size: 11px; }
+  .btn { min-height: 42px; }
+  .btn-sm { min-height: 36px; padding: 6px 10px; }
+  .export-section { margin: 10px; padding: 14px; }
+  .chiffrage-header-bar { flex-wrap: wrap; gap: 8px; padding: 12px 10px 0; }
+  .chiffrage-header-bar select { flex: 1 1 100%; font-size: 15px; padding: 10px; }
+  .chiffrage-header-bar .btn { flex: 1; justify-content: center; }
+  .lot-toolbar { flex-direction: column; gap: 8px; padding: 8px 10px; }
+  .lot-toolbar .btn { width: 100%; justify-content: center; min-height: 46px; }
+  #lot-search { width: 100%; font-size: 15px; padding: 10px; }
+  .detail-header { padding: 12px 10px; flex-wrap: wrap; gap: 8px; }
+  .detail-header .btn-sm { min-height: 40px; }
+  .detail-title { font-size: 17px; }
+  .side-param label { font-size: 13px; }
+  .side-param input { font-size: 15px; padding: 8px 10px; }
+}
+* { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+
 </style>
 </head>
 <body>
@@ -269,8 +362,9 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
     </div>
 
     <!-- Table lots -->
+    <div id="lots-cards-mobile" style="padding:8px 10px"></div>
     <div class="table-wrap" id="lots-table-wrap">
-      <div class="table-card">
+      <div class="table-card" style="overflow-x:auto;-webkit-overflow-scrolling:touch">
         <div class="table-toolbar">
           <input type="text" placeholder="Rechercher un lot…" id="lot-search" oninput="renderLotsTable()">
           <button class="btn btn-sm btn-outline" onclick="exportCSV()"><i class="ti ti-download" aria-hidden="true"></i>CSV</button>
@@ -324,7 +418,7 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
                 <button class="btn btn-sm btn-accent" onclick="applyMargeGlobale()" style="padding:4px 12px"><i class="ti ti-refresh" aria-hidden="true"></i>Appliquer</button>
                 <button class="btn btn-sm btn-outline" onclick="openImportArtisanModal()" style="padding:4px 12px"><i class="ti ti-file-import" aria-hidden="true"></i>Importer devis artisan</button>
               </div>
-              <table class="poste-table">
+              <div class="poste-table-wrap"><table class="poste-table">
                 <thead>
                   <tr>
                     <th style="width:30%">Désignation</th>
@@ -791,7 +885,7 @@ function renderChiffrage(){
   const c=state.chantiers[idx];
   document.getElementById('chiffrage-sub').textContent=c.nom+(c.client?' — '+c.client:'');
   document.getElementById('chantier-select').value=idx;
-  renderLotsTable();
+  if(typeof renderLotsTableOrCards === "function") renderLotsTableOrCards(); else renderLotsTable();
 }
 
 function renderLotsTable(){
@@ -872,13 +966,13 @@ function saveNewLot(){
   const lot={num,nom,postes,aleas:5,honoraires:5,tva:20,statut:'Chiffrage',prestation:'std',notes:'',marge:20};
   if(!state.chantiers[state.currentChantier].lots)state.chantiers[state.currentChantier].lots=[];
   state.chantiers[state.currentChantier].lots.push(lot);
-  saveState();renderLotsTable();renderChantierGrid();closeModal('modal-lot');showToast('Lot créé');
+  saveState();if(typeof renderLotsTableOrCards === "function") renderLotsTableOrCards(); else renderLotsTable();renderChantierGrid();closeModal('modal-lot');showToast('Lot créé');
 }
 
 function deleteLot(li){
   if(!confirm('Supprimer ce lot ?'))return;
   state.chantiers[state.currentChantier].lots.splice(li,1);
-  saveState();renderLotsTable();renderChantierGrid();showToast('Lot supprimé');
+  saveState();if(typeof renderLotsTableOrCards === "function") renderLotsTableOrCards(); else renderLotsTable();renderChantierGrid();showToast('Lot supprimé');
 }
 
 // === DETAIL LOT ===
@@ -1045,7 +1139,7 @@ function saveLot(){
   const lot=state.chantiers[state.currentChantier].lots[li];
   lot.statut=document.getElementById('param-statut').value;
   lot.notes=document.getElementById('param-notes').value;
-  saveState();renderLotsTable();renderChantierGrid();
+  saveState();if(typeof renderLotsTableOrCards === "function") renderLotsTableOrCards(); else renderLotsTable();renderChantierGrid();
 }
 
 // === IMPORT DEVIS ARTISAN ===
@@ -1374,6 +1468,92 @@ td{padding:6px 10px;border-bottom:1px solid #C8D8E8}tr:nth-child(even) td{backgr
 
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 function fmt(n){return Math.round(n).toLocaleString('fr-FR');}
+
+// ─── RENDU MOBILE : lots en cards ──────────────────────────────
+function isMobile(){ return window.innerWidth <= 700; }
+
+function renderLotsTableOrCards(){
+  const mobileCards = document.getElementById('lots-cards-mobile');
+  const tableWrap   = document.getElementById('lots-table-wrap');
+  if(isMobile()){
+    mobileCards.style.display = 'block';
+    if(tableWrap) tableWrap.style.display = 'none';
+    renderLotsMobileCards();
+  } else {
+    mobileCards.style.display = 'none';
+    if(tableWrap) tableWrap.style.display = '';
+    if(typeof renderLotsTableOrCards === "function") renderLotsTableOrCards(); else renderLotsTable();
+  }
+}
+
+function renderLotsMobileCards(){
+  const idx = state.currentChantier;
+  if(idx === null) return;
+  const lots = state.chantiers[idx].lots || [];
+  const container = document.getElementById('lots-cards-mobile');
+  const q = (document.getElementById('lot-search').value || '').toLowerCase();
+  const filtered = q ? lots.filter(l => l.nom.toLowerCase().includes(q) || (l.num||'').toLowerCase().includes(q)) : lots;
+
+  if(!filtered.length){
+    container.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text3);font-size:14px">Aucun lot — appuyez sur « Nouveau lot »</div>';
+    updateStats(lots); return;
+  }
+
+  container.innerHTML = '';
+  filtered.forEach((lot, ri) => {
+    const li = lots.indexOf(lot);
+    let travArtisan=0, travClient=0;
+    (lot.postes||[]).forEach(p => {
+      const q = parseFloat(p.q)||0;
+      travArtisan += q * (parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
+      travClient  += q * (parseFloat(p.puClient)||parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
+    });
+    const aleas = travClient * (parseFloat(lot.aleas||5)/100);
+    const hon   = travClient * (parseFloat(lot.honoraires||5)/100);
+    const ht    = travClient + aleas + hon;
+    const ttc   = ht * (1 + (parseFloat(lot.tva||20)/100));
+    const margeEur = travClient - travArtisan;
+    const margePct = travArtisan > 0 ? Math.round((margeEur/travArtisan)*100) : 0;
+    const sc = {Chiffrage:'s-chiffrage', Valide:'s-valide', Revision:'s-revision'}[lot.statut||'Chiffrage'] || 's-chiffrage';
+
+    const card = document.createElement('div');
+    card.style.cssText = 'background:var(--surface);border-radius:var(--r-lg);padding:14px;margin-bottom:10px;box-shadow:var(--shadow);border:1.5px solid var(--border)';
+    card.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.06em;text-transform:uppercase">${lot.num||''}</div>
+          <div style="font-size:16px;font-weight:600;color:var(--text);margin-top:2px">${lot.nom}</div>
+        </div>
+        <span class="status-badge ${sc}" style="font-size:10px">${lot.statut||'Chiffrage'}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+        <div style="background:var(--surface2);border-radius:var(--r-md);padding:10px">
+          <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:2px">ACHAT HT</div>
+          <div style="font-size:15px;font-weight:700;color:var(--text)">${fmt(travArtisan)} €</div>
+        </div>
+        <div style="background:var(--accent-bg);border-radius:var(--r-md);padding:10px">
+          <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:2px">VENTE TTC</div>
+          <div style="font-size:15px;font-weight:700;color:var(--nav)">${fmt(ttc)} €</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <span class="marge-badge${margeEur<0?' neg':''}" style="font-size:12px">${margePct>=0?'+':''}${margePct}% marge</span>
+        <span style="font-size:12px;color:var(--text3)">${(lot.postes||[]).length} poste(s)</span>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" style="flex:1;justify-content:center;min-height:46px;font-size:14px" onclick="openLotDetail(${li})"><i class="ti ti-edit"></i> Détailler</button>
+        <button class="btn btn-danger btn-sm" style="min-height:46px;padding:0 14px" onclick="deleteLot(${li})"><i class="ti ti-trash"></i></button>
+      </div>`;
+    container.appendChild(card);
+  });
+  updateStats(lots);
+}
+
+window.addEventListener('resize', () => {
+  if(state.currentChantier !== null && document.getElementById('page-chiffrage').classList.contains('active')){
+    renderLotsTableOrCards();
+  }
+});
 
 loadState();
 </script>
