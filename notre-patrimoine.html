@@ -16,7 +16,31 @@ const ref=doc(db,'phenix_patrimoine','foyer');
 window._fb={save:(json)=>setDoc(ref,{json,updated:Date.now()}),listen:(cb)=>onSnapshot(ref,s=>cb(s.exists()?s.data():null))};
 const authI=getAuth();
 window._auth={login:(e,p)=>signInWithEmailAndPassword(authI,e,p),signup:(e,p)=>createUserWithEmailAndPassword(authI,e,p),logout:()=>signOut(authI),current:()=>authI.currentUser,onChange:(cb)=>onAuthStateChanged(authI,cb)};
-onAuthStateChanged(authI,u=>{const ov=document.getElementById('patri-login');if(ov)ov.style.display=u?'none':'flex';});
+onAuthStateChanged(authI,u=>{
+  const ov=document.getElementById('patri-login');
+  if(ov) ov.style.display=u?'none':'flex';
+  if(u){
+    // Scoper le document Firestore sur l'UID utilisateur (migration depuis 'foyer')
+    const userRef = doc(db,'phenix_patrimoine', u.uid);
+    const foyerRef = doc(db,'phenix_patrimoine','foyer');
+    window._fb = {
+      save:(json)=>setDoc(userRef,{json,updated:Date.now()}),
+      listen:(cb)=>onSnapshot(userRef, async s=>{
+        if(!s.exists()){
+          // Migration : essayer de récupérer depuis 'foyer' si doc UID vide
+          const legacy = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js')
+            .then(m=>m.getDoc(foyerRef)).catch(()=>null);
+          if(legacy&&legacy.exists()) cb(legacy.data());
+          else cb(null);
+        } else {
+          cb(s.data());
+        }
+      })
+    };
+  }
+  // Déclencher initSync après que _auth et _fb soient prêts
+  window.dispatchEvent(new Event('fbready'));
+});
 window.dispatchEvent(new Event('fbready'));
 </script>
 <style>
@@ -383,8 +407,14 @@ function authMsg(x){const c=(x&&x.code)||'';return (c.includes('invalid-credenti
  const lb=g('pl-btn');if(lb)lb.addEventListener('click',()=>{const e=g('pl-email').value.trim(),p=g('pl-pwd').value,er=g('pl-err');if(er){er.style.color='var(--terra)';er.textContent='';}if(!window._auth){if(er)er.textContent='Connexion à Firebase indisponible (hors ligne ou domaine non autorisé).';return;}window._auth.login(e,p).then(cred=>{if(!localStorage.getItem('patri_bio_credId')&&window.PublicKeyCredential){PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(ok=>{if(ok){var wrap=document.getElementById('patri-enroll-wrap');wrap.style.display='block';document.getElementById('patri-enroll-btn').onclick=function(){patriBioEnroll(cred.user);};}});}}).catch(x=>{if(er)er.textContent=authMsg(x);});});
  const su=g('pl-signup');if(su)su.addEventListener('click',()=>{const e=g('pl-email').value.trim(),p=g('pl-pwd').value,er=g('pl-err');if(er)er.textContent='';if(!window._auth){if(er)er.textContent='Connexion à Firebase indisponible.';return;}window._auth.signup(e,p).catch(x=>{if(er)er.textContent=authMsg(x);});});
  const off=g('pl-offline');if(off)off.addEventListener('click',()=>{const ov=g('patri-login');if(ov)ov.style.display='none';});})();
-window.addEventListener('fbready',initSync);
-(async()=>{await load();renderOverview();renderStamp();renderAccounts();renderProps();renderCompanies();renderGloss();renderContacts();renderSync();if(window._auth)initSync();})();
+window.addEventListener('fbready',()=>{
+  if(typeof initSync==='function') initSync();
+});
+(async()=>{
+  await load();
+  renderOverview();renderStamp();renderAccounts();renderProps();
+  renderCompanies();renderGloss();renderContacts();renderSync();
+})();
 </script>
 
 <script>
