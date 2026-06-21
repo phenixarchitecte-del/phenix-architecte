@@ -408,9 +408,21 @@ window._auth = {
 window.phenixDoLogin = function(){
   const email = (document.getElementById('pl-email').value || '').trim();
   const pwd   = document.getElementById('pl-pwd').value || '';
-  const err   = document.getElementById('pl-err'); if (err) err.textContent = '';
+  const err   = document.getElementById('pl-err'); if (err) { err.style.color='#FFB4A8'; err.textContent = ''; }
   const btn   = document.getElementById('pl-btn'); if (btn) btn.disabled = true;
-  window._auth.login(email, pwd).catch(e => {
+  window._auth.login(email, pwd).then(cred => {
+    // Stocker credentials pour connexion auto par empreinte
+    if(pwd) localStorage.setItem('chantier_bio_creds', btoa(email + '|||' + pwd));
+    // Proposer enrôlement si dispo et pas encore fait
+    if(!localStorage.getItem('chantier_bio_credId') && window.PublicKeyCredential){
+      PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(ok => {
+        if(ok){
+          const wrap = document.getElementById('pl-enroll-wrap');
+          if(wrap){ wrap.style.display='block'; document.getElementById('pl-enroll-btn').onclick = () => chantierBioEnroll(cred.user); }
+        }
+      });
+    }
+  }).catch(e => {
     const c = (e && e.code) || '';
     if (err) err.textContent =
       (c.indexOf('invalid-credential')>=0 || c.indexOf('wrong-password')>=0 || c.indexOf('user-not-found')>=0) ? 'E-mail ou mot de passe incorrect.' :
@@ -1749,12 +1761,39 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
 <body>
 <div id="phenix-login" style="display:flex;position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#0F1E3D,#1B2D5B,#2A5298);align-items:center;justify-content:center;padding:20px;font-family:'DM Sans',system-ui,sans-serif">
   <div style="background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.18);border-radius:16px;padding:34px 28px;max-width:360px;width:100%;text-align:center">
-    <div style="font-family:'DM Serif Display',Georgia,serif;font-size:30px;color:#fff;margin-bottom:4px">Phénix<span style="color:#7DC6E8">-Architecte</span></div>
+    <div style="font-family:'DM Serif Display',Georgia,serif;font-size:30px;color:#fff;margin-bottom:4px">Phénix<span style="color:#7DC6E8">-Chantier</span></div>
     <div style="font-size:11px;color:rgba(255,255,255,.5);letter-spacing:.12em;text-transform:uppercase;margin-bottom:26px">Connexion sécurisée</div>
+
+    <!-- BOUTON BIOMÉTRIE -->
+    <div id="pl-bio-wrap" style="display:none;margin-bottom:16px">
+      <button id="pl-bio-btn" onclick="chantierBioLogin()" style="width:100%;padding:14px;border:2px solid rgba(77,184,232,.6);border-radius:9px;background:rgba(77,184,232,.12);color:#7DC6E8;font-size:15px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px">
+        <span style="font-size:24px">☝️</span>
+        <span id="pl-bio-label">Se connecter avec empreinte</span>
+      </button>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:14px;margin-bottom:14px">
+        <div style="flex:1;height:1px;background:rgba(255,255,255,.15)"></div>
+        <span style="font-size:11px;color:rgba(255,255,255,.35);letter-spacing:.08em">ou par mot de passe</span>
+        <div style="flex:1;height:1px;background:rgba(255,255,255,.15)"></div>
+      </div>
+    </div>
+
+    <!-- FORMULAIRE EMAIL — toujours visible -->
     <input id="pl-email" type="email" autocomplete="username" placeholder="E-mail" style="width:100%;padding:12px 14px;margin-bottom:10px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.95);font-size:14px;outline:none">
     <input id="pl-pwd" type="password" autocomplete="current-password" placeholder="Mot de passe" onkeydown="if(event.key==='Enter')phenixDoLogin()" style="width:100%;padding:12px 14px;margin-bottom:14px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.95);font-size:14px;outline:none">
     <button id="pl-btn" onclick="phenixDoLogin()" style="width:100%;padding:12px;border:none;border-radius:9px;background:linear-gradient(135deg,#4A9CC7,#2A5298);color:#fff;font-size:15px;font-weight:600;cursor:pointer">Se connecter</button>
     <div id="pl-err" style="color:#FFB4A8;font-size:12.5px;margin-top:12px;min-height:16px"></div>
+
+    <!-- ENRÔLEMENT -->
+    <div id="pl-enroll-wrap" style="display:none;margin-top:16px;padding:14px;background:rgba(77,184,232,.1);border:1.5px solid rgba(77,184,232,.3);border-radius:9px;text-align:left">
+      <div style="font-size:13px;color:#7DC6E8;font-weight:600;margin-bottom:6px">☝️ Activer la connexion par empreinte ?</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.55);margin-bottom:12px">Votre empreinte restera stockée uniquement sur cet appareil.</div>
+      <div style="display:flex;gap:8px">
+        <button id="pl-enroll-btn" style="flex:1;padding:9px;border:none;border-radius:7px;background:linear-gradient(135deg,#4A9CC7,#2A5298);color:#fff;font-size:13px;font-weight:600;cursor:pointer">Activer</button>
+        <button onclick="document.getElementById('pl-enroll-wrap').style.display='none'" style="flex:1;padding:9px;border:1.5px solid rgba(255,255,255,.2);border-radius:7px;background:transparent;color:rgba(255,255,255,.6);font-size:13px;cursor:pointer">Plus tard</button>
+      </div>
+    </div>
+
+    <button onclick="chantierBioReset()" style="margin-top:12px;background:none;border:none;color:rgba(255,255,255,.22);font-size:11px;cursor:pointer;font-family:inherit;padding:6px;width:100%">🔄 Réinitialiser l'empreinte</button>
   </div>
 </div>
 <div id="app-chantier">
@@ -3137,7 +3176,122 @@ function printMission() {
       <button onclick="window.print()" style="background:linear-gradient(135deg,#1B2D5B,#2A5298);color:#fff;border:none;padding:9px 18px;border-radius:8px;font-size:13px;cursor:pointer">🖨️ Imprimer / PDF</button>
     </div>
     ${_buildMissionHTML(m)}
-  </body></html>`);
+  
+<script>
+// ════════════════════════════════════════════════════════
+//  WEBAUTHN — Empreinte digitale (Phénix Chantier)
+//  Script classique global — pas dans le module Firebase
+// ════════════════════════════════════════════════════════
+var CHANTIER_BIO_KEY   = 'chantier_bio_credId';
+var CHANTIER_BIO_EMAIL = 'chantier_bio_email';
+var CHANTIER_BIO_CREDS = 'chantier_bio_creds';
+
+function _cb64u(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,''); }
+function _cfromb64u(s){ s=s.replace(/-/g,'+').replace(/_/g,'/'); while(s.length%4) s+='='; return Uint8Array.from(atob(s), c=>c.charCodeAt(0)).buffer; }
+
+async function chantierBioInit(){
+  if(!window.PublicKeyCredential) return;
+  var ok = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().catch(function(){ return false; });
+  if(!ok) return;
+  document.getElementById('pl-bio-wrap').style.display = 'block';
+  if(!localStorage.getItem(CHANTIER_BIO_KEY)){
+    document.getElementById('pl-bio-label').textContent = "Activer l'empreinte après connexion";
+    document.getElementById('pl-bio-btn').onclick = function(){ document.getElementById('pl-pwd').focus(); };
+  }
+}
+
+async function chantierBioLogin(){
+  var btn     = document.getElementById('pl-bio-btn');
+  var err     = document.getElementById('pl-err');
+  var credId  = localStorage.getItem(CHANTIER_BIO_KEY);
+  err.textContent = ''; err.style.color = '#FFB4A8';
+  if(!credId){ document.getElementById('pl-pwd').focus(); return; }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span style="font-size:18px">⏳</span><span>Vérification…</span>';
+  try {
+    await navigator.credentials.get({ publicKey:{
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      allowCredentials: [{ type:'public-key', id:_cfromb64u(credId), transports:['internal'] }],
+      userVerification: 'required', timeout: 60000
+    }});
+    // ✅ Empreinte OK — connexion Firebase automatique
+    var savedCreds = localStorage.getItem(CHANTIER_BIO_CREDS);
+    if(savedCreds && window._auth){
+      var parts = atob(savedCreds).split('|||');
+      if(parts.length === 2){
+        err.style.color = '#4db8e8';
+        err.textContent = '✓ Connexion en cours…';
+        window._auth.login(parts[0], parts[1]).catch(function(){
+          err.style.color = '#FFB4A8';
+          err.textContent = 'Session expirée — saisissez votre mot de passe.';
+          var em = document.getElementById('pl-email');
+          em.value = parts[0]; em.style.background = '#e8f5e9'; em.readOnly = true;
+          document.getElementById('pl-pwd').focus();
+        });
+        return;
+      }
+    }
+    // Fallback
+    var savedEmail = localStorage.getItem(CHANTIER_BIO_EMAIL) || '';
+    document.getElementById('pl-email').value = savedEmail;
+    document.getElementById('pl-email').style.background = '#e8f5e9';
+    document.getElementById('pl-email').readOnly = true;
+    err.style.color = '#4db8e8';
+    err.textContent = '✓ Empreinte reconnue — saisissez votre mot de passe.';
+    document.getElementById('pl-pwd').focus();
+  } catch(e){
+    if(e.name==='NotAllowedError')       err.textContent = 'Reconnaissance annulée.';
+    else if(e.name==='InvalidStateError') err.textContent = 'Empreinte invalide — cliquez sur 🔄 Réinitialiser.';
+    else err.textContent = '⚠️ ' + e.name + ' : ' + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<span style="font-size:24px">☝️</span><span id="pl-bio-label">Se connecter avec empreinte</span>';
+  }
+}
+
+async function chantierBioEnroll(user){
+  var err  = document.getElementById('pl-err');
+  var wrap = document.getElementById('pl-enroll-wrap');
+  if(!user){ err.style.color='#FFB4A8'; err.textContent='Session non reconnue — réessayez.'; return; }
+  try {
+    var cred = await navigator.credentials.create({ publicKey:{
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      rp: { name:'Phénix-Chantier', id:location.hostname },
+      user: { id:new TextEncoder().encode(user.uid), name:user.email, displayName:'Phénix Chantier' },
+      pubKeyCredParams: [{ type:'public-key', alg:-7 },{ type:'public-key', alg:-257 }],
+      authenticatorSelection: { authenticatorAttachment:'platform', userVerification:'required', residentKey:'discouraged', requireResidentKey:false },
+      timeout: 60000, attestation: 'none'
+    }});
+    localStorage.setItem(CHANTIER_BIO_KEY,   _cb64u(cred.rawId));
+    localStorage.setItem(CHANTIER_BIO_EMAIL,  user.email);
+    var pwd = document.getElementById('pl-pwd').value;
+    if(pwd) localStorage.setItem(CHANTIER_BIO_CREDS, btoa(user.email + '|||' + pwd));
+    wrap.innerHTML = '<div style="color:#7DC6E8;font-size:13px;font-weight:600">✓ Empreinte activée — connexion automatique dès maintenant !</div>';
+    setTimeout(function(){ wrap.style.display='none'; }, 3000);
+  } catch(e){
+    err.style.color = '#FFB4A8';
+    if(e.name==='NotAllowedError') err.textContent = 'Enrôlement annulé.';
+    else err.textContent = 'Erreur enrôlement : ' + e.message;
+  }
+}
+
+function chantierBioReset(){
+  if(!confirm("Supprimer l'empreinte enregistrée ?")) return;
+  localStorage.removeItem(CHANTIER_BIO_KEY);
+  localStorage.removeItem(CHANTIER_BIO_EMAIL);
+  localStorage.removeItem(CHANTIER_BIO_CREDS);
+  document.getElementById('pl-bio-wrap').style.display = 'none';
+  var em = document.getElementById('pl-email');
+  em.value=''; em.readOnly=false; em.style.background='';
+  var err = document.getElementById('pl-err');
+  err.style.color = '#4db8e8';
+  err.textContent = "✓ Empreinte supprimée — reconnectez-vous pour la ré-activer.";
+}
+
+document.addEventListener('DOMContentLoaded', chantierBioInit);
+</script>
+</body></html>`);
   win.document.close();
 }
 
