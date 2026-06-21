@@ -3133,7 +3133,7 @@ function _buildMissionText() {
 // ── Envoi ────────────────────────────────────────────────────
 function sendMissionWhatsApp() {
   const m = _getActiveMission();
-  if (!m) { toast('⚠️ Enregistrez d\'abord la fiche.'); return; }
+  if (!m) { toast('⚠️ Enregistrez d'abord la fiche.'); return; }
   const inv = state.intervenants.find(i => i.id == m.intervId);
   const tel = (inv && inv.tel || '').replace(/[\s.\-()]/g, '');
   const encoded = encodeURIComponent(_buildMissionText());
@@ -3142,7 +3142,7 @@ function sendMissionWhatsApp() {
 
 function sendMissionEmail() {
   const m = _getActiveMission();
-  if (!m) { toast('⚠️ Enregistrez d\'abord la fiche.'); return; }
+  if (!m) { toast('⚠️ Enregistrez d'abord la fiche.'); return; }
   const inv = state.intervenants.find(i => i.id == m.intervId);
   const ch  = m.chantierId ? state.chantiers.find(c => c.id == m.chantierId) : null;
   const subject = encodeURIComponent(`Fiche Mission — ${m.libelle} — ${ch ? ch.nom : ''}`);
@@ -3152,7 +3152,7 @@ function sendMissionEmail() {
 
 function copyMissionText() {
   const text = _buildMissionText();
-  if (!text) { toast('⚠️ Enregistrez d\'abord la fiche.'); return; }
+  if (!text) { toast('⚠️ Enregistrez d'abord la fiche.'); return; }
   navigator.clipboard.writeText(text)
     .then(() => toast('✅ Message copié !'))
     .catch(() => {
@@ -3165,7 +3165,7 @@ function copyMissionText() {
 
 function printMission() {
   const m = _getActiveMission();
-  if (!m) { toast('⚠️ Enregistrez d\'abord la fiche.'); return; }
+  if (!m) { toast('⚠️ Enregistrez d'abord la fiche.'); return; }
   const win = window.open('', '_blank', 'width=600,height=700');
   win.document.write(`<!DOCTYPE html><html lang="fr"><head>
     <meta charset="UTF-8"><title>Fiche Mission</title>
@@ -3315,7 +3315,7 @@ const CRV_STEPS = [
     id:      'date',
     name:    'Date',
     question:'Quelle est la date de la réunion ?',
-    hint:    'Dites "aujourd\'hui", "hier", ou une date. Ex : "lundi 12 juin"',
+    hint:    'Dites "aujourd'hui", "hier", ou une date. Ex : "lundi 12 juin"',
     type:    'date',
     skippable: false,
   },
@@ -3338,7 +3338,7 @@ const CRV_STEPS = [
   {
     id:      'avancement',
     name:    'Avancement',
-    question:'Décrivez l\'avancement des travaux.',
+    question:'Décrivez l'avancement des travaux.',
     hint:    'Parlez librement. Ex : "La charpente est posée, les menuiseries extérieures sont en cours"',
     type:    'textarea',
     skippable: true,
@@ -3347,7 +3347,7 @@ const CRV_STEPS = [
     id:      'reserves',
     name:    'Réserves',
     question:'Y a-t-il des réserves ou points à lever ?',
-    hint:    'Dites "aucune" s\'il n\'y en a pas. Sinon décrivez les problèmes constatés.',
+    hint:    'Dites "aucune" s'il n'y en a pas. Sinon décrivez les problèmes constatés.',
     type:    'textarea',
     skippable: true,
   },
@@ -3600,13 +3600,13 @@ function _crvProcessAnswer(text) {
     parsed = _crvParseChantier(t);
     if (!parsed) {
       _crvSetStatus('Chantier non trouvé. Réessayez avec le nom exact.');
-      _crvSpeak('Je n\'ai pas trouvé ce chantier. Répétez le nom du chantier.');
+      _crvSpeak('Je n'ai pas trouvé ce chantier. Répétez le nom du chantier.');
       return;
     }
   } else if (s.type === 'date') {
     parsed = _crvParseDate(t);
     if (!parsed && !s.skippable) {
-      _crvSetStatus('Date non comprise. Dites par exemple "aujourd\'hui" ou "lundi 15 juin".');
+      _crvSetStatus('Date non comprise. Dites par exemple "aujourd'hui" ou "lundi 15 juin".');
       _crvSpeak('Date non comprise. Réessayez.');
       return;
     }
@@ -3789,7 +3789,7 @@ function crvConfirmSave() {
 
   // Proposer d'ouvrir le CR pour compléter
   setTimeout(() => {
-    if (confirm('CR vocal enregistré ✓\n\nVoulez-vous l\'ouvrir pour ajouter des photos ou des plans ?')) {
+    if (confirm('CR vocal enregistré ✓\n\nVoulez-vous l'ouvrir pour ajouter des photos ou des plans ?')) {
       openModalCR(cr.id);
     }
   }, 800);
@@ -3893,7 +3893,7 @@ function statChantierBadge(s) {
 }
 function statLotBadge(s) {
   const m = { chiffrage:'badge-gray', ao:'badge-navy', attribue:'badge-blue', en_cours:'badge-amber', termine:'badge-green', reserve:'badge-red' };
-  const l = { chiffrage:'Chiffrage', ao:'Appel d\'offres', attribue:'Attribué', en_cours:'En cours', termine:'Terminé', reserve:'Réserves' };
+  const l = { chiffrage:'Chiffrage', ao:'Appel d'offres', attribue:'Attribué', en_cours:'En cours', termine:'Terminé', reserve:'Réserves' };
   return `<span class="badge ${m[s]||'badge-gray'}">${l[s]||s}</span>`;
 }
 function statFacBadge(s) {
@@ -4167,7 +4167,7 @@ function openModalInterv(id) {
   if (id) {
     const i = state.intervenants.find(x => x.id == id);
     if (!i) return;
-    document.getElementById('mIntervTitle').textContent = 'Modifier l\'intervenant';
+    document.getElementById('mIntervTitle').textContent = 'Modifier l'intervenant';
     document.getElementById('int-nom').value = i.nom;
     document.getElementById('int-metier').value = i.metier;
     document.getElementById('int-contact').value = i.contact || '';
@@ -5286,7 +5286,7 @@ async function exportCRPdfById(id) {
   const cr = state.comptes_rendus.find(x => x.id == id);
   if (!cr) return;
   const ch = state.chantiers.find(c => c.id == cr.chantierId);
-  toast('⏳ Préparation de l\'export…');
+  toast('⏳ Préparation de l'export…');
   // Rendre les pages PDF à la volée si besoin
   if (cr.plans && cr.plans.length && typeof pdfjsLib !== 'undefined') {
     for (const plan of cr.plans) {
@@ -5316,7 +5316,7 @@ async function exportCRPdfById(id) {
 function exportCRPdf() {
   const id = document.getElementById('cr-edit-id').value;
   const cr = id ? state.comptes_rendus.find(x => x.id == id) : null;
-  if (!cr) { toast('⚠️ Enregistrez d\'abord le CR.'); return; }
+  if (!cr) { toast('⚠️ Enregistrez d'abord le CR.'); return; }
   saveCR();
   exportCRPdfById(parseInt(id));
 }
@@ -5717,7 +5717,7 @@ function exportSynthesePDF() {
       svg2 += '</svg>';
       o += svg2;
       o += '<div style="display:flex;gap:12px;font-size:9px;color:#4A6080;margin-top:5px">';
-      o += '<span style="color:#4A9CC7">▬ En cours</span><span style="color:#2D7A4F">▬ Terminé</span><span style="color:#C0392B">▬ En retard</span><span style="color:#4A9CC7">┆ Aujourd\'hui</span>';
+      o += '<span style="color:#4A9CC7">▬ En cours</span><span style="color:#2D7A4F">▬ Terminé</span><span style="color:#C0392B">▬ En retard</span><span style="color:#4A9CC7">┆ Aujourd'hui</span>';
       o += '</div></div>';
     }
 
