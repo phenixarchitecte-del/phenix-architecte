@@ -295,6 +295,18 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
 </head>
 <body>
 
+<!-- LOGIN GATE -->
+<div id="phenix-login" style="display:flex;position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#0F1E3D,#1B2D5B,#2A5298);align-items:center;justify-content:center;padding:20px;font-family:'DM Sans',system-ui,sans-serif">
+  <div style="background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.18);border-radius:16px;padding:34px 28px;max-width:360px;width:100%;text-align:center">
+    <div style="font-family:'DM Serif Display',Georgia,serif;font-size:30px;color:#fff;margin-bottom:4px">Phénix<span style="color:#7DC6E8">-Conception</span></div>
+    <div style="font-size:11px;color:rgba(255,255,255,.5);letter-spacing:.12em;text-transform:uppercase;margin-bottom:26px">Chiffrage · Connexion</div>
+    <input id="pl-email" type="email" autocomplete="username" placeholder="E-mail" style="width:100%;padding:12px 14px;margin-bottom:10px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.95);font-size:14px;outline:none">
+    <input id="pl-pwd" type="password" autocomplete="current-password" placeholder="Mot de passe" onkeydown="if(event.key===&quot;Enter&quot;)phenixDoLogin()" style="width:100%;padding:12px 14px;margin-bottom:14px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.95);font-size:14px;outline:none">
+    <button id="pl-btn" onclick="phenixDoLogin()" style="width:100%;padding:12px;border:none;border-radius:9px;background:linear-gradient(135deg,#4A9CC7,#2A5298);color:#fff;font-size:15px;font-weight:600;cursor:pointer">Se connecter</button>
+    <div id="pl-err" style="color:#FFB4A8;font-size:12.5px;margin-top:12px;min-height:16px"></div>
+  </div>
+</div>
+
 <div class="topbar">
   <div class="logo">Phénix-Conception<span>Contractant Général · Maître d'Œuvre</span></div>
   <div class="topbar-sep"></div>
@@ -654,7 +666,97 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
 
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
 
-<script>
+<script type="module">
+import { initializeApp }    from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut }
+                             from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { getFirestore, doc, getDoc, setDoc, collection, getDocs, deleteDoc }
+                             from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+const firebaseConfig = {
+  apiKey:            "AIzaSyCjNKNvS6p3nqE6-_Gw9I397ZtXm2FG1ew",
+  authDomain:        "phenix-architecte-9151b.firebaseapp.com",
+  projectId:         "phenix-architecte-9151b",
+  storageBucket:     "phenix-architecte-9151b.firebasestorage.app",
+  messagingSenderId: "811231684720",
+  appId:             "1:811231684720:web:413fa324ae43c07607acb5"
+};
+const app  = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db   = getFirestore(app);
+
+// ── Auth gate ────────────────────────────────────────────────
+window._auth = {
+  login:  (e,p) => signInWithEmailAndPassword(auth, e, p),
+  logout: () => signOut(auth),
+  current: () => auth.currentUser
+};
+window.phenixDoLogin = function(){
+  const email=(document.getElementById('pl-email').value||'').trim();
+  const pwd=document.getElementById('pl-pwd').value||'';
+  const err=document.getElementById('pl-err'); if(err){err.style.color='#FFB4A8';err.textContent='';}
+  const btn=document.getElementById('pl-btn'); if(btn)btn.disabled=true;
+  window._auth.login(email,pwd).then(cred=>{
+    if(pwd) localStorage.setItem('chiffrage_bio_creds',btoa(email+'|||'+pwd));
+    if(!localStorage.getItem('chiffrage_bio_credId')&&window.PublicKeyCredential){
+      PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(ok=>{
+        if(ok){/* futur enrôlement bio */}
+      });
+    }
+  }).catch(e=>{
+    const c=(e&&e.code)||'';
+    if(err) err.textContent=
+      (c.includes('invalid-credential')||c.includes('wrong-password')||c.includes('user-not-found'))?'E-mail ou mot de passe incorrect.':
+      c.includes('invalid-email')?'E-mail invalide.':
+      c.includes('too-many-requests')?'Trop de tentatives.':
+      'Erreur : '+(c||(e&&e.message)||'');
+  }).finally(()=>{if(btn)btn.disabled=false;});
+};
+let _dispatched=false;
+onAuthStateChanged(auth, user=>{
+  const ov=document.getElementById('phenix-login');
+  if(user){
+    if(ov)ov.style.display='none';
+    if(!_dispatched){_dispatched=true;loadChantiers();}
+  } else {
+    if(ov)ov.style.display='flex';
+  }
+});
+
+// ── Firestore helpers ────────────────────────────────────────
+const COLL = 'phenix_chiffrage';
+
+async function saveChantiers(){
+  const user = auth.currentUser;
+  if(!user) return;
+  try{
+    await setDoc(doc(db, COLL, user.uid), { chantiers: state.chantiers, updatedAt: Date.now() });
+    updateSyncStatus('saved');
+  }catch(e){ console.error('Save error', e); updateSyncStatus('err'); }
+}
+
+async function loadChantiers(){
+  const user = auth.currentUser;
+  if(!user) return;
+  try{
+    const snap = await getDoc(doc(db, COLL, user.uid));
+    if(snap.exists()){
+      const data = snap.data();
+      state.chantiers = data.chantiers || [];
+    } else {
+      // Migration localStorage → Firestore (premier chargement)
+      const legacyKeys = ['phenix-chantiers-v3','phenix-chantiers-v2','phenix-chantiers-v1'];
+      for(const key of legacyKeys){
+        const raw = localStorage.getItem(key);
+        if(raw){ try{ const parsed=JSON.parse(raw); state.chantiers=parsed.chantiers||[]; break; }catch(e2){} }
+      }
+    }
+    initUI();
+    updateSyncStatus('ok');
+  }catch(e){ console.error('Load error', e); updateSyncStatus('err'); }
+}
+
+// Clé locale pour compatibilité (non utilisée pour la sync)
 const STORAGE_KEY='phenix-chantiers-v3';
 const LEGACY_KEYS=['phenix-chantiers-v2','phenix-chantiers-v1','phenix-chantiers'];
 const LOT_TEMPLATES={
@@ -676,41 +778,16 @@ let state={chantiers:[],currentChantier:null,currentLot:null,editingChantierIdx:
 let importPreviewData=[];
 
 function loadState(){
-  try{
-    const saved=localStorage.getItem(STORAGE_KEY);
-    if(saved){
-      state=JSON.parse(saved);
-      if(!state.chantiers)state.chantiers=[];
-    } else {
-      // Migration : cherche toutes les anciennes clés possibles
-      let migrated=false;
-      for(const key of LEGACY_KEYS){
-        const old=localStorage.getItem(key);
-        if(old){
-          try{
-            const parsed=JSON.parse(old);
-            state.chantiers=(parsed.chantiers||parsed||[]);
-            if(!Array.isArray(state.chantiers))state.chantiers=[];
-            // Sauvegarde immédiate sous la nouvelle clé
-            localStorage.setItem(STORAGE_KEY,JSON.stringify({chantiers:state.chantiers}));
-            migrated=true;
-            console.log('Migration depuis '+key+' : '+state.chantiers.length+' chantier(s)');
-            break;
-          }catch(e2){}
-        }
-      }
-      if(!migrated)state.chantiers=[];
-    }
-  }catch(e){state={chantiers:[],currentChantier:null,currentLot:null,editingChantierIdx:null};}
-  initUI();
+  // Auth required — loadChantiers() est appelé par onAuthStateChanged
+  // Ici on initialise juste l'UI vide le temps du chargement
   updateSyncStatus('ok');
 }
 
 function saveState(){
-  try{
-    localStorage.setItem(STORAGE_KEY,JSON.stringify({chantiers:state.chantiers}));
-    updateSyncStatus('saved');
-  }catch(e){updateSyncStatus('err');}
+  // Sauvegarde Firestore (sync multi-appareils)
+  if(typeof saveChantiers === 'function') saveChantiers();
+  // Aussi en localStorage pour offline/fallback
+  try{ localStorage.setItem(STORAGE_KEY,JSON.stringify({chantiers:state.chantiers})); }catch(e){}
 }
 
 function updateSyncStatus(status){
@@ -1575,6 +1652,7 @@ window.addEventListener('resize', () => {
 });
 
 loadState();
+window.phenixDoLogin = phenixDoLogin;
 </script>
 </body>
 </html>
