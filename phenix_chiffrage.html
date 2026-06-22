@@ -198,6 +198,7 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
 .ai-dot:nth-child(2){animation-delay:.2s}
 .ai-dot:nth-child(3){animation-delay:.4s}
 @keyframes ai-bounce{0%,80%,100%{transform:scale(0)}40%{transform:scale(1)}}
+@keyframes spin{to{transform:rotate(360deg)}}
 
 /* ═══════════════════════════════════════════════
    RESPONSIVE MOBILE — Android / iOS
@@ -313,6 +314,7 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
   <div class="topbar-actions">
     <button class="topbar-btn" onclick="exportData()" title="Exporter les données (sauvegarde)"><i class="ti ti-cloud-upload" aria-hidden="true"></i>Sauvegarder</button>
     <label class="topbar-btn" title="Importer des données depuis un autre appareil" style="cursor:pointer"><i class="ti ti-cloud-download" aria-hidden="true"></i>Importer<input type="file" accept=".json" onchange="importData(event)" style="display:none"></label>
+        <button class="topbar-btn" id="btn-push-cloud" onclick="pushToCloud()" title="Pousser données locales vers Firebase" style="display:none;background:linear-gradient(135deg,#4A9CC7,#2A5298);color:white;border:none"><i class="ti ti-cloud-arrow-up" aria-hidden="true"></i></button>
   </div>
   <div class="topbar-info" id="sync-info"><span class="sync-dot" id="sync-dot"></span><span id="sync-label">Prêt</span></div>
 </div>
@@ -785,6 +787,10 @@ async function loadChantiers(){
   }
 }
 
+// Expositions globales (module isolé, onclick ne voit pas le scope)
+window.saveChantiers = saveChantiers;
+window.loadChantiers = loadChantiers;
+
 </script>
 <script>
 const STORAGE_KEY='phenix-chantiers-v3';
@@ -815,10 +821,10 @@ function loadState(){
 }
 
 function saveState(){
-  // Sauvegarde Firestore (sync multi-appareils)
-  if(typeof saveChantiers === 'function') saveChantiers();
-  // Aussi en localStorage pour offline/fallback
+  // localStorage (toujours, même hors connexion)
   try{ localStorage.setItem(STORAGE_KEY,JSON.stringify({chantiers:state.chantiers})); }catch(e){}
+  // Firestore (sync multi-appareils, si connecté)
+  if(typeof window.saveChantiers === 'function') window.saveChantiers();
 }
 
 function updateSyncStatus(status){
@@ -833,6 +839,30 @@ function updateSyncStatus(status){
 }
 
 // === EXPORT / IMPORT DONNÉES ===
+
+// ── PUSH TO CLOUD ─────────────────────────────────────────────────────
+async function pushToCloud(){
+  if(!window._auth||!window._auth.current||!window._auth.current()){showToast('⚠️ Connectez-vous d\'abord');return;}
+  if(!state.chantiers.length){showToast('⚠️ Aucune donnée à pousser');return;}
+  if(!confirm('Pousser '+state.chantiers.length+' chantier(s) vers Firebase ?\nRemplace les données cloud existantes.'))return;
+  const btn=document.getElementById('btn-push-cloud');
+  if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader" style="font-size:18px;animation:spin 1s linear infinite"></i>';}
+  try{
+    if(typeof window.saveChantiers==='function'){
+      await window.saveChantiers();
+      showToast('✅ Données poussées — disponibles sur tous vos appareils !');
+    }else{
+      showToast('⚠️ Firebase non disponible ici');
+    }
+  }catch(e){showToast('❌ Erreur : '+e.message);}
+  finally{if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-cloud-arrow-up" style="font-size:18px"></i>';}}
+}
+
+function checkShowPushBtn(){
+  const btn=document.getElementById('btn-push-cloud');
+  if(btn) btn.style.display=state.chantiers.length>0?'inline-flex':'none';
+}
+
 function exportData(){
   const json=JSON.stringify({version:3,date:new Date().toISOString(),chantiers:state.chantiers},null,2);
   const blob=new Blob([json],{type:'application/json;charset=utf-8;'});
@@ -885,6 +915,7 @@ function showPage(page){
 function initUI(){
   renderChantierGrid();
   renderChantierSelects();
+  if(typeof checkShowPushBtn==='function') checkShowPushBtn();
 }
 
 // === CHANTIERS ===
@@ -1546,52 +1577,106 @@ function exportPDF(){
   const ci=idx!==null?idx:(selIdx!==''?parseInt(selIdx):null);
   if(ci===null){alert('Sélectionnez un chantier');return;}
   const c=state.chantiers[ci];
-  let totalArtisan=0,totalClient=0,totalTTC=0;
-  let lotsHTML=(c.lots||[]).map(lot=>{
-    let travArtisan=0,travClient=0;
+  const date=new Date().toLocaleDateString('fr-FR');
+  const ref='DEV-'+new Date().toISOString().slice(0,10).replace(/-/g,'')+'-'+(ci+1).toString().padStart(3,'0');
+  function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+  let totalHT=0,totalTVA=0,totalTTC=0;
+  const lotsHTML=(c.lots||[]).map(lot=>{
+    let htClient=0;
     (lot.postes||[]).forEach(p=>{
       const q=parseFloat(p.q)||0;
-      travArtisan+=q*(parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
-      travClient+=q*(parseFloat(p.puClient)||parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
+      htClient+=q*(parseFloat(p.puClient)||parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
     });
-    const aleas=travClient*(parseFloat(lot.aleas||5)/100);
-    const hon=travClient*(parseFloat(lot.honoraires||5)/100);
-    const ht=travClient+aleas+hon;
+    const aleas=htClient*(parseFloat(lot.aleas||5)/100);
+    const hon=htClient*(parseFloat(lot.honoraires||5)/100);
+    const ht=htClient+aleas+hon;
     const tva=parseFloat(lot.tva||20);
-    const ttc=ht*(1+tva/100);
-    const margePct=travArtisan>0?Math.round(((travClient-travArtisan)/travArtisan)*100):0;
-    totalArtisan+=travArtisan;totalClient+=ht;totalTTC+=ttc;
-    // Postes détail
-    const postesRows=(lot.postes||[]).map(p=>{
+    const tvaAmt=ht*(tva/100);
+    const ttc=ht+tvaAmt;
+    totalHT+=ht; totalTVA+=tvaAmt; totalTTC+=ttc;
+    const rows=(lot.postes||[]).map(p=>{
       const q=parseFloat(p.q)||0;
-      const cli=parseFloat(p.puClient)||parseFloat(p.puArtisan)||parseFloat(p.pu)||0;
-      return `<tr style="font-size:11px"><td style="padding:4px 8px;padding-left:20px;color:#4A6080">${p.n||''}</td><td style="text-align:right;padding:4px 8px">${q} ${p.u||''}</td><td style="text-align:right;padding:4px 8px">${fmt(cli)} €</td><td style="text-align:right;padding:4px 8px">${fmt(q*cli)} €</td></tr>`;
+      const pu=parseFloat(p.puClient)||parseFloat(p.puArtisan)||parseFloat(p.pu)||0;
+      return `<tr><td style="padding:5px 8px 5px 22px;font-size:11px;color:#334155">${esc(p.n)}</td><td style="text-align:right;padding:5px 8px;font-size:11px;white-space:nowrap">${q} ${esc(p.u||'u')}</td><td style="text-align:right;padding:5px 8px;font-size:11px">${fmt(pu)} €</td><td style="text-align:right;padding:5px 8px;font-size:11px;font-weight:600">${fmt(q*pu)} €</td></tr>`;
     }).join('');
-    return `<tr style="background:#1B2D5B;color:white"><td style="padding:8px 10px;font-weight:bold">${lot.num||''} — ${lot.nom}</td><td colspan="2" style="text-align:right;padding:8px 10px;font-size:11px">Marge : +${margePct}%</td><td style="text-align:right;padding:8px 10px;font-weight:bold">${fmt(ttc)} € TTC</td></tr>${postesRows}`;
+    return `<tr style="background:#1E3A5F"><td colspan="3" style="padding:8px 10px;color:#93C5FD;font-size:11.5px;font-weight:700">${esc(lot.num?lot.num+' — ':'')}${esc(lot.nom)}</td><td style="text-align:right;padding:8px 10px;color:white;font-size:12px;font-weight:700">${fmt(ttc)} € TTC</td></tr>${rows}<tr style="background:#F1F5F9"><td colspan="3" style="padding:4px 8px;font-size:10.5px;color:#64748B;text-align:right">Sous-total HT</td><td style="text-align:right;padding:4px 8px;font-size:10.5px;color:#1E3A5F;font-weight:600">${fmt(ht)} €</td></tr>`;
   }).join('');
 
-  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Devis Client — ${c.nom}</title><style>
-body{font-family:Georgia,serif;color:#0F1E3D;margin:0;padding:30px 40px;font-size:13px}
-h1{font-size:26px;color:#1B2D5B;margin-bottom:2px}.sub{color:#4A6080;font-size:12px;margin-bottom:20px}
-.header{border-bottom:2px solid #4A9CC7;padding-bottom:16px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:flex-end}
-.logo{font-size:20px;color:#1B2D5B;font-weight:bold}.logo-sub{font-size:10px;color:#4A6080;letter-spacing:2px;text-transform:uppercase}
-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
-th{background:#1B2D5B;color:#4A9CC7;padding:8px 10px;text-align:left;font-size:11px}
-td{padding:6px 10px;border-bottom:1px solid #C8D8E8}tr:nth-child(even) td{background:#F0F4F8}
-.total-row td{background:#1B2D5B;color:white;font-size:14px;font-weight:bold;border:none;padding:12px 10px}
-.footer{margin-top:40px;border-top:1px solid #C8D8E8;padding-top:12px;font-size:10px;color:#8BA5C0;text-align:center}
-@media print{body{padding:15px 20px}}
-</style></head><body>
-<div class="header"><div><div class="logo">Phénix-Architecture</div><div class="logo-sub">Maître d'Œuvre · Architecture</div></div><div style="text-align:right;font-size:11px;color:#8a8a8a">DEVIS CLIENT<br>${new Date().toLocaleDateString('fr-FR')}</div></div>
-<h1>${c.nom}</h1><div class="sub">${c.client?'Client : '+c.client+' — ':''}${c.adresse||''}${c.surface?' · '+c.surface+' m²':''} · Phase : ${c.phase||'APS'}</div>
-<table><thead><tr><th>Désignation</th><th style="text-align:right">Qté / Unité</th><th style="text-align:right">PU HT</th><th style="text-align:right">Total HT</th></tr></thead>
-<tbody>${lotsHTML}<tr class="total-row"><td colspan="3">TOTAL GÉNÉRAL TTC</td><td style="text-align:right">${fmt(totalTTC)} €</td></tr><tr class="total-row" style="font-size:12px"><td colspan="3" style="opacity:.8">dont Total HT</td><td style="text-align:right;opacity:.8">${fmt(totalClient)} €</td></tr></tbody></table>
-<div class="footer">Phénix-Architecture — Devis indicatif — ${new Date().toLocaleDateString('fr-FR')} — Valable 3 mois</div>
-</body></html>`;
-  const w=window.open('','_blank');w.document.write(html);w.document.close();
-  setTimeout(()=>w.print(),500);
-  showToast('Devis client PDF généré');
+  const html=`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Devis ${esc(c.nom)}</title>
+<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Segoe UI',Arial,sans-serif;color:#1E293B;background:#fff;font-size:13px}
+.page{max-width:800px;margin:0 auto;padding:28px 32px}
+.header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:16px;border-bottom:3px solid #1E3A5F;margin-bottom:20px}
+.brand{font-size:22px;font-weight:800;color:#1E3A5F}.brand span{color:#3B82F6}
+.brand-sub{font-size:9.5px;color:#64748B;letter-spacing:.12em;text-transform:uppercase;margin-top:2px}
+.brand-contact{font-size:10px;color:#64748B;margin-top:6px;line-height:1.7}
+.doc-badge{background:#1E3A5F;color:white;font-size:11px;font-weight:700;padding:4px 12px;border-radius:4px;display:inline-block;margin-bottom:6px}
+.doc-ref{font-size:10.5px;color:#64748B;line-height:1.8;text-align:right}
+.parties{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px;background:#F8FAFC;border-radius:8px;padding:14px}
+.plabel{font-size:9px;font-weight:700;color:#94A3B8;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.pname{font-size:13px;font-weight:700;color:#1E3A5F}
+.pdetail{font-size:10.5px;color:#475569;margin-top:2px;line-height:1.6}
+.objet{background:#EFF6FF;border-left:4px solid #3B82F6;padding:9px 12px;margin-bottom:16px;border-radius:0 6px 6px 0}
+.objet-lbl{font-size:9px;font-weight:700;color:#3B82F6;letter-spacing:.1em;text-transform:uppercase;margin-bottom:2px}
+.objet-val{font-size:13px;font-weight:600;color:#1E3A5F}
+.objet-det{font-size:10.5px;color:#64748B;margin-top:1px}
+table{width:100%;border-collapse:collapse;margin-bottom:16px}
+thead tr{background:#1E3A5F}
+thead th{padding:8px 10px;color:#93C5FD;font-size:10px;font-weight:700;letter-spacing:.06em;text-align:left}
+thead th:not(:first-child){text-align:right}
+tbody tr:nth-child(even) td{background:#F8FAFC}
+.totaux{margin-left:auto;width:260px;border:1.5px solid #E2E8F0;border-radius:8px;overflow:hidden;margin-bottom:20px}
+.trow{display:flex;justify-content:space-between;padding:7px 12px;font-size:12px}
+.trow:not(:last-child){border-bottom:1px solid #E2E8F0}
+.trow.main{background:#1E3A5F;color:white;font-size:13.5px;font-weight:700}
+.trow .lbl{color:#64748B}.trow .val{font-weight:600;color:#1E3A5F}
+.trow.main .lbl,.trow.main .val{color:white}
+.conditions{font-size:9.5px;color:#94A3B8;line-height:1.8;border-top:1px solid #E2E8F0;padding-top:12px;margin-bottom:16px}
+.sigs{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:16px}
+.sig{border:1.5px solid #E2E8F0;border-radius:6px;padding:10px;min-height:72px}
+.sig-lbl{font-size:9px;font-weight:700;color:#94A3B8;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.sig-name{font-size:10.5px;color:#475569;margin-bottom:28px}
+.footer{text-align:center;font-size:9px;color:#94A3B8;border-top:1px solid #E2E8F0;padding-top:8px;margin-top:10px;line-height:1.8}
+.no-print{text-align:right;margin-bottom:14px}
+.no-print button{background:#1E3A5F;color:white;border:none;padding:8px 18px;border-radius:6px;font-size:12px;cursor:pointer}
+@media print{.no-print{display:none}body{print-color-adjust:exact;-webkit-print-color-adjust:exact}.page{padding:12px 16px}}
+</style></head><body><div class="page">
+<div class="no-print"><button onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF</button></div>
+<div class="header">
+  <div><div class="brand">Phénix<span>-Architecture</span></div><div class="brand-sub">Maître d'Œuvre · Contractant Général</div>
+  <div class="brand-contact">6 lieu-dit l'Étreille — 63780 Saint-Georges-de-Mons<br>04 73 73 00 59 · contact@phenixarchitecte.fr<br>SIRET 987 989 316 00011</div></div>
+  <div><div class="doc-badge">DEVIS</div><div class="doc-ref">Réf : ${ref}<br>Date : ${date}<br>Validité : 3 mois</div></div>
+</div>
+<div class="parties">
+  <div><div class="plabel">Client</div><div class="pname">${esc(c.client||'—')}</div><div class="pdetail">${esc(c.adresse||'')}${c.surface?'<br>Surface : '+c.surface+' m²':''}</div></div>
+  <div><div class="plabel">Maître d'œuvre</div><div class="pname">Phénix-Architecture</div><div class="pdetail">Maxime Suchet<br>Contractant Général · MOE</div></div>
+</div>
+<div class="objet"><div class="objet-lbl">Objet</div><div class="objet-val">${esc(c.nom)}</div><div class="objet-det">Phase : ${esc(c.phase||'APS')}${c.type?' · '+esc(c.type):''}</div></div>
+<table><thead><tr><th style="width:45%">Désignation</th><th style="width:15%;text-align:right">Qté</th><th style="width:15%;text-align:right">PU HT</th><th style="width:25%;text-align:right">Total HT</th></tr></thead>
+<tbody>${lotsHTML}</tbody></table>
+<div class="totaux">
+  <div class="trow"><span class="lbl">Total HT</span><span class="val">${fmt(totalHT)} €</span></div>
+  <div class="trow"><span class="lbl">TVA</span><span class="val">${fmt(totalTVA)} €</span></div>
+  <div class="trow main"><span class="lbl">TOTAL TTC</span><span class="val">${fmt(totalTTC)} €</span></div>
+</div>
+<div class="conditions"><strong>Conditions :</strong> 30% à la commande · 40% en cours de travaux · 30% à réception.<br>
+<strong>Validité :</strong> 3 mois. <strong>Acceptation :</strong> retourner signé avec mention "Bon pour accord".</div>
+<div class="sigs">
+  <div class="sig"><div class="sig-lbl">Établi par</div><div class="sig-name">Maxime Suchet — Phénix-Architecture</div></div>
+  <div class="sig"><div class="sig-lbl">Bon pour accord — Client</div><div class="sig-name">${esc(c.client||'')}</div><div style="font-size:9.5px;color:#94A3B8">Signature précédée de "Lu et approuvé"</div></div>
+</div>
+<div class="footer">Phénix-Architecture · SIRET 987 989 316 00011 · 6 lieu-dit l'Étreille, 63780 Saint-Georges-de-Mons<br>contact@phenixarchitecte.fr · 04 73 73 00 59 · Document confidentiel</div>
+</div></body></html>`;
+
+  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.target='_blank';a.rel='noopener';
+  document.body.appendChild(a);a.click();
+  setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},1000);
+  showToast('Devis client ouvert — Imprimer pour enregistrer en PDF');
 }
+
 
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 function fmt(n){return Math.round(n).toLocaleString('fr-FR');}
