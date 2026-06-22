@@ -211,6 +211,7 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
   /* Texte masqué, icône seule — fonctionne même sans <span> */
   .topbar-btn { padding: 8px 10px; font-size: 0 !important; gap: 0; min-width: 40px; justify-content: center; line-height: 1; }
   .topbar-btn i, .topbar-btn .ti { font-size: 18px !important; display: inline-block; }
+  .push-label { display: none; }
   .topbar-actions { gap: 6px; }
   .topbar-info { display: none; }
   .layout { flex-direction: column; overflow: visible; min-height: unset; }
@@ -314,7 +315,7 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
   <div class="topbar-actions">
     <button class="topbar-btn" onclick="exportData()" title="Exporter les données (sauvegarde)"><i class="ti ti-cloud-upload" aria-hidden="true"></i>Sauvegarder</button>
     <label class="topbar-btn" title="Importer des données depuis un autre appareil" style="cursor:pointer"><i class="ti ti-cloud-download" aria-hidden="true"></i>Importer<input type="file" accept=".json" onchange="importData(event)" style="display:none"></label>
-        <button class="topbar-btn" id="btn-push-cloud" onclick="pushToCloud()" title="Pousser données locales vers Firebase" style="display:none;background:linear-gradient(135deg,#4A9CC7,#2A5298);color:white;border:none"><i class="ti ti-cloud-arrow-up" aria-hidden="true"></i></button>
+        <button class="topbar-btn" id="btn-push-cloud" onclick="pushToCloud()" title="Pousser les données locales vers le cloud" style="background:linear-gradient(135deg,#4A9CC7,#2A5298);color:white;border:none"><i class="ti ti-cloud-arrow-up" aria-hidden="true"></i><span class="push-label">&nbsp;Cloud</span></button>
   </div>
   <div class="topbar-info" id="sync-info"><span class="sync-dot" id="sync-dot"></span><span id="sync-label">Prêt</span></div>
 </div>
@@ -367,6 +368,7 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
           <option value="">— Sélectionner un chantier —</option>
         </select>
         <button class="btn btn-primary" onclick="openNewLotModal()"><i class="ti ti-plus" aria-hidden="true"></i>Nouveau lot</button>
+          <button class="btn btn-outline" onclick="exportPDF()" style="border-color:#4A9CC7;color:#4A9CC7"><i class="ti ti-file-type-pdf" aria-hidden="true"></i>Devis client PDF</button>
       </div>
     </div>
 
@@ -524,7 +526,7 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
       <div class="export-card">
         <div class="export-title">Récapitulatif PDF — Estimation APS/APD</div>
         <div class="export-desc">Génère un récapitulatif professionnel en-tête Phénix-Architecture avec décomposition par lots, paramètres (aléas, honoraires) et total général TTC.</div>
-        <button class="btn btn-accent" onclick="exportPDF()"><i class="ti ti-file-type-pdf" aria-hidden="true"></i>Générer PDF de synthèse</button>
+        <button class="btn btn-accent" onclick="exportPDF()" style="min-height:48px;font-size:14px"><i class="ti ti-file-type-pdf" aria-hidden="true"></i>Générer le devis client PDF</button>
       </div>
     </div>
   </div>
@@ -859,8 +861,9 @@ async function pushToCloud(){
 }
 
 function checkShowPushBtn(){
+  // Bouton cloud toujours visible quand connecté — pas de masquage
   const btn=document.getElementById('btn-push-cloud');
-  if(btn) btn.style.display=state.chantiers.length>0?'inline-flex':'none';
+  if(btn) btn.style.display='inline-flex';
 }
 
 function exportData(){
