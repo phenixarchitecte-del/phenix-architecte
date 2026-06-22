@@ -380,7 +380,7 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
     <div class="table-wrap" id="lots-table-wrap">
       <div class="table-card" style="overflow-x:auto;-webkit-overflow-scrolling:touch">
         <div class="table-toolbar">
-          <input type="text" placeholder="Rechercher un lot…" id="lot-search" oninput="renderLotsTable()">
+          <input type="text" placeholder="Rechercher un lot…" id="lot-search" oninput="renderLotsTableOrCards()">
           <button class="btn btn-sm btn-outline" onclick="exportCSV()"><i class="ti ti-download" aria-hidden="true"></i>CSV</button>
         </div>
         <table>
@@ -743,17 +743,46 @@ async function loadChantiers(){
     if(snap.exists()){
       const data = snap.data();
       state.chantiers = data.chantiers || [];
+      console.log('[Chiffrage] Données chargées depuis Firestore :', state.chantiers.length, 'chantier(s)');
     } else {
-      // Migration localStorage → Firestore (premier chargement)
-      const legacyKeys = ['phenix-chantiers-v3','phenix-chantiers-v2','phenix-chantiers-v1'];
+      // Firestore vide → migration depuis localStorage (toutes origines possibles)
+      const legacyKeys = ['phenix-chantiers-v3','phenix-chantiers-v2','phenix-chantiers-v1','phenix-chantiers'];
+      let migrated = false;
       for(const key of legacyKeys){
         const raw = localStorage.getItem(key);
-        if(raw){ try{ const parsed=JSON.parse(raw); state.chantiers=parsed.chantiers||[]; break; }catch(e2){} }
+        if(raw){
+          try{
+            const parsed = JSON.parse(raw);
+            const chantiers = parsed.chantiers || parsed || [];
+            if(Array.isArray(chantiers) && chantiers.length > 0){
+              state.chantiers = chantiers;
+              migrated = true;
+              console.log('[Chiffrage] Migration depuis localStorage (' + key + ') :', chantiers.length, 'chantier(s)');
+              // Sauvegarde immédiate vers Firestore pour sync future
+              await saveChantiers();
+              break;
+            }
+          }catch(e2){}
+        }
+      }
+      if(!migrated){
+        state.chantiers = [];
+        console.log('[Chiffrage] Aucune donnée locale trouvée — Firestore vide.');
       }
     }
     initUI();
     updateSyncStatus('ok');
-  }catch(e){ console.error('Load error', e); updateSyncStatus('err'); }
+  }catch(e){
+    console.error('[Chiffrage] Erreur chargement:', e);
+    // Fallback localStorage si Firestore inaccessible
+    const legacyKeys = ['phenix-chantiers-v3','phenix-chantiers-v2','phenix-chantiers-v1'];
+    for(const key of legacyKeys){
+      const raw = localStorage.getItem(key);
+      if(raw){ try{ const parsed=JSON.parse(raw); state.chantiers=parsed.chantiers||[]; break; }catch(e2){} }
+    }
+    initUI();
+    updateSyncStatus('err');
+  }
 }
 
 </script>
@@ -1580,7 +1609,7 @@ function renderLotsTableOrCards(){
   } else {
     mobileCards.style.display = 'none';
     if(tableWrap) tableWrap.style.display = '';
-    if(typeof renderLotsTableOrCards === "function") renderLotsTableOrCards(); else renderLotsTable();
+    renderLotsTable(); // ← direct, sans récursion
   }
 }
 
