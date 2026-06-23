@@ -1517,6 +1517,16 @@ window.loadChantiers = loadChantiers;
 <script>
 const STORAGE_KEY='phenix-chantiers-v3';
 const LEGACY_KEYS=['phenix-chantiers-v2','phenix-chantiers-v1','phenix-chantiers'];
+// Initialisé tôt pour éviter la temporal dead zone et les interruptions de script
+var metrageState = {
+  planImage: null, planFileName: '', canvas: null, ctx: null, scale: null,
+  calibrated: false, tool: null, drawing: false, currentPoints: [], measures: [],
+  calibPoints: [], zoom: 1, panX: 0, panY: 0, isPanning: false, lastPan: null,
+  offCanvas: null, _pendingFitImg: null
+};
+var iaResultData = null;
+var planBase64ForIA = null;
+var planMimeTypeForIA = 'image/jpeg';
 
 const LOT_TEMPLATES={
   vrd:[{n:'Débroussaillage / nettoyage',q:1,u:'ff',pu:{eco:800,std:1200,haut:1800}},{n:'Terrassement général (excav.)',q:50,u:'m³',pu:{eco:35,std:50,haut:70}},{n:'Remblai et compactage',q:30,u:'m³',pu:{eco:20,std:30,haut:45}},{n:'Réseau EP (tranchées + fourreaux)',q:1,u:'ff',pu:{eco:1500,std:2500,haut:4000}}],
@@ -2502,25 +2512,7 @@ window.phenixDoLogin = phenixDoLogin;
 ═══════════════════════════════════════════════════════════════════ */
 const METRAGE_COLORS = ['#4A9CC7','#2D7A4F','#C0392B','#8A6020','#6C3483','#1A5276','#117A65','#922B21','#784212','#1B4F72'];
 
-let metrageState = {
-  planImage: null,
-  planFileName: '',
-  canvas: null,
-  ctx: null,
-  scale: null,
-  calibrated: false,
-  tool: null,
-  drawing: false,
-  currentPoints: [],
-  measures: [],
-  calibPoints: [],
-  zoom: 1,
-  panX: 0,
-  panY: 0,
-  isPanning: false,
-  lastPan: null,
-  offCanvas: null,
-};
+// metrageState déjà initialisé en haut du script
 
 function initMetrageCanvas(){
   const zone = document.getElementById('metrage-canvas-zone');
@@ -3097,11 +3089,7 @@ const PU_AUVERGNE_2025 = {
   'portail_u':            2800,
 };
 
-// Données brutes IA (JSON parsé)
-let iaResultData = null;
-// Base64 du plan pour l'envoi à l'API
-let planBase64ForIA = null;
-let planMimeTypeForIA = 'image/jpeg';
+// Données IA déjà déclarées en haut du script (var iaResultData, planBase64ForIA, planMimeTypeForIA)
 
 // ── Déclencheurs ─────────────────────────────────────────────────
 
