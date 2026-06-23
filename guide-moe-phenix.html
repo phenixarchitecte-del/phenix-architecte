@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Guide Maîtrise d'Œuvre — Phénix-Architecte</title>
+<title>Guide Maîtrise d'Œuvre — Phénix-Architecture</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -32,6 +32,56 @@
     color: var(--text);
     line-height: 1.6;
   }
+
+
+  /* ===== ACCENTS SECTIONS AJOUTEES ===== */
+  --phase-legal: #8a5a14;
+  --phase-cg: #5a2a7a;
+}
+.tag-legal { background: rgba(138,90,20,0.12); color: #8a5a14; }
+.tag-cg { background: rgba(90,42,122,0.12); color: #5a2a7a; }
+.tag-permis { background: rgba(20,90,90,0.12); color: #145a5a; }
+.divider-legal { background: #8a5a14; color: #fff; }
+.divider-cg { background: #5a2a7a; color: #fff; }
+.divider-permis { background: #145a5a; color: #fff; }
+.card.legal::before { background: #8a5a14; }
+.card.cg::before { background: #5a2a7a; }
+.card.permis::before { background: #145a5a; }
+.checklist-header.ch-legal { background: #8a5a14; }
+.checklist-header.ch-cg { background: #5a2a7a; }
+.checklist-header.ch-permis { background: #145a5a; }
+.cl-item.legal-check.checked .cl-check { background: #8a5a14; border-color: #8a5a14; }
+.cl-item.cg-check.checked .cl-check { background: #5a2a7a; border-color: #5a2a7a; }
+
+/* Boîte interdiction (rouge fort) */
+.box-stop { background: #fdeaea; border: 1px solid #e8a0a0; }
+.box-stop h4 { color: #a01818; }
+.box-stop p, .box-stop li { color: #6a1414; }
+
+/* Deux colonnes obligations / interdictions */
+.dd-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 20px 0; }
+@media (max-width: 640px){ .dd-grid { grid-template-columns: 1fr; } }
+.dd-col { border-radius: 10px; padding: 16px 18px; }
+.dd-do { background: #e8f7f0; border: 1px solid #9ddcb8; }
+.dd-dont { background: #fdeaea; border: 1px solid #e8a0a0; }
+.dd-col h4 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px; }
+.dd-do h4 { color: #1a7a4a; }
+.dd-dont h4 { color: #a01818; }
+.dd-col ul { list-style: none; padding: 0; }
+.dd-col li { font-size: 13px; line-height: 1.5; padding: 5px 0 5px 22px; position: relative; }
+.dd-do li::before { content: '✓'; position: absolute; left: 0; color: #1a7a4a; font-weight: 700; }
+.dd-dont li::before { content: '✕'; position: absolute; left: 0; color: #a01818; font-weight: 700; }
+.dd-do li { color: #1a4a32; }
+.dd-dont li { color: #6a1414; }
+
+/* Etapes numérotées */
+.steps { counter-reset: stp; margin: 20px 0; }
+.step { display: flex; gap: 14px; padding: 12px 0; border-bottom: 1px solid #eef0f4; }
+.step:last-child { border-bottom: none; }
+.step-num { counter-increment: stp; flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%; background: var(--navy); color: #fff; font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: center; }
+.step-num::before { content: counter(stp); }
+.step-body h5 { font-size: 14px; font-weight: 700; color: var(--navy); margin-bottom: 2px; }
+.step-body p { font-size: 13px; color: var(--muted); line-height: 1.5; }
 
   /* ===== HERO ===== */
   .hero {
@@ -529,7 +579,7 @@
 
 <!-- HERO -->
 <div class="hero">
-  <div class="hero-badge">📐 Phénix-Architecte · Guide Opérationnel</div>
+  <div class="hero-badge">📐 Phénix-Architecture · Guide Opérationnel</div>
   <h1>Guide<br><span>Maîtrise d'Œuvre</span><br>Phase par Phase</h1>
   <p>De la rédaction du PRO jusqu'à la réception des travaux — gestion des dossiers, sélection des artisans et suivi de chantier selon les bonnes pratiques de la profession.</p>
   <div class="hero-phases">
@@ -541,17 +591,22 @@
 
 <!-- SOURCE NOTE -->
 <div class="source-note">
-  📚 Basé sur : <strong>Boîte à Outils Chantier MAF</strong> (24 chapitres, mise à jour jan. 2026) · Ordre des Architectes · Marchés privés (hors loi MOP) · Pratiques Phénix-Architecte
+  📚 Basé sur : <strong>Boîte à Outils Chantier MAF</strong> (24 chapitres, mise à jour jan. 2026) · Ordre des Architectes · Marchés privés (hors loi MOP) · Pratiques Phénix-Architecture
 </div>
 
 <!-- NAV -->
 <nav class="nav">
   <a href="#vision">Vue d'ensemble</a>
+  <a href="#statut">Statut &amp; Titre</a>
+  <a href="#assurances">Assurances</a>
+  <a href="#permis">Permis de construire</a>
   <a href="#pro">Phase PRO</a>
   <a href="#dce">Phase DCE</a>
   <a href="#artisans">Sélection Artisans</a>
+  <a href="#cg">Contractant Général</a>
   <a href="#det">Phase DET</a>
   <a href="#reception">Réception</a>
+  <a href="#coffre">Documents à conserver</a>
   <a href="#maf">Ressources MAF</a>
 </nav>
 
@@ -601,7 +656,237 @@
       <span class="box-icon">⚖️</span>
       <div>
         <h4>Cadre légal — Marchés privés (hors loi MOP)</h4>
-        <p>En <strong>marché privé</strong>, la loi MOP ne s'applique pas. C'est le <strong>contrat de maîtrise d'œuvre signé avec le MOA</strong> qui définit précisément les missions confiées (PRO, DCE, DET, AOR…) et leurs limites. Aucune mission n'est automatiquement incluse : tout doit être contractualisé explicitement. La responsabilité décennale de l'architecte reste pleinement engagée sur les travaux suivis (art. 1792 Code civil).</p>
+        <p>En <strong>marché privé</strong>, la loi MOP ne s'applique pas. C'est le <strong>contrat de maîtrise d'œuvre signé avec le MOA</strong> qui définit précisément les missions confiées (PRO, DCE, DET, AOR…) et leurs limites. Aucune mission n'est automatiquement incluse : tout doit être contractualisé explicitement. La responsabilité décennale du maître d'œuvre reste pleinement engagée sur les travaux suivis (art. 1792 Code civil).</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== STATUT, TITRE & CADRE LÉGAL ===== -->
+<div id="statut">
+  <div class="phase-divider container">
+    <div class="phase-divider-line"></div>
+    <span class="phase-divider-label divider-legal">⚖️ Statut, Titre &amp; Cadre légal</span>
+    <div class="phase-divider-line"></div>
+  </div>
+  <div class="container">
+    <div class="section-header">
+      <div class="phase-tag tag-legal">⚖️ OBLIGATIONS &amp; INTERDICTIONS</div>
+      <h2>Ton statut de maître d'œuvre — ce que tu peux et ne peux pas faire</h2>
+      <p>Tu exerces sous <strong>Phénix-Architecture (EURL)</strong> en qualité de <strong>maître d'œuvre</strong>. Tu es diplômé d'État en architecture (ENSACF) mais <strong>non inscrit à l'Ordre des Architectes</strong>. Cette distinction commande tes obligations, tes interdictions et la rédaction de tous tes documents commerciaux.</p>
+    </div>
+
+    <div class="box box-stop">
+      <span class="box-icon">🚫</span>
+      <div>
+        <h4>Interdiction n°1 — Le titre d'« architecte »</h4>
+        <p>Le titre d'architecte est protégé (loi n°77-2 du 3 janvier 1977, art. 40). En tant que non-inscrit à l'Ordre, <strong>tu ne dois jamais te désigner comme « architecte »</strong> : ni sur tes devis, plans, site web, plaquette, signature mail, cartes de visite ou réseaux sociaux. L'usurpation de titre est un délit (art. 433-17 Code pénal : jusqu'à <strong>1 an de prison et 15 000 €</strong>, + action de l'Ordre).</p>
+        <p style="margin-top:8px;"><strong>Termes autorisés :</strong> maître d'œuvre · maître d'œuvre en bâtiment · concepteur · diplômé d'État en architecture (DE/ADE). C'est précisément pour cela que la marque a évolué de « Phénix-Architecte » vers <strong>« Phénix-Architecture »</strong> (un nom commercial, pas un titre). Évite toute formulation laissant croire à une inscription à l'Ordre.</p>
+      </div>
+    </div>
+
+    <div class="box box-stop">
+      <span class="box-icon">📐</span>
+      <div>
+        <h4>Interdiction n°2 — Établir un permis de construire au-delà du seuil de recours obligatoire à l'architecte</h4>
+        <ul>
+          <li><strong>Particulier construisant pour lui-même :</strong> tu peux établir le PC tant que la <strong>surface de plancher totale après travaux ≤ 150 m²</strong>. Au-delà → architecte inscrit obligatoire (art. L.431-1 et R.431-2 Code de l'urbanisme). Tu ne peux pas signer.</li>
+          <li><strong>Personne morale (SCI, SARL, SAS, association…) :</strong> recours à l'architecte obligatoire <strong>dès le 1er m²</strong>, sans seuil. Tu ne peux <em>jamais</em> établir leur permis de construire — même une SCI familiale.</li>
+          <li><strong>Bâtiment agricole :</strong> seuil de 800 m² (SP et emprise au sol).</li>
+          <li><strong>Le seuil s'apprécie sur le TOTAL après travaux</strong> (existant + créé). Une maison de 130 m² + extension de 25 m² = 155 m² → architecte obligatoire, même si l'extension paraît modeste.</li>
+          <li><strong>Déclaration préalable (DP) :</strong> architecte <em>jamais</em> obligatoire, quel que soit le demandeur ou la surface → tu peux toujours la déposer.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="dd-grid">
+      <div class="dd-col dd-do">
+        <h4>✅ Tes obligations de maître d'œuvre</h4>
+        <ul>
+          <li><strong>Contrat écrit</strong> signé avant toute mission (rien n'est inclus « d'office » en marché privé — chaque phase se contractualise).</li>
+          <li><strong>Devoir de conseil</strong> renforcé et écrit : alerter le MOA sur la faisabilité, les surcoûts, les risques, le choix des entreprises, l'intérêt de la Dommages-Ouvrage.</li>
+          <li><strong>RC décennale</strong> souscrite et valide <em>avant</em> ouverture de chantier (loi Spinetta, art. L.241-1 C. assurances).</li>
+          <li><strong>RC professionnelle</strong> (fautes de conception / suivi, dommages immatériels).</li>
+          <li>Respect des <strong>règles de l'art, DTU, normes</strong> applicables (RE2020, accessibilité, sécurité incendie selon projet).</li>
+          <li><strong>Tout par écrit :</strong> CR, OS, validations, alertes — les paroles n'ont aucune valeur devant un tribunal.</li>
+          <li>Conserver les dossiers <strong>10 ans minimum</strong> (durée décennale).</li>
+        </ul>
+      </div>
+      <div class="dd-col dd-dont">
+        <h4>🚫 Tes interdictions / pièges</h4>
+        <ul>
+          <li>Te dire ou laisser croire « architecte ».</li>
+          <li>Établir un PC hors seuils (≥150 m² particulier, toute personne morale).</li>
+          <li><strong>Toucher une commission occulte</strong> d'un artisan en mission de MOE pure (manquement au devoir de loyauté ; risque de corruption privée, art. 445-1 C. pénal). → voir la section <em>Contractant général</em> pour la solution propre.</li>
+          <li>Démarrer une mission ou un chantier sans contrat signé ni assurances vérifiées.</li>
+          <li>T'engager au-delà de ta mission contractuelle.</li>
+          <li>Valider verbalement des travaux supplémentaires.</li>
+          <li>Déguiser une construction de maison neuve en « maîtrise d'œuvre » (piège CCMI — voir plus loin).</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="box box-info">
+      <span class="box-icon">🛡️</span>
+      <div>
+        <h4>Tes responsabilités dans le temps</h4>
+        <ul>
+          <li><strong>Parfait achèvement (GPA) :</strong> 1 an à compter de la réception (art. 1792-6 C. civ.).</li>
+          <li><strong>Bon fonctionnement (biennale) :</strong> 2 ans — éléments d'équipement dissociables.</li>
+          <li><strong>Décennale :</strong> 10 ans — présomption de responsabilité sur les dommages compromettant la solidité ou rendant l'ouvrage impropre à sa destination (art. 1792). Tu en réponds sur les travaux que tu as conçus / suivis.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== ASSURANCES ===== -->
+<div id="assurances">
+  <div class="phase-divider container">
+    <div class="phase-divider-line"></div>
+    <span class="phase-divider-label divider-legal">🛡️ Tes assurances</span>
+    <div class="phase-divider-line"></div>
+  </div>
+  <div class="container">
+    <div class="section-header">
+      <div class="phase-tag tag-legal">🛡️ COUVERTURE OBLIGATOIRE</div>
+      <h2>Les assurances qui te protègent (et celles à ne pas oublier en contractant général)</h2>
+      <p>Une activité non déclarée à ton assureur = <strong>nullité de garantie</strong> = responsabilité sur ton patrimoine personnel en cas de sinistre. C'est le risque le plus grave et le plus silencieux du métier.</p>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Assurance</th><th>Ce qu'elle couvre</th><th>Statut</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>RC décennale MOE</strong></td>
+            <td>Dommages décennaux sur les ouvrages que tu conçois / diriges. Déclencheur : ouverture de chantier (DOC). Vérifie que les <strong>activités déclarées</strong> correspondent à tes missions réelles (neuf / réno, type d'ouvrages).</td>
+            <td><span class="td-status status-obli">Obligatoire</span></td>
+          </tr>
+          <tr>
+            <td><strong>RC professionnelle / exploitation</strong></td>
+            <td>Fautes de conception et de suivi, erreurs, dommages immatériels (retards, surcoûts), dommages aux tiers pendant la mission.</td>
+            <td><span class="td-status status-obli">Indispensable</span></td>
+          </tr>
+          <tr>
+            <td><strong>RC décennale « entreprise générale / constructeur »</strong></td>
+            <td>Couvre l'activité de <strong>contractant général</strong> (tu portes la responsabilité de tous les lots). <strong>Ta RC décennale MOE ne couvre PAS cette activité.</strong></td>
+            <td><span class="td-status status-obli">Si contractant général</span></td>
+          </tr>
+          <tr>
+            <td><strong>Garantie de livraison à prix et délais convenus</strong></td>
+            <td>Caution d'un établissement de crédit / assureur agréé. <strong>Obligatoire</strong> dès qu'une opération relève du CCMI (maison individuelle — voir section dédiée).</td>
+            <td><span class="td-status status-obli">Si CCMI</span></td>
+          </tr>
+          <tr>
+            <td><strong>Dommages-Ouvrage (DO)</strong></td>
+            <td>Souscrite par le <strong>MOA</strong> (pas par toi), elle préfinance les réparations décennales sans attendre un procès. Ton <strong>devoir de conseil t'oblige à l'en informer par écrit</strong> — garde la trace de cette information.</td>
+            <td><span class="td-status status-rec">Conseil écrit obligatoire</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="box box-warning">
+      <span class="box-icon">⚠️</span>
+      <div>
+        <h4>Le réflexe avant chaque nouvelle activité</h4>
+        <p>Avant ton <strong>premier chantier en contractant général</strong>, écris à ton assureur pour faire <strong>étendre / adapter ta police</strong> (activité « entreprise générale » ou « constructeur non réalisateur »). Demande une attestation mentionnant explicitement cette activité. Sans cela, un sinistre décennal sur un lot d'artisan défaillant resterait <strong>à ta charge personnelle</strong>.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== PERMIS DE CONSTRUIRE ===== -->
+<div id="permis">
+  <div class="phase-divider container">
+    <div class="phase-divider-line"></div>
+    <span class="phase-divider-label divider-permis">🏛️ Permis de construire</span>
+    <div class="phase-divider-line"></div>
+  </div>
+  <div class="container">
+    <div class="section-header">
+      <div class="phase-tag tag-permis">🏛️ URBANISME</div>
+      <h2>Monter un permis de construire — quel régime, quels formulaires, quelles pièces</h2>
+      <p>La première erreur coûte un mois : mauvais formulaire, surface mal calculée ou pièce manquante suspendent l'instruction. Voici la procédure complète, à jour 2026.</p>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Projet</th><th>Régime</th><th>Formulaire (2026)</th></tr></thead>
+        <tbody>
+          <tr><td>Moins de 5 m² de SP / emprise</td><td>Aucune formalité</td><td>—</td></tr>
+          <tr><td>5 à 20 m² (40 m² en zone U avec PLU), modif. de façade, clôture, petite piscine, changement de destination sans modif. structure</td><td><strong>Déclaration préalable (DP)</strong></td><td><strong>Cerfa 16702</strong> (ex-13703) · DP1→DP8</td></tr>
+          <tr><td>Maison individuelle neuve, extension &gt; 20 m² (&gt; 40 en zone U), tout projet portant le total &gt; 150 m²</td><td><strong>Permis de construire maison individuelle (PCMI)</strong></td><td><strong>Cerfa 13406*16</strong> · PCMI1→PCMI8</td></tr>
+          <tr><td>Autres bâtiments (collectif, commerce, industriel, agricole), permis d'aménager</td><td><strong>Permis de construire</strong></td><td><strong>Cerfa 13409*16</strong></td></tr>
+          <tr><td>Démolition (si exigée par la commune)</td><td>Permis de démolir</td><td>Cerfa 13405</td></tr>
+          <tr><td>Modification d'un PC en cours de validité</td><td>Permis modificatif</td><td>Cerfa 16700 / 13412</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="box box-stop">
+      <span class="box-icon">🚫</span>
+      <div>
+        <h4>Avant de monter un PC — vérifie que tu as le droit de le signer</h4>
+        <p>Calcule d'abord la <strong>surface de plancher totale après travaux</strong>. Si &gt; 150 m² (particulier) ou demandeur = personne morale → <strong>tu ne peux pas établir ni signer ce PC</strong> : il faut un architecte inscrit. Une SP &gt; 150 m² renseignée sans signature d'architecte = <strong>rejet automatique</strong> du dossier. En revanche, une <strong>DP</strong> ne requiert jamais d'architecte : tu peux toujours la porter.</p>
+      </div>
+    </div>
+
+    <div style="margin: 28px 0 12px;">
+      <div class="phase-tag tag-permis">📑 Pièces PCMI</div>
+      <h3 style="font-size: 18px; font-weight: 700; color: var(--navy); margin-top: 8px;">Les 8 pièces obligatoires du dossier PCMI (Cerfa 13406)</h3>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Pièce</th><th>Contenu</th><th>Point de vigilance</th></tr></thead>
+        <tbody>
+          <tr><td><strong>PCMI1</strong></td><td>Plan de situation</td><td>Échelle 1/25 000 à 1/5 000 (fond IGN/Géoportail). Indiquer le Nord.</td></tr>
+          <tr><td><strong>PCMI2</strong></td><td>Plan de masse coté</td><td>Échelle 1/200 ou 1/500. Cotes (L×l×H), limites séparatives, accès, réseaux, plantations, Nord.</td></tr>
+          <tr><td><strong>PCMI3</strong></td><td>Plan en coupe du terrain et de la construction</td><td>Profil avant/après travaux, NGF, hauteurs. Indispensable si terrain en pente.</td></tr>
+          <tr><td><strong>PCMI4</strong></td><td>Notice décrivant le terrain et le projet</td><td>Matériaux, teintes, toiture, assainissement, gestion des eaux pluviales. <strong>1re cause de demande de pièces</strong> — soigne-la.</td></tr>
+          <tr><td><strong>PCMI5</strong></td><td>Plans des façades et toitures</td><td>Élévations cotées de chaque face, teintes et menuiseries.</td></tr>
+          <tr><td><strong>PCMI6</strong></td><td>Document graphique d'insertion (3D / photomontage)</td><td>Souvent jugé « facultatif » à tort → demande de pièces systématique s'il manque.</td></tr>
+          <tr><td><strong>PCMI7</strong></td><td>Photographie de l'environnement proche</td><td>Photos récentes de la rue / voisinage immédiat.</td></tr>
+          <tr><td><strong>PCMI8</strong></td><td>Photographie de l'environnement lointain</td><td>Vue d'ensemble du quartier ou du paysage.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="box box-info">
+      <span class="box-icon">➕</span>
+      <div>
+        <h4>Pièces complémentaires fréquentes (selon le projet)</h4>
+        <ul>
+          <li><strong>Attestation RE2020</strong> — obligatoire pour toute maison neuve (au dépôt <em>et</em> à l'achèvement). Fournie par le maître d'œuvre ou un bureau d'études thermiques.</li>
+          <li><strong>Étude géotechnique (G1/G2)</strong> — zones d'aléa argileux (retrait-gonflement), loi ELAN.</li>
+          <li><strong>Attestation SPANC</strong> — si assainissement non collectif.</li>
+          <li><strong>Avis de l'Architecte des Bâtiments de France (ABF)</strong> — secteur protégé / abords de monument (+1 mois de délai).</li>
+          <li><strong>Notice sécurité / accessibilité</strong> — ERP, logements collectifs.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div style="margin: 28px 0 12px;">
+      <div class="phase-tag tag-permis">⏱️ Procédure</div>
+      <h3 style="font-size: 18px; font-weight: 700; color: var(--navy); margin-top: 8px;">Du dépôt à l'achèvement — étape par étape</h3>
+    </div>
+    <div class="steps">
+      <div class="step"><div class="step-num"></div><div class="step-body"><h5>Dépôt dématérialisé (SVE)</h5><p>Depuis le 1er janvier 2026, la saisine par voie électronique est généralisée (guichet de la commune ou portail national). Le récépissé est horodaté instantanément. Le dépôt papier reste possible. Si tu déposes au nom du MOA, joins un <strong>mandat daté et signé</strong>.</p></div></div>
+      <div class="step"><div class="step-num"></div><div class="step-body"><h5>Délais d'instruction</h5><p>DP : 1 mois · PCMI : 2 mois · PC autres bâtiments : 3 mois · +1 mois en secteur ABF. Une demande de pièces complémentaires <strong>suspend</strong> le délai.</p></div></div>
+      <div class="step"><div class="step-num"></div><div class="step-body"><h5>Décision (ou permis tacite)</h5><p>Sans réponse à l'expiration du délai, l'autorisation est en principe <strong>tacite</strong> (sauf secteur protégé). Récupère et conserve l'arrêté.</p></div></div>
+      <div class="step"><div class="step-num"></div><div class="step-body"><h5>Affichage sur le terrain</h5><p>Panneau réglementaire ≥ 80 cm, visible depuis la voie publique, dès l'arrêté et pendant toute la durée du chantier. Le <strong>recours des tiers (2 mois)</strong> court à partir d'un affichage continu — fais constater l'affichage (huissier ou photos datées) pour purger le délai.</p></div></div>
+      <div class="step"><div class="step-num"></div><div class="step-body"><h5>Ouverture de chantier — DOC</h5><p>Déclaration d'ouverture de chantier (Cerfa 13407) en mairie. C'est aussi le déclencheur de la décennale.</p></div></div>
+      <div class="step"><div class="step-num"></div><div class="step-body"><h5>Achèvement — DAACT</h5><p>Déclaration attestant l'achèvement et la conformité des travaux (Cerfa 13408) en fin de chantier. La mairie peut contrôler la conformité dans les 3 à 5 mois.</p></div></div>
+    </div>
+
+    <div class="box box-tip">
+      <span class="box-icon">💡</span>
+      <div>
+        <h4>Validité &amp; bons réflexes</h4>
+        <p>Le permis est valable <strong>3 ans</strong>, prorogeable deux fois 1 an (demande 2 mois avant échéance). Consulte toujours le <strong>PLU</strong> de la commune (Géoportail de l'urbanisme) avant de concevoir : il peut imposer hauteurs, teintes, implantations, clôtures. Télécharge les Cerfa uniquement sur <strong>service-public.fr</strong> (les versions périmées sont rejetées par les guichets dématérialisés).</p>
       </div>
     </div>
   </div>
@@ -964,6 +1249,130 @@
   </div>
 </div>
 
+<!-- ===== CONTRACTANT GÉNÉRAL ===== -->
+<div id="cg">
+  <div class="phase-divider container">
+    <div class="phase-divider-line"></div>
+    <span class="phase-divider-label divider-cg">💼 Contractant Général</span>
+    <div class="phase-divider-line"></div>
+  </div>
+  <div class="container">
+    <div class="section-header">
+      <div class="phase-tag tag-cg">💼 MODÈLE FINANCIER</div>
+      <h2>Faire passer tout le financier par toi — le modèle contractant général</h2>
+      <p>C'est le levier qui te permet de te rémunérer sur les travaux (ta marge) plutôt que sur des honoraires seuls. Mais il change ta nature juridique : tu deviens <strong>constructeur</strong>, avec de nouvelles responsabilités — et un piège pénal à éviter absolument.</p>
+    </div>
+
+    <div class="cards">
+      <div class="card cg">
+        <span class="card-icon">🔁</span>
+        <h3>Le principe</h3>
+        <p>Tu signes avec le client UN contrat global à prix forfaitaire (conception + travaux). Tu contractes en ton nom avec les artisans. Le client te paie, tu paies les artisans. Ta marge t'appartient.</p>
+      </div>
+      <div class="card cg">
+        <span class="card-icon">💶</span>
+        <h3>Ta rémunération</h3>
+        <p>Marge sur le prix global (≠ commission occulte). Légitime et transparente : tu achètes les travaux et les revends dans ton forfait.</p>
+      </div>
+      <div class="card cg">
+        <span class="card-icon">🧾</span>
+        <h3>La TVA</h3>
+        <p>Tu collectes la TVA sur le prix global (10 % réno logement &gt; 2 ans, 20 % neuf), tu récupères celle de tes achats. Comptabilité distincte de la MOE.</p>
+      </div>
+      <div class="card cg">
+        <span class="card-icon">⚖️</span>
+        <h3>Ta responsabilité</h3>
+        <p>Tu portes la décennale sur TOUS les lots et le risque de défaillance des artisans. D'où l'exigence d'assurance « entreprise générale ».</p>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th></th><th>Maîtrise d'œuvre pure</th><th>Contractant général</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Qui signe avec les artisans ?</strong></td><td>Le MOA (chaque marché MOA ↔ artisan)</td><td><strong>Toi</strong> (artisans = tes sous-traitants)</td></tr>
+          <tr><td><strong>L'argent des travaux transite par…</strong></td><td>Le MOA directement</td><td><strong>Toi</strong></td></tr>
+          <tr><td><strong>Ta rémunération</strong></td><td>Honoraires (% des travaux) payés par le MOA</td><td><strong>Marge</strong> sur le prix global</td></tr>
+          <tr><td><strong>Marge sur les artisans</strong></td><td>Interdite (sauf apporteur d'affaires déclaré)</td><td>Oui, c'est ton modèle</td></tr>
+          <tr><td><strong>Assurance requise</strong></td><td>RC décennale MOE</td><td>RC décennale <strong>entreprise générale / constructeur</strong></td></tr>
+          <tr><td><strong>Décennale portée</strong></td><td>Sur ta conception / ton suivi</td><td>Sur <strong>l'ensemble de l'ouvrage</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="box box-stop">
+      <span class="box-icon">🛑</span>
+      <div>
+        <h4>LE PIÈGE À CONNAÎTRE — La requalification en CCMI (loi du 19 décembre 1990)</h4>
+        <p>Dès que <strong>trois conditions</strong> sont réunies, ton opération relève <strong>de plein droit</strong> du Contrat de Construction de Maison Individuelle, <em>quel que soit le nom donné au contrat</em> :</p>
+        <ul>
+          <li>① une <strong>maison individuelle</strong> ou un immeuble de <strong>≤ 2 logements</strong> destiné au même maître d'ouvrage, sur son terrain ;</li>
+          <li>② tu <strong>fournis le plan</strong> (même indirectement, même retouché à partir de celui du client) ;</li>
+          <li>③ tu te charges des travaux de <strong>mise hors d'eau et hors d'air</strong> (gros œuvre, couverture, menuiseries extérieures).</li>
+        </ul>
+        <p style="margin-top:8px;">Le juge <strong>requalifie</strong> un « contrat de maîtrise d'œuvre » ou « contractant général » en CCMI s'il en présente les caractéristiques. Exemple : <strong>CA Toulouse, 12 déc. 2023</strong> — un « contrat de maîtrise d'œuvre » a été requalifié en CCMI parce que le maître d'œuvre avait suggéré le choix des entreprises et fourni un descriptif des lots. C'est exactement le profil d'une mission « tout le financier passe par moi ».</p>
+        <p style="margin-top:8px;"><strong>Conséquences si tu n'as pas respecté le formalisme CCMI :</strong></p>
+        <ul>
+          <li><strong>Nullité</strong> du contrat avec effet rétroactif → le client récupère tout ce qu'il t'a versé ;</li>
+          <li><strong>Sanctions pénales : jusqu'à 2 ans de prison et 300 000 € d'amende</strong> (construire sans CCMI écrit ni garantie de livraison) ;</li>
+          <li>Mise en cause de ta décennale et de ta responsabilité personnelle.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="dd-grid">
+      <div class="dd-col dd-do">
+        <h4>✅ Modèle contractant général SÛR (hors CCMI)</h4>
+        <ul>
+          <li>Locaux <strong>tertiaires, commerciaux, industriels, agricoles</strong> (pas d'habitation).</li>
+          <li>Immeubles de <strong>plus de 2 logements</strong>.</li>
+          <li><strong>Rénovation</strong> de l'existant sans création neuve de mise hors d'eau/hors d'air.</li>
+          <li>Opérations où tu ne fournis pas le plan <em>et</em> ne réalises pas le hors d'eau/hors d'air.</li>
+          <li>→ Contrat d'<strong>entreprise générale</strong> classique, prix global, marge libre.</li>
+        </ul>
+      </div>
+      <div class="dd-col dd-dont">
+        <h4>🛑 Zone CCMI obligatoire</h4>
+        <ul>
+          <li>Maison individuelle <strong>neuve</strong> (ou ≤ 2 logements) que tu conçois ET dont tu fais le hors d'eau/hors d'air.</li>
+          <li>→ Tu <strong>dois</strong> alors employer un <strong>CCMI complet</strong> : contrat type écrit, notice descriptive, prix forfaitaire et définitif, échéancier réglementé (15 % / 25 % / 40 %…), <strong>garantie de livraison</strong>, délai de rétractation 10 j, conditions suspensives (terrain, PC, prêt, DO).</li>
+          <li><strong>Ne le déguise jamais</strong> en maîtrise d'œuvre.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="box box-warning">
+      <span class="box-icon">🤝</span>
+      <div>
+        <h4>L'alternative en mission de MOE pure — l'apporteur d'affaires déclaré</h4>
+        <p>Si tu restes <strong>maître d'œuvre</strong> (le MOA paie directement les artisans) mais veux une rémunération liée aux artisans, ne touche <strong>jamais</strong> de rétrocommission cachée. Formalise un <strong>contrat d'apporteur d'affaires</strong> transparent avec chaque artisan : commission définie, facturée avec TVA, traçable — et informe le MOA de l'existence de ces accords. La commission occulte t'expose civilement (perte du devoir de loyauté) et pénalement (corruption privée, art. 445-1 C. pénal).</p>
+      </div>
+    </div>
+
+    <div class="checklist">
+      <div class="checklist-header ch-cg">💼 Checklist — Sécuriser une opération en contractant général</div>
+      <div class="checklist-body">
+        <div class="cl-item cg-check" onclick="toggleCheck(this)"><div class="cl-check"></div><div class="cl-content"><div class="cl-title">Qualifier l'opération : risque CCMI ? (maison ≤ 2 logts + plan fourni + hors d'eau/hors d'air)</div><div class="cl-note">Si oui → CCMI obligatoire ou refus du montage en CG déguisé</div></div></div>
+        <div class="cl-item cg-check" onclick="toggleCheck(this)"><div class="cl-check"></div><div class="cl-content"><div class="cl-title">Assurance « entreprise générale / constructeur » étendue et attestée</div><div class="cl-note">Activité déclarée AVANT le 1er chantier en CG</div></div></div>
+        <div class="cl-item cg-check" onclick="toggleCheck(this)"><div class="cl-check"></div><div class="cl-content"><div class="cl-title">Contrat global signé avec le client (prix forfaitaire, délais, pénalités, garanties)</div><div class="cl-note">Distinct d'un contrat de maîtrise d'œuvre</div></div></div>
+        <div class="cl-item cg-check" onclick="toggleCheck(this)"><div class="cl-check"></div><div class="cl-content"><div class="cl-title">Contrats de sous-traitance signés avec chaque artisan</div><div class="cl-note">Loi 1975 — tu es ici le donneur d'ordre / client du sous-traitant</div></div></div>
+        <div class="cl-item cg-check" onclick="toggleCheck(this)"><div class="cl-check"></div><div class="cl-content"><div class="cl-title">Attestations décennales valides de CHAQUE artisan collectées</div><div class="cl-note">Année des travaux + activité du lot — ta marge ne te protège pas d'un artisan non assuré</div></div></div>
+        <div class="cl-item cg-check" onclick="toggleCheck(this)"><div class="cl-check"></div><div class="cl-content"><div class="cl-title">Retenue de garantie 5 % prévue sur chaque sous-traitant</div><div class="cl-note">Ou caution bancaire de substitution (Loi 71-584)</div></div></div>
+        <div class="cl-item cg-check" onclick="toggleCheck(this)"><div class="cl-check"></div><div class="cl-content"><div class="cl-title">Échéancier client &gt; échéancier artisans (trésorerie positive)</div><div class="cl-note">Tu portes le besoin en fonds de roulement et le risque de défaillance</div></div></div>
+        <div class="cl-item cg-check" onclick="toggleCheck(this)"><div class="cl-check"></div><div class="cl-content"><div class="cl-title">Régime de TVA validé avec ton comptable (10 % / 20 %, autoliquidation sous-traitance BTP)</div><div class="cl-note">L'autoliquidation TVA s'applique entre toi et tes sous-traitants BTP</div></div></div>
+      </div>
+    </div>
+
+    <div class="box box-info">
+      <span class="box-icon">💧</span>
+      <div>
+        <h4>Le nerf de la guerre — ta trésorerie</h4>
+        <p>En contractant général, tu avances la défaillance possible d'un artisan et tu portes le décalage entre ce que paie le client et ce que tu dois aux artisans. Construis toujours un <strong>échéancier client en avance de phase</strong> sur l'échéancier artisans, prévois un acompte au démarrage, et ne règle un artisan que sur <strong>situation visée</strong>. La marge n'est un gain que si la trésorerie ne te met jamais en risque.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ===== PHASE DET ===== -->
 <div id="det">
   <div class="phase-divider container">
@@ -975,7 +1384,7 @@
     <div class="section-header">
       <div class="phase-tag tag-det">DET</div>
       <h2>Diriger l'Exécution des Travaux</h2>
-      <p>La DET couvre l'ensemble des aspects techniques, administratifs et financiers du chantier. En <strong>marché privé</strong>, les règles sont plus souples qu'en marché public mais la responsabilité de l'architecte est identique. La MAF insiste sur <strong>la sécurisation des écrits</strong> : des paroles n'ont aucune valeur devant les tribunaux.</p>
+      <p>La DET couvre l'ensemble des aspects techniques, administratifs et financiers du chantier. En <strong>marché privé</strong>, les règles sont plus souples qu'en marché public mais la responsabilité du maître d'œuvre est identique. La MAF insiste sur <strong>la sécurisation des écrits</strong> : des paroles n'ont aucune valeur devant les tribunaux.</p>
     </div>
 
     <div class="cards">
@@ -1060,7 +1469,7 @@
       <span class="box-icon">🚨</span>
       <div>
         <h4>Règle absolue (MAF) — L'écrit protège</h4>
-        <p>Les architectes doivent être <em>particulièrement attentifs à la rédaction des comptes rendus de chantier</em>. De simples paroles n'ont aucune valeur devant les tribunaux. Chaque décision, observation, réserve ou directive doit figurer par écrit dans le compte rendu ou un ordre de service numéroté.</p>
+        <p>Le maître d'œuvre doit être <em>particulièrement attentif à la rédaction des comptes rendus de chantier</em>. De simples paroles n'ont aucune valeur devant les tribunaux. Chaque décision, observation, réserve ou directive doit figurer par écrit dans le compte rendu ou un ordre de service numéroté.</p>
       </div>
     </div>
 
@@ -1072,7 +1481,7 @@
         </div>
         <div class="acc-body">
           <ul>
-            <li><strong>En-tête :</strong> N° de CR, date, heure, lieu, nom de l'opération, architecte responsable</li>
+            <li><strong>En-tête :</strong> N° de CR, date, heure, lieu, nom de l'opération, maître d'œuvre responsable</li>
             <li><strong>Présents / Absents :</strong> liste complète avec fonctions et entreprises représentées</li>
             <li><strong>Avancement général :</strong> % d'avancement par lot, conformité au planning</li>
             <li><strong>Constats techniques :</strong> observations par lot, non-conformités, points à corriger</li>
@@ -1091,7 +1500,7 @@
         </div>
         <div class="acc-body">
           <ul>
-            <li>L'OS est un document <strong>numéroté et daté</strong> adressé à l'entreprise (3 exemplaires : MOA, architecte, entreprise)</li>
+            <li>L'OS est un document <strong>numéroté et daté</strong> adressé à l'entreprise (3 exemplaires : MOA, maître d'œuvre, entreprise)</li>
             <li>En <strong>marché privé</strong>, l'OS n'a pas la force contraignante du marché public — l'entreprise peut émettre des réserves ou refuser sans conséquence automatique</li>
             <li>Usages pratiques : démarrage des travaux, modifications techniques convenues, constats formels de retard ou de non-conformité</li>
             <li><strong>Préférer la confirmation écrite partagée</strong> (email avec AR, courrier) plutôt qu'un OS unilatéral — obtenir systématiquement la réponse écrite de l'entreprise</li>
@@ -1108,7 +1517,7 @@
         <div class="acc-body">
           <ul>
             <li>Les modalités de paiement sont fixées par le <strong>contrat d'entreprise (devis signé)</strong> — vérifier le rythme de facturation convenu (mensuel, par avancement, à l'achèvement)</li>
-            <li>L'architecte <strong>certifie l'avancement</strong> des travaux avant que le MOA règle — son visa protège le MOA contre les facturations abusives</li>
+            <li>Le maître d'œuvre <strong>certifie l'avancement</strong> des travaux avant que le MOA règle — son visa protège le MOA contre les facturations abusives</li>
             <li>En privé, il n'y a pas de procédure de DGD formalisée comme en marché public — prévoir dans le contrat les modalités de décompte final</li>
             <li>La <strong>retenue de garantie</strong> (5% du marché) est légalement possible en marché privé — à prévoir contractuellement et à remplacer par une caution bancaire si l'entreprise le demande (Loi 71-584)</li>
             <li>Tout travail supplémentaire = accord du MOA + devis signé AVANT exécution — sans cela, l'entreprise peut se voir refuser le paiement</li>
@@ -1222,7 +1631,7 @@
           </tr>
           <tr>
             <td><strong>PV de réception</strong></td>
-            <td>Document signé MOA + architecte. Acte la réception avec ou sans réserves.</td>
+            <td>Document signé MOA + maître d'œuvre. Acte la réception avec ou sans réserves.</td>
             <td>En privé, la réception peut être expresse (PV signé) ou tacite (prise de possession sans réserve). Toujours formaliser par un PV pour figer la date de départ des garanties.</td>
           </tr>
           <tr>
@@ -1242,7 +1651,7 @@
           </tr>
           <tr>
             <td><strong>GPA</strong><br><small>Garantie de Parfait Achèvement</small></td>
-            <td>Désordres signalés dans l'année. L'architecte assiste le MOA pour faire valoir ses droits.</td>
+            <td>Désordres signalés dans l'année. Le maître d'œuvre assiste le MOA pour faire valoir ses droits.</td>
             <td>1 an à compter de la réception (art. 1792-6 Code civil) — s'applique en marchés privés comme publics</td>
           </tr>
         </tbody>
@@ -1257,6 +1666,60 @@
       </div>
     </div>
         <p>La MAF recommande d'exiger la mise à jour des plans d'exécution par les entreprises <strong>au fur et à mesure du chantier</strong>, sans attendre la réception. Cette anticipation protège en cas de défaillance d'une entreprise avant la réception. Conditionner la validation des dernières situations à la remise des éléments DOE du lot concerné.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== COFFRE-FORT PROJET ===== -->
+<div id="coffre">
+  <div class="phase-divider container">
+    <div class="phase-divider-line"></div>
+    <span class="phase-divider-label" style="background: var(--navy); color: var(--cyan);">🗄️ Coffre-fort projet</span>
+    <div class="phase-divider-line"></div>
+  </div>
+  <div class="container">
+    <div class="section-header">
+      <div class="phase-tag tag-common">🗄️ TRAÇABILITÉ</div>
+      <h2>Le dossier qui te protège — à constituer pour chaque opération</h2>
+      <p>En cas de litige, c'est ton dossier qui parle pour toi. Un projet sans écrits, c'est ta parole contre celle du client ou de l'entreprise. Conserve l'intégralité <strong>10 ans minimum</strong> à compter de la réception (durée décennale).</p>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Catégorie</th><th>Documents à archiver</th><th>Conservation</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Contractuel</strong></td><td>Contrat MOE ou contrat d'entreprise générale signé + avenants ; mandat de dépôt PC ; CGV</td><td>10 ans</td></tr>
+          <tr><td><strong>Assurances</strong></td><td>Tes attestations (RC pro, décennale) <em>de l'année des travaux</em> + attestation décennale de <strong>chaque entreprise</strong> ; attestation DO du MOA</td><td>10 ans</td></tr>
+          <tr><td><strong>Conception</strong></td><td>Plans datés et indicés, CCTP, DPGF, estimations, notes de calcul / BET</td><td>10 ans</td></tr>
+          <tr><td><strong>Urbanisme</strong></td><td>Dossier PC/DP déposé, arrêté, plans visés, attestation RE2020, DOC, DAACT, constat d'affichage</td><td>10 ans</td></tr>
+          <tr><td><strong>Consultation</strong></td><td>DCE diffusé, preuves d'envoi, offres reçues, rapport d'analyse, devis signés</td><td>10 ans</td></tr>
+          <tr><td><strong>Chantier</strong></td><td>CR numérotés, OS, fiches de travaux modificatifs, situations visées, factures, courriers/emails du devoir de conseil, photos horodatées</td><td>10 ans</td></tr>
+          <tr><td><strong>Sous-traitance (CG)</strong></td><td>Contrats de sous-traitance, agréments, attestations de régularité fiscale/sociale (URSSAF)</td><td>10 ans</td></tr>
+          <tr><td><strong>Réception</strong></td><td>PV de réception, liste et levée des réserves, DOE, DIUO, attestation de fin de GPA</td><td>10 ans</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="box box-tip">
+      <span class="box-icon">📌</span>
+      <div>
+        <h4>Les 5 écrits qui te sauvent en cas de litige</h4>
+        <ul>
+          <li><strong>Le contrat signé</strong> définissant précisément ta mission et ses limites.</li>
+          <li><strong>Les alertes écrites</strong> (devoir de conseil) : DO recommandée, risques signalés, réserves émises.</li>
+          <li><strong>Les comptes rendus diffusés</strong> dans les 48 h, non contestés.</li>
+          <li><strong>Les devis signés</strong> pour tout travail supplémentaire <em>avant</em> exécution.</li>
+          <li><strong>Le PV de réception</strong> figeant la date de départ des garanties.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="box box-info">
+      <span class="box-icon">☁️</span>
+      <div>
+        <h4>Bonne pratique — l'archivage numérique</h4>
+        <p>Un dossier par opération, structuré par phase (PRO / DCE / Marchés / Chantier / Réception), sauvegardé avec horodatage. Tes outils Phénix (chiffrage, dossier, chantier, suivi) peuvent centraliser CR, situations et photos : assure-toi simplement que tout reste <strong>exportable et conservé 10 ans</strong>, indépendamment de la plateforme.</p>
       </div>
     </div>
   </div>
@@ -1304,7 +1767,7 @@
       <span class="box-icon">🔗</span>
       <div>
         <h4>Accès à la Boîte à Outils MAF</h4>
-        <p>La boîte à outils est accessible aux adhérents MAF via l'espace adhérent : <strong>boiteaoutils.maf.fr</strong>. Si tu n'es pas encore adhérent MAF, l'assurance professionnelle des architectes couvre obligatoirement la RC décennale et donne accès à ces ressources.</p>
+        <p>La boîte à outils est accessible aux adhérents MAF via l'espace adhérent : <strong>boiteaoutils.maf.fr</strong>. La <strong>Boîte à Outils MAF</strong> reste une référence méthodologique précieuse, même si — en tant que maître d'œuvre non inscrit à l'Ordre — ton assurance RC décennale est généralement souscrite auprès d'un assureur couvrant les maîtres d'œuvre (SMABTP, MAAF Pro, L'Auxiliaire, courtiers spécialisés MOE…) plutôt qu'à la MAF, réservée aux architectes inscrits. Vérifie les conditions d'accès à la Boîte à Outils selon ton contrat.</p>
       </div>
     </div>
 
@@ -1330,7 +1793,7 @@
 
 <!-- FOOTER -->
 <div class="footer">
-  <strong>Phénix-Architecte</strong> · Guide Maîtrise d'Œuvre — Marchés Privés · Basé sur la Boîte à Outils MAF (jan. 2026) et les bonnes pratiques de la profession<br>
+  <strong>Phénix-Architecture</strong> · Guide Maîtrise d'Œuvre — Marchés Privés · Basé sur la Boîte à Outils MAF (jan. 2026) et les bonnes pratiques de la profession<br>
   <span style="margin-top: 6px; display: block;">Saint-Georges-de-Mons (63780) · phenix-architecte.fr · Ce guide est un outil pratique, non un document contractuel.</span>
 </div>
 
