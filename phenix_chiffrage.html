@@ -148,7 +148,7 @@ tr:hover td{background:var(--accent-bg)}
 .empty-state p{font-size:14px}
 
 /* MODAL */
-.modal-overlay{position:absolute;inset:0;background:rgba(15,30,61,.6);display:none;align-items:center;justify-content:center;z-index:100}
+.modal-overlay{position:fixed;inset:0;background:rgba(15,30,61,.6);display:none;align-items:center;justify-content:center;z-index:100000}
 .modal-overlay.open{display:flex}
 .modal{background:var(--surface);border-radius:var(--r-lg);padding:28px;width:440px;max-width:90%;box-shadow:var(--shadow-md)}
 .modal-title{font-family:var(--font-serif);font-size:22px;font-weight:400;color:var(--nav);margin-bottom:20px}
@@ -1517,16 +1517,30 @@ window.loadChantiers = loadChantiers;
 <script>
 const STORAGE_KEY='phenix-chantiers-v3';
 const LEGACY_KEYS=['phenix-chantiers-v2','phenix-chantiers-v1','phenix-chantiers'];
-// Initialisé tôt pour éviter la temporal dead zone et les interruptions de script
+
+// ── Variables globales déclarées tôt (évite temporal dead zone) ──
 var metrageState = {
-  planImage: null, planFileName: '', canvas: null, ctx: null, scale: null,
-  calibrated: false, tool: null, drawing: false, currentPoints: [], measures: [],
-  calibPoints: [], zoom: 1, panX: 0, panY: 0, isPanning: false, lastPan: null,
-  offCanvas: null, _pendingFitImg: null
+  planImage:null, planFileName:'', canvas:null, ctx:null, scale:null,
+  calibrated:false, tool:null, drawing:false, currentPoints:[], measures:[],
+  calibPoints:[], zoom:1, panX:0, panY:0, isPanning:false, lastPan:null,
+  offCanvas:null, _pendingFitImg:null
 };
 var iaResultData = null;
 var planBase64ForIA = null;
 var planMimeTypeForIA = 'image/jpeg';
+var _mousePreviewPt = null;
+var questReponses = {
+  toit_forme:'2pans', toit_couv:'tuile_plate_noire', toit_iso:'soufle', toit_ep_iso:'300',
+  mur_type:'parpaing', mur_iso:'ite', mur_ep_iso:'140', sad:'270',
+  hsp_rdc:'250', hsp_r1:'250', plancher_type:'poutrelle_hourdis',
+  menu_mat:'pvc_blanc', menu_vitrage:'dv_standard', menu_volets:'roulants_elec', pe_type:'design',
+  vmc_type:'df_enthalpique', chauf_type:'pac_aireau_rad', ecs_type:'thermo', nb_rad:'6',
+  nb_tableaux:'1', nb_ve:'1', domotique:'aucune', alarme:'base',
+  sdb_config:'douche_seule', douche_type:'italienne', wc_type:'suspendu',
+  assainissement:'tout_egout', eau_potable:'reseau',
+  sol_sejour:'carrelage', sol_ch:'parquet_flottant', facade_type:'enduit_mono',
+  terrasse:'aucune', portail:'porte_garage_auto', cloture:'aucune',
+};
 
 const LOT_TEMPLATES={
   vrd:[{n:'Débroussaillage / nettoyage',q:1,u:'ff',pu:{eco:800,std:1200,haut:1800}},{n:'Terrassement général (excav.)',q:50,u:'m³',pu:{eco:35,std:50,haut:70}},{n:'Remblai et compactage',q:30,u:'m³',pu:{eco:20,std:30,haut:45}},{n:'Réseau EP (tranchées + fourreaux)',q:1,u:'ff',pu:{eco:1500,std:2500,haut:4000}}],
@@ -2792,7 +2806,7 @@ function canvasToWorld(e){
   return {x:(e.clientX-rect.left-metrageState.panX)/metrageState.zoom, y:(e.clientY-rect.top-metrageState.panY)/metrageState.zoom};
 }
 
-let _mousePreviewPt=null;
+// _mousePreviewPt déclaré en haut du script
 function onCanvasMouseMove(e){
   if(metrageState.isPanning) return;
   _mousePreviewPt=canvasToWorld(e);
@@ -3279,78 +3293,7 @@ Sois précis et exhaustif. Si une valeur n'est pas lisible sur le plan, estime-l
 
 // ── Modal résultats IA ───────────────────────────────────────────
 
-function ouvrirModalIAResultats(data) {
-  const projet = data.projet || {};
-  const pieces = data.pieces || [];
-  const menus = data.menuiseries || {};
-  const lots = data.lots || [];
-
-  // Remplir sélecteur chantier
-  const selC = document.getElementById('ia-dest-chantier');
-  selC.innerHTML = '<option value="">— Sélectionner un chantier —</option>';
-  state.chantiers.forEach((c,i) => selC.add(new Option(c.nom, i)));
-
-  // Résumé
-  const summaryEl = document.getElementById('ia-summary-zone');
-  const totalFen = (menus.fenetres||[]).reduce((s,f)=>s+(f.quantite||1),0);
-  const totalPF = (menus.portes_fenetres||[]).reduce((s,f)=>s+(f.quantite||1),0);
-  const totalPI = (menus.portes_interieures||[]).reduce((s,f)=>s+(f.quantite||1),0);
-  const totalPE = (menus.portes_entree||[]).reduce((s,f)=>s+(f.quantite||1),0);
-  const totalSurf = pieces.reduce((s,p)=>s+(p.surface||0),0);
-
-  summaryEl.innerHTML = `
-    <div style="background:linear-gradient(135deg,rgba(108,52,131,.07),rgba(42,82,152,.07));border:1.5px solid rgba(108,52,131,.2);border-radius:var(--r-lg);padding:14px 16px;margin-bottom:12px">
-      <div style="font-size:12px;font-weight:700;color:#6C3483;margin-bottom:8px">📋 ${projet.description||'Plan analysé'}</div>
-      <div class="ia-summary-grid">
-        <div class="ia-sum-card"><div class="ia-sum-label">Type</div><div class="ia-sum-val" style="font-size:14px;font-family:var(--font-sans);font-weight:600">${projet.type==='neuf'?'🏗️ Neuf':'🔨 Rénov.'}</div></div>
-        <div class="ia-sum-card"><div class="ia-sum-label">Surface plancher</div><div class="ia-sum-val">${projet.surface_plancher||totalSurf.toFixed(0)} m²</div></div>
-        <div class="ia-sum-card"><div class="ia-sum-label">Périmètre ext.</div><div class="ia-sum-val">${projet.perimetre_exterieur||'—'} ml</div></div>
-        <div class="ia-sum-card"><div class="ia-sum-label">HSP</div><div class="ia-sum-val">${projet.hsp||2.50} m</div></div>
-        <div class="ia-sum-card"><div class="ia-sum-label">Fenêtres</div><div class="ia-sum-val">${totalFen}</div></div>
-        <div class="ia-sum-card"><div class="ia-sum-label">Ptes-fen.</div><div class="ia-sum-val">${totalPF}</div></div>
-        <div class="ia-sum-card"><div class="ia-sum-label">Portes int.</div><div class="ia-sum-val">${totalPI}</div></div>
-        <div class="ia-sum-card"><div class="ia-sum-label">Lots générés</div><div class="ia-sum-val">${lots.length}</div></div>
-      </div>
-      ${pieces.length ? `<div style="margin-top:10px;font-size:12px;color:var(--text2)"><strong style="color:var(--nav)">Pièces :</strong> ${pieces.map(p=>`${p.nom} <strong>${p.surface} m²</strong>`).join(' · ')}</div>` : ''}
-    </div>`;
-
-  // Lots
-  const lotsEl = document.getElementById('ia-lots-container');
-  lotsEl.innerHTML = '';
-  lots.forEach((lot, li) => {
-    const postes = lot.postes || [];
-    const totalLot = postes.reduce((s,p) => s + (parseFloat(p.q)||0)*(parseFloat(p.pu_client)||parseFloat(p.pu_artisan)||0), 0);
-    const lotDiv = document.createElement('div');
-    lotDiv.className = 'ia-result-lot';
-    lotDiv.innerHTML = `
-      <div class="ia-result-lot-header" onclick="toggleIALot(${li})">
-        <input type="checkbox" class="ia-lot-check" id="ia-lot-chk-${li}" checked onclick="event.stopPropagation()">
-        <div class="ia-result-lot-title">${lot.num||'LOT '+(li+1).toString().padStart(2,'0')} — ${lot.nom}</div>
-        <div class="ia-result-lot-badge">${postes.length} postes</div>
-        <div class="ia-result-lot-badge" style="background:var(--surface2);color:var(--nav)">${Math.round(totalLot).toLocaleString('fr-FR')} € HT</div>
-        <i class="ti ti-chevron-down" id="ia-lot-chev-${li}" style="color:var(--text3);font-size:14px;transition:transform .2s"></i>
-      </div>
-      <div class="ia-result-lot-body" id="ia-lot-body-${li}">
-        <div style="display:grid;grid-template-columns:1fr 60px 40px 70px 70px;gap:4px;padding:5px 14px;font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;background:var(--surface2)">
-          <div>Désignation</div><div style="text-align:right">Qté</div><div style="text-align:center">Unité</div><div style="text-align:right">PU artisan</div><div style="text-align:right">PU client</div>
-        </div>
-        ${postes.map((p,pi) => `
-        <div class="ia-poste-row">
-          <div style="font-size:12px;color:var(--text)">${p.n}</div>
-          <input type="number" value="${p.q}" min="0" step="0.1" id="iap-q-${li}-${pi}" oninput="recalcIAPoste(${li},${pi})">
-          <div style="text-align:center;font-size:11px;color:var(--text3)">${p.u}</div>
-          <input type="number" value="${p.pu_artisan||0}" min="0" step="1" id="iap-pa-${li}-${pi}" oninput="recalcIAPoste(${li},${pi})">
-          <input type="number" value="${p.pu_client||p.pu_artisan||0}" min="0" step="1" id="iap-pc-${li}-${pi}" style="background:#fff9e6" oninput="recalcIAPoste(${li},${pi})">
-        </div>`).join('')}
-        <div style="padding:6px 14px;text-align:right;font-size:12px;font-weight:700;color:var(--nav);background:var(--surface2)" id="ia-lot-total-${li}">
-          Total HT client : ${Math.round(totalLot).toLocaleString('fr-FR')} €
-        </div>
-      </div>`;
-    lotsEl.appendChild(lotDiv);
-  });
-
-  document.getElementById('modal-ia-resultats').classList.add('open');
-}
+// ouvrirModalIAResultats -> voir version avec questionnaire plus bas
 
 function toggleIALot(li) {
   const body = document.getElementById('ia-lot-body-'+li);
@@ -3437,43 +3380,43 @@ window.confirmerImportIA = confirmerImportIA;
 ═══════════════════════════════════════════════════════════════════ */
 
 // État du questionnaire
-let questReponses = {
-  toit_forme:    '2pans',
-  toit_couv:     'tuile_plate_noire',
-  toit_iso:      'soufle',
-  toit_ep_iso:   '300',
-  mur_type:      'parpaing',
-  mur_iso:       'ite',
-  mur_ep_iso:    '140',
-  sad:           '270',
-  hsp_rdc:       '250',
-  hsp_r1:        '250',
-  plancher_type: 'poutrelle_hourdis',
-  menu_mat:      'pvc_blanc',
-  menu_vitrage:  'dv_standard',
-  menu_volets:   'roulants_elec',
-  pe_type:       'design',
-  vmc_type:      'df_enthalpique',
-  chauf_type:    'pac_aireau_rad',
-  ecs_type:      'thermo',
-  nb_rad:        '6',
-  nb_tableaux:   '1',
-  nb_ve:         '1',
-  domotique:     'aucune',
-  alarme:        'base',
-  sdb_config:    'douche_seule',
-  douche_type:   'italienne',
-  wc_type:       'suspendu',
-  assainissement:'tout_egout',
-  eau_potable:   'reseau',
-  sol_sejour:    'carrelage',
-  sol_ch:        'parquet_flottant',
-  facade_type:   'enduit_mono',
-  terrasse:      'aucune',
-  portail:       'porte_garage_auto',
-  cloture:       'aucune',
-  nb_ve:         '1',
-};
+// questReponses déclaré en haut du script
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 function selectChip(el, key) {
   // Désélectionner les autres chips du même groupe
