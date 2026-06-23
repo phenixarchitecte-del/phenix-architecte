@@ -2599,10 +2599,21 @@ function loadPlanFile(file){
 }
 
 function loadPlanFromPdf(file){
-  const existing = document.getElementById('pdfjs-script');
-  const doLoad = () => {
-    if(typeof pdfjsLib === 'undefined'){ showToast('⚠️ PDF.js non disponible'); return; }
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  // Essayer d'abord unpkg (moins de restrictions CSP que cdnjs)
+  const PDFJS_URLS = [
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
+    'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js',
+  ];
+  const WORKER_URLS = [
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js',
+    'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js',
+  ];
+
+  showToast('📄 Chargement du PDF…');
+
+  const doRender = () => {
+    if(typeof pdfjsLib === 'undefined'){ showToast('⚠️ PDF.js non disponible — essayez un PNG ou JPG'); return; }
+    pdfjsLib.GlobalWorkerOptions.workerSrc = WORKER_URLS[0];
     const reader = new FileReader();
     reader.onload = async e => {
       try{
@@ -2613,20 +2624,44 @@ function loadPlanFromPdf(file){
         tmp.width = viewport.width; tmp.height = viewport.height;
         await page.render({canvasContext:tmp.getContext('2d'),viewport}).promise;
         const img = new Image();
-        img.onload = () => { metrageState.planImage = img; setupOffscreenCanvas(img); showMetrageWorkArea(); };
+        img.onload = () => { metrageState.planImage=img; setupOffscreenCanvas(img); showMetrageWorkArea(); };
         img.src = tmp.toDataURL();
-      }catch(err){ showToast('⚠️ Erreur PDF : ' + err.message); }
+      }catch(err){
+        // Si worker bloque, essayer sans worker (mode legacy)
+        try {
+          pdfjsLib.GlobalWorkerOptions.workerSrc = WORKER_URLS[1];
+          const pdf2 = await pdfjsLib.getDocument({data: new Uint8Array(e.target.result)}).promise;
+          const page2 = await pdf2.getPage(1);
+          const vp2 = page2.getViewport({scale:2.5});
+          const tmp2 = document.createElement('canvas');
+          tmp2.width=vp2.width; tmp2.height=vp2.height;
+          await page2.render({canvasContext:tmp2.getContext('2d'),viewport:vp2}).promise;
+          const img2 = new Image();
+          img2.onload=()=>{metrageState.planImage=img2;setupOffscreenCanvas(img2);showMetrageWorkArea();};
+          img2.src=tmp2.toDataURL();
+        } catch(err2) {
+          showToast('⚠️ Erreur PDF : ' + err2.message + ' — essayez un export PNG de votre plan');
+        }
+      }
     };
     reader.readAsArrayBuffer(file);
   };
-  if(!existing){
+
+  const existing = document.getElementById('pdfjs-script');
+  if(existing && typeof pdfjsLib !== 'undefined'){ doRender(); return; }
+
+  let tried = 0;
+  const tryLoad = (idx) => {
+    if(idx >= PDFJS_URLS.length){ showToast('⚠️ Impossible de charger PDF.js — utilisez PNG/JPG'); return; }
     const s = document.createElement('script');
     s.id = 'pdfjs-script';
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-    s.onload = doLoad;
-    s.onerror = () => showToast('⚠️ Impossible de charger PDF.js');
+    s.src = PDFJS_URLS[idx];
+    s.onload = doRender;
+    s.onerror = () => { s.remove(); tryLoad(idx+1); };
     document.head.appendChild(s);
-  } else { doLoad(); }
+  };
+  if(existing) existing.remove();
+  tryLoad(0);
 }
 
 function setupOffscreenCanvas(img){
@@ -2634,12 +2669,21 @@ function setupOffscreenCanvas(img){
   off.width = img.naturalWidth; off.height = img.naturalHeight;
   off.getContext('2d').drawImage(img, 0, 0);
   metrageState.offCanvas = off;
+  metrageState._pendingFitImg = img; // on recalcule le fit une fois la zone visible
+}
+
+function _fitPlanToZone(){
+  const img = metrageState._pendingFitImg;
+  if(!img) return;
   const zone = document.getElementById('metrage-canvas-zone');
-  const scaleX = (zone.clientWidth||600) / img.naturalWidth;
-  const scaleY = (zone.clientHeight||400) / img.naturalHeight;
+  const w = zone.clientWidth || zone.offsetWidth || 800;
+  const h = zone.clientHeight || zone.offsetHeight || 500;
+  const scaleX = w / img.naturalWidth;
+  const scaleY = h / img.naturalHeight;
   metrageState.zoom = Math.min(scaleX, scaleY) * 0.95;
-  metrageState.panX = ((zone.clientWidth||600) - img.naturalWidth * metrageState.zoom) / 2;
-  metrageState.panY = ((zone.clientHeight||400) - img.naturalHeight * metrageState.zoom) / 2;
+  metrageState.panX = (w - img.naturalWidth * metrageState.zoom) / 2;
+  metrageState.panY = (h - img.naturalHeight * metrageState.zoom) / 2;
+  metrageState._pendingFitImg = null;
 }
 
 function showMetrageWorkArea(){
@@ -2648,9 +2692,14 @@ function showMetrageWorkArea(){
   wa.style.display = 'flex';
   document.getElementById('btn-clear-measures').style.display = '';
   document.getElementById('btn-export-mesures').style.display = '';
-  if(!metrageState.canvas){ initMetrageCanvas(); }
-  else { resizeMetrageCanvas(); }
-  drawPlan();
+  document.getElementById('btn-analyse-ia').style.display = '';
+  // Laisser le DOM se rendre avant d'initialiser le canvas (zone.clientWidth dispo)
+  requestAnimationFrame(() => {
+    if(!metrageState.canvas){ initMetrageCanvas(); }
+    else { resizeMetrageCanvas(); }
+    _fitPlanToZone();
+    drawPlan();
+  });
 }
 
 function drawPlan(){
@@ -3069,29 +3118,27 @@ function loadPlanEtAnalyser(file) {
       planMimeTypeForIA = file.type || 'image/jpeg';
       // Charger aussi visuellement
       const img = new Image();
-      img.onload = () => { metrageState.planImage=img; setupOffscreenCanvas(img); showMetrageWorkArea(); };
+      img.onload = () => { metrageState.planImage=img; setupOffscreenCanvas(img); showMetrageWorkArea(); setTimeout(()=>lancerAnalyseIA(),200); };
       img.src = e.target.result;
-      lancerAnalyseIA();
+
     };
     reader.readAsDataURL(file);
   }
 }
 
 function loadPlanFromPdfEtAnalyser(file) {
-  // D'abord lire en base64 pour l'IA (PDF natif)
+  // Lire en base64 pour l'IA
   const readerB64 = new FileReader();
   readerB64.onload = e => {
     planBase64ForIA = e.target.result.split(',')[1];
     planMimeTypeForIA = 'application/pdf';
   };
   readerB64.readAsDataURL(file);
-  // Puis charger visuellement via PDF.js
+  // Charger visuellement
   loadPlanFromPdf(file);
-  // Déclencher l'analyse une fois le plan affiché
-  setTimeout(() => {
-    showMetrageWorkArea();
-    lancerAnalyseIA();
-  }, 1500);
+  // L'analyse sera déclenchée manuellement via le bouton
+  // (on ne peut pas enchaîner automatiquement car loadPlanFromPdf est async)
+  showToast('📄 Plan chargé — cliquez "Lancer l\'analyse IA" pour analyser');
 }
 
 function lancerAnalyseIA() {
