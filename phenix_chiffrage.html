@@ -1169,10 +1169,10 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
       <div id="ia-summary-zone" style="margin-bottom:14px"></div>
       <div style="font-size:12px;color:var(--text2);margin-bottom:8px;font-weight:600">Lots et postes générés — modifiez les quantités et PU avant d'importer :</div>
       <!-- Sélecteur chantier destination -->
-      <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+      <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:8px;flex-wrap:wrap">
         <div style="flex:1;min-width:180px">
           <label style="font-size:11px;color:var(--text2);font-weight:600;display:block;margin-bottom:3px">Chantier destination</label>
-          <select id="ia-dest-chantier" onchange="updateIADestLot()" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:var(--font-sans);background:var(--bg)">
+          <select id="ia-dest-chantier" onchange="onIAChantierChange()" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:var(--font-sans);background:var(--bg)">
             <option value="">— Sélectionner —</option>
           </select>
         </div>
@@ -1182,6 +1182,45 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
             <option value="new">Créer de nouveaux lots (recommandé)</option>
             <option value="existing">Ajouter dans un lot existant</option>
           </select>
+        </div>
+      </div>
+
+      <!-- Formulaire création chantier inline -->
+      <div id="ia-new-chantier-form" style="background:linear-gradient(135deg,rgba(74,156,199,.07),rgba(42,82,152,.05));border:1.5px solid var(--accent);border-radius:var(--r-lg);padding:14px 16px;margin-bottom:12px">
+        <div style="font-size:12px;font-weight:700;color:var(--nav);margin-bottom:10px;display:flex;align-items:center;gap:6px">
+          <i class="ti ti-home-plus" style="font-size:16px;color:var(--accent)"></i>Créer un nouveau chantier
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div>
+            <label style="font-size:11px;color:var(--text2);font-weight:600;display:block;margin-bottom:3px">Nom du chantier *</label>
+            <input type="text" id="ia-chantier-nom" placeholder="ex: DEVAL — Vitrac" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:var(--font-sans);background:var(--bg)" oninput="updateIAChantierNom()">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text2);font-weight:600;display:block;margin-bottom:3px">Client</label>
+            <input type="text" id="ia-chantier-client" placeholder="ex: Yohan Deval" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:var(--font-sans);background:var(--bg)">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+          <div>
+            <label style="font-size:11px;color:var(--text2);font-weight:600;display:block;margin-bottom:3px">Adresse</label>
+            <input type="text" id="ia-chantier-adresse" placeholder="ex: Vitrac 63410" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:var(--font-sans);background:var(--bg)">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text2);font-weight:600;display:block;margin-bottom:3px">Type</label>
+            <select id="ia-chantier-type" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:var(--font-sans);background:var(--bg)">
+              <option value="Construction neuve">Construction neuve</option>
+              <option value="Rénovation">Rénovation</option>
+              <option value="Extension">Extension</option>
+              <option value="Aménagement">Aménagement</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text2);font-weight:600;display:block;margin-bottom:3px">Surface (m²)</label>
+            <input type="number" id="ia-chantier-surface" placeholder="135" min="1" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:var(--font-sans);background:var(--bg)">
+          </div>
+        </div>
+        <div style="margin-top:8px;font-size:11px;color:var(--text3)">
+          <i class="ti ti-info-circle" style="vertical-align:middle"></i> Ce chantier sera créé dans votre liste et les lots y seront rattachés automatiquement.
         </div>
       </div>
       <!-- Corps des lots IA -->
@@ -3322,49 +3361,95 @@ function recalcIAPoste(li, pi) {
   if(totEl) totEl.textContent = 'Total HT client : ' + Math.round(total).toLocaleString('fr-FR') + ' €';
 }
 
-function updateIADestLot() { /* placeholder */ }
+function onIAChantierChange() {
+  const val = document.getElementById('ia-dest-chantier').value;
+  // Masquer le formulaire si un chantier existant est sélectionné
+  document.getElementById('ia-new-chantier-form').style.display = val === '' ? '' : 'none';
+}
+
+function updateIADestLot() { onIAChantierChange(); }
+
+function updateIAChantierNom() {
+  // Auto-remplir le nom dans le select comme aperçu
+  const nom = document.getElementById('ia-chantier-nom').value.trim();
+  const sel = document.getElementById('ia-dest-chantier');
+  // S'assurer que l'option "nouveau" est visible avec le nom saisi
+  if(nom) {
+    let opt = sel.querySelector('option[value="__preview__"]');
+    if(!opt) { opt = new Option('', '__preview__'); sel.insertBefore(opt, sel.options[1]); }
+    opt.text = '+ Nouveau : ' + nom;
+  }
+}
 
 function confirmerImportIA() {
-  const ci = parseInt(document.getElementById('ia-dest-chantier').value);
-  if(isNaN(ci)) { showToast('⚠️ Sélectionnez un chantier de destination'); return; }
+  const selCi = document.getElementById('ia-dest-chantier').value;
   const lots = iaResultData?.lots || [];
-  let nbLots = 0, nbPostes = 0;
+  let ci;
+
+  // Mode création d'un nouveau chantier
+  if(selCi === '' || selCi === '__preview__') {
+    const nom = document.getElementById('ia-chantier-nom').value.trim();
+    if(!nom) { showToast('⚠️ Saisissez le nom du chantier'); document.getElementById('ia-chantier-nom').focus(); return; }
+    const client = document.getElementById('ia-chantier-client').value.trim();
+    const adresse = document.getElementById('ia-chantier-adresse').value.trim();
+    const type = document.getElementById('ia-chantier-type').value;
+    const surface = parseFloat(document.getElementById('ia-chantier-surface').value) || (iaResultData?.projet?.surface_plancher) || 0;
+    // Créer le chantier
+    const newChantier = {
+      nom, client, adresse, type, surface,
+      lots: [], statut: 'En cours', date: new Date().toISOString().split('T')[0],
+      notes: 'Créé depuis analyse IA plan — ' + (iaResultData?.projet?.description || '')
+    };
+    state.chantiers.push(newChantier);
+    ci = state.chantiers.length - 1;
+  } else {
+    ci = parseInt(selCi);
+    if(isNaN(ci)) { showToast('⚠️ Sélectionnez ou créez un chantier'); return; }
+  }
+
   const chantier = state.chantiers[ci];
   if(!chantier.lots) chantier.lots = [];
 
+  let nbLots = 0, nbPostes = 0;
   lots.forEach((lot, li) => {
     const chk = document.getElementById('ia-lot-chk-'+li);
     if(!chk || !chk.checked) return;
     const postes = (lot.postes||[]).map((p, pi) => ({
       n: p.n,
-      q: parseFloat(document.getElementById('iap-q-'+li+'-'+pi)?.value)||parseFloat(p.q)||0,
-      u: p.u||'u',
-      puArtisan: parseFloat(document.getElementById('iap-pa-'+li+'-'+pi)?.value)||parseFloat(p.pu_artisan)||0,
-      puClient:  parseFloat(document.getElementById('iap-pc-'+li+'-'+pi)?.value)||parseFloat(p.pu_client)||parseFloat(p.pu_artisan)||0,
-      pu:        parseFloat(p.pu_artisan)||0
+      q: parseFloat(document.getElementById('iap-q-'+li+'-'+pi)?.value) || parseFloat(p.q) || 0,
+      u: p.u || 'u',
+      puArtisan: parseFloat(document.getElementById('iap-pa-'+li+'-'+pi)?.value) || parseFloat(p.pu_artisan) || 0,
+      puClient:  parseFloat(document.getElementById('iap-pc-'+li+'-'+pi)?.value) || parseFloat(p.pu_client)  || 0,
+      pu: parseFloat(p.pu_artisan) || 0
     }));
     const nbExistants = chantier.lots.length;
     chantier.lots.push({
       num: 'LOT '+(nbExistants+1).toString().padStart(2,'0'),
-      nom: lot.nom,
-      postes,
-      aleas: 5, honoraires: 5, tva: 20, statut: 'Chiffrage', prestation: 'std',
-      notes: 'Généré par analyse IA du plan — ' + (iaResultData?.projet?.description||''),
-      marge: 20
+      nom: lot.nom, postes,
+      aleas:5, honoraires:5, tva:20, statut:'Chiffrage', prestation:'std',
+      notes: 'Généré par analyse IA — ' + (iaResultData?.projet?.description||''),
+      marge:20
     });
-    nbLots++;
-    nbPostes += postes.length;
+    nbLots++; nbPostes += postes.length;
   });
 
   saveState();
   closeModal('modal-ia-resultats');
-  showToast('✅ ' + nbLots + ' lot(s) créé(s) — ' + nbPostes + ' poste(s) importé(s)');
-  // Naviguer vers chiffrage
+  // Réinitialiser le formulaire pour la prochaine fois
+  document.getElementById('ia-chantier-nom').value = '';
+  document.getElementById('ia-chantier-client').value = '';
+  document.getElementById('ia-chantier-adresse').value = '';
+  document.getElementById('ia-chantier-surface').value = '';
+  showToast('✅ ' + (selCi===''||selCi==='__preview__' ? 'Chantier créé + ' : '') + nbLots + ' lot(s), ' + nbPostes + ' poste(s) importé(s)');
+  // Naviguer vers le chiffrage du chantier créé
   state.currentChantier = ci;
   showPage('chiffrage');
-  document.getElementById('chantier-select').value = ci;
+  const sel = document.getElementById('chantier-select');
+  if(sel) { sel.value = ci; }
   renderChiffrage();
 }
+
+// confirmerImportIA déclarée plus haut (version avec création chantier)
 
 window.lancerAnalyseIA = lancerAnalyseIA;
 window.loadPlanEtAnalyser = loadPlanEtAnalyser;
@@ -3372,6 +3457,8 @@ window.ouvrirModalIAResultats = ouvrirModalIAResultats;
 window.toggleIALot = toggleIALot;
 window.recalcIAPoste = recalcIAPoste;
 window.updateIADestLot = updateIADestLot;
+window.onIAChantierChange = onIAChantierChange;
+window.updateIAChantierNom = updateIAChantierNom;
 window.confirmerImportIA = confirmerImportIA;
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -3484,8 +3571,26 @@ function _ouvrirModalResultats(data) {
   const lots = data.lots || [];
 
   const selC = document.getElementById('ia-dest-chantier');
-  selC.innerHTML = '<option value="">— Sélectionner un chantier —</option>';
+  selC.innerHTML = '<option value="">— Créer un nouveau chantier —</option>';
   state.chantiers.forEach((c,i) => selC.add(new Option(c.nom, i)));
+  // Aucun chantier existant → formulaire visible d'emblée
+  const hasChantiers = state.chantiers.length > 0;
+  document.getElementById('ia-new-chantier-form').style.display = hasChantiers ? 'none' : '';
+  if(!hasChantiers) selC.value = '';
+
+  // Pré-remplir le formulaire depuis les données IA
+  const nomAutoClient = (menus.portes_entree?.[0]?.designation||'').replace(/PE.*/,'').trim();
+  const nomSuggere = data.projet?.description
+    ? data.projet.description.replace(/plan\s*(rdc|r\+1)?\s*/i,'').trim()
+    : '';
+  if(document.getElementById('ia-chantier-nom').value === '')
+    document.getElementById('ia-chantier-nom').value = nomSuggere || '';
+  if(document.getElementById('ia-chantier-surface').value === '' && projet.surface_plancher)
+    document.getElementById('ia-chantier-surface').value = projet.surface_plancher;
+  if(projet.type === 'neuf')
+    document.getElementById('ia-chantier-type').value = 'Construction neuve';
+  else if(projet.type === 'renovation')
+    document.getElementById('ia-chantier-type').value = 'Rénovation';
 
   const totalFen = (menus.fenetres||[]).reduce((s,f)=>s+(f.quantite||1),0);
   const totalPF = (menus.portes_fenetres||[]).reduce((s,f)=>s+(f.quantite||1),0);
