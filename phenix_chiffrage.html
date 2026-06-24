@@ -258,7 +258,39 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
 .ia-sum-card{background:var(--accent-bg);border:1.5px solid var(--border);border-radius:var(--r-md);padding:10px 12px}
 .ia-sum-label{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--text2);font-weight:700}
 .ia-sum-val{font-family:var(--font-serif);font-size:18px;color:var(--nav);margin-top:2px}
-/* Questionnaire technique */
+/* ═══ PAGE RÉNOVATION ═══ */
+.reno-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.reno-niveau-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r-lg);overflow:hidden}
+.reno-niveau-header{padding:10px 16px;background:var(--surface2);display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border)}
+.reno-niveau-title{font-size:13px;font-weight:700;color:var(--nav);flex:1}
+.reno-plan-slots{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px}
+.reno-plan-slot{border:2px dashed var(--border);border-radius:var(--r-md);min-height:100px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:all .15s;position:relative;overflow:hidden;background:var(--bg);text-align:center;padding:8px}
+.reno-plan-slot:hover{border-color:var(--accent);background:var(--accent-bg)}
+.reno-plan-slot.loaded{border-style:solid;border-color:var(--accent);background:var(--accent-bg)}
+.reno-plan-slot.loaded-demolition{border-color:#e67e22;background:rgba(230,126,34,.07)}
+.reno-plan-slot.loaded-projet{border-color:#27ae60;background:rgba(39,174,96,.07)}
+.reno-slot-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px}
+.reno-slot-label.existant{color:var(--text3)}
+.reno-slot-label.demolition{color:#e67e22}
+.reno-slot-label.projet{color:#27ae60}
+.reno-slot-thumb{width:100%;height:60px;object-fit:contain;border-radius:4px;margin-bottom:4px;display:none}
+.reno-slot-name{font-size:10px;color:var(--text2);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.reno-slot-del{position:absolute;top:4px;right:4px;width:18px;height:18px;border-radius:50%;background:var(--danger);color:#fff;font-size:10px;display:none;align-items:center;justify-content:center;cursor:pointer;border:none;line-height:1}
+.reno-plan-slot.loaded .reno-slot-del{display:flex}
+.reno-prompt-zone{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r-lg);padding:16px;margin-bottom:16px}
+.reno-prompt-label{font-size:12px;font-weight:700;color:var(--nav);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.reno-prompt-textarea{width:100%;min-height:120px;padding:10px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:var(--font-sans);background:var(--bg);color:var(--text);resize:vertical;line-height:1.6}
+.reno-prompt-textarea:focus{outline:none;border-color:var(--accent)}
+.reno-prompt-hint{font-size:11px;color:var(--text3);margin-top:6px;line-height:1.6}
+.reno-add-niveau{display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;border:2px dashed var(--border);border-radius:var(--r-lg);cursor:pointer;color:var(--text3);font-size:13px;font-weight:600;transition:all .15s;background:var(--bg);margin-bottom:16px;font-family:var(--font-sans)}
+.reno-add-niveau:hover{border-color:var(--accent);color:var(--nav);background:var(--accent-bg)}
+.reno-ia-status{display:none;padding:12px 16px;border-radius:var(--r-md);font-size:13px;margin-bottom:12px}
+.reno-ia-status.running{background:rgba(108,52,131,.08);border:1.5px solid rgba(108,52,131,.25);color:#6C3483;display:flex;align-items:center;gap:10px}
+.reno-ia-status.error{background:var(--danger-bg);border:1.5px solid var(--danger);color:var(--danger);display:block}
+@media(max-width:700px){
+  .reno-grid{grid-template-columns:1fr}
+  .reno-plan-slots{grid-template-columns:1fr 1fr}
+}
 .modal-questionnaire{width:820px;max-width:97%;max-height:94vh;overflow-y:auto;padding:0}
 .quest-header{padding:22px 28px 16px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:10}
 .quest-progress-bar{height:4px;background:var(--border);border-radius:2px;margin-top:12px;overflow:hidden}
@@ -434,6 +466,9 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
   </div>
   <div class="nav-item" onclick="showPage('metrages')" id="nav-metrages">
     <i class="ti ti-ruler-measure" aria-hidden="true"></i> Métrés / Plans
+  </div>
+  <div class="nav-item" onclick="showPage('renovation')" id="nav-renovation">
+    <i class="ti ti-refresh" aria-hidden="true"></i> Rénovation IA
   </div>
   <div class="nav-item" onclick="showPage('export')" id="nav-export">
     <i class="ti ti-file-export" aria-hidden="true"></i> Export
@@ -1254,6 +1289,64 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
         <button class="btn btn-outline" onclick="closeModal('modal-export-mesures')">Annuler</button>
         <button class="btn btn-primary" onclick="confirmExportMesures()"><i class="ti ti-check" aria-hidden="true"></i>Créer les postes</button>
       </div>
+    </div>
+  </div>
+
+  <!-- PAGE RÉNOVATION IA -->
+  <div class="page" id="page-renovation" style="overflow-y:auto">
+    <div class="page-header">
+      <div class="page-title">Rénovation IA</div>
+      <div class="page-sub">Chargez votre dossier PDF complet — l'IA détecte et analyse automatiquement chaque page (existant, démoli, projet)</div>
+      <div class="page-actions">
+        <button class="btn btn-primary" onclick="renoLancerIA()" id="btn-reno-analyser" style="display:none;background:linear-gradient(135deg,#6C3483,#2A5298);border-color:#6C3483"><i class="ti ti-robot"></i>Analyser par IA</button>
+      </div>
+    </div>
+    <div style="padding:20px 28px;flex:1;display:flex;flex-direction:column;gap:16px">
+
+      <!-- Zone de dépôt PDF -->
+      <div id="reno-drop-area">
+        <div class="plan-drop-zone" id="reno-drop-zone" onclick="document.getElementById('reno-pdf-input').click()"
+             style="max-width:600px;margin:0 auto;border-color:rgba(108,52,131,.4);background:linear-gradient(135deg,rgba(108,52,131,.04),rgba(42,82,152,.04))">
+          <input type="file" id="reno-pdf-input" accept=".pdf,.jpg,.jpeg,.png,.webp" multiple style="display:none" onchange="renoHandleDossier(this.files)">
+          <i class="ti ti-file-type-pdf" style="font-size:48px;display:block;margin-bottom:12px;color:#6C3483"></i>
+          <div style="font-weight:700;font-size:15px;color:var(--text)">Glissez votre dossier PDF ici</div>
+          <div style="font-size:13px;margin-top:6px;color:var(--text2)">ou cliquez pour parcourir</div>
+          <div style="font-size:12px;margin-top:10px;color:var(--text3);line-height:1.7">
+            PDF multi-pages · Plusieurs fichiers acceptés<br>
+            L'IA lit les titres de chaque page et identifie automatiquement<br>
+            <strong style="color:#6C3483">Existant / Démoli / Projet</strong> par niveau
+          </div>
+        </div>
+      </div>
+
+      <!-- Aperçu des pages extraites -->
+      <div id="reno-pages-preview" style="display:none">
+        <div style="font-size:12px;font-weight:700;color:var(--nav);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">
+          <span id="reno-pages-count"></span>
+          <button class="btn btn-sm btn-outline" onclick="renoReset()"><i class="ti ti-x"></i>Changer de dossier</button>
+        </div>
+        <div id="reno-pages-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:4px"></div>
+        <div style="font-size:11px;color:var(--text3);margin-top:6px">
+          💡 Les titres de page sont lus automatiquement. L'IA identifie chaque plan sans intervention de votre part.
+        </div>
+      </div>
+
+      <!-- Prompt libre -->
+      <div class="reno-prompt-zone" id="reno-prompt-zone" style="display:none">
+        <div class="reno-prompt-label">
+          <i class="ti ti-message-2" style="font-size:16px;color:var(--accent)"></i>
+          Description des travaux <span style="font-weight:400;color:var(--text3)">(facultatif mais recommandé)</span>
+        </div>
+        <textarea class="reno-prompt-textarea" id="reno-prompt"
+          placeholder="Ex : Réaménagement R+1 — ouverture de 2m dans le refend grange/habitation avec pose IPN. Démolition des cloisons existantes, redistribution selon plan projet. Escalier droit remplacé par 2 volées. SDB créée ex nihilo. Murs en pierre ancienne, plancher bois à conserver. Finitions standard."></textarea>
+        <div class="reno-prompt-hint">
+          💡 Décrivez comme à un artisan : démolitions, ouvertures dans murs porteurs, matériaux existants, contraintes, finitions souhaitées, travaux hors périmètre.
+        </div>
+      </div>
+
+      <!-- Statut IA -->
+      <div class="reno-ia-status" id="reno-ia-status"></div>
+
     </div>
   </div>
 
@@ -3929,6 +4022,331 @@ function recalculerLotsAvecReponses(data, rep) {
 window.selectChip = selectChip;
 window.validerQuestionnaire = validerQuestionnaire;
 window.recalculerLotsAvecReponses = recalculerLotsAvecReponses;
+
+/* ═══════════════════════════════════════════════════════════════════
+   MODULE RÉNOVATION IA — Phénix-Architecture
+   Chiffrage différentiel multi-niveaux : existant + démoli + projet
+═══════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════════
+   MODULE RÉNOVATION IA — Mode dossier unique multi-pages
+   Un seul PDF → extraction de toutes les pages → détection auto des titres
+═══════════════════════════════════════════════════════════════════ */
+
+// Pages extraites du dossier PDF : [{b64, mime, titre, pageNum, thumb}]
+var renoPages = [];
+
+// ── Drag & drop sur la zone ───────────────────────────────────────
+(function(){
+  setTimeout(() => {
+    const zone = document.getElementById('reno-drop-zone');
+    if(!zone) return;
+    zone.ondragover = e => { e.preventDefault(); zone.style.borderColor='#6C3483'; };
+    zone.ondragleave = () => { zone.style.borderColor=''; };
+    zone.ondrop = e => {
+      e.preventDefault(); zone.style.borderColor='';
+      if(e.dataTransfer.files.length) renoHandleDossier(e.dataTransfer.files);
+    };
+  }, 500);
+})();
+
+// ── Chargement dossier ────────────────────────────────────────────
+async function renoHandleDossier(files) {
+  if(!files || !files.length) return;
+  renoPages = [];
+  showToast('📄 Extraction des pages en cours…');
+  const statusEl = document.getElementById('reno-ia-status');
+  statusEl.className = 'reno-ia-status running';
+  statusEl.style.display = 'flex';
+  statusEl.innerHTML = '<div class="ai-loading"><div class="ai-dot" style="background:#6C3483"></div><div class="ai-dot" style="background:#6C3483"></div><div class="ai-dot" style="background:#6C3483"></div></div><span>Extraction des pages PDF…</span>';
+
+  for(const file of Array.from(files)) {
+    const ext = file.name.split('.').pop().toLowerCase();
+    if(ext === 'pdf') {
+      await renoExtractPdfPages(file);
+    } else {
+      // Image directe
+      await new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onload = e => {
+          const b64 = e.target.result.split(',')[1];
+          renoPages.push({
+            b64, mime: file.type||'image/jpeg',
+            titre: file.name.replace(/\.[^.]+$/,''),
+            pageNum: 1, fichier: file.name,
+            thumb: e.target.result
+          });
+          resolve();
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+  }
+
+  statusEl.style.display = 'none';
+  if(renoPages.length === 0) { showToast('⚠️ Aucune page extraite'); return; }
+
+  renoAfficherApercu();
+}
+
+async function renoExtractPdfPages(file) {
+  await new Promise((resolve) => {
+    const doExtract = async () => {
+      if(typeof pdfjsLib === 'undefined') { showToast('⚠️ PDF.js non disponible'); resolve(); return; }
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      const reader = new FileReader();
+      reader.onload = async e => {
+        try {
+          const pdf = await pdfjsLib.getDocument({data: new Uint8Array(e.target.result)}).promise;
+          const nb = pdf.numPages;
+          for(let p = 1; p <= nb; p++) {
+            const page = await pdf.getPage(p);
+            // Extraire le texte pour lire le titre de la page
+            const textContent = await page.getTextContent();
+            const textes = textContent.items.map(i => i.str).filter(s => s.trim().length > 2);
+            const titre = renoDetectTitrePage(textes, file.name, p);
+            // Rendre à haute résolution pour que l'IA voie les cotes
+            const viewport = page.getViewport({scale: 2.5});
+            const tmp = document.createElement('canvas');
+            tmp.width = viewport.width; tmp.height = viewport.height;
+            await page.render({canvasContext: tmp.getContext('2d'), viewport}).promise;
+            // Miniature à basse résolution pour l'aperçu UI
+            const thumbVp = page.getViewport({scale: 0.3});
+            const thumbCv = document.createElement('canvas');
+            thumbCv.width = thumbVp.width; thumbCv.height = thumbVp.height;
+            await page.render({canvasContext: thumbCv.getContext('2d'), viewport: thumbVp}).promise;
+            const b64 = tmp.toDataURL('image/jpeg', 0.88).split(',')[1];
+            const thumb = thumbCv.toDataURL('image/jpeg', 0.7);
+            renoPages.push({ b64, mime:'image/jpeg', titre, pageNum:p, fichier:file.name, thumb });
+          }
+          resolve();
+        } catch(err) { showToast('⚠️ Erreur PDF p.'+p+' : '+err.message); resolve(); }
+      };
+      reader.readAsArrayBuffer(file);
+    };
+    // Charger PDF.js si pas encore disponible
+    if(typeof pdfjsLib !== 'undefined') { doExtract(); return; }
+    const existing = document.getElementById('pdfjs-script');
+    if(existing) existing.remove();
+    const s = document.createElement('script');
+    s.id = 'pdfjs-script';
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload = doExtract;
+    s.onerror = () => { showToast('⚠️ PDF.js non disponible'); resolve(); };
+    document.head.appendChild(s);
+  });
+}
+
+// ── Détection automatique du titre de page ────────────────────────
+function renoDetectTitrePage(textes, nomFichier, pageNum) {
+  // Mots-clés pour identifier le type et le niveau
+  const full = textes.join(' ').toUpperCase();
+
+  // Patterns de titre ArchiCAD / convention Phénix
+  const patterns = [
+    /PLAN\s+(RDC|R\.?D\.?C\.?|REZ[- ]DE[- ]CHAUSS[EÉ]E)\s+(EXISTANT|EXIST\.?)/i,
+    /PLAN\s+(RDC|R\.?D\.?C\.?|REZ[- ]DE[- ]CHAUSS[EÉ]E)\s+(D[EÉ]MOLI|D[EÉ]MO\.?|DEMOL)/i,
+    /PLAN\s+(RDC|R\.?D\.?C\.?|REZ[- ]DE[- ]CHAUSS[EÉ]E)\s+(PROJET|PROJ\.?)/i,
+    /PLAN\s+(R\+1|PREMIER[- ]ETAGE|1ER[- ]ETAGE)\s+(EXISTANT|EXIST\.?)/i,
+    /PLAN\s+(R\+1|PREMIER[- ]ETAGE|1ER[- ]ETAGE)\s+(D[EÉ]MOLI|D[EÉ]MO\.?|DEMOL)/i,
+    /PLAN\s+(R\+1|PREMIER[- ]ETAGE|1ER[- ]ETAGE)\s+(PROJET|PROJ\.?)/i,
+    /PLAN\s+(R\+2|DEUXI[EÈ]ME[- ]ETAGE|2[EÈ]ME[- ]ETAGE)\s+(EXISTANT|EXIST\.?)/i,
+    /PLAN\s+(R\+2|DEUXI[EÈ]ME[- ]ETAGE|2[EÈ]ME[- ]ETAGE)\s+(PROJET|PROJ\.?)/i,
+    /PLAN\s+(COMBLES?|SOUS-SOL|CAVE|GARAGE|FACADE|COUPE)/i,
+    /PLAN\s+(EXISTANT|EXIST\.?)/i,
+    /PLAN\s+(D[EÉ]MOLI|D[EÉ]MO\.?|DEMOL)/i,
+    /PLAN\s+(PROJET|PROJ\.?)/i,
+  ];
+
+  // Chercher dans les textes individuels (titres isolés)
+  for(const texte of textes) {
+    for(const pat of patterns) {
+      if(pat.test(texte)) return texte.trim().substring(0, 60);
+    }
+  }
+
+  // Chercher dans le texte complet reconstitué
+  for(const pat of patterns) {
+    const m = full.match(pat);
+    if(m) return m[0].trim().substring(0, 60);
+  }
+
+  // Fallback : chercher des mots-clés connus dans les textes
+  const keywords = ['EXISTANT','DEMOLITION','DEMOLIT','DEMOLI','PROJET','COMBLES','RDC','R+1','R+2','SOUS-SOL'];
+  const found = [];
+  for(const kw of keywords) {
+    if(full.includes(kw)) found.push(kw);
+  }
+  if(found.length >= 2) return found.slice(0,3).join(' — ');
+  if(found.length === 1) return `Page ${pageNum} — ${found[0]}`;
+
+  // Dernier recours : nom du fichier + numéro de page
+  return `${nomFichier.replace(/\.[^.]+$/,'')} — Page ${pageNum}`;
+}
+
+// ── Aperçu des pages extraites ────────────────────────────────────
+function renoAfficherApercu() {
+  document.getElementById('reno-drop-area').style.display = 'none';
+  document.getElementById('reno-pages-preview').style.display = '';
+  document.getElementById('reno-prompt-zone').style.display = '';
+  document.getElementById('btn-reno-analyser').style.display = '';
+
+  const count = document.getElementById('reno-pages-count');
+  count.textContent = `${renoPages.length} page${renoPages.length>1?'s':''} extraite${renoPages.length>1?'s':''} — titres détectés automatiquement`;
+
+  const grid = document.getElementById('reno-pages-grid');
+  grid.innerHTML = '';
+  renoPages.forEach((pg, i) => {
+    const card = document.createElement('div');
+    card.style.cssText = 'background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r-md);overflow:hidden;position:relative';
+    // Colorer selon le type détecté
+    const type = renoDetectTypeFromTitre(pg.titre);
+    const colors = {existant:'#4A9CC7', demolition:'#e67e22', projet:'#27ae60', autre:'var(--border2)'};
+    const col = colors[type] || colors.autre;
+    card.innerHTML = `
+      <div style="height:4px;background:${col}"></div>
+      <img src="${pg.thumb}" style="width:100%;height:90px;object-fit:contain;background:#f8f9fa;display:block">
+      <div style="padding:6px 8px">
+        <div style="font-size:10px;font-weight:700;color:${col};text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">${renoTypeLabel(type)}</div>
+        <div style="font-size:10px;color:var(--text);line-height:1.4;word-break:break-word">${pg.titre}</div>
+        <div style="font-size:9px;color:var(--text3);margin-top:2px">Page ${pg.pageNum}</div>
+      </div>
+      <button onclick="renoSupprimerPage(${i})" 
+        style="position:absolute;top:8px;right:6px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.5);color:#fff;font-size:11px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1">×</button>`;
+    grid.appendChild(card);
+  });
+
+  showToast(`✅ ${renoPages.length} page(s) prête(s) — rédigez votre description puis lancez l'analyse`);
+}
+
+function renoDetectTypeFromTitre(titre) {
+  const t = titre.toUpperCase();
+  if(/D[EÉ]MOLI|DEMOL|DÉMOLI/.test(t)) return 'demolition';
+  if(/EXISTANT|EXIST\.?/.test(t)) return 'existant';
+  if(/PROJET|PROJ\.?/.test(t)) return 'projet';
+  return 'autre';
+}
+
+function renoTypeLabel(type) {
+  return {existant:'État existant', demolition:'Démolition', projet:'Projet', autre:'Autre'}[type]||type;
+}
+
+function renoSupprimerPage(idx) {
+  renoPages.splice(idx, 1);
+  if(renoPages.length === 0) { renoReset(); return; }
+  renoAfficherApercu();
+}
+
+function renoReset() {
+  renoPages = [];
+  document.getElementById('reno-drop-area').style.display = '';
+  document.getElementById('reno-pages-preview').style.display = 'none';
+  document.getElementById('reno-prompt-zone').style.display = 'none';
+  document.getElementById('btn-reno-analyser').style.display = 'none';
+  document.getElementById('reno-ia-status').style.display = 'none';
+  document.getElementById('reno-pdf-input').value = '';
+}
+
+// ── Analyse IA ────────────────────────────────────────────────────
+async function renoLancerIA() {
+  const PROXY = 'https://phenix-proxy.phenixarchitecte.workers.dev';
+  if(!renoPages.length) { showToast('⚠️ Chargez d\'abord un dossier'); return; }
+
+  const hasProjet = renoPages.some(pg => /PROJET|PROJ/i.test(pg.titre));
+  if(!hasProjet) showToast('⚠️ Aucun plan projet détecté — vérifiez les titres de page');
+
+  const prompt = (document.getElementById('reno-prompt')||{}).value?.trim()||'';
+  const statusEl = document.getElementById('reno-ia-status');
+  statusEl.className = 'reno-ia-status running';
+  statusEl.style.display = 'flex';
+  statusEl.innerHTML = `<div class="ai-loading"><div class="ai-dot" style="background:#6C3483"></div><div class="ai-dot" style="background:#6C3483"></div><div class="ai-dot" style="background:#6C3483"></div></div><span>Analyse différentielle en cours sur ${renoPages.length} plan(s)…</span>`;
+
+  const systemPrompt = `Tu es un expert en chiffrage BTP français spécialisé en RÉNOVATION.
+Tu reçois plusieurs plans d'architecture étiquetés : [NIVEAU — TYPE] où TYPE est EXISTANT, DEMOLITION ou PROJET.
+Ta mission : chiffrage DIFFÉRENTIEL — uniquement les travaux à réaliser, pas ce qui existe et ne change pas.
+
+MÉTHODE D'ANALYSE :
+1. Compare existant vs projet pour chaque niveau fourni
+2. Le plan démolition précise ce qui disparaît (si fourni) — sinon déduis-le de la comparaison
+3. Chiffre uniquement le delta : démolitions + créations + modifications
+4. Pour les ouvertures dans murs porteurs : IPN + étude structure OBLIGATOIRE
+5. Retourne UNIQUEMENT un JSON valide, sans markdown.
+
+TARIFS RÉNOVATION AUVERGNE 2025 :
+Démolition cloison plâtre 25€/m², maçonnerie 45€/m², refend porteur 180€/ml
+Ouverture mur porteur + IPN : 2800–4500€ selon largeur
+Cloison BA13 neuve réno 65€/m², Doublage réno 55€/m²
+Carrelage réno 85€/m², Parquet flottant réno 55€/m², Parquet massif 110€/m²
+Peinture réno 22€/m², Enduit+peinture 38€/m²
+SDB complète réno 8500–12000€, Douche italienne réno 1600€/u, WC suspendu 1700€/u
+Escalier bois remplacement 6000–9500€
+Électricité réno 85€/point, VMC réno 1400€/ff
+Fenêtre PVC DV réno 1100€/u, Velux 1400€/u
+Porte int. neuve 550€/u, Menuiserie bois sur mesure 900€/u
+
+FORMAT JSON :
+{
+  "projet":{"type":"renovation","description":"résumé 1 ligne","surface_concernee":0,"niveaux":[],"points_cles":[]},
+  "analyse_delta":{"demolitions":[],"creations":[],"modifications":[]},
+  "lots":[{"num":"LOT 01","nom":"Démolitions","postes":[{"n":"libellé","q":0,"u":"m²","pu_artisan":0,"pu_client":0}]}]
+}
+
+LOTS RÉNOVATION (uniquement ceux avec travaux réels) :
+LOT 01 Démolitions/Déconstruction · LOT 02 Gros œuvre/Ouvertures/IPN · LOT 03 Cloisons/Distribution
+LOT 04 Menuiseries intérieures · LOT 05 Menuiseries extérieures · LOT 06 Plomberie/Sanitaires
+LOT 07 Électricité · LOT 08 Revêtements de sol · LOT 09 Carrelage mural/Faïence
+LOT 10 Peinture/Finitions · LOT 11 Escalier · LOT 12 Isolation · LOT 13 Nettoyage/Divers`;
+
+  // Construire le contenu avec tous les plans étiquetés
+  const content = [];
+  if(prompt) content.push({type:'text', text:`DESCRIPTION DU MAÎTRE D'ŒUVRE :\n${prompt}\n\nPLANS JOINTS (${renoPages.length} pages) :`});
+  else content.push({type:'text', text:`Analyse ces ${renoPages.length} plans de rénovation et produis le chiffrage différentiel :`});
+
+  renoPages.forEach((pg, i) => {
+    content.push({type:'text', text:`\n[PLAN ${i+1}/${renoPages.length} — "${pg.titre}"]`});
+    content.push({type:'image', source:{type:'base64', media_type:pg.mime, data:pg.b64}});
+  });
+
+  try {
+    const res = await fetch(PROXY, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        model:'claude-sonnet-4-6', max_tokens:8000,
+        system: systemPrompt, messages:[{role:'user', content}]
+      })
+    });
+    if(!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
+    const data = await res.json();
+    if(data.error) throw new Error(data.error.message||JSON.stringify(data.error));
+
+    const raw = (data.content||[]).map(b=>b.text||'').join('');
+    const clean = raw.replace(/```json|```/g,'').trim();
+    const parsed = JSON.parse(clean.slice(clean.indexOf('{'), clean.lastIndexOf('}')+1));
+
+    statusEl.style.display = 'none';
+
+    // Pré-remplir le formulaire chantier
+    iaResultData = parsed;
+    const nomInput = document.getElementById('ia-chantier-nom');
+    if(nomInput && !nomInput.value) nomInput.value = parsed.projet?.description||'';
+    const surfInput = document.getElementById('ia-chantier-surface');
+    if(surfInput && !surfInput.value && parsed.projet?.surface_concernee)
+      surfInput.value = parsed.projet.surface_concernee;
+    document.getElementById('ia-chantier-type').value = 'Rénovation';
+
+    _ouvrirModalResultats(parsed);
+
+  } catch(err) {
+    statusEl.className = 'reno-ia-status error';
+    statusEl.innerHTML = `⚠️ ${err.message}`;
+    showToast('❌ ' + err.message.slice(0,80));
+  }
+}
+
+window.renoHandleDossier = renoHandleDossier;
+window.renoSupprimerPage = renoSupprimerPage;
+window.renoReset = renoReset;
+window.renoLancerIA = renoLancerIA;
 </script>
 </body>
 </html>
