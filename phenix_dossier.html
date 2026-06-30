@@ -4625,6 +4625,7 @@ function openProjectModal(id) {
       <button class="btn btn-sm" onclick="openEditModal(${id})"><i class="ti ti-edit"></i> Modifier la fiche</button>
       <button class="btn btn-sm" onclick="switchModalTab('historique')" style="color:var(--accent);border-color:var(--accent)"><i class="ti ti-history"></i> Voir l'historique</button>
       <button class="btn btn-sm" onclick="openInChiffrage(${id})" style="background:rgba(74,156,199,0.15);color:#4A9CC7;border-color:rgba(74,156,199,0.4)" title="Ouvrir ce projet dans Phénix Chiffrage"><i class="ti ti-calculator"></i> Ouvrir dans Chiffrage</button>
+      <button class="btn btn-sm" onclick="openInPermis(${id})" style="background:rgba(0,180,216,0.15);color:#00B4D8;border-color:rgba(0,180,216,0.4)" title="Ouvrir ce projet dans Phénix Permis"><i class="ti ti-file-description"></i> Ouvrir dans Permis</button>
     </div>`;
 
   // Historique
@@ -4769,6 +4770,28 @@ function openInChiffrage(id) {
   const chiffrageUrl = 'phenix_chiffrage.html';
   toast_d('📐 Ouverture de Phénix Chiffrage…');
   setTimeout(() => window.open(chiffrageUrl, '_blank'), 400);
+}
+
+function openInPermis(id) {
+  const p = stateDossier.projets.find(x => x.id == id);
+  if (!p) return;
+  // Même pattern que openInChiffrage : handoff via localStorage partagé
+  const payload = {
+    projetId: String(p.id),
+    nom: p.nom || '',
+    client: p.client || '',
+    adresse: p.adresse || '',
+    surface: p.surface || '',
+    type: p.type || '',
+    phase: p.phase || '',
+    ref: p.ref || '',
+    _source: 'phenix_dossier',
+    _ts: Date.now(),
+  };
+  localStorage.setItem('phenix-open-in-permis', JSON.stringify(payload));
+  const permisUrl = 'phenix_permis.html';
+  toast_d('📋 Ouverture de Phénix Permis…');
+  setTimeout(() => window.open(permisUrl, '_blank'), 400);
 }
 
 function openEditModal(id) {

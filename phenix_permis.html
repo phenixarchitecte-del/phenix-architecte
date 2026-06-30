@@ -1,0 +1,1166 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phénix Permis — IA Architecture</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --navy: #0f1e35;
+    --navy-mid: #162845;
+    --navy-light: #1e3a5f;
+    --cyan: #00b4d8;
+    --cyan-pale: #90e0ef;
+    --white: #f0f4f8;
+    --grey: #8a9bb0;
+    --border: rgba(0,180,216,0.18);
+    --success: #22c55e;
+    --error: #ef4444;
+    --amber: #f59e0b;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--navy);
+    color: var(--white);
+    min-height: 100vh;
+    font-size: 14px;
+  }
+
+  /* HEADER */
+  header {
+    background: var(--navy-mid);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 56px;
+    flex-shrink: 0;
+  }
+  .logo { font-family: 'DM Serif Display', serif; font-size: 18px; color: var(--white); letter-spacing: 0.02em; }
+  .logo span { color: var(--cyan); }
+  .badge { background: rgba(0,180,216,0.12); border: 1px solid var(--border); color: var(--cyan); font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 20px; letter-spacing: 0.08em; text-transform: uppercase; }
+
+  /* TOP TABS (modules) */
+  .module-tabs {
+    background: var(--navy);
+    border-bottom: 2px solid var(--border);
+    padding: 0 24px;
+    display: flex;
+    gap: 0;
+  }
+  .module-tab {
+    padding: 13px 24px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--grey);
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    white-space: nowrap;
+    transition: color 0.2s, border-color 0.2s;
+    background: none;
+    border-top: none; border-left: none; border-right: none;
+    letter-spacing: 0.02em;
+  }
+  .module-tab:hover { color: var(--white); }
+  .module-tab.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+  .module-tab .tab-icon { margin-right: 7px; }
+
+  /* SUB TABS (types de permis) */
+  .sub-tabs-bar {
+    background: var(--navy-mid);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    display: flex;
+    gap: 0;
+    overflow-x: auto;
+  }
+  .sub-tab {
+    padding: 11px 18px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--grey);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    transition: color 0.2s, border-color 0.2s;
+    background: none;
+    border-top: none; border-left: none; border-right: none;
+  }
+  .sub-tab:hover { color: var(--white); }
+  .sub-tab.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+
+  /* LAYOUT */
+  .app {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    height: calc(100vh - 56px - 44px - 42px - 30px);
+    overflow: hidden;
+  }
+  .app.no-sidebar { grid-template-columns: 1fr; }
+
+  /* SIDEBAR */
+  .sidebar {
+    background: var(--navy-mid);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 16px 0;
+  }
+  .sidebar-section { padding: 0 14px 16px; }
+  .sidebar-label { font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--grey); padding: 8px 0; }
+  .piece-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px; cursor: pointer; transition: background 0.15s; margin-bottom: 2px; border: 1px solid transparent; }
+  .piece-item:hover { background: rgba(0,180,216,0.07); }
+  .piece-item.active { background: rgba(0,180,216,0.13); border-color: var(--border); }
+  .piece-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--navy-light); border: 2px solid var(--grey); flex-shrink: 0; }
+  .piece-dot.done { border-color: var(--success); background: var(--success); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  .piece-name { font-size: 12px; color: var(--white); flex: 1; line-height: 1.3; }
+  .piece-ref { font-size: 10px; color: var(--grey); }
+
+  /* MAIN */
+  .main { display: flex; flex-direction: column; overflow: hidden; }
+  .main-header {
+    padding: 16px 24px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    flex-shrink: 0;
+  }
+  .main-title { font-family: 'DM Serif Display', serif; font-size: 18px; color: var(--white); margin-bottom: 2px; }
+  .main-sub { font-size: 12px; color: var(--grey); }
+
+  .btn { display: inline-flex; align-items: center; gap: 7px; padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; transition: all 0.2s; font-family: 'DM Sans', sans-serif; white-space: nowrap; }
+  .btn-primary { background: var(--cyan); color: var(--navy); }
+  .btn-primary:hover { background: var(--cyan-pale); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-ghost { background: rgba(255,255,255,0.06); color: var(--white); border: 1px solid var(--border); }
+  .btn-ghost:hover { background: rgba(255,255,255,0.1); }
+  .btn-amber { background: var(--amber); color: var(--navy); }
+  .btn-amber:hover { background: #fbbf24; }
+  .btn-amber:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* WORKSPACE */
+  .workspace { flex: 1; overflow-y: auto; padding: 20px 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-content: start; }
+  .workspace.single-col { grid-template-columns: 1fr; }
+
+  .panel { background: var(--navy-mid); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .panel-head { padding: 11px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .panel-title { font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--grey); }
+  .panel-title.accent { color: var(--cyan); }
+  .panel-title.amber { color: var(--amber); }
+  .panel-body { padding: 14px; }
+
+  /* DROP ZONES */
+  .drop-zone { border: 2px dashed var(--border); border-radius: 8px; padding: 28px 16px; text-align: center; cursor: pointer; transition: all 0.2s; position: relative; min-height: 160px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
+  .drop-zone:hover, .drop-zone.dragover { border-color: var(--cyan); background: rgba(0,180,216,0.05); }
+  .drop-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .drop-icon { font-size: 28px; opacity: 0.5; }
+  .drop-label { font-size: 12px; color: var(--grey); }
+  .drop-hint { font-size: 11px; color: var(--grey); opacity: 0.6; }
+  .preview-img { width: 100%; border-radius: 6px; object-fit: contain; max-height: 200px; background: rgba(0,0,0,0.2); }
+  .clear-btn { margin-top: 8px; font-size: 11px; color: var(--grey); cursor: pointer; text-decoration: underline; background: none; border: none; font-family: inherit; }
+
+  /* MULTI-UPLOAD */
+  .relevé-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; margin-bottom: 12px; }
+  .relevé-thumb { position: relative; border-radius: 6px; overflow: hidden; background: rgba(0,0,0,0.3); border: 1px solid var(--border); aspect-ratio: 4/3; }
+  .relevé-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .relevé-thumb .rm-btn { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 50%; background: rgba(239,68,68,0.8); border: none; color: white; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; line-height: 1; }
+  .relevé-thumb .rm-btn:hover { background: var(--error); }
+  .add-thumb { border: 2px dashed var(--border); border-radius: 6px; aspect-ratio: 4/3; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; position: relative; transition: border-color 0.2s; font-size: 11px; color: var(--grey); gap: 4px; }
+  .add-thumb:hover { border-color: var(--cyan); }
+  .add-thumb input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+  /* PARAMS */
+  .params-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+  .field label { display: block; font-size: 10px; font-weight: 600; color: var(--grey); margin-bottom: 4px; letter-spacing: 0.05em; text-transform: uppercase; }
+  .field input, .field select, .field textarea { width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; color: var(--white); font-size: 12px; font-family: 'DM Sans', sans-serif; outline: none; transition: border-color 0.2s; }
+  .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--cyan); }
+  .field textarea { resize: vertical; min-height: 64px; }
+  .field select option { background: var(--navy-mid); }
+
+  /* RADIO CARDS */
+  .radio-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+  .radio-card { padding: 10px 12px; border-radius: 7px; border: 1px solid var(--border); cursor: pointer; transition: all 0.15s; }
+  .radio-card:hover { border-color: rgba(0,180,216,0.4); background: rgba(0,180,216,0.04); }
+  .radio-card.selected { border-color: var(--cyan); background: rgba(0,180,216,0.1); }
+  .radio-card input { display: none; }
+  .radio-card-title { font-size: 12px; font-weight: 600; color: var(--white); margin-bottom: 2px; }
+  .radio-card-desc { font-size: 10px; color: var(--grey); line-height: 1.4; }
+
+  /* OUTPUT */
+  .output-panel { grid-column: 1 / -1; }
+  .output-area { min-height: 100px; }
+  .generating-indicator { display: flex; align-items: center; gap: 12px; padding: 20px; color: var(--cyan); font-size: 13px; }
+  .spinner { width: 18px; height: 18px; border: 2px solid rgba(0,180,216,0.2); border-top-color: var(--cyan); border-radius: 50%; animation: spin 0.8s linear infinite; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .result-instructions { padding: 16px 18px; font-size: 13px; line-height: 1.7; color: var(--white); }
+  .result-actions { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+  /* VARIANTE CARDS */
+  .variantes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; padding: 16px; }
+  .variante-card { background: var(--navy-light); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; transition: border-color 0.2s; }
+  .variante-card:hover { border-color: rgba(0,180,216,0.4); }
+  .variante-card-head { padding: 12px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .variante-num { font-family: 'DM Serif Display', serif; font-size: 22px; color: var(--cyan); opacity: 0.6; }
+  .variante-label { font-size: 13px; font-weight: 600; color: var(--white); }
+  .variante-body { padding: 14px; font-size: 12px; line-height: 1.65; color: var(--grey); }
+  .variante-body strong { color: var(--white); }
+  .variante-schema { padding: 12px 14px; background: rgba(0,0,0,0.2); font-family: monospace; font-size: 11px; color: var(--cyan-pale); white-space: pre; overflow-x: auto; line-height: 1.5; border-top: 1px solid var(--border); }
+  .variante-actions { padding: 10px 14px; border-top: 1px solid var(--border); display: flex; gap: 8px; }
+
+  .alert { padding: 10px 14px; border-radius: 6px; font-size: 12px; display: flex; align-items: flex-start; gap: 9px; }
+  .alert-info { background: rgba(0,180,216,0.1); border: 1px solid rgba(0,180,216,0.25); color: var(--cyan-pale); }
+  .alert-amber { background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.25); color: #fcd34d; }
+  .alert-error { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); color: #fca5a5; }
+
+  /* STATUS BAR */
+  .status-bar { background: var(--navy-mid); border-top: 1px solid var(--border); padding: 5px 24px; display: flex; align-items: center; gap: 16px; font-size: 11px; color: var(--grey); flex-shrink: 0; height: 30px; }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
+
+  /* SECTIONS cachées */
+  .module-section { display: none; }
+  .module-section.active { display: contents; }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(0,180,216,0.2); border-radius: 3px; }
+
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .workspace { grid-template-columns: 1fr; }
+    .params-grid, .radio-cards { grid-template-columns: 1fr; }
+    .output-panel { grid-column: 1; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Phénix<span>·</span>Permis</div>
+  <span class="badge">IA Architecture · POC</span>
+</header>
+
+<!-- MODULE TABS -->
+<div class="module-tabs">
+  <button class="module-tab active" onclick="setModule('esquisse', this)">
+    <span class="tab-icon">✏️</span>Esquisse IA
+  </button>
+  <button class="module-tab" onclick="setModule('permis', this)">
+    <span class="tab-icon">📋</span>Mise en page Permis
+  </button>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     MODULE ESQUISSE
+═══════════════════════════════════════════════════════════ -->
+<div id="module-esquisse" style="display:flex;flex-direction:column;height:calc(100vh - 56px - 44px - 30px);overflow:hidden;">
+
+  <div class="main-header">
+    <div>
+      <div class="main-title">Esquisse IA — Proposition de plan</div>
+      <div class="main-sub">Chargez vos relevés, renseignez le programme · l'IA produit une proposition unique, à affiner par itérations</div>
+    </div>
+    <button class="btn btn-amber" id="btn-esquisse" onclick="generateEsquisse()" disabled>
+      ✦ Générer la proposition
+    </button>
+  </div>
+
+  <div class="workspace" style="flex:1;overflow-y:auto;">
+
+    <!-- RELEVÉS -->
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-title amber">① Plans de relevé & photos</span>
+        <span id="releve-count" style="font-size:11px;color:var(--grey)">0 fichier</span>
+      </div>
+      <div class="panel-body">
+        <div class="alert alert-info" style="margin-bottom:12px">
+          <span>ℹ</span>
+          <span>Photos de l'existant, plans de relevé scannés, extraits cadastraux — l'IA analysera l'ensemble pour comprendre le bâti existant.</span>
+        </div>
+        <div class="relevé-grid" id="releve-grid">
+          <div class="add-thumb" onclick="document.getElementById('releve-input').click()">
+            <span style="font-size:22px;opacity:0.4">+</span>
+            <span>Ajouter</span>
+            <input type="file" id="releve-input" accept="image/*" multiple onchange="addReleves(event)" style="display:none">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PROGRAMME -->
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-title amber">② Programme & contraintes</span>
+      </div>
+      <div class="panel-body">
+        <div class="params-grid">
+          <div class="field">
+            <label>Type d'opération</label>
+            <select id="e-type">
+              <option value="extension">Extension</option>
+              <option value="renovation">Rénovation / redistribution</option>
+              <option value="surélévation">Surélévation</option>
+              <option value="construction_neuve">Construction neuve</option>
+              <option value="changement_destination">Changement de destination</option>
+              <option value="amenagement_combles">Aménagement combles</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Surface existante (m²)</label>
+            <input type="number" id="e-surface-ex" placeholder="85">
+          </div>
+          <div class="field">
+            <label>Surface projetée / à créer (m²)</label>
+            <input type="number" id="e-surface-proj" placeholder="35">
+          </div>
+          <div class="field">
+            <label>Nombre de niveaux</label>
+            <select id="e-niveaux">
+              <option value="1">Plain-pied (R+0)</option>
+              <option value="2" selected>R+1</option>
+              <option value="3">R+2</option>
+              <option value="combles">Combles aménageables</option>
+            </select>
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:10px">
+          <label>Pièces souhaitées / programme détaillé</label>
+          <textarea id="e-programme" placeholder="Ex : séjour ouvert sur cuisine 40m², 3 chambres dont 1 suite parentale avec dressing, 2 SDB, bureau, garage 2 voitures, terrasse couverte côté Sud…"></textarea>
+        </div>
+        <div class="field">
+          <label>Contraintes & orientations</label>
+          <textarea id="e-contraintes" style="min-height:52px" placeholder="Ex : vue dégagée côté Ouest, mur mitoyen au Nord, porte-fenêtre existante à conserver, budget 120 000€, style contemporain…"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- TYPE DE VARIANTE -->
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-title">③ Angle de la proposition</span>
+      </div>
+      <div class="panel-body">
+        <div class="radio-cards" id="variante-type-cards">
+          <label class="radio-card selected" onclick="selectVarianteType(this,'organisation')">
+            <input type="radio" name="vtype" value="organisation" checked>
+            <div class="radio-card-title">📐 Organisation spatiale</div>
+            <div class="radio-card-desc">Distribution des pièces, circulations, zoning jour/nuit — schéma en ASCII</div>
+          </label>
+          <label class="radio-card" onclick="selectVarianteType(this,'extension')">
+            <input type="radio" name="vtype" value="extension">
+            <div class="radio-card-title">➕ Extension & implantation</div>
+            <div class="radio-card-desc">Positionnement de l'extension par rapport à l'existant, volumétrie</div>
+          </label>
+          <label class="radio-card" onclick="selectVarianteType(this,'renovation')">
+            <input type="radio" name="vtype" value="renovation">
+            <div class="radio-card-title">🔨 Redistribution existant</div>
+            <div class="radio-card-desc">Cloisons à supprimer/créer, nouveau cloisonnement avec phasage</div>
+          </label>
+          <label class="radio-card" onclick="selectVarianteType(this,'mixte')">
+            <input type="radio" name="vtype" value="mixte">
+            <div class="radio-card-title">⚡ Synthèse équilibrée</div>
+            <div class="radio-card-desc">Compromis entre ambition du projet et faisabilité technique/budgétaire</div>
+          </label>
+        </div>
+        <div class="alert alert-info">
+          <span>ℹ</span>
+          <span>L'IA produit une seule proposition, affinée selon vos critères. Vous la retravaillez ensuite par itérations successives.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTEXTE CLIENT -->
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-title">④ Contexte client</span>
+      </div>
+      <div class="panel-body">
+        <div class="params-grid">
+          <div class="field">
+            <label>Profil client</label>
+            <select id="e-profil">
+              <option value="famille">Famille avec enfants</option>
+              <option value="couple">Couple</option>
+              <option value="senior">Senior / accessibilité PMR</option>
+              <option value="telework">Télétravail / libéral</option>
+              <option value="investisseur">Investisseur locatif</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Style architectural</label>
+            <select id="e-style">
+              <option value="contemporain">Contemporain</option>
+              <option value="traditionnel">Traditionnel Auvergnat</option>
+              <option value="bioclimatique">Bioclimatique / passif</option>
+              <option value="minimaliste">Minimaliste</option>
+              <option value="libre">Au choix de l'IA</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Notes libres pour l'IA</label>
+          <textarea id="e-notes" style="min-height:52px" placeholder="Ex : le client tient absolument à garder la cheminée en pierre, il aime les espaces ouverts, sa femme veut un cellier indépendant de la cuisine…"></textarea>
+        </div>
+        <div class="alert alert-amber" style="margin-top:10px">
+          <span>⚠</span>
+          <span>L'esquisse IA est un outil d'aide à la réflexion. Vous restez seul décisionnaire sur la faisabilité structurelle et réglementaire.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- OUTPUT ESQUISSE -->
+    <div class="panel output-panel" id="esquisse-output-panel" style="display:none">
+      <div class="panel-head">
+        <span class="panel-title accent">✦ Proposition d'esquisse</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span id="esquisse-badge" style="font-size:11px;color:var(--grey)"></span>
+          <button class="btn btn-ghost" style="padding:4px 10px;font-size:11px" onclick="copyEsquisseResult()">📋 Copier</button>
+        </div>
+      </div>
+      <div id="esquisse-output-area"></div>
+    </div>
+
+  </div><!-- /workspace -->
+</div><!-- /module-esquisse -->
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     MODULE PERMIS
+═══════════════════════════════════════════════════════════ -->
+<div id="module-permis" style="display:none;flex-direction:column;height:calc(100vh - 56px - 44px - 30px);overflow:hidden;">
+
+  <!-- SUB TABS -->
+  <div class="sub-tabs-bar">
+    <button class="sub-tab active" onclick="setTab(this,'PC')">Permis de Construire</button>
+    <button class="sub-tab" onclick="setTab(this,'DP')">Déclaration Préalable</button>
+    <button class="sub-tab" onclick="setTab(this,'DT')">Déclaration de Travaux</button>
+    <button class="sub-tab" onclick="setTab(this,'PD')">Permis de Démolir</button>
+    <button class="sub-tab" onclick="setTab(this,'AT')">Autorisation ERP</button>
+  </div>
+
+  <div class="app" id="permis-app">
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-label">Pièces obligatoires</div>
+        <div id="piece-list"></div>
+      </div>
+    </div>
+
+    <!-- MAIN PERMIS -->
+    <div class="main">
+      <div class="main-header">
+        <div>
+          <div class="main-title" id="piece-title">Plan de masse (PC2)</div>
+          <div class="main-sub" id="piece-desc">Vue aérienne du terrain avec implantation du projet, limites parcellaires, cotes et orientation</div>
+        </div>
+        <button class="btn btn-primary" id="btn-generate" onclick="generate()" disabled>
+          ✦ Générer la pièce
+        </button>
+      </div>
+
+      <div class="workspace" id="permis-workspace">
+
+        <div class="panel">
+          <div class="panel-head">
+            <span class="panel-title accent">① Gabarit de référence</span>
+            <span id="template-status" style="font-size:11px;color:var(--grey)">Non chargé</span>
+          </div>
+          <div class="panel-body">
+            <div class="drop-zone" id="dz-template" ondragover="dzOver(event,'dz-template')" ondragleave="dzLeave('dz-template')" ondrop="dzDrop(event,'template')">
+              <input type="file" accept="image/*,application/pdf" onchange="loadFile(event,'template')">
+              <div class="drop-icon">🗂</div>
+              <div class="drop-label">Déposez votre pièce de référence</div>
+              <div class="drop-hint">PNG · JPG · PDF — votre permis déjà réalisé</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <span class="panel-title accent">② Plan brut à mettre en page</span>
+            <span id="raw-status" style="font-size:11px;color:var(--grey)">Non chargé</span>
+          </div>
+          <div class="panel-body">
+            <div class="drop-zone" id="dz-raw" ondragover="dzOver(event,'dz-raw')" ondragleave="dzLeave('dz-raw')" ondrop="dzDrop(event,'raw')">
+              <input type="file" accept="image/*" onchange="loadFile(event,'raw')">
+              <div class="drop-icon">📐</div>
+              <div class="drop-label">Déposez votre plan brut ArchiCAD</div>
+              <div class="drop-hint">PNG · JPG — export depuis ArchiCAD</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><span class="panel-title">③ Paramètres du dossier</span></div>
+          <div class="panel-body">
+            <div class="params-grid">
+              <div class="field"><label>Client / Pétitionnaire</label><input type="text" id="p-client" placeholder="M. Dupont Jean"></div>
+              <div class="field"><label>Commune</label><input type="text" id="p-commune" placeholder="Saint-Georges-de-Mons"></div>
+              <div class="field"><label>Référence parcelle</label><input type="text" id="p-parcelle" placeholder="Section B n°123"></div>
+              <div class="field"><label>N° de dossier</label><input type="text" id="p-dossier" placeholder="PC 063 290 25 00001"></div>
+            </div>
+            <div class="field"><label>Informations complémentaires</label><textarea id="p-extra" placeholder="Surface terrain : 800 m² — Surface plancher : 120 m² — Hauteur faîtière : 8,50 m…"></textarea></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><span class="panel-title">④ Consignes graphiques</span></div>
+          <div class="panel-body">
+            <div class="field" style="margin-bottom:10px">
+              <label>Style graphique</label>
+              <select id="p-style">
+                <option value="identique">Identique au gabarit</option>
+                <option value="epure">Épuré / minimaliste</option>
+                <option value="technique">Technique avec hachures</option>
+                <option value="couleur">Avec aplats de couleur</option>
+              </select>
+            </div>
+            <div class="field" style="margin-bottom:12px">
+              <label>Éléments à faire apparaître</label>
+              <textarea id="p-elements" style="min-height:52px" placeholder="Rose des vents, échelle graphique, limites parcellaires en rouge, projet en orange…"></textarea>
+            </div>
+            <div class="alert alert-info" style="font-size:11px">
+              <span>ℹ</span>
+              <span>L'IA analysera votre gabarit et reproduira le style graphique, le cartouche et les annotations sur votre plan brut.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel output-panel" id="output-panel" style="display:none">
+          <div class="panel-head">
+            <span class="panel-title accent">✦ Résultat — Plan mis en page</span>
+            <span id="output-badge" style="font-size:11px;color:var(--grey)"></span>
+          </div>
+          <div class="panel-body output-area" id="output-area"></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="status-bar">
+  <div class="status-dot"></div>
+  <span>Phénix-Architecture · Phénix Permis</span>
+  <span style="margin-left:auto;color:rgba(138,155,176,0.4)">SIRET 987 989 316 00011</span>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// DONNÉES
+// ═══════════════════════════════════════════════════════════
+
+const PIECES = {
+  PC: [
+    { id:'PC1', ref:'PC1', name:'Plan de situation', desc:'Localisation du terrain dans la commune, accès, échelle 1/5000 à 1/25000' },
+    { id:'PC2', ref:'PC2', name:'Plan de masse', desc:'Vue aérienne avec implantation, limites parcellaires, cotes et orientation' },
+    { id:'PC3', ref:'PC3', name:'Plan en coupe', desc:'Coupe du terrain naturel et du projet avec cotes NGF' },
+    { id:'PC4', ref:'PC4', name:'Notice descriptive', desc:'Description du terrain, du projet, des matériaux et de l\'aspect extérieur' },
+    { id:'PC5', ref:'PC5', name:'Plan des façades', desc:'Ensemble des façades du projet, coloris et matériaux' },
+    { id:'PC6', ref:'PC6', name:'Vue en perspective', desc:'Vue volumétrique du projet dans son environnement' },
+    { id:'PC7', ref:'PC7', name:'Photomontage', desc:'Insertion du projet dans une photo du site existant' },
+    { id:'AT1', ref:'AT1', name:'Attestation RE2020', desc:'Attestation de prise en compte des exigences RE2020' },
+  ],
+  DP: [
+    { id:'DP1', ref:'DP1', name:'Plan de situation', desc:'Localisation du terrain dans la commune' },
+    { id:'DP2', ref:'DP2', name:'Plan de masse', desc:'Implantation du projet sur le terrain' },
+    { id:'DP3', ref:'DP3', name:'Plan en coupe', desc:'Coupe du terrain et de la construction' },
+    { id:'DP4', ref:'DP4', name:'Plan des façades', desc:'Facades et toitures concernées' },
+    { id:'DP5', ref:'DP5', name:'Notice descriptive', desc:'Description des travaux et matériaux' },
+  ],
+  DT: [
+    { id:'DT1', ref:'DT1', name:'Plan de situation', desc:'Localisation du terrain' },
+    { id:'DT2', ref:'DT2', name:'Plan de masse', desc:'Implantation générale' },
+    { id:'DT3', ref:'DT3', name:'Notice descriptive', desc:'Nature des travaux' },
+  ],
+  PD: [
+    { id:'PD1', ref:'PD1', name:'Plan de situation', desc:'Localisation du bâtiment à démolir' },
+    { id:'PD2', ref:'PD2', name:'Plan de masse', desc:'Emplacement de la construction à démolir' },
+    { id:'PD3', ref:'PD3', name:'Photos existant', desc:'Documentation photographique de l\'existant' },
+    { id:'PD4', ref:'PD4', name:'Notice descriptive', desc:'Justification de la démolition' },
+  ],
+  AT: [
+    { id:'AT1', ref:'AT1', name:'Plan de situation', desc:'Localisation de l\'ERP' },
+    { id:'AT2', ref:'AT2', name:'Plan général', desc:'Plan des locaux avec cheminements accessibles' },
+    { id:'AT3', ref:'AT3', name:'Notice accessibilité', desc:'Dispositions pour l\'accessibilité PMR' },
+    { id:'AT4', ref:'AT4', name:'Notice sécurité incendie', desc:'Mesures de sécurité incendie' },
+  ],
+};
+
+// ═══════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════
+
+let state = {
+  module: 'esquisse',
+  tab: 'PC',
+  activePiece: null,
+  templateData: null, templateMime: null,
+  rawData: null, rawMime: null,
+  generating: false,
+  // esquisse
+  releveFiles: [],   // [{name, dataUrl, base64, mime}]
+  varianteType: 'organisation',
+  esquisseDone: false,
+};
+
+// ═══════════════════════════════════════════════════════════
+// MODULE SWITCH
+// ═══════════════════════════════════════════════════════════
+
+function setModule(mod, el) {
+  document.querySelectorAll('.module-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  state.module = mod;
+  document.getElementById('module-esquisse').style.display = mod === 'esquisse' ? 'flex' : 'none';
+  document.getElementById('module-permis').style.display = mod === 'permis' ? 'flex' : 'none';
+  if (mod === 'permis' && !state.activePiece) {
+    renderSidebar();
+    selectPiece(PIECES['PC'][1]);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// MODULE PERMIS
+// ═══════════════════════════════════════════════════════════
+
+function setTab(el, tab) {
+  document.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  state.tab = tab;
+  state.activePiece = null;
+  resetFile('template'); resetFile('raw');
+  renderSidebar();
+  selectPiece(PIECES[tab][0]);
+}
+
+function renderSidebar() {
+  const list = document.getElementById('piece-list');
+  if (!list) return;
+  list.innerHTML = '';
+  (PIECES[state.tab] || []).forEach(p => {
+    const el = document.createElement('div');
+    el.className = 'piece-item' + (state.activePiece?.id === p.id ? ' active' : '');
+    el.innerHTML = `<div class="piece-dot"></div><div><div class="piece-name">${p.name}</div><div class="piece-ref">${p.ref}</div></div>`;
+    el.onclick = () => selectPiece(p);
+    list.appendChild(el);
+  });
+}
+
+function selectPiece(p) {
+  state.activePiece = p;
+  document.getElementById('piece-title').textContent = `${p.name} (${p.ref})`;
+  document.getElementById('piece-desc').textContent = p.desc;
+  document.getElementById('output-panel').style.display = 'none';
+  renderSidebar();
+  checkCanGenerate();
+}
+
+function loadFile(event, type) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const dataUrl = e.target.result;
+    const base64 = dataUrl.split(',')[1];
+    const mime = file.type;
+    if (type === 'template') { state.templateData = base64; state.templateMime = mime; showPreview('dz-template', dataUrl, mime, 'template-status', file.name, 'template'); }
+    else { state.rawData = base64; state.rawMime = mime; showPreview('dz-raw', dataUrl, mime, 'raw-status', file.name, 'raw'); }
+    checkCanGenerate();
+  };
+  reader.readAsDataURL(file);
+}
+
+function showPreview(dzId, dataUrl, mime, statusId, name, resetType) {
+  const dz = document.getElementById(dzId);
+  const isPDF = mime === 'application/pdf';
+  dz.innerHTML = isPDF
+    ? `<div style="padding:16px;text-align:center"><div style="font-size:30px">📄</div><div style="font-size:12px;color:var(--cyan);margin:6px 0">${name}</div><div style="font-size:11px;color:var(--grey)">PDF chargé</div></div><button class="clear-btn" onclick="resetFile('${resetType}')">Supprimer</button>`
+    : `<img src="${dataUrl}" class="preview-img" alt="preview"><button class="clear-btn" onclick="resetFile('${resetType}')">Changer</button>`;
+  document.getElementById(statusId).textContent = '✓ ' + name.substring(0,20);
+  document.getElementById(statusId).style.color = 'var(--success)';
+}
+
+function resetFile(type) {
+  if (type === 'template') {
+    state.templateData = null; state.templateMime = null;
+    document.getElementById('template-status').textContent = 'Non chargé';
+    document.getElementById('template-status').style.color = '';
+    document.getElementById('dz-template').innerHTML = `<input type="file" accept="image/*,application/pdf" onchange="loadFile(event,'template')"><div class="drop-icon">🗂</div><div class="drop-label">Déposez votre pièce de référence</div><div class="drop-hint">PNG · JPG · PDF</div>`;
+  } else {
+    state.rawData = null; state.rawMime = null;
+    document.getElementById('raw-status').textContent = 'Non chargé';
+    document.getElementById('raw-status').style.color = '';
+    document.getElementById('dz-raw').innerHTML = `<input type="file" accept="image/*" onchange="loadFile(event,'raw')"><div class="drop-icon">📐</div><div class="drop-label">Déposez votre plan brut ArchiCAD</div><div class="drop-hint">PNG · JPG</div>`;
+  }
+  checkCanGenerate();
+}
+
+function dzOver(e, id) { e.preventDefault(); document.getElementById(id).classList.add('dragover'); }
+function dzLeave(id) { document.getElementById(id).classList.remove('dragover'); }
+function dzDrop(e, type) {
+  e.preventDefault();
+  const id = type === 'template' ? 'dz-template' : 'dz-raw';
+  document.getElementById(id).classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  loadFile({ target: { files: [file] } }, type);
+}
+
+function checkCanGenerate() {
+  const ok = state.templateData && state.rawData && state.activePiece;
+  const btn = document.getElementById('btn-generate');
+  if (btn) btn.disabled = !ok;
+}
+
+async function generate() {
+  if (state.generating) return;
+  state.generating = true;
+  const panel = document.getElementById('output-panel');
+  const area = document.getElementById('output-area');
+  panel.style.display = '';
+  document.getElementById('output-badge').textContent = '';
+  area.innerHTML = `<div class="generating-indicator"><div class="spinner"></div><span>Analyse du gabarit et mise en page en cours…</span></div>`;
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  const piece = state.activePiece;
+  const prompt = `Tu es expert en mise en page de dossiers de permis de construire français pour le cabinet Phénix-Architecture (maître d'œuvre, Auvergne, SIRET 987 989 316 00011).
+
+Je te fournis deux images :
+1. IMAGE GABARIT : pièce de permis déjà réalisée — modèle graphique à respecter (cartouche, typo, mise en page, marges).
+2. IMAGE PLAN BRUT : nouveau plan à mettre en page.
+
+PIÈCE : ${piece.name} (${piece.ref}) — ${piece.desc}
+
+CLIENT : ${document.getElementById('p-client').value || 'À renseigner'}
+COMMUNE : ${document.getElementById('p-commune').value || 'À renseigner'}
+PARCELLE : ${document.getElementById('p-parcelle').value || 'À renseigner'}
+DOSSIER : ${document.getElementById('p-dossier').value || 'À renseigner'}
+INFOS : ${document.getElementById('p-extra').value || '—'}
+STYLE : ${document.getElementById('p-style').value}
+ÉLÉMENTS : ${document.getElementById('p-elements').value || '—'}
+
+Réponds avec ces sections :
+
+## ANALYSE DU GABARIT
+Éléments graphiques : cartouche, marges, traits, couleurs, légendes, rose des vents, échelle, logos.
+
+## INSTRUCTIONS DE MISE EN PAGE
+Étape par étape pour reproduire ce style sur le plan brut. Inclus cotes, tailles de texte, codes hex.
+
+## MODIFICATIONS À APPORTER AU PLAN BRUT
+Liste des ajouts/modifications point par point.
+
+## CHAMPS DU CARTOUCHE
+Tous les champs avec valeurs à renseigner pour ce dossier.
+
+## POINTS D'ATTENTION RÉGLEMENTAIRES
+Exigences spécifiques à la pièce ${piece.ref} en France (2025-2026).`;
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6', max_tokens: 1500,
+        messages: [{ role: 'user', content: [
+          { type: 'image', source: { type: 'base64', media_type: state.templateMime === 'application/pdf' ? 'image/jpeg' : state.templateMime, data: state.templateData } },
+          { type: 'image', source: { type: 'base64', media_type: state.rawMime, data: state.rawData } },
+          { type: 'text', text: prompt }
+        ]}]
+      })
+    });
+    if (!resp.ok) { const e = await resp.json(); throw new Error(e.error?.message || 'Erreur API'); }
+    const data = await resp.json();
+    const text = data.content.map(b => b.text||'').join('\n');
+    area.innerHTML = `<div class="result-instructions">${formatResult(text)}</div>
+      <div class="result-actions">
+        <button class="btn btn-ghost" onclick="copyResult()">📋 Copier</button>
+        <button class="btn btn-ghost" onclick="window.print()">🖨 Imprimer</button>
+        <span style="margin-left:auto;font-size:11px;color:var(--grey)">Claude Sonnet 4.6</span>
+      </div>`;
+    document.getElementById('output-badge').textContent = '✓ Généré';
+    document.getElementById('output-badge').style.color = 'var(--success)';
+  } catch(err) {
+    area.innerHTML = `<div class="alert alert-error" style="margin:16px"><span>⚠</span><span><strong>Erreur :</strong> ${err.message}</span></div>`;
+  }
+  state.generating = false;
+}
+
+function formatResult(text) {
+  return text
+    .replace(/## (.+)/g, '<h3 style="font-family:\'DM Serif Display\',serif;font-size:15px;color:var(--cyan);margin:18px 0 7px;padding-top:14px;border-top:1px solid var(--border)">$1</h3>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong style="color:var(--white)">$1</strong>')
+    .replace(/^- (.+)/gm, '<div style="padding:3px 0 3px 12px;border-left:2px solid var(--border);margin:3px 0;color:var(--white)">$1</div>')
+    .replace(/^(\d+)\. (.+)/gm, '<div style="padding:3px 0;color:var(--white)"><span style="color:var(--cyan);font-weight:600;margin-right:7px">$1.</span>$2</div>')
+    .replace(/\n\n/g, '<br><br>').replace(/\n/g, '<br>');
+}
+
+function copyResult() {
+  const text = document.querySelector('.result-instructions')?.innerText || '';
+  navigator.clipboard.writeText(text).then(() => {
+    event.target.textContent = '✓ Copié';
+    setTimeout(() => event.target.textContent = '📋 Copier', 2000);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// MODULE ESQUISSE
+// ═══════════════════════════════════════════════════════════
+
+function addReleves(event) {
+  const files = Array.from(event.target.files);
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      state.releveFiles.push({ name: file.name, dataUrl: e.target.result, base64: e.target.result.split(',')[1], mime: file.type });
+      renderReleveGrid();
+      checkCanEsquisse();
+    };
+    reader.readAsDataURL(file);
+  });
+  event.target.value = '';
+}
+
+function removeReleve(idx) {
+  state.releveFiles.splice(idx, 1);
+  renderReleveGrid();
+  checkCanEsquisse();
+}
+
+function renderReleveGrid() {
+  const grid = document.getElementById('releve-grid');
+  const count = document.getElementById('releve-count');
+  let html = '';
+  state.releveFiles.forEach((f, i) => {
+    html += `<div class="relevé-thumb">
+      <img src="${f.dataUrl}" alt="${f.name}">
+      <button class="rm-btn" onclick="removeReleve(${i})">×</button>
+    </div>`;
+  });
+  html += `<div class="add-thumb" onclick="document.getElementById('releve-input').click()">
+    <span style="font-size:22px;opacity:0.4">+</span>
+    <span>Ajouter</span>
+    <input type="file" id="releve-input" accept="image/*" multiple onchange="addReleves(event)" style="display:none">
+  </div>`;
+  grid.innerHTML = html;
+  count.textContent = state.releveFiles.length + ' fichier' + (state.releveFiles.length > 1 ? 's' : '');
+}
+
+function selectVarianteType(el, val) {
+  document.querySelectorAll('.radio-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  state.varianteType = val;
+}
+
+function checkCanEsquisse() {
+  const hasReleve = state.releveFiles.length > 0;
+  const hasProgramme = document.getElementById('e-programme')?.value?.trim().length > 0;
+  document.getElementById('btn-esquisse').disabled = !(hasReleve && hasProgramme);
+}
+
+// Surveiller le programme
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('e-programme').addEventListener('input', checkCanEsquisse);
+});
+
+async function generateEsquisse() {
+  if (state.generating) return;
+  state.generating = true;
+
+  const panel = document.getElementById('esquisse-output-panel');
+  const area = document.getElementById('esquisse-output-area');
+  panel.style.display = '';
+  document.getElementById('esquisse-badge').textContent = '';
+  area.innerHTML = `<div class="generating-indicator"><div class="spinner"></div><span>Analyse des relevés et génération des esquisses en cours…</span></div>`;
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  const type = document.getElementById('e-type').value;
+  const surfEx = document.getElementById('e-surface-ex').value;
+  const surfProj = document.getElementById('e-surface-proj').value;
+  const niveaux = document.getElementById('e-niveaux').value;
+  const programme = document.getElementById('e-programme').value;
+  const contraintes = document.getElementById('e-contraintes').value;
+  const profil = document.getElementById('e-profil').value;
+  const style = document.getElementById('e-style').value;
+  const notes = document.getElementById('e-notes').value;
+  const nbVariantes = document.getElementById('e-nb-variantes').value;
+  const vtype = state.varianteType;
+
+  const vtypeLabels = {
+    organisation: 'organisation spatiale et distribution des pièces',
+    extension: 'positionnement et volumétrie de l\'extension',
+    renovation: 'redistribution et cloisonnement de l\'existant',
+    mixte: 'variantes contrastées (conservateur / ambitieux / intermédiaire)'
+  };
+
+  const prompt = `Tu es architecte-conseil expert en maîtrise d'œuvre pour le cabinet Phénix-Architecture (Auvergne). Tu analyses des relevés de bâti existant et proposes des esquisses d'aménagement.
+
+OPÉRATION : ${type}
+SURFACE EXISTANTE : ${surfEx || 'non précisée'} m²
+SURFACE À CRÉER : ${surfProj || 'non précisée'} m²
+NIVEAUX : ${niveaux}
+PROFIL CLIENT : ${profil}
+STYLE ARCHITECTURAL : ${style}
+
+PROGRAMME DÉTAILLÉ :
+${programme}
+
+CONTRAINTES & ORIENTATIONS :
+${contraintes || 'Non précisées'}
+
+NOTES COMPLÉMENTAIRES :
+${notes || 'Aucune'}
+
+TYPE DE VARIANTES DEMANDÉES : ${vtypeLabels[vtype]}
+NOMBRE DE VARIANTES : ${nbVariantes}
+
+J'ai joint ${state.releveFiles.length} image(s) de relevé : analyse-les attentivement pour comprendre la géométrie existante, les ouvertures, les circulations et les contraintes structurelles visibles.
+
+Produis exactement ${nbVariantes} variantes. Pour CHAQUE variante, fournis OBLIGATOIREMENT ces 4 blocs dans cet ordre exact :
+
+VARIANTE_START
+NOM: [nom court évocateur de la variante]
+CONCEPT: [1-2 phrases résumant l'intention architecturale]
+DESCRIPTION:
+[Description détaillée : organisation, circulations, zoning, surfaces approximatives par pièce, points forts]
+SCHEMA:
+[Schéma ASCII du plan — utilise des caractères comme ┌ ┐ └ ┘ ─ │ ┤ ├ ┬ ┴ ┼ pour les murs, et des labels courts pour les pièces. Fais un vrai schéma lisible, pas juste du texte]
+AVANTAGES:
+[3 à 4 avantages concrets de cette variante]
+POINTS_ATTENTION:
+[2 à 3 points techniques ou réglementaires à vérifier]
+VARIANTE_END
+
+Sois précis, concret, utile pour un maître d'œuvre qui va travailler sur ArchiCAD ensuite.`;
+
+  try {
+    // Construire le contenu avec les images
+    const content = [];
+    state.releveFiles.forEach((f, i) => {
+      content.push({ type: 'image', source: { type: 'base64', media_type: f.mime, data: f.base64 } });
+      content.push({ type: 'text', text: `[Relevé ${i+1} : ${f.name}]` });
+    });
+    content.push({ type: 'text', text: prompt });
+
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1500, messages: [{ role: 'user', content }] })
+    });
+
+    if (!resp.ok) { const e = await resp.json(); throw new Error(e.error?.message || 'Erreur API'); }
+    const data = await resp.json();
+    const text = data.content.map(b => b.text||'').join('\n');
+
+    area.innerHTML = renderVariantes(text);
+    document.getElementById('esquisse-badge').textContent = `✓ ${nbVariantes} variante(s) générée(s)`;
+    document.getElementById('esquisse-badge').style.color = 'var(--success)';
+
+  } catch(err) {
+    area.innerHTML = `<div class="alert alert-error" style="margin:16px"><span>⚠</span><span><strong>Erreur :</strong> ${err.message}</span></div>`;
+  }
+  state.generating = false;
+}
+
+function renderVariantes(text) {
+  // Parser les variantes
+  const blocks = text.split('VARIANTE_START').slice(1);
+  if (!blocks.length) {
+    // Fallback : affichage brut formaté
+    return `<div class="result-instructions">${formatResult(text)}</div>
+      <div class="result-actions"><button class="btn btn-ghost" onclick="copyEsquisseResult()">📋 Copier</button></div>`;
+  }
+
+  let html = '<div class="variantes-grid">';
+  blocks.forEach((block, i) => {
+    const content = block.split('VARIANTE_END')[0];
+    const nom = extract(content, 'NOM') || `Variante ${i+1}`;
+    const concept = extract(content, 'CONCEPT') || '';
+    const description = extract(content, 'DESCRIPTION') || '';
+    const schema = extract(content, 'SCHEMA') || '';
+    const avantages = extract(content, 'AVANTAGES') || '';
+    const attention = extract(content, 'POINTS_ATTENTION') || '';
+
+    html += `<div class="variante-card">
+      <div class="variante-card-head">
+        <span class="variante-num">${String(i+1).padStart(2,'0')}</span>
+        <div style="flex:1;padding-left:12px">
+          <div class="variante-label">${nom}</div>
+          <div style="font-size:11px;color:var(--grey);margin-top:2px;line-height:1.4">${concept}</div>
+        </div>
+        <button class="btn btn-ghost" style="padding:4px 10px;font-size:11px" onclick="copyVariante(this)">📋</button>
+      </div>
+      ${schema ? `<div class="variante-schema">${escHtml(schema.trim())}</div>` : ''}
+      <div class="variante-body">
+        ${description ? `<div style="margin-bottom:10px">${formatMini(description)}</div>` : ''}
+        ${avantages ? `<div style="margin-bottom:6px"><strong style="color:var(--success);font-size:11px">✓ AVANTAGES</strong><div style="margin-top:4px">${formatMini(avantages)}</div></div>` : ''}
+        ${attention ? `<div><strong style="color:var(--amber);font-size:11px">⚠ POINTS D'ATTENTION</strong><div style="margin-top:4px">${formatMini(attention)}</div></div>` : ''}
+      </div>
+      <div class="variante-actions">
+        <button class="btn btn-ghost" style="font-size:11px;padding:5px 10px" onclick="copyVarianteText(${i})">📋 Copier cette variante</button>
+        <button class="btn btn-ghost" style="font-size:11px;padding:5px 10px" onclick="refineVariante(${i}, '${escAttr(nom)}')">✏️ Affiner</button>
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+
+  // Stocker pour copie globale
+  window._variantesText = text;
+  window._variantesBlocks = blocks;
+
+  html += `<div style="padding:14px 16px;border-top:1px solid var(--border);display:flex;gap:10px;align-items:center">
+    <button class="btn btn-ghost" onclick="copyEsquisseResult()">📋 Copier tout</button>
+    <span style="margin-left:auto;font-size:11px;color:var(--grey)">Claude Sonnet 4.6 · Phénix-Architecture</span>
+  </div>`;
+
+  return html;
+}
+
+function extract(text, key) {
+  const regex = new RegExp(key + ':\\s*([\\s\\S]*?)(?=\\n[A-Z_]+:|$)');
+  const m = text.match(regex);
+  return m ? m[1].trim() : '';
+}
+
+function formatMini(text) {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/^[-•] (.+)/gm, '<div style="padding:2px 0 2px 10px;border-left:2px solid var(--border);margin:2px 0">$1</div>')
+    .replace(/^(\d+)\. (.+)/gm, '<div style="padding:2px 0"><span style="color:var(--cyan);font-weight:600;margin-right:6px">$1.</span>$2</div>')
+    .replace(/\n\n/g, '<br>').replace(/\n/g, '<br>');
+}
+
+function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escAttr(s) { return s.replace(/'/g,"\\'"); }
+
+function copyEsquisseResult() {
+  navigator.clipboard.writeText(window._variantesText || '').then(() => {
+    const btn = event.target;
+    const orig = btn.textContent;
+    btn.textContent = '✓ Copié';
+    setTimeout(() => btn.textContent = orig, 2000);
+  });
+}
+
+function copyVarianteText(idx) {
+  const block = (window._variantesBlocks || [])[idx] || '';
+  navigator.clipboard.writeText(block.split('VARIANTE_END')[0].trim()).then(() => {
+    const btn = event.target;
+    btn.textContent = '✓ Copié';
+    setTimeout(() => btn.textContent = '📋 Copier cette variante', 2000);
+  });
+}
+
+async function refineVariante(idx, nom) {
+  const question = prompt(`Affiner la variante "${nom}" — précisez votre demande :`);
+  if (!question) return;
+
+  const btn = event.target;
+  btn.textContent = '⏳ En cours…';
+  btn.disabled = true;
+
+  const baseBlock = (window._variantesBlocks || [])[idx] || '';
+  const prompt2 = `Voici une variante d'esquisse architecturale existante :
+
+${baseBlock.split('VARIANTE_END')[0]}
+
+L'architecte demande l'ajustement suivant : "${question}"
+
+Propose une version améliorée de cette variante en gardant le même format (NOM, CONCEPT, DESCRIPTION, SCHEMA, AVANTAGES, POINTS_ATTENTION), mais en intégrant la demande d'ajustement.`;
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1000,
+        messages: [{ role: 'user', content: prompt2 }] })
+    });
+    const data = await resp.json();
+    const text = data.content.map(b => b.text||'').join('\n');
+    // Remplacer le bloc dans l'affichage
+    const card = document.querySelectorAll('.variante-card')[idx];
+    const tmpDiv = document.createElement('div');
+    tmpDiv.innerHTML = renderVariantes('VARIANTE_START\n' + text + '\nVARIANTE_END');
+    const newCard = tmpDiv.querySelector('.variante-card');
+    if (newCard && card) card.replaceWith(newCard);
+  } catch(err) {
+    alert('Erreur : ' + err.message);
+  }
+  btn.textContent = '✏️ Affiner';
+  btn.disabled = false;
+}
+
+// ═══════════════════════════════════════════════════════════
+// HANDOFF DEPUIS PHÉNIX DOSSIER
+// ═══════════════════════════════════════════════════════════
+
+let linkedProjet = null;
+
+function checkIncomingFromDossier() {
+  try {
+    const raw = localStorage.getItem('phenix-open-in-permis');
+    if (!raw) return;
+    const p = JSON.parse(raw);
+    if (!p._ts || Date.now() - p._ts > 5 * 60 * 1000) { localStorage.removeItem('phenix-open-in-permis'); return; }
+    localStorage.removeItem('phenix-open-in-permis');
+
+    linkedProjet = p;
+    showLinkedBanner(p);
+    prefillFromProjet(p);
+  } catch(e) { console.error('[Permis] Erreur handoff Dossier:', e); }
+}
+
+function showLinkedBanner(p) {
+  const banner = document.createElement('div');
+  banner.style.cssText = 'background:rgba(0,180,216,0.12);border-bottom:1px solid var(--border);padding:8px 24px;display:flex;align-items:center;gap:10px;font-size:12px;color:var(--cyan-pale);flex-shrink:0;';
+  banner.innerHTML = `<span>🔗</span><span><strong style="color:var(--white)">${p.nom}</strong> — ${p.client} · projet lié depuis Phénix Dossier</span>
+    <button onclick="this.parentElement.remove()" style="margin-left:auto;background:none;border:none;color:var(--grey);cursor:pointer;font-size:14px">×</button>`;
+  document.body.insertBefore(banner, document.querySelector('.module-tabs'));
+}
+
+function prefillFromProjet(p) {
+  // Champs du module Permis (onglet Mise en page)
+  const client = document.getElementById('p-client');
+  const dossier = document.getElementById('p-dossier');
+  if (client) client.value = p.client || '';
+  if (dossier && p.ref) dossier.value = p.ref;
+  // L'adresse contient souvent la commune en fin de chaîne — on la met telle quelle
+  const commune = document.getElementById('p-commune');
+  if (commune && p.adresse) commune.value = p.adresse;
+
+  // Champs du module Esquisse (programme pré-rempli avec ce qu'on sait)
+  const eNotes = document.getElementById('e-notes');
+  if (eNotes && !eNotes.value) {
+    eNotes.value = `Projet lié : ${p.nom} (${p.ref || 'réf. à compléter'}) — phase ${p.phase || '—'}`;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════
+
+// Watcher programme
+window.addEventListener('load', () => {
+  const prog = document.getElementById('e-programme');
+  if (prog) prog.addEventListener('input', checkCanEsquisse);
+  // Init permis sidebar (en arrière-plan)
+  renderSidebar();
+  // Détecter un projet transmis par Phénix Dossier
+  checkIncomingFromDossier();
+});
+
+</script>
+</body>
+</html>
