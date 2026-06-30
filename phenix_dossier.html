@@ -4624,6 +4624,7 @@ function openProjectModal(id) {
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-sm" onclick="openEditModal(${id})"><i class="ti ti-edit"></i> Modifier la fiche</button>
       <button class="btn btn-sm" onclick="switchModalTab('historique')" style="color:var(--accent);border-color:var(--accent)"><i class="ti ti-history"></i> Voir l'historique</button>
+      <button class="btn btn-sm" onclick="openInChiffrage(${id})" style="background:rgba(74,156,199,0.15);color:#4A9CC7;border-color:rgba(74,156,199,0.4)" title="Ouvrir ce projet dans Phénix Chiffrage"><i class="ti ti-calculator"></i> Ouvrir dans Chiffrage</button>
     </div>`;
 
   // Historique
@@ -4743,6 +4744,31 @@ async function deleteCurrentProject() {
   await removeProjet(String(currentProjectId));
   renderDashboard_d(); renderProjets();
   toast_d('🗑️ Projet supprimé.');
+}
+
+function openInChiffrage(id) {
+  const p = stateDossier.projets.find(x => x.id == id);
+  if (!p) return;
+  // Passer les données du projet via localStorage (clé partagée entre les deux apps sur le même domaine)
+  const payload = {
+    projetId: String(p.id),
+    nom: p.nom || '',
+    client: p.client || '',
+    adresse: p.adresse || '',
+    surface: p.surface || '',
+    budget: p.budget || '',
+    honoraires: p.honoraires || '',
+    type: p.type || '',
+    phase: p.phase || '',
+    ref: p.ref || '',
+    _source: 'phenix_dossier',
+    _ts: Date.now(),
+  };
+  localStorage.setItem('phenix-open-in-chiffrage', JSON.stringify(payload));
+  // Ouvrir Phénix Chiffrage — adapter l'URL si besoin
+  const chiffrageUrl = 'phenix_chiffrage.html';
+  toast_d('📐 Ouverture de Phénix Chiffrage…');
+  setTimeout(() => window.open(chiffrageUrl, '_blank'), 400);
 }
 
 function openEditModal(id) {

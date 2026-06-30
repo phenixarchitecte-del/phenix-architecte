@@ -1389,6 +1389,19 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
 <div class="modal-overlay" id="modal-chantier">
   <div class="modal">
     <div class="modal-title" id="modal-chantier-title">Nouveau chantier</div>
+
+    <!-- ── Import depuis Phénix Dossier ── -->
+    <div id="import-dossier-zone" style="background:rgba(74,156,199,0.09);border:1px solid rgba(74,156,199,0.28);border-radius:8px;padding:11px 13px;margin-bottom:14px">
+      <div style="font-size:10px;font-weight:700;color:#4A9CC7;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px">⚡ Importer depuis Phénix Dossier</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="f-import-projet" style="flex:1;background:var(--surface,#1a2a4a);border:1px solid var(--border,rgba(74,156,199,0.2));border-radius:6px;padding:7px 10px;color:var(--text,#fff);font-size:12px;font-family:inherit">
+          <option value="">— Sélectionner un projet Dossier —</option>
+        </select>
+        <button class="btn btn-sm" onclick="importFromDossier()" style="background:#4A9CC7;color:#fff;border:none;padding:7px 12px;font-size:12px;white-space:nowrap;flex-shrink:0">Importer</button>
+      </div>
+      <div id="import-dossier-status" style="font-size:11px;color:var(--text2,rgba(255,255,255,0.5));margin-top:5px;display:none"></div>
+    </div>
+
     <div class="form-group"><label>Nom du chantier *</label><input type="text" id="f-nom" placeholder="Ex: Maison Dupont — Rénovation"></div>
     <div class="form-row">
       <div class="form-group"><label>Type de projet</label>
@@ -1796,6 +1809,57 @@ function initUI(){
   renderChantierGrid();
   renderChantierSelects();
   if(typeof checkShowPushBtn==='function') checkShowPushBtn();
+  // Détecter un projet passé depuis Phénix Dossier
+  checkIncomingFromDossier();
+}
+
+function checkIncomingFromDossier() {
+  try {
+    const raw = localStorage.getItem('phenix-open-in-chiffrage');
+    if (!raw) return;
+    const p = JSON.parse(raw);
+    // Ignorer si la payload a plus de 5 minutes (éviter les doubles ouvertures)
+    if (!p._ts || Date.now() - p._ts > 5 * 60 * 1000) { localStorage.removeItem('phenix-open-in-chiffrage'); return; }
+    localStorage.removeItem('phenix-open-in-chiffrage');
+    // Vérifier si un chantier lié à ce projetId existe déjà
+    const existing = state.chantiers.findIndex(c => String(c.projetId) === String(p.projetId));
+    if (existing >= 0) {
+      // Chantier déjà lié → l'ouvrir directement
+      showToast('📂 Projet Dossier détecté — chantier existant ouvert');
+      state.currentChantier = existing;
+      renderChantierGrid();
+      renderChiffrage();
+      showPage('chiffrage');
+      return;
+    }
+    // Pas de chantier lié → proposer d'en créer un
+    if (confirm('📋 Phénix Dossier a transmis le projet :\n\n"' + p.nom + '" — ' + p.client + '\n\nCréer un nouveau chantier Chiffrage pour ce projet ?')) {
+      // Pré-remplir et ouvrir le modal
+      state.editingChantierIdx = null;
+      clearChantierForm();
+      document.getElementById('modal-chantier-title').textContent = 'Nouveau chantier';
+      document.getElementById('f-nom').value = p.nom || '';
+      document.getElementById('f-client').value = p.client || '';
+      document.getElementById('f-adresse').value = p.adresse || '';
+      document.getElementById('f-surface').value = p.surface || '';
+      // Phase
+      const phaseMap = {'ESQ':'Esquisse','APS':'APS','APD':'APD','DCE':'DCE','ACT':'Travaux','DET':'Travaux','AOR':'Travaux'};
+      const fPhase = document.getElementById('f-phase');
+      if (phaseMap[p.phase]) fPhase.value = phaseMap[p.phase];
+      // Stocker le lien
+      const importSel = document.getElementById('f-import-projet');
+      if (importSel) {
+        importSel.dataset.linkedProjetId = p.projetId;
+        importSel.dataset.linkedBudget = p.budget || '';
+        importSel.dataset.linkedHonoraires = p.honoraires || '';
+      }
+      // Mettre à jour le statut import
+      const status = document.getElementById('import-dossier-status');
+      if (status) { status.textContent = '✓ Données importées depuis Phénix Dossier (ref. ' + (p.ref||p.projetId) + ')'; status.style.color='#2D7A4F'; status.style.display=''; }
+      document.getElementById('modal-chantier').classList.add('open');
+      loadProjetsFromDossier();
+    }
+  } catch(e) { console.warn('checkIncomingFromDossier error:', e); }
 }
 
 // === CHANTIERS ===
@@ -1863,7 +1927,15 @@ function selectChantier(i){
   renderChiffrage();
 }
 
-function openNewChantierModal(){state.editingChantierIdx=null;clearChantierForm();document.getElementById('modal-chantier-title').textContent='Nouveau chantier';document.getElementById('modal-chantier').classList.add('open');}
+function openNewChantierModal(){state.editingChantierIdx=null;clearChantierForm();document.getElementById('modal-chantier-title').textContent='Nouveau chantier';
+  // Reset import
+  const importSel = document.getElementById('f-import-projet');
+  if (importSel) { delete importSel.dataset.linkedProjetId; delete importSel.dataset.linkedBudget; delete importSel.dataset.linkedHonoraires; }
+  const status = document.getElementById('import-dossier-status');
+  if (status) { status.style.display='none'; status.style.color=''; }
+  document.getElementById('modal-chantier').classList.add('open');
+  loadProjetsFromDossier();
+}
 function editChantier(i){
   state.editingChantierIdx=i;
   const c=state.chantiers[i];
@@ -1884,10 +1956,69 @@ function deleteChantier(i){
   saveState();renderChantierGrid();renderChantierSelects();showToast('Chantier supprimé');
 }
 function clearChantierForm(){['f-nom','f-surface','f-adresse','f-client'].forEach(id=>document.getElementById(id).value='');}
+
+// ── Lien Phénix Dossier → Chiffrage ─────────────────────────
+async function loadProjetsFromDossier() {
+  const sel = document.getElementById('f-import-projet');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">— Chargement… —</option>';
+  try {
+    // Même projet Firebase que Phénix Dossier : collection phenix_projets
+    const snap = await getDocs(collection(db, 'phenix_projets'));
+    const projets = [];
+    snap.forEach(d => projets.push(d.data()));
+    projets.sort((a,b) => (a.nom||'').localeCompare(b.nom||''));
+    sel.innerHTML = '<option value="">— Sélectionner un projet Dossier —</option>'
+      + projets.map(p => `<option value="${p.id}" data-nom="${p.nom||''}" data-client="${p.client||''}" data-adresse="${p.adresse||''}" data-surface="${p.surface||''}" data-type="${p.type||''}" data-phase="${p.phase||''}" data-budget="${p.budget||''}" data-honoraires="${p.honoraires||''}">${p.ref ? p.ref+' — ' : ''}${p.nom} · ${p.client}</option>`).join('');
+    const status = document.getElementById('import-dossier-status');
+    status.textContent = projets.length + ' projet(s) Phénix Dossier disponible(s)';
+    status.style.display = '';
+  } catch(e) {
+    sel.innerHTML = '<option value="">— Erreur de chargement —</option>';
+    console.warn('Phénix Dossier import error:', e);
+  }
+}
+
+function importFromDossier() {
+  const sel = document.getElementById('f-import-projet');
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt || !opt.value) { showToast('⚠️ Sélectionnez un projet Phénix Dossier'); return; }
+  const d = opt.dataset;
+  document.getElementById('f-nom').value = d.nom || '';
+  document.getElementById('f-client').value = d.client || '';
+  document.getElementById('f-adresse').value = d.adresse || '';
+  document.getElementById('f-surface').value = d.surface || '';
+  // Mapper le type dossier → type chiffrage
+  const typeMap = { 'Rénovation':'Rénovation complète','Extension':'Extension / Surélévation','Neuf':'Construction neuve','Réhabilitation':'Réhabilitation','Aménagement':'Aménagement intérieur' };
+  const fType = document.getElementById('f-type');
+  const mappedType = Object.entries(typeMap).find(([k]) => (d.type||'').includes(k));
+  if (mappedType) fType.value = mappedType[1];
+  // Phase
+  const fPhase = document.getElementById('f-phase');
+  const phaseMap = {'ESQ':'Esquisse','APS':'APS','APD':'APD','DCE':'DCE','ACT':'Travaux','DET':'Travaux','AOR':'Travaux'};
+  if (phaseMap[d.phase]) fPhase.value = phaseMap[d.phase];
+  // Stocker le lien pour la sauvegarde
+  document.getElementById('f-import-projet').dataset.linkedProjetId = opt.value;
+  document.getElementById('f-import-projet').dataset.linkedBudget = d.budget || '';
+  document.getElementById('f-import-projet').dataset.linkedHonoraires = d.honoraires || '';
+  const status = document.getElementById('import-dossier-status');
+  status.textContent = '✓ Données importées depuis Phénix Dossier';
+  status.style.color = '#2D7A4F';
+  status.style.display = '';
+  showToast('✅ Projet importé : ' + d.nom);
+}
 function saveNewChantier(){
   const nom=document.getElementById('f-nom').value.trim();
   if(!nom){alert('Nom requis');return;}
-  const data={nom,type:document.getElementById('f-type').value,surface:document.getElementById('f-surface').value,adresse:document.getElementById('f-adresse').value,client:document.getElementById('f-client').value,phase:document.getElementById('f-phase').value,lots:[]};
+  const importSel = document.getElementById('f-import-projet');
+  const linkedProjetId = importSel?.dataset?.linkedProjetId || null;
+  const linkedBudget = importSel?.dataset?.linkedBudget || '';
+  const linkedHonoraires = importSel?.dataset?.linkedHonoraires || '';
+  const data={nom,type:document.getElementById('f-type').value,surface:document.getElementById('f-surface').value,adresse:document.getElementById('f-adresse').value,client:document.getElementById('f-client').value,phase:document.getElementById('f-phase').value,lots:[],
+    projetId: linkedProjetId,
+    budgetTravaux: linkedBudget,
+    honoraires: linkedHonoraires,
+  };
   if(state.editingChantierIdx!==null){Object.assign(state.chantiers[state.editingChantierIdx],data);data.lots=state.chantiers[state.editingChantierIdx].lots;}
   else{state.chantiers.push(data);}
   saveState();renderChantierGrid();renderChantierSelects();closeModal('modal-chantier');showToast(state.editingChantierIdx!==null?'Chantier mis à jour':'Chantier créé');
