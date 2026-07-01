@@ -3365,17 +3365,24 @@ function _crvRenderRecap() {
 
 // ── Toggle écoute ───────────────────────────────────────────
 function toggleCRVocalListening() {
-  if (_crv.listening) { _crvStopListening(); }
-  else { _crvStartListening(); }
+  if (_crv.listening) {
+    _crv.userStopped = true;
+    _crvStopListening();
+  } else {
+    _crv.userStopped = false;
+    _crv.finalTranscript = '';
+    _crvStartListening();
+  }
 }
 
 function _crvStartListening() {
   _crvStopSpeech();
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) return;
+  if (typeof _crv.finalTranscript !== 'string') _crv.finalTranscript = '';
   _crv.reco = new SR();
   _crv.reco.lang = 'fr-FR';
-  _crv.reco.continuous = false;
+  _crv.reco.continuous = true;      // ne coupe plus sur une simple pause
   _crv.reco.interimResults = true;
   _crv.reco.maxAlternatives = 1;
 
@@ -3383,46 +3390,61 @@ function _crvStartListening() {
     _crv.listening = true;
     _crvSetMicState(true);
     document.getElementById('crv-transcript-wrap').style.display = '';
-    document.getElementById('crv-transcript').textContent = '…';
-    _crvSetStatus('🔴 Écoute en cours — parlez maintenant');
+    document.getElementById('crv-transcript').textContent = _crv.finalTranscript || '…';
+    _crvSetStatus('🔴 Écoute en cours — parlez, faites une pause si besoin, réappuyez sur le micro pour valider');
   };
 
   _crv.reco.onresult = (e) => {
-    const transcript = Array.from(e.results).map(r => r[0].transcript).join('');
-    document.getElementById('crv-transcript').textContent = transcript;
-    if (e.results[0].isFinal) {
-      _crvProcessAnswer(transcript);
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const r = e.results[i];
+      if (r.isFinal) {
+        _crv.finalTranscript = (_crv.finalTranscript + ' ' + r[0].transcript).trim();
+      } else {
+        interim += r[0].transcript;
+      }
     }
+    document.getElementById('crv-transcript').textContent = (_crv.finalTranscript + ' ' + interim).trim();
   };
 
   _crv.reco.onerror = (e) => {
+    if (e.error === 'no-speech' || e.error === 'aborted') {
+      // Silence pendant une pause : on ne coupe pas, onend va relancer discrètement
+      return;
+    }
+    _crv.userStopped = true;
     _crv.listening = false;
     _crvSetMicState(false);
     if (e.error === 'not-allowed') _crvSetStatus('⚠️ Accès micro refusé — autorisez le micro dans Chrome');
-    else if (e.error === 'no-speech') _crvSetStatus('Aucune parole — réessayez');
     else _crvSetStatus('Erreur micro : ' + e.error);
   };
 
   _crv.reco.onend = () => {
     _crv.listening = false;
-    _crvSetMicState(false);
+    if (_crv.userStopped) {
+      _crvSetMicState(false);
+      _crv.reco = null;
+      const finalText = (_crv.finalTranscript || '').trim();
+      if (finalText) {
+        _crvProcessAnswer(finalText);
+      }
+    } else {
+      // Coupure automatique du navigateur pendant une pause : on relance sans rien perdre
+      try { _crv.reco.start(); } catch (err) { _crvSetMicState(false); }
+    }
   };
 
   _crv.reco.start();
 }
 
 function _crvStopListening() {
+  _crv.userStopped = true;
   if (_crv.reco) {
-    try { _crv.reco.abort(); } catch(e){}
-    try { _crv.reco.stop();  } catch(e){}
-    _crv.reco.onstart  = null;
-    _crv.reco.onresult = null;
-    _crv.reco.onerror  = null;
-    _crv.reco.onend    = null;
-    _crv.reco = null;
+    try { _crv.reco.stop(); } catch (e) {}
+  } else {
+    _crv.listening = false;
+    _crvSetMicState(false);
   }
-  _crv.listening = false;
-  _crvSetMicState(false);
 }
 
 function _crvSetMicState(listening) {
