@@ -1879,6 +1879,7 @@ function checkIncomingFromDossier() {
 
 // === CHANTIERS ===
 // ── Tri numérique automatique des lots (LOT 01, LOT 02, ...) ──
+// Un tri manuel (boutons monter/descendre) prend le pas via le champ "ordre".
 function lotSortKey(lot){
   const s = (lot.num || lot.nom || '').toString();
   const m = s.match(/(\d+)/);
@@ -1887,12 +1888,31 @@ function lotSortKey(lot){
 function sortLotsInPlace(lots){
   if (!Array.isArray(lots)) return lots;
   lots.sort((a,b) => {
-    const ka = lotSortKey(a), kb = lotSortKey(b);
-    if (ka !== kb) return ka - kb;
+    const oa = (a.ordre!==undefined && a.ordre!==null) ? a.ordre : lotSortKey(a)*1000;
+    const ob = (b.ordre!==undefined && b.ordre!==null) ? b.ordre : lotSortKey(b)*1000;
+    if (oa !== ob) return oa - ob;
     return (a.num || a.nom || '').localeCompare(b.num || b.nom || '', 'fr', {numeric:true, sensitivity:'base'});
   });
   return lots;
 }
+function reindexOrdre(lots){
+  lots.forEach((l,i) => { l.ordre = i; });
+}
+function moveLot(li, dir){
+  const idx=state.currentChantier;
+  if(idx===null) return;
+  const lots=sortLotsInPlace(state.chantiers[idx].lots||[]);
+  const target=li+dir;
+  if(target<0||target>=lots.length) return;
+  reindexOrdre(lots); // s'assurer que tous les lots ont un ordre explicite
+  const tmp=lots[li].ordre;
+  lots[li].ordre=lots[target].ordre;
+  lots[target].ordre=tmp;
+  sortLotsInPlace(lots);
+  saveState();
+  if(typeof renderLotsTableOrCards === "function") renderLotsTableOrCards(); else renderLotsTable();
+}
+window.moveLot = moveLot;
 
 function renderChantierGrid(){
   const wrap=document.getElementById('chantier-grid-wrap');
@@ -2121,6 +2141,8 @@ function renderLotsTable(){
       <td class="ttc-val">${fmt(ttc)} €</td>
       <td><span class="status-badge ${sc}">${lot.statut||'Chiffrage'}</span></td>
       <td class="row-actions">
+        <button class="btn btn-sm btn-icon" onclick="moveLot(${li},-1)" ${ri===0?'disabled style="opacity:.3"':''} title="Monter"><i class="ti ti-arrow-up" aria-hidden="true"></i></button>
+        <button class="btn btn-sm btn-icon" onclick="moveLot(${li},1)" ${ri===filtered.length-1?'disabled style="opacity:.3"':''} title="Descendre"><i class="ti ti-arrow-down" aria-hidden="true"></i></button>
         <button class="btn btn-sm btn-outline" onclick="openLotDetail(${li})"><i class="ti ti-edit" aria-hidden="true"></i>Détail</button>
         <button class="btn btn-sm btn-danger" onclick="deleteLot(${li})"><i class="ti ti-trash" aria-hidden="true"></i></button>
       </td>`;
@@ -2977,6 +2999,8 @@ function renderLotsMobileCards(){
         <span style="font-size:12px;color:var(--text3)">${(lot.postes||[]).length} poste(s)</span>
       </div>
       <div style="display:flex;gap:8px">
+        <button class="btn btn-sm btn-icon" style="min-height:46px" onclick="moveLot(${li},-1)" ${ri===0?'disabled style="opacity:.3;min-height:46px"':''} title="Monter"><i class="ti ti-arrow-up"></i></button>
+        <button class="btn btn-sm btn-icon" style="min-height:46px" onclick="moveLot(${li},1)" ${ri===filtered.length-1?'disabled style="opacity:.3;min-height:46px"':''} title="Descendre"><i class="ti ti-arrow-down"></i></button>
         <button class="btn btn-primary" style="flex:1;justify-content:center;min-height:46px;font-size:14px" onclick="openLotDetail(${li})"><i class="ti ti-edit"></i> Détailler</button>
         <button class="btn btn-danger btn-sm" style="min-height:46px;padding:0 14px" onclick="deleteLot(${li})"><i class="ti ti-trash"></i></button>
       </div>`;

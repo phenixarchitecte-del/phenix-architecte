@@ -3927,7 +3927,7 @@ function renderChantiers() {
   }
   list.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem">' +
     state.chantiers.map(c => {
-      const lots = state.lots.filter(l => l.chantierId == c.id);
+      const lots = sortLotsInPlace(state.lots.filter(l => l.chantierId == c.id));
       const ttc = lots.reduce((s, l) => s + (l.ht * (1 + l.tva / 100)), 0);
       const av = lots.length ? Math.round(lots.reduce((s, l) => s + (parseFloat(l.av) || 0), 0) / lots.length) : 0;
       return `<div class="card" style="margin:0;border-top:3px solid #4A9CC7">
@@ -4062,14 +4062,16 @@ async function importFromChiffrage() {
 
     let created = 0, updated = 0;
     items.forEach(item => {
-      const existing = state.lots.find(l => l.chantierId == chantier.id && l.nom === item.nom);
+      const composedNom = (item.num ? item.num + ' — ' : '') + item.nom;
+      const existing = state.lots.find(l => l.chantierId == chantier.id && (l.nom === composedNom || l.nom === item.nom));
       if (existing) {
         existing.ht = item.montantHt;
         existing.tva = item.tva;
+        if (item.num && !existing.nom.startsWith(item.num)) existing.nom = composedNom;
         updated++;
       } else {
         state.lots.push({
-          id: uid(), chantierId: chantier.id, nom: item.nom, cat: 'Autre',
+          id: uid(), chantierId: chantier.id, nom: composedNom, cat: 'Autre',
           interv: null, statut: mapStatutChiffrage(item.statut),
           ht: item.montantHt, tva: item.tva, av: 0,
           debut: '', fin: '', notes: 'Importé depuis Phénix Chiffrage le ' + new Date().toLocaleDateString('fr-FR')
@@ -4136,7 +4138,7 @@ function exportLotsPDF() {
   `;
 
   function buildCh(c) {
-    const lots = state.lots.filter(l => l.chantierId == c.id);
+    const lots = sortLotsInPlace(state.lots.filter(l => l.chantierId == c.id));
     const tHT  = lots.reduce((s,l)=>s+l.ht,0);
     const tTTC = lots.reduce((s,l)=>s+l.ht*(1+l.tva/100),0);
     const av   = lots.length ? Math.round(lots.reduce((s,l)=>s+(parseFloat(l.av)||0),0)/lots.length) : 0;
@@ -4219,15 +4221,49 @@ ${body}
   toast('📄 Export ouvert — Imprimer → Enregistrer en PDF');
 }
 
+// ── Tri numérique automatique des lots (Lot 01, Lot 02, ...) ──
+// Un tri manuel (boutons monter/descendre) prend le pas via le champ "ordre".
+function lotSortKey(nom){
+  const s = (nom || '').toString();
+  const m = s.match(/(\d+)/);
+  return m ? parseInt(m[1], 10) : Infinity;
+}
+function sortLotsInPlace(lots){
+  if (!Array.isArray(lots)) return lots;
+  lots.sort((a,b) => {
+    const oa = (a.ordre!==undefined && a.ordre!==null) ? a.ordre : lotSortKey(a.nom)*1000;
+    const ob = (b.ordre!==undefined && b.ordre!==null) ? b.ordre : lotSortKey(b.nom)*1000;
+    if (oa !== ob) return oa - ob;
+    return (a.nom || '').localeCompare(b.nom || '', 'fr', {numeric:true, sensitivity:'base'});
+  });
+  return lots;
+}
+function reindexOrdre(lots){
+  lots.forEach((l,i) => { l.ordre = i; });
+}
+function moveLot(id, dir){
+  const filter = document.getElementById('lots-filter-ch')?.value || activeChantier;
+  const lots = sortLotsInPlace(filter ? state.lots.filter(l => l.chantierId == filter) : [...state.lots]);
+  const idx = lots.findIndex(l => l.id == id);
+  const target = idx + dir;
+  if (idx===-1 || target<0 || target>=lots.length) return;
+  reindexOrdre(lots);
+  const tmp = lots[idx].ordre;
+  lots[idx].ordre = lots[target].ordre;
+  lots[target].ordre = tmp;
+  saveLocal();
+  renderLots();
+}
+
 function renderLots() {
   const filter = document.getElementById('lots-filter-ch')?.value || activeChantier;
-  const lots = filter ? state.lots.filter(l => l.chantierId == filter) : state.lots;
+  const lots = sortLotsInPlace(filter ? state.lots.filter(l => l.chantierId == filter) : [...state.lots]);
   const tbody = document.getElementById('lots-tbody');
 
   if (!lots.length) {
     tbody.innerHTML = '<tr><td colspan="10"><div class="empty-state"><div class="empty-icon"><i class="ti ti-list-check"></i></div><div class="empty-title">Aucun lot</div></div></td></tr>';
   } else {
-    tbody.innerHTML = lots.map(l => {
+    tbody.innerHTML = lots.map((l, ri) => {
       const ch = state.chantiers.find(c => c.id == l.chantierId);
       const inv = l.interv ? state.intervenants.find(i => i.id == l.interv) : null;
       const ttc = l.ht * (1 + l.tva / 100);
@@ -4246,7 +4282,10 @@ function renderLots() {
         </td>
         <td class="td-muted" style="white-space:nowrap;font-size:11px">${l.debut?fmtDate(l.debut):'—'}<br>${l.fin?`<span style="color:${isLate?'var(--red)':'inherit'}">${fmtDate(l.fin)}</span>`:'—'}</td>
         <td>${statLotBadge(l.statut)}</td>
-        <td><button class="btn btn-sm btn-icon" onclick="openModalLot(${l.id})" title="Modifier"><i class="ti ti-edit"></i></button>
+        <td style="white-space:nowrap">
+          <button class="btn btn-sm btn-icon" onclick="moveLot(${l.id},-1)" ${ri===0?'disabled style="opacity:.3"':''} title="Monter"><i class="ti ti-arrow-up"></i></button>
+          <button class="btn btn-sm btn-icon" onclick="moveLot(${l.id},1)" ${ri===lots.length-1?'disabled style="opacity:.3"':''} title="Descendre"><i class="ti ti-arrow-down"></i></button>
+          <button class="btn btn-sm btn-icon" onclick="openModalLot(${l.id})" title="Modifier"><i class="ti ti-edit"></i></button>
           ${inv ? `<button class="btn btn-sm btn-icon" style="background:var(--green);color:#fff;border-color:var(--green)" onclick="openMissionSheet(${l.id})" title="Envoyer fiche mission"><i class="ti ti-send"></i></button>` : ''}
         </td>
       </tr>`;
@@ -4527,7 +4566,7 @@ function renderPlanning() {
 // ═══════════════════════════════════════════════════════════
 function updateFacLots() {
   const cid = document.getElementById('fac-chantier').value;
-  const lots = state.lots.filter(l => l.chantierId == cid);
+  const lots = sortLotsInPlace(state.lots.filter(l => l.chantierId == cid));
   document.getElementById('fac-lot').innerHTML = lots.map(l => `<option value="${l.id}">${l.nom}</option>`).join('') || '<option value="">Aucun lot</option>';
 }
 
@@ -5349,7 +5388,7 @@ function renderDashboard() {
     avDiv.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:.5rem 0">Aucun chantier. <a href="#" onclick="openModalChantier();return false" style="color:var(--accent)">Créer →</a></div>';
   } else {
     avDiv.innerHTML = filterCh.map(c => {
-      const lots = state.lots.filter(l => l.chantierId == c.id);
+      const lots = sortLotsInPlace(state.lots.filter(l => l.chantierId == c.id));
       const av = lots.length ? Math.round(lots.reduce((s, l) => s + (parseFloat(l.av)||0), 0) / lots.length) : 0;
       const avColor = av < 30 ? 'var(--red)' : av < 70 ? '#F5A623' : 'var(--green)';
       return `<div style="margin-bottom:10px">
