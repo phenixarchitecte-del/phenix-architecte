@@ -506,6 +506,7 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
         </select>
         <button class="btn btn-primary" onclick="openNewLotModal()"><i class="ti ti-plus" aria-hidden="true"></i>Nouveau lot</button>
           <button class="btn btn-outline" onclick="exportPDF()" style="border-color:#4A9CC7;color:#4A9CC7"><i class="ti ti-file-type-pdf" aria-hidden="true"></i>Devis client PDF</button>
+          <button class="btn btn-outline" onclick="openImportArtisanModalGlobal()" style="border-color:#e74c3c;color:#e74c3c"><i class="ti ti-file-import" aria-hidden="true"></i>Importer devis artisan (IA)</button>
           <button class="btn btn-outline" onclick="exportToFinancement()" style="border-color:#2D7A4F;color:#2D7A4F"><i class="ti ti-coin" aria-hidden="true"></i>Envoyer vers Financement</button>
           <button class="btn btn-outline" onclick="exportToChantier()" style="border-color:#1B2D5B;color:#1B2D5B"><i class="ti ti-building-factory-2" aria-hidden="true"></i>Envoyer vers Chantier</button>
       </div>
@@ -1512,7 +1513,7 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
       <div style="font-size:12px;font-weight:700;color:var(--nav);margin-bottom:6px">Aperçu — <span id="preview-count">0</span> lignes détectées</div>
       <div style="overflow-x:auto;max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r-md)">
         <table class="preview-table" id="preview-table">
-          <thead><tr><th>#</th><th>Désignation</th><th>Qté</th><th>Unité</th><th>PU artisan HT (€)</th></tr></thead>
+          <thead><tr><th>#</th><th>Désignation</th><th>Qté</th><th>Unité</th><th>PU artisan HT (€)</th><th id="th-lot" style="display:none">Lot</th></tr></thead>
           <tbody id="preview-tbody"></tbody>
         </table>
       </div>
@@ -2408,8 +2409,38 @@ function saveLot(){
 }
 
 // === IMPORT DEVIS ARTISAN ===
+let importGlobalMode = false;
+
+function openImportArtisanModalGlobal(){
+  if(state.currentChantier===null){alert('Sélectionnez d\'abord un chantier.');return;}
+  importGlobalMode = true;
+  importPreviewData=[];
+  document.getElementById('import-preview').style.display='none';
+  document.getElementById('btn-confirm-import').style.display='none';
+  document.getElementById('import-txt-area').value='';
+  document.getElementById('file-artisan').value='';
+  document.getElementById('pdf-artisan-status').style.display='none';
+  document.getElementById('pdf-artisan-drop').innerHTML=`<i class="ti ti-file-type-pdf" style="font-size:28px;display:block;margin-bottom:8px;color:#e74c3c" aria-hidden="true"></i>Glissez le PDF du devis artisan ici<br><span style="font-size:11px;margin-top:4px;display:block">ou cliquez pour parcourir — l'IA détecte aussi le lot de chaque ligne</span>`;
+  switchImportTab('pdf');
+  document.getElementById('modal-import-artisan').classList.add('open');
+
+  const zone=document.getElementById('drop-zone');
+  if(zone){
+    zone.ondragover=(e)=>{e.preventDefault();zone.classList.add('drag');};
+    zone.ondragleave=()=>zone.classList.remove('drag');
+    zone.ondrop=(e)=>{e.preventDefault();zone.classList.remove('drag');const f=e.dataTransfer.files[0];if(f)processImportFile(f);};
+  }
+  const pdfZone=document.getElementById('pdf-artisan-drop');
+  if(pdfZone){
+    pdfZone.ondragover=(e)=>{e.preventDefault();pdfZone.classList.add('drag');};
+    pdfZone.ondragleave=()=>pdfZone.classList.remove('drag');
+    pdfZone.ondrop=(e)=>{e.preventDefault();pdfZone.classList.remove('drag');const f=e.dataTransfer.files[0];if(f)handlePdfArtisan(f);};
+  }
+}
+
 function openImportArtisanModal(){
   if(state.currentLot===null){alert('Ouvrez d\'abord un lot.');return;}
+  importGlobalMode = false;
   importPreviewData=[];
   document.getElementById('import-preview').style.display='none';
   document.getElementById('btn-confirm-import').style.display='none';
@@ -2459,6 +2490,16 @@ async function analyzePdfArtisan(base64){
   importPreviewData=[];
   status.style.display='block';
   status.innerHTML=`<div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--accent2);background:var(--accent-bg);border:1.5px solid var(--accent);border-radius:var(--r-md);padding:12px 14px"><div class="ai-loading"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div></div> Analyse du devis artisan en cours…</div>`;
+
+  const existingLots = (state.chantiers[state.currentChantier]?.lots||[]).map(l=>l.nom).filter(Boolean);
+  const lotFieldSchema = importGlobalMode ? ',"lot":"nom du lot"' : '';
+  const lotRules = importGlobalMode ? `
+- "lot" : nom du lot/corps d'état auquel appartient cette ligne.
+  Lots déjà existants sur ce chantier : ${existingLots.length ? existingLots.join(' | ') : '(aucun)'}
+  Si une ligne correspond clairement à un lot existant, reprends EXACTEMENT son nom tel quel.
+  Sinon, propose un nom de lot standard du bâtiment français (ex: "Terrassement / VRD", "Gros œuvre / Fondations", "Charpente", "Couverture / Zinguerie", "Menuiseries extérieures", "Plomberie / Sanitaire", "Électricité", "Chauffage / VMC", "Cloisons / Doublages", "Revêtements de sols", "Peinture / Finitions").
+  Regroupe les lignes d'un même corps de métier sous le même nom de lot, y compris si le devis vient d'un seul artisan multi-lots.` : '';
+
   try{
     const res=await fetch(PROXY_URL,{
       method:'POST',
@@ -2470,7 +2511,7 @@ async function analyzePdfArtisan(base64){
         system:`Tu es un assistant spécialisé dans l'analyse de devis du bâtiment français.
 Analyse le devis artisan fourni et extrais TOUTES les lignes de prestations.
 Retourne UNIQUEMENT un JSON valide, sans markdown, sans texte avant ou après :
-{"postes":[{"n":"Désignation complète de la prestation","q":1.0,"u":"m²","pu":150.00},...]}
+{"postes":[{"n":"Désignation complète de la prestation","q":1.0,"u":"m²","pu":150.00${lotFieldSchema}},...]}
 
 RÈGLES STRICTES :
 - "n" : désignation complète (libellé de la ligne)
@@ -2480,7 +2521,7 @@ RÈGLES STRICTES :
 - Ignorer les lignes de titre/sous-total/total/TVA/mentions légales
 - Inclure TOUTES les lignes de prestations, même celles sans prix
 - Si une ligne a un montant total mais pas de PU : diviser montant/qté pour obtenir PU
-- Utiliser le point comme séparateur décimal`,
+- Utiliser le point comme séparateur décimal${lotRules}`,
         messages:[{
           role:'user',
           content:[
@@ -2503,7 +2544,8 @@ RÈGLES STRICTES :
       n:p.n||'',
       q:parseFloat(p.q)||1,
       u:p.u||'u',
-      puArtisan:parseFloat(p.pu)||0
+      puArtisan:parseFloat(p.pu)||0,
+      lotSuggestion:p.lot||''
     })));
     showToast('✓ '+parsed.postes.length+' postes extraits par l\'IA');
   }catch(err){
@@ -2592,19 +2634,32 @@ function parseRawText(text){
   return rows;
 }
 
+function lotSelectOptionsHtml(rowIndex, selectedLotNom){
+  const lots = state.chantiers[state.currentChantier]?.lots || [];
+  let opts = lots.map((l,li) => `<option value="idx:${li}" ${l.nom===selectedLotNom?'selected':''}>${l.num?l.num+' — ':''}${l.nom}</option>`).join('');
+  const matched = lots.some(l => l.nom === selectedLotNom);
+  const newLabel = selectedLotNom && !matched ? selectedLotNom : (selectedLotNom || 'Nouveau lot');
+  opts += `<option value="new" ${(!matched)?'selected':''}>+ Nouveau lot : ${newLabel}</option>`;
+  return opts;
+}
+
 function showImportPreview(rows){
   importPreviewData=rows;
   const marge=parseFloat(document.getElementById('import-marge').value)||20;
   document.getElementById('preview-count').textContent=rows.length;
   const tb=document.getElementById('preview-tbody');
   tb.innerHTML='';
+  document.getElementById('th-lot').style.display = importGlobalMode ? '' : 'none';
   rows.forEach((r,i)=>{
     const tr=document.createElement('tr');
     tr.innerHTML=`<td style="color:var(--text3)">${i+1}</td>
       <td><input type="text" value="${r.n}" onchange="importPreviewData[${i}].n=this.value" style="width:100%;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit"></td>
       <td><input type="number" value="${r.q}" min="0" step="0.1" style="width:55px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit" onchange="importPreviewData[${i}].q=parseFloat(this.value)||0"></td>
       <td><input type="text" value="${r.u}" style="width:38px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit" onchange="importPreviewData[${i}].u=this.value"></td>
-      <td><input type="number" value="${r.puArtisan}" min="0" step="0.01" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;text-align:right" onchange="importPreviewData[${i}].puArtisan=parseFloat(this.value)||0"></td>`;
+      <td><input type="number" value="${r.puArtisan}" min="0" step="0.01" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;text-align:right" onchange="importPreviewData[${i}].puArtisan=parseFloat(this.value)||0"></td>
+      <td style="display:${importGlobalMode?'':'none'}"><select onchange="importPreviewData[${i}].lotChoice=this.value" style="max-width:220px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:11px;font-family:inherit">${lotSelectOptionsHtml(i, r.lotSuggestion)}</select></td>`;
+    const sel = tr.querySelector('select');
+    if(sel) importPreviewData[i].lotChoice = sel.value;
     tb.appendChild(tr);
   });
   document.getElementById('import-preview').style.display=rows.length?'':'none';
@@ -2616,21 +2671,65 @@ function showImportPreview(rows){
 function confirmImportArtisan(){
   const marge=parseFloat(document.getElementById('import-marge').value)||20;
   const coef=1+(marge/100);
-  const lot=state.chantiers[state.currentChantier].lots[state.currentLot];
-  const newPostes=importPreviewData.map(r=>({
-    n:r.n,q:r.q||1,u:r.u||'u',
-    puArtisan:r.puArtisan||0,
-    puClient:Math.round((r.puArtisan||0)*coef*100)/100,
-    pu:r.puArtisan||0
-  }));
-  lot.postes=[...(lot.postes||[]),...newPostes];
-  lot.marge=marge;
-  document.getElementById('param-marge').value=marge;
+  const chantier=state.chantiers[state.currentChantier];
+
+  if(!importGlobalMode){
+    const lot=chantier.lots[state.currentLot];
+    const newPostes=importPreviewData.map(r=>({
+      n:r.n,q:r.q||1,u:r.u||'u',
+      puArtisan:r.puArtisan||0,
+      puClient:Math.round((r.puArtisan||0)*coef*100)/100,
+      pu:r.puArtisan||0
+    }));
+    lot.postes=[...(lot.postes||[]),...newPostes];
+    lot.marge=marge;
+    document.getElementById('param-marge').value=marge;
+    saveState();
+    renderPostes();
+    computeLotTotal();
+    closeModal('modal-import-artisan');
+    showToast(newPostes.length+' postes importés — marge '+marge+'% appliquée');
+    return;
+  }
+
+  // ── Mode global : répartition automatique par lot ──
+  let nbCreated=0, nbUpdated=0;
+  const newLotCache = {}; // nom → index du lot nouvellement créé dans ce batch
+
+  importPreviewData.forEach(r=>{
+    const poste = {
+      n:r.n, q:r.q||1, u:r.u||'u',
+      puArtisan:r.puArtisan||0,
+      puClient:Math.round((r.puArtisan||0)*coef*100)/100,
+      pu:r.puArtisan||0
+    };
+    const choice = r.lotChoice || 'new';
+    let lotIdx;
+    if(choice.startsWith('idx:')){
+      lotIdx = parseInt(choice.split(':')[1]);
+    } else {
+      const nom = (r.lotSuggestion||'').trim() || 'Lot importé';
+      if(newLotCache[nom]!==undefined){
+        lotIdx = newLotCache[nom];
+      } else {
+        const num='LOT '+(chantier.lots.length+1).toString().padStart(2,'0');
+        chantier.lots.push({num,nom,postes:[],aleas:5,honoraires:5,tva:20,statut:'Chiffrage',prestation:'std',notes:'Créé automatiquement depuis import devis artisan (IA)',marge:marge});
+        lotIdx = chantier.lots.length-1;
+        newLotCache[nom]=lotIdx;
+        nbCreated++;
+      }
+    }
+    if(!chantier.lots[lotIdx].postes) chantier.lots[lotIdx].postes=[];
+    chantier.lots[lotIdx].postes.push(poste);
+    nbUpdated++;
+  });
+
   saveState();
-  renderPostes();
-  computeLotTotal();
+  if(typeof renderLotsTableOrCards === "function") renderLotsTableOrCards(); else renderLotsTable();
+  renderChantierGrid();
   closeModal('modal-import-artisan');
-  showToast(newPostes.length+' postes importés — marge '+marge+'% appliquée');
+  importGlobalMode = false;
+  showToast(nbUpdated+' poste(s) répartis sur '+(nbCreated?nbCreated+' nouveau(x) lot(s) et ':'')+'les lots existants');
 }
 
 // === EXPORT ===
