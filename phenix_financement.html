@@ -246,6 +246,35 @@ body{font-family:var(--font-sans);background:var(--bg);color:var(--text);font-si
       <div id="checklistBody"></div>
     </div>
 
+    <!-- Synthèse des travaux (issue de Phénix Chiffrage) -->
+    <div class="card" id="chiffrageCard" style="display:none">
+      <div class="card-title"><i class="ti ti-calculator"></i> Synthèse des travaux (Chiffrage)</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem" id="chiffrageMeta"></div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:12.5px">
+          <thead>
+            <tr style="text-align:left;border-bottom:2px solid var(--border)">
+              <th style="padding:6px 8px">Lot</th>
+              <th style="padding:6px 8px">Désignation</th>
+              <th style="padding:6px 8px;text-align:right">Montant HT</th>
+              <th style="padding:6px 8px;text-align:right">TVA</th>
+              <th style="padding:6px 8px;text-align:right">Montant TTC</th>
+            </tr>
+          </thead>
+          <tbody id="chiffrageLotsBody"></tbody>
+          <tfoot>
+            <tr style="border-top:2px solid var(--border);font-weight:700">
+              <td colspan="2" style="padding:8px">TOTAL</td>
+              <td style="padding:8px;text-align:right" id="chiffrageTotalHt">—</td>
+              <td></td>
+              <td style="padding:8px;text-align:right;color:var(--navy)" id="chiffrageTotalTtc">—</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <button class="btn btn-sm" style="margin-top:10px" onclick="utiliserMontantChiffrage()"><i class="ti ti-arrow-down"></i> Utiliser ce montant dans le plan de financement</button>
+    </div>
+
     <!-- Plan de financement -->
     <div class="card">
       <div class="card-title"><i class="ti ti-coin"></i> Plan de financement</div>
@@ -315,6 +344,34 @@ function toast(msg) {
 function fmtEur(n) {
   n = parseFloat(n) || 0;
   return n.toLocaleString('fr-FR', {minimumFractionDigits:0, maximumFractionDigits:0}) + ' €';
+}
+
+// ── Synthèse des travaux issue de Phénix Chiffrage ──
+function renderChiffrageSynthese(chiffrage) {
+  const card = document.getElementById('chiffrageCard');
+  if (!chiffrage || !chiffrage.lots || !chiffrage.lots.length) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  const dateExport = chiffrage.exportedAt ? new Date(chiffrage.exportedAt).toLocaleString('fr-FR') : '';
+  document.getElementById('chiffrageMeta').textContent =
+    (chiffrage.chantierNom ? 'Chantier : ' + chiffrage.chantierNom + ' · ' : '') +
+    (dateExport ? 'Envoyé depuis Chiffrage le ' + dateExport : '');
+  document.getElementById('chiffrageLotsBody').innerHTML = chiffrage.lots.map(l => `
+    <tr style="border-bottom:1px solid var(--bg2)">
+      <td style="padding:6px 8px;color:var(--text2)">${l.num || ''}</td>
+      <td style="padding:6px 8px">${l.nom || ''}</td>
+      <td style="padding:6px 8px;text-align:right">${fmtEur(l.montantHt)}</td>
+      <td style="padding:6px 8px;text-align:right;color:var(--text2)">${l.tva || 20}%</td>
+      <td style="padding:6px 8px;text-align:right;font-weight:600">${fmtEur(l.montantTtc)}</td>
+    </tr>`).join('');
+  document.getElementById('chiffrageTotalHt').textContent = fmtEur(chiffrage.totalHt);
+  document.getElementById('chiffrageTotalTtc').textContent = fmtEur(chiffrage.totalTtc);
+}
+
+function utiliserMontantChiffrage() {
+  if (!currentDossier.chiffrage) return;
+  document.getElementById('f-cout-total').value = Math.round(currentDossier.chiffrage.totalTtc);
+  calcMensualite();
+  toast('✓ Montant repris dans le plan de financement');
 }
 
 // ── Récupération du handoff depuis Phénix Dossier ──
@@ -508,6 +565,7 @@ function fillForm(data) {
   document.getElementById('f-duree-travaux').value = cal.dureeTravaux || '';
   document.getElementById('f-jalons').value        = cal.jalons || '';
   document.getElementById('f-notes').value         = data.notes || '';
+  renderChiffrageSynthese(data.chiffrage);
   renderChecklist();
   calcMensualite();
 }

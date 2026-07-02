@@ -506,6 +506,7 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
         </select>
         <button class="btn btn-primary" onclick="openNewLotModal()"><i class="ti ti-plus" aria-hidden="true"></i>Nouveau lot</button>
           <button class="btn btn-outline" onclick="exportPDF()" style="border-color:#4A9CC7;color:#4A9CC7"><i class="ti ti-file-type-pdf" aria-hidden="true"></i>Devis client PDF</button>
+          <button class="btn btn-outline" onclick="exportToFinancement()" style="border-color:#2D7A4F;color:#2D7A4F"><i class="ti ti-coin" aria-hidden="true"></i>Envoyer vers Financement</button>
       </div>
     </div>
 
@@ -1604,6 +1605,12 @@ async function saveChantiers(){
   }catch(e){ console.error('Save error', e); updateSyncStatus('err'); }
 }
 
+// ── Passerelle vers Phénix Financement ──────────────────────
+async function pushChiffrageToFinancement(projetId, payload){
+  await setDoc(doc(db, 'phenix_financement', String(projetId)), { chiffrage: payload }, { merge: true });
+}
+window.pushChiffrageToFinancement = pushChiffrageToFinancement;
+
 async function loadChantiers(){
   const user = auth.currentUser;
   if(!user) return;
@@ -2097,6 +2104,56 @@ function renderLotsTable(){
   });
   updateStats(lots);
 }
+
+// ── Export synthèse des lots vers Phénix Financement ─────────
+function computeLotAmounts(lot){
+  let travClient=0;
+  (lot.postes||[]).forEach(p=>{
+    const q=parseFloat(p.q)||0;
+    travClient+=q*(parseFloat(p.puClient)||parseFloat(p.pu)||0);
+  });
+  const aleas=travClient*(parseFloat(lot.aleas||5)/100);
+  const hon=travClient*(parseFloat(lot.honoraires||5)/100);
+  const ht=travClient+aleas+hon;
+  const tva=parseFloat(lot.tva||20);
+  const ttc=ht*(1+tva/100);
+  return { ht, ttc, tva };
+}
+
+async function exportToFinancement(){
+  const idx=state.currentChantier;
+  if(idx===null||!state.chantiers[idx]){ showToast('Sélectionnez un chantier d\'abord'); return; }
+  const c=state.chantiers[idx];
+  if(!c.projetId){ showToast('⚠️ Ce chantier n\'est pas lié à un projet Phénix Dossier — importez le projet depuis la fiche chantier avant l\'export'); return; }
+  const lots=c.lots||[];
+  if(!lots.length){ showToast('Aucun lot à exporter'); return; }
+
+  let totalHt=0, totalTtc=0;
+  const lotsExport = lots.map(lot=>{
+    const { ht, ttc, tva } = computeLotAmounts(lot);
+    totalHt+=ht; totalTtc+=ttc;
+    return { num: lot.num||'', nom: lot.nom||'', montantHt: Math.round(ht*100)/100, tva, montantTtc: Math.round(ttc*100)/100, statut: lot.statut||'Chiffrage' };
+  });
+
+  const payload = {
+    chantierNom: c.nom||'',
+    lots: lotsExport,
+    totalHt: Math.round(totalHt*100)/100,
+    totalTtc: Math.round(totalTtc*100)/100,
+    exportedAt: new Date().toISOString(),
+    source: 'phenix_chiffrage',
+  };
+
+  try{
+    if(typeof window.pushChiffrageToFinancement !== 'function'){ showToast('⚠️ Connexion Firebase indisponible'); return; }
+    await window.pushChiffrageToFinancement(c.projetId, payload);
+    showToast('✅ Synthèse envoyée vers Dossier Financement (' + fmt(totalTtc) + ' € TTC)');
+  }catch(e){
+    console.error('Export financement error', e);
+    showToast('⚠️ Échec de l\'envoi vers Financement');
+  }
+}
+window.exportToFinancement = exportToFinancement;
 
 function updateStats(lots){
   let totalArtisan=0,totalClient=0;
