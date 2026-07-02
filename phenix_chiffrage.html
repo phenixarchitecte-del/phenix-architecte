@@ -1878,6 +1878,22 @@ function checkIncomingFromDossier() {
 }
 
 // === CHANTIERS ===
+// ── Tri numérique automatique des lots (LOT 01, LOT 02, ...) ──
+function lotSortKey(lot){
+  const s = (lot.num || lot.nom || '').toString();
+  const m = s.match(/(\d+)/);
+  return m ? parseInt(m[1], 10) : Infinity;
+}
+function sortLotsInPlace(lots){
+  if (!Array.isArray(lots)) return lots;
+  lots.sort((a,b) => {
+    const ka = lotSortKey(a), kb = lotSortKey(b);
+    if (ka !== kb) return ka - kb;
+    return (a.num || a.nom || '').localeCompare(b.num || b.nom || '', 'fr', {numeric:true, sensitivity:'base'});
+  });
+  return lots;
+}
+
 function renderChantierGrid(){
   const wrap=document.getElementById('chantier-grid-wrap');
   if(!state.chantiers.length){
@@ -2075,7 +2091,7 @@ function renderChiffrage(){
 function renderLotsTable(){
   const idx=state.currentChantier;
   if(idx===null)return;
-  const lots=state.chantiers[idx].lots||[];
+  const lots=sortLotsInPlace(state.chantiers[idx].lots||[]);
   const q=(document.getElementById('lot-search').value||'').toLowerCase();
   const filtered=q?lots.filter(l=>l.nom.toLowerCase().includes(q)||l.num.toLowerCase().includes(q)):lots;
   const tb=document.getElementById('lots-tbody');
@@ -2133,7 +2149,7 @@ async function exportToFinancement(){
   if(idx===null||!state.chantiers[idx]){ showToast('Sélectionnez un chantier d\'abord'); return; }
   const c=state.chantiers[idx];
   if(!c.projetId){ showToast('⚠️ Ce chantier n\'est pas lié à un projet Phénix Dossier — importez le projet depuis la fiche chantier avant l\'export'); return; }
-  const lots=c.lots||[];
+  const lots=sortLotsInPlace(c.lots||[]);
   if(!lots.length){ showToast('Aucun lot à exporter'); return; }
 
   let totalHt=0, totalTtc=0;
@@ -2168,12 +2184,12 @@ async function exportToChantier(){
   if(idx===null||!state.chantiers[idx]){ showToast('Sélectionnez un chantier d\'abord'); return; }
   const c=state.chantiers[idx];
   if(!c.projetId){ showToast('⚠️ Ce chantier n\'est pas lié à un projet Phénix Dossier — importez le projet depuis la fiche chantier avant l\'export'); return; }
-  const lots=c.lots||[];
+  const lots=sortLotsInPlace(c.lots||[]);
   if(!lots.length){ showToast('Aucun lot à exporter'); return; }
 
   const lotsExport = lots.map(lot=>{
     const { ht, ttc, tva } = computeLotAmounts(lot);
-    return { nom: lot.nom||'', montantHt: Math.round(ht*100)/100, tva, montantTtc: Math.round(ttc*100)/100, statut: lot.statut||'Chiffrage' };
+    return { num: lot.num||'', nom: lot.nom||'', montantHt: Math.round(ht*100)/100, tva, montantTtc: Math.round(ttc*100)/100, statut: lot.statut||'Chiffrage' };
   });
 
   const payload = {
@@ -2749,6 +2765,7 @@ function exportCSVFull(){
 
 function exportCSVForChantier(idx){
   const c=state.chantiers[idx];
+  sortLotsInPlace(c.lots||[]);
   let csv='LOT;Désignation;Poste;Qté;Unité;PU Artisan HT;PU Client HT;Total Client HT poste;Marge%;Total Client HT lot;TVA%;Total TTC lot\n';
   (c.lots||[]).forEach(lot=>{
     let travArtisan=0,travClient=0;
@@ -2783,6 +2800,7 @@ function exportPDF(){
   const ci=idx!==null?idx:(selIdx!==''?parseInt(selIdx):null);
   if(ci===null){alert('Sélectionnez un chantier');return;}
   const c=state.chantiers[ci];
+  sortLotsInPlace(c.lots||[]);
   const date=new Date().toLocaleDateString('fr-FR');
   const ref='DEV-'+new Date().toISOString().slice(0,10).replace(/-/g,'')+'-'+(ci+1).toString().padStart(3,'0');
   function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
@@ -2907,7 +2925,7 @@ function renderLotsTableOrCards(){
 function renderLotsMobileCards(){
   const idx = state.currentChantier;
   if(idx === null) return;
-  const lots = state.chantiers[idx].lots || [];
+  const lots = sortLotsInPlace(state.chantiers[idx].lots || []);
   const container = document.getElementById('lots-cards-mobile');
   const q = (document.getElementById('lot-search').value || '').toLowerCase();
   const filtered = q ? lots.filter(l => l.nom.toLowerCase().includes(q) || (l.num||'').toLowerCase().includes(q)) : lots;
