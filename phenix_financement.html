@@ -279,13 +279,18 @@ body{font-family:var(--font-sans);background:var(--bg);color:var(--text);font-si
     <!-- Plan de financement -->
     <div class="card">
       <div class="card-title"><i class="ti ti-coin"></i> Plan de financement</div>
+      <div id="rateBadge" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--accent-bg);border:1px solid rgba(74,156,199,.3);border-radius:var(--r-sm);padding:8px 12px;margin-bottom:1rem;font-size:12px;color:var(--accent2)">
+        <i class="ti ti-trending-up"></i>
+        <span id="rateBadgeText">Chargement du taux marché…</span>
+        <button class="btn btn-sm" style="margin-left:auto;padding:4px 10px" onclick="refreshMarketRates(true)" id="rateRefreshBtn"><i class="ti ti-refresh"></i> Actualiser</button>
+      </div>
       <div class="form-grid">
         <div class="form-group"><label>Coût total des travaux (€ TTC)</label><input type="number" id="f-cout-total" oninput="calcMensualite()"></div>
         <div class="form-group"><label>Apport personnel (€)</label><input type="number" id="f-apport" oninput="calcMensualite()"></div>
         <div class="form-group"><label>Montant du prêt sollicité (€)</label><input type="number" id="f-montant-pret" oninput="calcMensualite()"></div>
         <div class="form-group"><label>Durée souhaitée (années)</label><input type="number" id="f-duree" value="20" oninput="calcMensualite()"></div>
-        <div class="form-group"><label>Taux indicatif (%/an)</label><input type="number" step="0.01" id="f-taux" value="3.5" oninput="calcMensualite()"></div>
-        <div class="form-group"><label>Assurance emprunteur (%/an, optionnel)</label><input type="number" step="0.01" id="f-assurance" value="0.3" oninput="calcMensualite()"></div>
+        <div class="form-group"><label>Taux indicatif (%/an) <span id="f-taux-tag" style="font-weight:400;text-transform:none;color:var(--text3)"></span></label><input type="number" step="0.01" id="f-taux" oninput="calcMensualite()"></div>
+        <div class="form-group"><label>Assurance emprunteur (%/an, optionnel)</label><input type="number" step="0.01" id="f-assurance" oninput="calcMensualite()"></div>
       </div>
       <div class="calc-box" id="calcBox">Renseignez le montant du prêt pour estimer la mensualité.</div>
       <div style="font-size:11px;color:var(--text2);margin-top:8px">Estimation indicative à titre informatif — le calcul définitif relève de l'établissement bancaire.</div>
@@ -335,6 +340,79 @@ let currentProjet = null;
 let currentDossier = { checklist: {} };
 let saveTimeout = null;
 
+const PROXY_URL = 'https://phenix-proxy.phenixarchitecte.workers.dev';
+const RATE_CACHE_KEY = 'phenix-taux-marche';
+const RATE_MAX_AGE_MS = 30 * 24 * 3600 * 1000; // 30 jours
+// Valeur de repli si aucune actualisation n'a encore réussi (référence juillet 2026)
+const RATE_FALLBACK = { taux20: 3.36, assurance: 0.34, date: '2026-07-02', source: 'Observatoire Crédit Logement/CSA' };
+
+function getRateCache() {
+  try {
+    const raw = localStorage.getItem(RATE_CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch(e) { return null; }
+}
+function setRateCache(data) {
+  try { localStorage.setItem(RATE_CACHE_KEY, JSON.stringify(data)); } catch(e) {}
+}
+function currentMarketRate() {
+  return getRateCache() || RATE_FALLBACK;
+}
+function renderRateBadge() {
+  const r = currentMarketRate();
+  const txt = document.getElementById('rateBadgeText');
+  if (!txt) return;
+  txt.textContent = `Taux marché moyen (20 ans) : ${r.taux20}% · Assurance moyenne : ${r.assurance}%/an — au ${new Date(r.date).toLocaleDateString('fr-FR')}${r.source ? ' (' + r.source + ')' : ''}`;
+  const tag = document.getElementById('f-taux-tag');
+  if (tag) tag.textContent = `réf. marché ${r.taux20}%`;
+}
+
+async function refreshMarketRates(manual) {
+  const btn = document.getElementById('rateRefreshBtn');
+  const txt = document.getElementById('rateBadgeText');
+  if (manual && btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2"></i> Actualisation…'; }
+  try {
+    const res = await fetch(PROXY_URL, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6', max_tokens: 1024,
+        metadata: { user_id: 'financement-taux-marche' },
+        tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+        system: "Tu recherches le taux moyen actuel des crédits immobiliers en France sur 20 ans (tous profils confondus) et le taux moyen d'assurance emprunteur, à partir de sources fiables et récentes (courtiers, Observatoire Crédit Logement/CSA, Banque de France). Une fois la recherche faite, réponds UNIQUEMENT avec un JSON sur une seule ligne, sans aucun texte avant ni après, sans balises markdown : {\"taux20\":3.36,\"assurance\":0.34,\"date\":\"AAAA-MM-JJ\",\"source\":\"nom du site utilisé\"}",
+        messages: [{ role:'user', content: "Quel est le taux immobilier moyen actuel en France sur 20 ans, et le taux moyen d'assurance emprunteur ?" }]
+      })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message || 'Erreur proxy');
+    const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text||'').join('');
+    const match = text.match(/\{[^{}]*\}/);
+    if (!match) throw new Error('Réponse IA non exploitable');
+    const parsed = JSON.parse(match[0]);
+    if (!parsed.taux20) throw new Error('Taux introuvable dans la réponse');
+    const cacheData = {
+      taux20: parseFloat(parsed.taux20),
+      assurance: parseFloat(parsed.assurance) || RATE_FALLBACK.assurance,
+      date: parsed.date || new Date().toISOString().slice(0,10),
+      source: parsed.source || '',
+      fetchedAt: Date.now()
+    };
+    setRateCache(cacheData);
+    renderRateBadge();
+    if (manual) toast('✓ Taux marché actualisés');
+  } catch(e) {
+    console.error('refreshMarketRates error:', e);
+    if (manual) toast('⚠️ Actualisation impossible — valeur de référence conservée');
+  } finally {
+    if (manual && btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-refresh"></i> Actualiser'; }
+  }
+}
+
+function isRateCacheStale() {
+  const c = getRateCache();
+  if (!c || !c.fetchedAt) return true;
+  return (Date.now() - c.fetchedAt) > RATE_MAX_AGE_MS;
+}
+
 function toast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -343,8 +421,9 @@ function toast(msg) {
 }
 
 function fmtEur(n) {
-  n = parseFloat(n) || 0;
-  return n.toLocaleString('fr-FR', {minimumFractionDigits:0, maximumFractionDigits:0}) + ' €';
+  n = Math.round(parseFloat(n) || 0);
+  const withSpaces = n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  return withSpaces + ' €';
 }
 
 // ── Synthèse des travaux issue de Phénix Chiffrage ──
@@ -574,8 +653,8 @@ function fillForm(data) {
   document.getElementById('f-apport').value        = fin.apport || '';
   document.getElementById('f-montant-pret').value  = fin.montantPret || '';
   document.getElementById('f-duree').value         = fin.duree || 20;
-  document.getElementById('f-taux').value          = fin.taux || 3.5;
-  document.getElementById('f-assurance').value     = fin.assurance || 0.3;
+  document.getElementById('f-taux').value          = fin.taux || currentMarketRate().taux20;
+  document.getElementById('f-assurance').value     = fin.assurance || currentMarketRate().assurance;
   document.getElementById('f-date-demarrage').value= cal.dateDemarrage || '';
   document.getElementById('f-duree-travaux').value = cal.dureeTravaux || '';
   document.getElementById('f-jalons').value        = cal.jalons || '';
@@ -616,16 +695,23 @@ function genererPDF() {
   const ref = document.getElementById('i-ref').value || '—';
 
   docPdf.setFont('helvetica', 'bold');
-  docPdf.text('Client :', 15, y); docPdf.setFont('helvetica', 'normal'); docPdf.text(String(client), 45, y);
+  docPdf.text('Client :', 15, y); docPdf.setFont('helvetica', 'normal'); docPdf.text(String(client), 15 + docPdf.getTextWidth('Client :') + 3, y);
   y += 6;
   docPdf.setFont('helvetica', 'bold');
-  docPdf.text('Référence projet :', 15, y); docPdf.setFont('helvetica', 'normal'); docPdf.text(String(ref), 45, y);
+  docPdf.text('Référence projet :', 15, y); docPdf.setFont('helvetica', 'normal'); docPdf.text(String(ref), 15 + docPdf.getTextWidth('Référence projet :') + 3, y);
   y += 6;
   docPdf.setFont('helvetica', 'bold');
-  docPdf.text('Adresse du projet :', 15, y); docPdf.setFont('helvetica', 'normal'); docPdf.text(String(adresse), 45, y);
-  y += 6;
+  docPdf.text('Adresse du projet :', 15, y);
+  docPdf.setFont('helvetica', 'normal');
+  {
+    const labelW = docPdf.getTextWidth('Adresse du projet :');
+    const valueX = 15 + labelW + 3;
+    const adresseLines = docPdf.splitTextToSize(String(adresse), 195 - valueX);
+    docPdf.text(adresseLines, valueX, y);
+    y += 6 * adresseLines.length;
+  }
   docPdf.setFont('helvetica', 'bold');
-  docPdf.text('Surface :', 15, y); docPdf.setFont('helvetica', 'normal'); docPdf.text(String(surface), 45, y);
+  docPdf.text('Surface :', 15, y); docPdf.setFont('helvetica', 'normal'); docPdf.text(String(surface), 15 + docPdf.getTextWidth('Surface :') + 3, y);
   y += 12;
 
   // Plan de financement
@@ -707,8 +793,14 @@ function genererPDF() {
 window.addEventListener('firebase-ready', async () => {
   document.getElementById('app').style.display = '';
   loadHandoff();
+  renderRateBadge();
+  document.getElementById('f-taux').value = currentMarketRate().taux20;
+  document.getElementById('f-assurance').value = currentMarketRate().assurance;
   renderChecklist();
   calcMensualite();
+
+  // Actualisation silencieuse en arrière-plan si le cache a plus de 30 jours
+  if (isRateCacheStale()) refreshMarketRates(false);
 
   if (currentProjet && currentProjet.projetId) {
     const existing = await window._fbFin.getDossierOnce(currentProjet.projetId);
