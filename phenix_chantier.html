@@ -1805,6 +1805,10 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
       <div class="form-grid">
         <div class="form-group"><label>Nom du chantier *</label><input id="ch-nom" placeholder="Ex: Villa Dupont"></div>
         <div class="form-group"><label>Référence dossier</label><input id="ch-ref" placeholder="Ex: 2025-001"></div>
+        <div class="form-group" style="grid-column:1/-1"><label>Lier au projet Phénix Dossier (optionnel)</label>
+          <select id="ch-projetid"><option value="">— Aucun lien —</option></select>
+          <div style="font-size:11px;color:var(--text3);margin-top:3px">Permet d'importer directement les lots validés depuis Phénix Chiffrage.</div>
+        </div>
         <div class="form-group"><label>Maître d'ouvrage *</label><input id="ch-client" placeholder="Nom du client"></div>
         <div class="form-group"><label>Type de travaux</label>
           <select id="ch-type"><option>Construction neuve</option><option>Rénovation</option><option>Extension</option><option>Réhabilitation</option><option>Aménagement intérieur</option><option>Autre</option></select>
@@ -2392,6 +2396,7 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
               <option value="">Tous les chantiers</option>
             </select>
             <button class="btn btn-primary" onclick="openModalLot()"><i class="ti ti-plus"></i> Nouveau lot</button>
+            <button class="btn" onclick="importFromChiffrage()" style="border-color:#4A9CC7;color:#4A9CC7"><i class="ti ti-download"></i> Importer depuis Chiffrage</button>
           </div>
         </div>
         <div id="lots-kpi" class="metrics" style="grid-template-columns:repeat(3,1fr)"></div>
@@ -2682,6 +2687,9 @@ function _tryInitChantierFirebase() {
   if (_fbChantierInitDone) return;
   if (!initChantierFirebase()) return;
   _fbChantierInitDone = true;
+  if (window._fb && typeof window._fb.listenProjets === 'function') {
+    window._fb.listenProjets(list => { dossierProjets = list || []; });
+  }
 }
 _tryInitChantierFirebase();
 window.addEventListener('firebase-ready', function onFBR() {
@@ -3810,6 +3818,15 @@ function initiales(nom) { return nom.split(' ').filter(Boolean).map(w => w[0].to
 // ═══════════════════════════════════════════════════════════
 //  CHANTIERS
 // ═══════════════════════════════════════════════════════════
+let dossierProjets = [];
+function populateProjetSelect(selectedId) {
+  const sel = document.getElementById('ch-projetid');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">— Aucun lien —</option>' +
+    dossierProjets.map(p => `<option value="${p.id}">${p.nom || p.client || ('Projet ' + p.id)}${p.client ? ' — ' + p.client : ''}</option>`).join('');
+  sel.value = selectedId || '';
+}
+
 function openModalChantier(id) {
   const fields = ['ch-nom','ch-ref','ch-client','ch-adresse','ch-budget','ch-notes'];
   if (id) {
@@ -3825,6 +3842,7 @@ function openModalChantier(id) {
     document.getElementById('ch-honoraires').value = c.honoraires || '';
     document.getElementById('ch-commissions').value = c.commissions || '';
     document.getElementById('ch-nom').dataset.editId = id;
+    populateProjetSelect(c.projetId || '');
     previewChCA();
   } else {
     document.getElementById('mChantierTitle').textContent = 'Nouveau chantier';
@@ -3835,6 +3853,7 @@ function openModalChantier(id) {
     document.getElementById('ch-honoraires').value = '';
     document.getElementById('ch-commissions').value = '';
     document.getElementById('ch-ca-preview').style.display = 'none';
+    populateProjetSelect('');
     delete document.getElementById('ch-nom').dataset.editId;
   }
   openModal('modalChantier');
@@ -3868,7 +3887,8 @@ function saveChantier() {
     statut: document.getElementById('ch-statut').value,
     notes: document.getElementById('ch-notes').value,
     honoraires: parseFloat(document.getElementById('ch-honoraires').value) || 0,
-    commissions: parseFloat(document.getElementById('ch-commissions').value) || 0
+    commissions: parseFloat(document.getElementById('ch-commissions').value) || 0,
+    projetId: document.getElementById('ch-projetid').value || null
   };
   if (editId) {
     const i = state.chantiers.findIndex(x => x.id == editId);
@@ -4011,6 +4031,53 @@ function deleteLot() {
   state.lots = state.lots.filter(l => l.id != id);
   state.factures = state.factures.filter(f => f.lotId != id);
   saveLocal(); closeModal('modalLot'); toast('🗑️ Lot supprimé.'); renderLots(); updateBadges();
+}
+
+// ── Import de la synthèse des lots depuis Phénix Chiffrage ───
+function mapStatutChiffrage(s) {
+  if (s === 'Valide') return 'attribue';
+  return 'chiffrage';
+}
+
+async function importFromChiffrage() {
+  const filter = document.getElementById('lots-filter-ch')?.value || activeChantier;
+  if (!filter) { toast('⚠️ Sélectionnez un chantier dans le filtre avant d\'importer.'); return; }
+  const chantier = state.chantiers.find(c => c.id == filter);
+  if (!chantier) { toast('⚠️ Chantier introuvable.'); return; }
+  if (!chantier.projetId) { toast('⚠️ Ce chantier n\'est pas lié à un projet Phénix Dossier — modifiez-le pour le lier avant d\'importer.'); return; }
+
+  if (!window._fb || typeof window._fb.getDoc !== 'function') { toast('⚠️ Connexion Firebase indisponible.'); return; }
+  try {
+    const snap = await window._fb.getDoc(window._fb.doc(window._fb.db, 'phenix_chantier_import', String(chantier.projetId)));
+    if (!snap.exists()) { toast('Aucune synthèse Chiffrage disponible pour ce projet — utilisez « Envoyer vers Chantier » depuis Phénix Chiffrage.'); return; }
+    const data = snap.data();
+    const items = data.lots || [];
+    if (!items.length) { toast('La synthèse Chiffrage est vide.'); return; }
+
+    let created = 0, updated = 0;
+    items.forEach(item => {
+      const existing = state.lots.find(l => l.chantierId == chantier.id && l.nom === item.nom);
+      if (existing) {
+        existing.ht = item.montantHt;
+        existing.tva = item.tva;
+        updated++;
+      } else {
+        state.lots.push({
+          id: uid(), chantierId: chantier.id, nom: item.nom, cat: 'Autre',
+          interv: null, statut: mapStatutChiffrage(item.statut),
+          ht: item.montantHt, tva: item.tva, av: 0,
+          debut: '', fin: '', notes: 'Importé depuis Phénix Chiffrage le ' + new Date().toLocaleDateString('fr-FR')
+        });
+        created++;
+      }
+    });
+
+    saveLocal(); renderLots(); updateBadges();
+    toast('✅ Import terminé : ' + created + ' créé(s), ' + updated + ' mis à jour.');
+  } catch(e) {
+    console.error('Import chiffrage error', e);
+    toast('⚠️ Échec de l\'import depuis Chiffrage.');
+  }
 }
 
 function renderLots() {

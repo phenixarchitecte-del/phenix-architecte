@@ -507,6 +507,7 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
         <button class="btn btn-primary" onclick="openNewLotModal()"><i class="ti ti-plus" aria-hidden="true"></i>Nouveau lot</button>
           <button class="btn btn-outline" onclick="exportPDF()" style="border-color:#4A9CC7;color:#4A9CC7"><i class="ti ti-file-type-pdf" aria-hidden="true"></i>Devis client PDF</button>
           <button class="btn btn-outline" onclick="exportToFinancement()" style="border-color:#2D7A4F;color:#2D7A4F"><i class="ti ti-coin" aria-hidden="true"></i>Envoyer vers Financement</button>
+          <button class="btn btn-outline" onclick="exportToChantier()" style="border-color:#1B2D5B;color:#1B2D5B"><i class="ti ti-building-factory-2" aria-hidden="true"></i>Envoyer vers Chantier</button>
       </div>
     </div>
 
@@ -1611,6 +1612,12 @@ async function pushChiffrageToFinancement(projetId, payload){
 }
 window.pushChiffrageToFinancement = pushChiffrageToFinancement;
 
+// ── Passerelle vers Phénix Chantier (import lots budget) ────
+async function pushChiffrageToChantierImport(projetId, payload){
+  await setDoc(doc(db, 'phenix_chantier_import', String(projetId)), payload);
+}
+window.pushChiffrageToChantierImport = pushChiffrageToChantierImport;
+
 async function loadChantiers(){
   const user = auth.currentUser;
   if(!user) return;
@@ -2154,6 +2161,38 @@ async function exportToFinancement(){
   }
 }
 window.exportToFinancement = exportToFinancement;
+
+async function exportToChantier(){
+  const idx=state.currentChantier;
+  if(idx===null||!state.chantiers[idx]){ showToast('Sélectionnez un chantier d\'abord'); return; }
+  const c=state.chantiers[idx];
+  if(!c.projetId){ showToast('⚠️ Ce chantier n\'est pas lié à un projet Phénix Dossier — importez le projet depuis la fiche chantier avant l\'export'); return; }
+  const lots=c.lots||[];
+  if(!lots.length){ showToast('Aucun lot à exporter'); return; }
+
+  const lotsExport = lots.map(lot=>{
+    const { ht, ttc, tva } = computeLotAmounts(lot);
+    return { nom: lot.nom||'', montantHt: Math.round(ht*100)/100, tva, montantTtc: Math.round(ttc*100)/100, statut: lot.statut||'Chiffrage' };
+  });
+
+  const payload = {
+    chantierNom: c.nom||'',
+    client: c.client||'',
+    lots: lotsExport,
+    exportedAt: new Date().toISOString(),
+    source: 'phenix_chiffrage',
+  };
+
+  try{
+    if(typeof window.pushChiffrageToChantierImport !== 'function'){ showToast('⚠️ Connexion Firebase indisponible'); return; }
+    await window.pushChiffrageToChantierImport(c.projetId, payload);
+    showToast('✅ ' + lotsExport.length + ' lot(s) prêt(s) à importer dans Phénix Chantier');
+  }catch(e){
+    console.error('Export chantier error', e);
+    showToast('⚠️ Échec de l\'envoi vers Chantier');
+  }
+}
+window.exportToChantier = exportToChantier;
 
 function updateStats(lots){
   let totalArtisan=0,totalClient=0;
