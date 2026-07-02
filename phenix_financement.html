@@ -224,16 +224,17 @@ body{font-family:var(--font-sans);background:var(--bg);color:var(--text);font-si
       <div>Aucun projet n'a été transmis depuis Phénix Dossier. Ouvrez ce module depuis la fiche projet (bouton « Dossier Financement ») pour préremplir automatiquement les informations client.</div>
     </div>
 
-    <!-- Infos projet (lecture seule, venant du handoff) -->
+    <!-- Infos projet (modifiables — pré-remplies depuis Phénix Dossier) -->
     <div class="card" id="infoCard" style="display:none">
       <div class="card-title"><i class="ti ti-user"></i> Client &amp; projet</div>
       <div class="info-grid">
-        <div class="info-field"><div class="lbl">Client</div><div class="val" id="i-client">—</div></div>
-        <div class="info-field"><div class="lbl">Référence</div><div class="val" id="i-ref">—</div></div>
-        <div class="info-field"><div class="lbl">Phase</div><div class="val" id="i-phase">—</div></div>
-        <div class="info-field" style="grid-column:span 2"><div class="lbl">Adresse du projet</div><div class="val" id="i-adresse">—</div></div>
-        <div class="info-field"><div class="lbl">Surface</div><div class="val" id="i-surface">—</div></div>
+        <div class="info-field"><div class="lbl">Client</div><input class="val" id="i-client" style="border:none;background:transparent;width:100%;padding:0;font:inherit;color:inherit" oninput="scheduleAutosave()"></div>
+        <div class="info-field"><div class="lbl">Référence</div><input class="val" id="i-ref" style="border:none;background:transparent;width:100%;padding:0;font:inherit;color:inherit" oninput="scheduleAutosave()"></div>
+        <div class="info-field"><div class="lbl">Phase</div><input class="val" id="i-phase" style="border:none;background:transparent;width:100%;padding:0;font:inherit;color:inherit" oninput="scheduleAutosave()"></div>
+        <div class="info-field" style="grid-column:span 2"><div class="lbl">Adresse du projet</div><input class="val" id="i-adresse" style="border:none;background:transparent;width:100%;padding:0;font:inherit;color:inherit" oninput="scheduleAutosave()"></div>
+        <div class="info-field"><div class="lbl">Surface (m²)</div><input class="val" id="i-surface" type="number" style="border:none;background:transparent;width:100%;padding:0;font:inherit;color:inherit" oninput="scheduleAutosave()"></div>
       </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px">Pré-rempli depuis Phénix Dossier — modifiable et enregistré avec le dossier financement.</div>
     </div>
 
     <!-- Avancement du dossier -->
@@ -402,11 +403,11 @@ function loadHandoff() {
     document.getElementById('infoCard').style.display = '';
     document.getElementById('pageTitle').textContent = currentProjet.nom || 'Dossier financement';
     document.getElementById('pageSubtitle').textContent = 'Projet ' + (currentProjet.ref || '') ;
-    document.getElementById('i-client').textContent  = currentProjet.client  || '—';
-    document.getElementById('i-ref').textContent      = currentProjet.ref    || '—';
-    document.getElementById('i-phase').textContent    = currentProjet.phase  || '—';
-    document.getElementById('i-adresse').textContent  = currentProjet.adresse|| '—';
-    document.getElementById('i-surface').textContent  = currentProjet.surface ? currentProjet.surface + ' m²' : '—';
+    document.getElementById('i-client').value  = currentProjet.client  || '';
+    document.getElementById('i-ref').value      = currentProjet.ref    || '';
+    document.getElementById('i-phase').value    = currentProjet.phase  || '';
+    document.getElementById('i-adresse').value  = currentProjet.adresse|| '';
+    document.getElementById('i-surface').value  = currentProjet.surface || '';
   } else {
     document.getElementById('noProjectWarn').style.display = 'flex';
     document.getElementById('pageSubtitle').textContent = 'Aucun projet lié';
@@ -520,6 +521,13 @@ function collectFormData() {
   return {
     projetId: currentProjet ? currentProjet.projetId : null,
     projetNom: currentProjet ? currentProjet.nom : '',
+    projetInfo: {
+      client: document.getElementById('i-client').value,
+      ref: document.getElementById('i-ref').value,
+      phase: document.getElementById('i-phase').value,
+      adresse: document.getElementById('i-adresse').value,
+      surface: document.getElementById('i-surface').value,
+    },
     checklist: currentDossier.checklist || {},
     financement: {
       coutTotal: document.getElementById('f-cout-total').value,
@@ -553,6 +561,13 @@ async function saveDossier(showToast) {
 function fillForm(data) {
   if (!data) return;
   currentDossier = data;
+  if (data.projetInfo) {
+    document.getElementById('i-client').value  = data.projetInfo.client  || '';
+    document.getElementById('i-ref').value      = data.projetInfo.ref    || '';
+    document.getElementById('i-phase').value    = data.projetInfo.phase  || '';
+    document.getElementById('i-adresse').value  = data.projetInfo.adresse|| '';
+    document.getElementById('i-surface').value  = data.projetInfo.surface || '';
+  }
   const fin = data.financement || {};
   const cal = data.calendrier || {};
   document.getElementById('f-cout-total').value    = fin.coutTotal || '';
@@ -594,10 +609,11 @@ function genererPDF() {
 
   docPdf.setTextColor(15, 30, 61);
   docPdf.setFontSize(10);
-  const client = currentProjet ? (currentProjet.client || '—') : '—';
-  const adresse = currentProjet ? (currentProjet.adresse || '—') : '—';
-  const surface = currentProjet ? (currentProjet.surface ? currentProjet.surface + ' m²' : '—') : '—';
-  const ref = currentProjet ? (currentProjet.ref || '—') : '—';
+  const client = document.getElementById('i-client').value || '—';
+  const adresse = document.getElementById('i-adresse').value || '—';
+  const surfaceVal = document.getElementById('i-surface').value;
+  const surface = surfaceVal ? surfaceVal + ' m²' : '—';
+  const ref = document.getElementById('i-ref').value || '—';
 
   docPdf.setFont('helvetica', 'bold');
   docPdf.text('Client :', 15, y); docPdf.setFont('helvetica', 'normal'); docPdf.text(String(client), 45, y);
