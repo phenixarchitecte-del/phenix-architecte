@@ -45,6 +45,13 @@ window._fbFin = {
     const snap = await getDoc(doc(db, 'phenix_financement', String(projetId)));
     return snap.exists() ? snap.data() : null;
   },
+  // ── Lecture directe de l'état Phénix Chiffrage (import automatique) ──
+  async getChiffrageChantiers() {
+    const user = auth.currentUser;
+    if (!user) return [];
+    const snap = await getDoc(doc(db, 'phenix_chiffrage', user.uid));
+    return snap.exists() ? (snap.data().chantiers || []) : [];
+  },
   listenDossier(projetId, callback) {
     return onSnapshot(doc(db, 'phenix_financement', String(projetId)), snap => {
       callback(snap.exists() ? snap.data() : null);
@@ -274,6 +281,7 @@ body{font-family:var(--font-sans);background:var(--bg);color:var(--text);font-si
         </table>
       </div>
       <button class="btn btn-sm" style="margin-top:10px" onclick="utiliserMontantChiffrage()"><i class="ti ti-arrow-down"></i> Utiliser ce montant dans le plan de financement</button>
+      <button class="btn btn-sm" style="margin-top:10px" onclick="loadChiffrageLive(true)"><i class="ti ti-refresh"></i> Actualiser depuis Chiffrage</button>
     </div>
 
     <!-- Plan de financement -->
@@ -445,6 +453,54 @@ function renderChiffrageSynthese(chiffrage) {
     </tr>`).join('');
   document.getElementById('chiffrageTotalHt').textContent = fmtEur(chiffrage.totalHt);
   document.getElementById('chiffrageTotalTtc').textContent = fmtEur(chiffrage.totalTtc);
+}
+
+// ── Import automatique et direct depuis Phénix Chiffrage (sans bouton dédié) ──
+function computeLotAmountsFin(lot) {
+  let travClient = 0;
+  (lot.postes || []).forEach(p => {
+    const q = parseFloat(p.q) || 0;
+    travClient += q * (parseFloat(p.puClient) || parseFloat(p.pu) || 0);
+  });
+  const aleas = travClient * (parseFloat(lot.aleas || 5) / 100);
+  const hon = travClient * (parseFloat(lot.honoraires || 5) / 100);
+  const ht = travClient + aleas + hon;
+  const tva = parseFloat(lot.tva || 20);
+  const ttc = ht * (1 + tva / 100);
+  return { ht, ttc, tva };
+}
+
+async function loadChiffrageLive(manual) {
+  if (!currentProjet || !currentProjet.projetId) return;
+  if (!window._fbFin || typeof window._fbFin.getChiffrageChantiers !== 'function') return;
+  try {
+    const chantiers = await window._fbFin.getChiffrageChantiers();
+    const chantier = chantiers.find(c => String(c.projetId) === String(currentProjet.projetId));
+    if (!chantier || !chantier.lots || !chantier.lots.length) {
+      if (manual) toast('Aucun lot trouvé dans Chiffrage pour ce projet');
+      return;
+    }
+    let totalHt = 0, totalTtc = 0;
+    const lotsExport = chantier.lots.map(lot => {
+      const { ht, ttc, tva } = computeLotAmountsFin(lot);
+      totalHt += ht; totalTtc += ttc;
+      return { num: lot.num || '', nom: lot.nom || '', montantHt: Math.round(ht*100)/100, tva, montantTtc: Math.round(ttc*100)/100, statut: lot.statut || 'Chiffrage' };
+    });
+    const chiffrageData = {
+      chantierNom: chantier.nom || '',
+      lots: lotsExport,
+      totalHt: Math.round(totalHt*100)/100,
+      totalTtc: Math.round(totalTtc*100)/100,
+      exportedAt: new Date().toISOString(),
+      source: 'phenix_chiffrage_live',
+    };
+    currentDossier.chiffrage = chiffrageData;
+    renderChiffrageSynthese(chiffrageData);
+    if (manual) toast('✓ Synthèse actualisée depuis Chiffrage');
+  } catch(e) {
+    console.error('loadChiffrageLive error:', e);
+    if (manual) toast('⚠️ Lecture de Chiffrage impossible');
+  }
 }
 
 function utiliserMontantChiffrage() {
@@ -805,6 +861,7 @@ window.addEventListener('firebase-ready', async () => {
   if (currentProjet && currentProjet.projetId) {
     const existing = await window._fbFin.getDossierOnce(currentProjet.projetId);
     if (existing) fillForm(existing);
+    loadChiffrageLive(false);
     // Écoute temps réel (utile si plusieurs onglets ouverts)
     window._fbFin.listenDossier(currentProjet.projetId, (data) => {
       if (data && JSON.stringify(data) !== JSON.stringify(currentDossier)) {

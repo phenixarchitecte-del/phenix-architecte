@@ -352,6 +352,11 @@ window._fb = {
       return remoteState;
     },
 
+    // ── Récupération à la demande d'un média par son id (filet de sécurité) ──
+    async getMediaById(mediaId) {
+      return await _getMedia(mediaId);
+    },
+
     // ── Sauvegarder : médias dans phenix_media, fiche principale légère ──
     async saveState(stateObj) {
       try {
@@ -4831,8 +4836,19 @@ function crAddPhotos(e) {
   e.target.value = '';
 }
 
-function renderCRPhotos() {
+async function renderCRPhotos() {
   const container = document.getElementById('cr-photos-container');
+
+  const missing = crPhotos.filter(p => !p.dataUrl && !p.storageUrl && p.mediaId);
+  if (missing.length && window._fbChantier && typeof window._fbChantier.getMediaById === 'function') {
+    for (const p of missing) {
+      try {
+        const du = await window._fbChantier.getMediaById(p.mediaId);
+        if (du) { p.dataUrl = du; p.storageUrl = du; }
+      } catch(e) { console.error('Réhydratation photo échouée:', e); }
+    }
+  }
+
   container.innerHTML = crPhotos.map((p, idx) => {
     const src = p.storageUrl || p.dataUrl;
     if (!src) return '';
@@ -4878,6 +4894,19 @@ function crAddPlan(e) {
 async function renderCRPlans() {
   const container = document.getElementById('cr-plans-container');
   if (!container) return;
+
+  // Filet de sécurité : si un plan n'a pas encore son dataUrl (ex: état local
+  // pas encore synchronisé), on le récupère à la demande via son mediaId.
+  const missing = crPlans.filter(pl => !pl.dataUrl && pl.mediaId);
+  if (missing.length && window._fbChantier && typeof window._fbChantier.getMediaById === 'function') {
+    container.innerHTML = '<div style="text-align:center;color:#8BA5C0;padding:30px;font-size:13px"><i class="ti ti-loader" style="animation:spin 1s linear infinite;font-size:22px"></i><br>Chargement du plan…</div>';
+    for (const pl of missing) {
+      try {
+        const du = await window._fbChantier.getMediaById(pl.mediaId);
+        if (du) { pl.dataUrl = du; pl.storageUrl = du; }
+      } catch(e) { console.error('Réhydratation plan échouée:', e); }
+    }
+  }
 
   // Couleurs disponibles pour pastilles
   const PASTILLE_COLORS = ['#C0392B','#E67E22','#2D7A4F','#1B2D5B','#8e44ad','#16a085','#2980b9'];
@@ -5156,12 +5185,14 @@ function openModalCR(id) {
       dataUrl: p.dataUrl || p.storageUrl || null,
       storageUrl: p.storageUrl || null,
       storagePath: p.storagePath || null,
+      mediaId: p.mediaId || null,
       caption: p.caption || ''
     }));
     crPlans = (cr.plans || []).map(pl => ({
       dataUrl: pl.dataUrl || pl.storageUrl || null,
       storageUrl: pl.storageUrl || null,
       storagePath: pl.storagePath || null,
+      mediaId: pl.mediaId || null,
       name: pl.name || '',
       annotations: pl.annotations || []
     }));
@@ -5203,12 +5234,14 @@ function saveCR() {
       dataUrl: p.dataUrl || null,
       storageUrl: p.storageUrl || null,
       storagePath: p.storagePath || null,
+      mediaId: p.mediaId || null,
       caption: p.caption || ''
     })),
     plans: crPlans.map(pl => ({
       dataUrl: pl.dataUrl || null,
       storageUrl: pl.storageUrl || null,
       storagePath: pl.storagePath || null,
+      mediaId: pl.mediaId || null,
       name: pl.name || '',
       annotations: pl.annotations || []
     }))
