@@ -4626,6 +4626,8 @@ function openProjectModal(id) {
       <button class="btn btn-sm" onclick="switchModalTab('historique')" style="color:var(--accent);border-color:var(--accent)"><i class="ti ti-history"></i> Voir l'historique</button>
       <button class="btn btn-sm" onclick="openInChiffrage(${id})" style="background:rgba(74,156,199,0.15);color:#4A9CC7;border-color:rgba(74,156,199,0.4)" title="Ouvrir ce projet dans Phénix Chiffrage"><i class="ti ti-calculator"></i> Ouvrir dans Chiffrage</button>
       <button class="btn btn-sm" onclick="openInPermis(${id})" style="background:rgba(0,180,216,0.15);color:#00B4D8;border-color:rgba(0,180,216,0.4)" title="Ouvrir ce projet dans Phénix Permis"><i class="ti ti-file-description"></i> Ouvrir dans Permis</button>
+      <button class="btn btn-sm" onclick="openInFinancement(${id})" style="background:rgba(45,122,79,0.12);color:#2D7A4F;border-color:rgba(45,122,79,0.4)" title="Ouvrir le dossier de financement bancaire pour ce projet"><i class="ti ti-coin"></i> Dossier Financement</button>
+      <button class="btn btn-sm" onclick="openInContrat(${id})" style="background:rgba(27,45,91,0.1);color:#1B2D5B;border-color:rgba(27,45,91,0.35)" title="Générer un contrat MOE ou contractant général pour ce projet"><i class="ti ti-file-signature"></i> Générer un contrat</button>
     </div>`;
 
   // Historique
@@ -4792,6 +4794,53 @@ function openInPermis(id) {
   const permisUrl = 'phenix_permis.html';
   toast_d('📋 Ouverture de Phénix Permis…');
   setTimeout(() => window.open(permisUrl, '_blank'), 400);
+}
+
+function openInFinancement(id) {
+  const p = stateDossier.projets.find(x => x.id == id);
+  if (!p) return;
+  // Même pattern que openInChiffrage / openInPermis : handoff via localStorage partagé
+  const payload = {
+    projetId: String(p.id),
+    nom: p.nom || '',
+    client: p.client || '',
+    adresse: p.adresse || '',
+    surface: p.surface || '',
+    budget: p.budget || '',
+    type: p.type || '',
+    phase: p.phase || '',
+    ref: p.ref || '',
+    _source: 'phenix_dossier',
+    _ts: Date.now(),
+  };
+  localStorage.setItem('phenix-open-in-financement', JSON.stringify(payload));
+  const financementUrl = 'phenix_financement.html?projet=' + encodeURIComponent(p.id);
+  toast_d('🏦 Ouverture du Dossier Financement…');
+  setTimeout(() => window.open(financementUrl, '_blank'), 400);
+}
+
+function openInContrat(id) {
+  const p = stateDossier.projets.find(x => x.id == id);
+  if (!p) return;
+  // Même pattern que les autres handoffs : localStorage partagé
+  const payload = {
+    projetId: String(p.id),
+    nom: p.nom || '',
+    client: p.client || '',
+    adresse: p.adresse || '',
+    surface: p.surface || '',
+    budget: p.budget || '',
+    honoraires: p.honoraires || '',
+    type: p.type || '',
+    phase: p.phase || '',
+    ref: p.ref || '',
+    _source: 'phenix_dossier',
+    _ts: Date.now(),
+  };
+  localStorage.setItem('phenix-open-in-contrat', JSON.stringify(payload));
+  const contratUrl = 'phenix_contrat.html?projet=' + encodeURIComponent(p.id);
+  toast_d('📝 Ouverture du Générateur de Contrats…');
+  setTimeout(() => window.open(contratUrl, '_blank'), 400);
 }
 
 function openEditModal(id) {

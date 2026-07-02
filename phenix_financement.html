@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<title>Phénix-Architecture · Dossier Financement</title>
+
+<script type="module">
+import { initializeApp }       from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getFirestore,
+         doc, setDoc, getDoc,
+         onSnapshot }           from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { getAuth, signInWithEmailAndPassword, signOut,
+         onAuthStateChanged }  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { getStorage, ref,
+         uploadString,
+         getDownloadURL,
+         deleteObject }        from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js';
+
+const firebaseConfig = {
+  apiKey:            "AIzaSyCjNKNvS6p3nqE6-_Gw9I397ZtXm2FG1ew",
+  authDomain:        "phenix-architecte-9151b.firebaseapp.com",
+  projectId:         "phenix-architecte-9151b",
+  storageBucket:     "phenix-architecte-9151b.firebasestorage.app",
+  messagingSenderId: "811231684720",
+  appId:             "1:811231684720:web:413fa324ae43c07607acb5"
+};
+
+const app     = initializeApp(firebaseConfig);
+const db      = getFirestore(app);
+const storage = getStorage(app);
+const auth    = getAuth(app);
+
+// ── Exposition globale pour le code non-module ci-dessous ──
+window._fbFin = {
+  async saveDossier(projetId, data) {
+    await setDoc(doc(db, 'phenix_financement', String(projetId)), data);
+  },
+  async getDossierOnce(projetId) {
+    const snap = await getDoc(doc(db, 'phenix_financement', String(projetId)));
+    return snap.exists() ? snap.data() : null;
+  },
+  listenDossier(projetId, callback) {
+    return onSnapshot(doc(db, 'phenix_financement', String(projetId)), snap => {
+      callback(snap.exists() ? snap.data() : null);
+    }, err => {
+      console.error('Firestore listen error:', err.message || err);
+      callback(null);
+    });
+  },
+  async uploadFile(path, dataUrl) {
+    try {
+      const fileRef = ref(storage, path);
+      const [header, data] = dataUrl.split(',');
+      const mimeType = header.match(/data:([^;]+)/)[1];
+      await uploadString(fileRef, data, 'base64', { contentType: mimeType });
+      return await getDownloadURL(fileRef);
+    } catch(e) {
+      console.error('Storage upload error:', e.message || e);
+      return null;
+    }
+  },
+  async deleteFile(path) {
+    try { await deleteObject(ref(storage, path)); } catch(e) { /* déjà supprimé */ }
+  }
+};
+
+window._auth = {
+  login:  (e, p) => signInWithEmailAndPassword(auth, e, p),
+  logout: () => signOut(auth),
+  current: () => auth.currentUser
+};
+window.phenixDoLogin = function(){
+  const email = (document.getElementById('pl-email').value || '').trim();
+  const pwd   = document.getElementById('pl-pwd').value || '';
+  const err   = document.getElementById('pl-err'); if (err) err.textContent = '';
+  const btn   = document.getElementById('pl-btn'); if (btn) btn.disabled = true;
+  window._auth.login(email, pwd).catch(e => {
+    const c = (e && e.code) || '';
+    if (err) err.textContent =
+      (c.indexOf('invalid-credential')>=0 || c.indexOf('wrong-password')>=0 || c.indexOf('user-not-found')>=0) ? 'E-mail ou mot de passe incorrect.' :
+      c.indexOf('operation-not-allowed')>=0 ? "Activez « E-mail/Mot de passe » dans Firebase → Authentication." :
+      c.indexOf('invalid-email')>=0 ? 'E-mail invalide.' :
+      c.indexOf('too-many-requests')>=0 ? 'Trop de tentatives, réessayez plus tard.' :
+      c.indexOf('network')>=0 ? 'Pas de connexion internet.' :
+      ('Erreur : ' + (c || (e && e.message) || ''));
+  }).finally(() => { if (btn) btn.disabled = false; });
+};
+let _dispatched = false;
+onAuthStateChanged(auth, user => {
+  const ov = document.getElementById('phenix-login');
+  if (user) {
+    if (ov) ov.style.display = 'none';
+    if (!_dispatched) { _dispatched = true; window.dispatchEvent(new Event('firebase-ready')); }
+  } else {
+    if (ov) ov.style.display = 'flex';
+  }
+});
+</script>
+
+<style>
+:root {
+  --bg:#F0F4F8; --bg2:#E4ECF3; --bg3:#D4E2EC;
+  --card:#FFFFFF;
+  --text:#0F1E3D; --text2:#4A6080; --text3:#8BA5C0;
+  --border:#C8D8E8;
+  --accent:#4A9CC7; --accent2:#2A5298; --accent-bg:#E8F4FB;
+  --navy:#1B2D5B; --navy2:#2A3F6F;
+  --green:#2D7A4F; --green-bg:#E3F5EC;
+  --amber:#8A6020; --amber-bg:#FDF3DC;
+  --red:#C0392B; --red-bg:#FDECEB;
+  --font-serif:'DM Serif Display',Georgia,serif;
+  --font-sans:'DM Sans',sans-serif;
+  --r-sm:5px; --r-md:9px; --r-lg:13px;
+  --shadow:0 1px 4px rgba(15,30,61,.07),0 1px 2px rgba(15,30,61,.04);
+  --shadow-md:0 4px 16px rgba(15,30,61,.1),0 2px 6px rgba(15,30,61,.06);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans);background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+
+/* ── Login overlay ── */
+#phenix-login{display:flex;position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#0F1E3D,#1B2D5B,#2A5298);align-items:center;justify-content:center;padding:20px;font-family:'DM Sans',system-ui,sans-serif}
+#phenix-login .box{background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.18);border-radius:16px;padding:34px 28px;max-width:360px;width:100%;text-align:center}
+#phenix-login .logo{font-family:'DM Serif Display',Georgia,serif;font-size:30px;color:#fff;margin-bottom:4px}
+#phenix-login .logo span{color:#7DC6E8}
+#phenix-login .sub{font-size:11px;color:rgba(255,255,255,.5);letter-spacing:.12em;text-transform:uppercase;margin-bottom:26px}
+#phenix-login input{width:100%;padding:12px 14px;margin-bottom:10px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.95);font-size:14px;outline:none;font-family:inherit}
+#phenix-login button{width:100%;padding:12px;border:none;border-radius:9px;background:linear-gradient(135deg,#4A9CC7,#2A5298);color:#fff;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}
+#pl-err{color:#FFB4A8;font-size:12.5px;margin-top:12px;min-height:16px}
+
+/* ── App shell ── */
+.topbar{background:var(--navy);color:#fff;padding:14px 24px;display:flex;align-items:center;gap:14px;box-shadow:var(--shadow-md)}
+.topbar-title{font-family:var(--font-serif);font-size:19px;flex:1}
+.topbar-title span{color:#7DC6E8}
+.topbar .btn{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2);color:#fff}
+.topbar .btn:hover{background:rgba(255,255,255,.2)}
+.content{max-width:900px;margin:0 auto;padding:2rem 1.5rem 4rem}
+.page-title{font-family:var(--font-serif);font-size:26px;color:var(--navy)}
+.page-subtitle{font-size:13px;color:var(--text2);margin-top:2px}
+
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;font-size:13px;font-family:var(--font-sans);border-radius:var(--r-md);cursor:pointer;border:1.5px solid var(--border);background:var(--card);color:var(--text);transition:all .15s;font-weight:500;white-space:nowrap}
+.btn:hover{background:var(--bg);border-color:var(--accent);color:var(--navy)}
+.btn-primary{background:linear-gradient(135deg,#4A9CC7,#2A5298);border-color:transparent;color:#fff}
+.btn-primary:hover{filter:brightness(1.08);color:#fff}
+.btn-sm{padding:6px 11px;font-size:12px}
+
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:1.25rem 1.5rem;margin-bottom:1.25rem;box-shadow:var(--shadow)}
+.card-title{font-size:14px;font-weight:700;color:var(--navy);display:flex;align-items:center;gap:8px;margin-bottom:1rem}
+.card-title i{color:var(--accent)}
+
+.info-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.info-field{background:var(--bg);border-radius:var(--r-sm);padding:9px 12px}
+.info-field .lbl{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px}
+.info-field .val{font-size:13px;font-weight:600;color:var(--text)}
+
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-group{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+.form-group label{font-size:11px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.06em}
+.form-group input,.form-group textarea,.form-group select{
+  font-size:13px;padding:8px 10px;border-radius:var(--r-sm);border:1.5px solid var(--border);
+  background:var(--bg);color:var(--text);font-family:var(--font-sans);transition:border-color .15s;
+}
+.form-group input:focus,.form-group textarea:focus,.form-group select:focus{outline:none;border-color:var(--accent)}
+.form-group textarea{resize:vertical;min-height:60px}
+
+.calc-box{background:var(--accent-bg);border-radius:var(--r-sm);padding:12px 14px;margin-top:6px;font-size:13px;color:var(--accent2)}
+.calc-box strong{font-size:16px;color:var(--navy)}
+
+.checklist-row{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--bg2)}
+.checklist-row:last-child{border-bottom:none}
+.cl-icon{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px}
+.cl-icon.st-manquant{background:var(--red-bg);color:var(--red)}
+.cl-icon.st-attente{background:var(--amber-bg);color:var(--amber)}
+.cl-icon.st-obtenu{background:var(--green-bg);color:var(--green)}
+.cl-label{flex:1;font-size:13px;font-weight:500}
+.cl-label .cl-note{display:block;font-size:11px;color:var(--text2);font-weight:400;margin-top:2px}
+.cl-status{font-size:12px;padding:6px 8px;border-radius:var(--r-sm);border:1.5px solid var(--border);background:var(--bg);font-family:inherit}
+.cl-file{font-size:11px;color:var(--accent2);text-decoration:none;white-space:nowrap}
+.cl-upload-btn{background:none;border:1.5px solid var(--border);border-radius:var(--r-sm);padding:5px 8px;font-size:11px;cursor:pointer;color:var(--text2);white-space:nowrap}
+.cl-upload-btn:hover{border-color:var(--accent);color:var(--accent2)}
+
+.progress-summary{display:flex;align-items:center;gap:10px;margin-bottom:1rem}
+.progress-bar-outer{flex:1;height:8px;background:var(--bg2);border-radius:4px;overflow:hidden}
+.progress-bar-inner{height:100%;background:linear-gradient(90deg,#4A9CC7,#2A5298);border-radius:4px;transition:width .3s}
+.progress-summary .pct{font-size:13px;font-weight:700;color:var(--navy);min-width:70px;text-align:right}
+
+.footer-actions{position:sticky;bottom:0;background:var(--card);border-top:1px solid var(--border);padding:14px 1.5rem;display:flex;justify-content:flex-end;gap:10px;box-shadow:0 -2px 10px rgba(15,30,61,.06)}
+.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;border-radius:var(--r-sm);font-size:12px;padding:8px 16px;box-shadow:var(--shadow-md);opacity:0;pointer-events:none;transition:opacity .25s;z-index:9999}
+.toast.show{opacity:1}
+.warn-box{background:var(--amber-bg);color:var(--amber);border-radius:var(--r-sm);padding:12px 16px;font-size:12.5px;margin-bottom:1.25rem;display:flex;gap:10px;align-items:flex-start}
+</style>
+</head>
+<body>
+
+<div id="phenix-login">
+  <div class="box">
+    <div class="logo">Phénix<span>-Architecture</span></div>
+    <div class="sub">Connexion sécurisée</div>
+    <input id="pl-email" type="email" autocomplete="username" placeholder="E-mail">
+    <input id="pl-pwd" type="password" autocomplete="current-password" placeholder="Mot de passe" onkeydown="if(event.key==='Enter')phenixDoLogin()">
+    <button id="pl-btn" onclick="phenixDoLogin()">Se connecter</button>
+    <div id="pl-err"></div>
+  </div>
+</div>
+
+<div id="app" style="display:none">
+  <div class="topbar">
+    <button class="btn btn-sm" onclick="window.close()"><i class="ti ti-arrow-left"></i> Retour au dossier</button>
+    <div class="topbar-title">Dossier <span>Financement</span></div>
+    <button class="btn btn-sm" onclick="window._auth.logout()"><i class="ti ti-logout"></i> Déconnexion</button>
+  </div>
+
+  <div class="content">
+    <div class="page-title" id="pageTitle">Dossier financement</div>
+    <div class="page-subtitle" id="pageSubtitle" style="margin-bottom:1.5rem">Chargement…</div>
+
+    <div id="noProjectWarn" class="warn-box" style="display:none">
+      <i class="ti ti-alert-triangle"></i>
+      <div>Aucun projet n'a été transmis depuis Phénix Dossier. Ouvrez ce module depuis la fiche projet (bouton « Dossier Financement ») pour préremplir automatiquement les informations client.</div>
+    </div>
+
+    <!-- Infos projet (lecture seule, venant du handoff) -->
+    <div class="card" id="infoCard" style="display:none">
+      <div class="card-title"><i class="ti ti-user"></i> Client &amp; projet</div>
+      <div class="info-grid">
+        <div class="info-field"><div class="lbl">Client</div><div class="val" id="i-client">—</div></div>
+        <div class="info-field"><div class="lbl">Référence</div><div class="val" id="i-ref">—</div></div>
+        <div class="info-field"><div class="lbl">Phase</div><div class="val" id="i-phase">—</div></div>
+        <div class="info-field" style="grid-column:span 2"><div class="lbl">Adresse du projet</div><div class="val" id="i-adresse">—</div></div>
+        <div class="info-field"><div class="lbl">Surface</div><div class="val" id="i-surface">—</div></div>
+      </div>
+    </div>
+
+    <!-- Avancement du dossier -->
+    <div class="card">
+      <div class="card-title"><i class="ti ti-checklist"></i> Avancement du dossier</div>
+      <div class="progress-summary">
+        <div class="progress-bar-outer"><div class="progress-bar-inner" id="progressBar" style="width:0%"></div></div>
+        <div class="pct" id="progressPct">0 / 0</div>
+      </div>
+      <div id="checklistBody"></div>
+    </div>
+
+    <!-- Plan de financement -->
+    <div class="card">
+      <div class="card-title"><i class="ti ti-coin"></i> Plan de financement</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Coût total des travaux (€ TTC)</label><input type="number" id="f-cout-total" oninput="calcMensualite()"></div>
+        <div class="form-group"><label>Apport personnel (€)</label><input type="number" id="f-apport" oninput="calcMensualite()"></div>
+        <div class="form-group"><label>Montant du prêt sollicité (€)</label><input type="number" id="f-montant-pret" oninput="calcMensualite()"></div>
+        <div class="form-group"><label>Durée souhaitée (années)</label><input type="number" id="f-duree" value="20" oninput="calcMensualite()"></div>
+        <div class="form-group"><label>Taux indicatif (%/an)</label><input type="number" step="0.01" id="f-taux" value="3.5" oninput="calcMensualite()"></div>
+        <div class="form-group"><label>Assurance emprunteur (%/an, optionnel)</label><input type="number" step="0.01" id="f-assurance" value="0.3" oninput="calcMensualite()"></div>
+      </div>
+      <div class="calc-box" id="calcBox">Renseignez le montant du prêt pour estimer la mensualité.</div>
+      <div style="font-size:11px;color:var(--text2);margin-top:8px">Estimation indicative à titre informatif — le calcul définitif relève de l'établissement bancaire.</div>
+    </div>
+
+    <!-- Calendrier prévisionnel -->
+    <div class="card">
+      <div class="card-title"><i class="ti ti-calendar-event"></i> Calendrier prévisionnel des travaux</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Date de démarrage prévisionnelle</label><input type="date" id="f-date-demarrage"></div>
+        <div class="form-group"><label>Durée estimée des travaux (mois)</label><input type="number" id="f-duree-travaux"></div>
+      </div>
+      <div class="form-group"><label>Jalons / phases clés</label><textarea id="f-jalons" placeholder="Ex : Terrassement — Fondations — Élévation — Hors d'eau/hors d'air — Second œuvre — Livraison"></textarea></div>
+    </div>
+
+    <!-- Notes -->
+    <div class="card">
+      <div class="card-title"><i class="ti ti-note"></i> Notes complémentaires</div>
+      <div class="form-group"><textarea id="f-notes" placeholder="Précisions à l'attention du conseiller bancaire…"></textarea></div>
+    </div>
+  </div>
+
+  <div class="footer-actions">
+    <button class="btn" onclick="saveDossier(true)"><i class="ti ti-device-floppy"></i> Enregistrer</button>
+    <button class="btn btn-primary" onclick="genererPDF()"><i class="ti ti-file-download"></i> Générer le PDF pour la banque</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Liste des pièces standard pour un dossier de financement construction ──
+const CHECKLIST_DEFS = [
+  { key:'permis',      label:'Permis de construire (arrêté)' },
+  { key:'nonrecours',  label:"Attestation de non-recours / non-retrait du permis" },
+  { key:'dpgf',        label:'Devis descriptif estimatif (DPGF)' },
+  { key:'plans',       label:'Plans (masse, façades, coupes, niveaux)' },
+  { key:'surface',     label:'Attestation de surface (SHAB / surface de plancher)' },
+  { key:'contrat',     label:'Contrat signé (maîtrise d\'œuvre ou entreprise générale)' },
+  { key:'rcpro',       label:'Attestation RC Pro (maître d\'œuvre)' },
+  { key:'decennale',   label:'Attestations décennales des artisans' },
+  { key:'terrain',     label:'Titre de propriété / compromis du terrain' },
+  { key:'re2020',      label:'Étude thermique RE2020', note:'si disponible' },
+];
+
+let currentProjet = null;
+let currentDossier = { checklist: {} };
+let saveTimeout = null;
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+function fmtEur(n) {
+  n = parseFloat(n) || 0;
+  return n.toLocaleString('fr-FR', {minimumFractionDigits:0, maximumFractionDigits:0}) + ' €';
+}
+
+// ── Récupération du handoff depuis Phénix Dossier ──
+function loadHandoff() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlProjetId = urlParams.get('projet');
+
+  let payload = null;
+  try {
+    const raw = localStorage.getItem('phenix-open-in-financement');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      // On ne prend le payload que s'il correspond au projet demandé (ou s'il n'y a pas de param URL)
+      if (!urlProjetId || String(parsed.projetId) === String(urlProjetId)) {
+        payload = parsed;
+      }
+    }
+  } catch(e) { /* ignore */ }
+
+  if (payload) {
+    currentProjet = payload;
+  } else if (urlProjetId) {
+    currentProjet = { projetId: urlProjetId, nom:'', client:'', adresse:'', surface:'', phase:'', ref:'' };
+  }
+
+  if (currentProjet) {
+    document.getElementById('noProjectWarn').style.display = 'none';
+    document.getElementById('infoCard').style.display = '';
+    document.getElementById('pageTitle').textContent = currentProjet.nom || 'Dossier financement';
+    document.getElementById('pageSubtitle').textContent = 'Projet ' + (currentProjet.ref || '') ;
+    document.getElementById('i-client').textContent  = currentProjet.client  || '—';
+    document.getElementById('i-ref').textContent      = currentProjet.ref    || '—';
+    document.getElementById('i-phase').textContent    = currentProjet.phase  || '—';
+    document.getElementById('i-adresse').textContent  = currentProjet.adresse|| '—';
+    document.getElementById('i-surface').textContent  = currentProjet.surface ? currentProjet.surface + ' m²' : '—';
+  } else {
+    document.getElementById('noProjectWarn').style.display = 'flex';
+    document.getElementById('pageSubtitle').textContent = 'Aucun projet lié';
+  }
+}
+
+// ── Checklist rendering ──
+function renderChecklist() {
+  const body = document.getElementById('checklistBody');
+  const cl = currentDossier.checklist || {};
+  let obtenus = 0;
+  body.innerHTML = CHECKLIST_DEFS.map(def => {
+    const item = cl[def.key] || { status:'manquant' };
+    if (item.status === 'obtenu') obtenus++;
+    const iconMap = { manquant:'ti-x', attente:'ti-clock', obtenu:'ti-check' };
+    const fileLink = item.fileUrl
+      ? `<a class="cl-file" href="${item.fileUrl}" target="_blank"><i class="ti ti-file-check"></i> Fichier</a>`
+      : `<button class="cl-upload-btn" onclick="triggerUpload('${def.key}')"><i class="ti ti-upload"></i> Joindre</button>`;
+    return `
+      <div class="checklist-row">
+        <div class="cl-icon st-${item.status}"><i class="ti ${iconMap[item.status]}"></i></div>
+        <div class="cl-label">${def.label}${def.note?`<span class="cl-note">${def.note}</span>`:''}</div>
+        <select class="cl-status" onchange="setChecklistStatus('${def.key}', this.value)">
+          <option value="manquant" ${item.status==='manquant'?'selected':''}>Manquant</option>
+          <option value="attente" ${item.status==='attente'?'selected':''}>En attente</option>
+          <option value="obtenu" ${item.status==='obtenu'?'selected':''}>Obtenu</option>
+        </select>
+        ${fileLink}
+      </div>`;
+  }).join('');
+  const pct = Math.round((obtenus / CHECKLIST_DEFS.length) * 100);
+  document.getElementById('progressBar').style.width = pct + '%';
+  document.getElementById('progressPct').textContent = obtenus + ' / ' + CHECKLIST_DEFS.length;
+}
+
+function setChecklistStatus(key, status) {
+  if (!currentDossier.checklist) currentDossier.checklist = {};
+  if (!currentDossier.checklist[key]) currentDossier.checklist[key] = {};
+  currentDossier.checklist[key].status = status;
+  renderChecklist();
+  scheduleAutosave();
+}
+
+function triggerUpload(key) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.pdf,.jpg,.jpeg,.png';
+  input.onchange = async () => {
+    const file = input.files[0];
+    if (!file) return;
+    toast('Envoi du fichier…');
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const projetId = currentProjet ? currentProjet.projetId : 'sans-projet';
+      const path = `financement/${projetId}/${key}_${Date.now()}_${file.name}`;
+      const url = await window._fbFin.uploadFile(path, reader.result);
+      if (url) {
+        if (!currentDossier.checklist) currentDossier.checklist = {};
+        if (!currentDossier.checklist[key]) currentDossier.checklist[key] = {};
+        currentDossier.checklist[key].fileUrl = url;
+        currentDossier.checklist[key].filePath = path;
+        currentDossier.checklist[key].fileName = file.name;
+        currentDossier.checklist[key].status = 'obtenu';
+        renderChecklist();
+        scheduleAutosave();
+        toast('✓ Fichier joint');
+      } else {
+        toast('Échec de l\'envoi');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
+}
+
+// ── Calcul mensualité (formule standard prêt amortissable) ──
+function calcMensualite() {
+  const montant = parseFloat(document.getElementById('f-montant-pret').value) || 0;
+  const dureeAns = parseFloat(document.getElementById('f-duree').value) || 0;
+  const taux = parseFloat(document.getElementById('f-taux').value) || 0;
+  const assurance = parseFloat(document.getElementById('f-assurance').value) || 0;
+  const box = document.getElementById('calcBox');
+
+  if (montant <= 0 || dureeAns <= 0) {
+    box.innerHTML = 'Renseignez le montant du prêt et la durée pour estimer la mensualité.';
+    scheduleAutosave();
+    return;
+  }
+  const n = dureeAns * 12;
+  const tauxMensuel = (taux / 100) / 12;
+  let mensualiteCredit;
+  if (tauxMensuel > 0) {
+    mensualiteCredit = montant * tauxMensuel / (1 - Math.pow(1 + tauxMensuel, -n));
+  } else {
+    mensualiteCredit = montant / n;
+  }
+  const mensualiteAssurance = (montant * (assurance / 100)) / 12;
+  const total = mensualiteCredit + mensualiteAssurance;
+
+  box.innerHTML = `Mensualité estimée : <strong>${fmtEur(total)}</strong> / mois
+    <div style="font-size:11px;margin-top:4px;color:var(--text2)">dont crédit ${fmtEur(mensualiteCredit)} + assurance ${fmtEur(mensualiteAssurance)} · coût total du crédit ≈ ${fmtEur(mensualiteCredit*n - montant)}</div>`;
+  scheduleAutosave();
+}
+
+function scheduleAutosave() {
+  clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => saveDossier(false), 1500);
+}
+
+function collectFormData() {
+  return {
+    projetId: currentProjet ? currentProjet.projetId : null,
+    projetNom: currentProjet ? currentProjet.nom : '',
+    checklist: currentDossier.checklist || {},
+    financement: {
+      coutTotal: document.getElementById('f-cout-total').value,
+      apport: document.getElementById('f-apport').value,
+      montantPret: document.getElementById('f-montant-pret').value,
+      duree: document.getElementById('f-duree').value,
+      taux: document.getElementById('f-taux').value,
+      assurance: document.getElementById('f-assurance').value,
+    },
+    calendrier: {
+      dateDemarrage: document.getElementById('f-date-demarrage').value,
+      dureeTravaux: document.getElementById('f-duree-travaux').value,
+      jalons: document.getElementById('f-jalons').value,
+    },
+    notes: document.getElementById('f-notes').value,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+async function saveDossier(showToast) {
+  if (!currentProjet || !currentProjet.projetId) {
+    if (showToast) toast('Impossible d\'enregistrer : aucun projet lié');
+    return;
+  }
+  const data = collectFormData();
+  currentDossier = { ...currentDossier, ...data };
+  await window._fbFin.saveDossier(currentProjet.projetId, currentDossier);
+  if (showToast) toast('✓ Dossier enregistré');
+}
+
+function fillForm(data) {
+  if (!data) return;
+  currentDossier = data;
+  const fin = data.financement || {};
+  const cal = data.calendrier || {};
+  document.getElementById('f-cout-total').value    = fin.coutTotal || '';
+  document.getElementById('f-apport').value        = fin.apport || '';
+  document.getElementById('f-montant-pret').value  = fin.montantPret || '';
+  document.getElementById('f-duree').value         = fin.duree || 20;
+  document.getElementById('f-taux').value          = fin.taux || 3.5;
+  document.getElementById('f-assurance').value     = fin.assurance || 0.3;
+  document.getElementById('f-date-demarrage').value= cal.dateDemarrage || '';
+  document.getElementById('f-duree-travaux').value = cal.dureeTravaux || '';
+  document.getElementById('f-jalons').value        = cal.jalons || '';
+  document.getElementById('f-notes').value         = data.notes || '';
+  renderChecklist();
+  calcMensualite();
+}
+
+// ── Génération du PDF de synthèse pour la banque ──
+function genererPDF() {
+  const { jsPDF } = window.jspdf;
+  const docPdf = new jsPDF();
+  const navy = [27, 45, 91];
+  const accent = [74, 156, 199];
+  let y = 20;
+
+  docPdf.setFont('helvetica', 'bold');
+  docPdf.setFontSize(18);
+  docPdf.setTextColor(...navy);
+  docPdf.text('Phénix-Architecture', 15, y);
+  docPdf.setFontSize(11);
+  docPdf.setFont('helvetica', 'normal');
+  docPdf.setTextColor(...accent);
+  y += 7;
+  docPdf.text('Dossier de synthèse — Demande de financement', 15, y);
+  docPdf.setDrawColor(...accent);
+  y += 4;
+  docPdf.line(15, y, 195, y);
+  y += 10;
+
+  docPdf.setTextColor(15, 30, 61);
+  docPdf.setFontSize(10);
+  const client = currentProjet ? (currentProjet.client || '—') : '—';
+  const adresse = currentProjet ? (currentProjet.adresse || '—') : '—';
+  const surface = currentProjet ? (currentProjet.surface ? currentProjet.surface + ' m²' : '—') : '—';
+  const ref = currentProjet ? (currentProjet.ref || '—') : '—';
+
+  docPdf.setFont('helvetica', 'bold');
+  docPdf.text('Client :', 15, y); docPdf.setFont('helvetica', 'normal'); docPdf.text(String(client), 45, y);
+  y += 6;
+  docPdf.setFont('helvetica', 'bold');
+  docPdf.text('Référence projet :', 15, y); docPdf.setFont('helvetica', 'normal'); docPdf.text(String(ref), 45, y);
+  y += 6;
+  docPdf.setFont('helvetica', 'bold');
+  docPdf.text('Adresse du projet :', 15, y); docPdf.setFont('helvetica', 'normal'); docPdf.text(String(adresse), 45, y);
+  y += 6;
+  docPdf.setFont('helvetica', 'bold');
+  docPdf.text('Surface :', 15, y); docPdf.setFont('helvetica', 'normal'); docPdf.text(String(surface), 45, y);
+  y += 12;
+
+  // Plan de financement
+  const fin = currentDossier.financement || {};
+  docPdf.setFont('helvetica', 'bold'); docPdf.setFontSize(12); docPdf.setTextColor(...navy);
+  docPdf.text('Plan de financement', 15, y); y += 3;
+  docPdf.setDrawColor(...accent); docPdf.line(15, y, 195, y); y += 7;
+  docPdf.setFontSize(10); docPdf.setTextColor(15, 30, 61);
+
+  const finRows = [
+    ['Coût total des travaux', fin.coutTotal ? fmtEur(fin.coutTotal) : '—'],
+    ['Apport personnel', fin.apport ? fmtEur(fin.apport) : '—'],
+    ['Montant du prêt sollicité', fin.montantPret ? fmtEur(fin.montantPret) : '—'],
+    ['Durée souhaitée', fin.duree ? fin.duree + ' ans' : '—'],
+    ['Taux indicatif', fin.taux ? fin.taux + ' %/an' : '—'],
+  ];
+  finRows.forEach(([label, val]) => {
+    docPdf.setFont('helvetica', 'normal');
+    docPdf.text(label + ' :', 20, y);
+    docPdf.setFont('helvetica', 'bold');
+    docPdf.text(String(val), 100, y);
+    y += 6;
+  });
+  y += 6;
+
+  // Calendrier
+  const cal = currentDossier.calendrier || {};
+  docPdf.setFont('helvetica', 'bold'); docPdf.setFontSize(12); docPdf.setTextColor(...navy);
+  docPdf.text('Calendrier prévisionnel', 15, y); y += 3;
+  docPdf.setDrawColor(...accent); docPdf.line(15, y, 195, y); y += 7;
+  docPdf.setFontSize(10); docPdf.setTextColor(15, 30, 61);
+  docPdf.setFont('helvetica', 'normal');
+  docPdf.text('Démarrage prévisionnel : ' + (cal.dateDemarrage || '—'), 20, y); y += 6;
+  docPdf.text('Durée estimée : ' + (cal.dureeTravaux ? cal.dureeTravaux + ' mois' : '—'), 20, y); y += 6;
+  if (cal.jalons) {
+    const jalonsLines = docPdf.splitTextToSize(cal.jalons, 170);
+    docPdf.text(jalonsLines, 20, y);
+    y += jalonsLines.length * 5;
+  }
+  y += 6;
+
+  // Checklist
+  if (y > 240) { docPdf.addPage(); y = 20; }
+  docPdf.setFont('helvetica', 'bold'); docPdf.setFontSize(12); docPdf.setTextColor(...navy);
+  docPdf.text('Pièces du dossier', 15, y); y += 3;
+  docPdf.setDrawColor(...accent); docPdf.line(15, y, 195, y); y += 7;
+  docPdf.setFontSize(9.5);
+
+  const cl = currentDossier.checklist || {};
+  CHECKLIST_DEFS.forEach(def => {
+    if (y > 280) { docPdf.addPage(); y = 20; }
+    const item = cl[def.key] || { status: 'manquant' };
+    const statusLabel = item.status === 'obtenu' ? 'Obtenu' : item.status === 'attente' ? 'En attente' : 'Manquant';
+    const statusColor = item.status === 'obtenu' ? [45,122,79] : item.status === 'attente' ? [138,96,32] : [192,57,43];
+    docPdf.setTextColor(15, 30, 61);
+    docPdf.setFont('helvetica', 'normal');
+    docPdf.text('• ' + def.label, 20, y);
+    docPdf.setTextColor(...statusColor);
+    docPdf.setFont('helvetica', 'bold');
+    docPdf.text(statusLabel, 165, y);
+    y += 6;
+  });
+
+  // Footer
+  const pageCount = docPdf.internal.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    docPdf.setPage(i);
+    docPdf.setFontSize(8);
+    docPdf.setTextColor(139, 165, 192);
+    docPdf.setFont('helvetica', 'normal');
+    docPdf.text('Phénix-Architecture EURL · Maître d\'œuvre · Saint-Georges-de-Mons (63780) · contact@phenixarchitecte.fr · 04 73 73 00 59', 15, 290);
+  }
+
+  const filename = 'Dossier-financement-' + (client !== '—' ? client.replace(/\s+/g, '-') : 'client') + '.pdf';
+  docPdf.save(filename);
+}
+
+// ── Démarrage ──
+window.addEventListener('firebase-ready', async () => {
+  document.getElementById('app').style.display = '';
+  loadHandoff();
+  renderChecklist();
+  calcMensualite();
+
+  if (currentProjet && currentProjet.projetId) {
+    const existing = await window._fbFin.getDossierOnce(currentProjet.projetId);
+    if (existing) fillForm(existing);
+    // Écoute temps réel (utile si plusieurs onglets ouverts)
+    window._fbFin.listenDossier(currentProjet.projetId, (data) => {
+      if (data && JSON.stringify(data) !== JSON.stringify(currentDossier)) {
+        // Ne pas écraser une saisie en cours brutalement — simple mise à jour silencieuse en arrière-plan
+      }
+    });
+  }
+});
+</script>
+</body>
+</html>

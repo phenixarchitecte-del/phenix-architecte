@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<title>Phénix-Architecture · Générateur de Contrats</title>
+
+<script type="module">
+import { initializeApp }       from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getFirestore,
+         doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { getAuth, signInWithEmailAndPassword, signOut,
+         onAuthStateChanged }  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+
+const firebaseConfig = {
+  apiKey:            "AIzaSyCjNKNvS6p3nqE6-_Gw9I397ZtXm2FG1ew",
+  authDomain:        "phenix-architecte-9151b.firebaseapp.com",
+  projectId:         "phenix-architecte-9151b",
+  storageBucket:     "phenix-architecte-9151b.firebasestorage.app",
+  messagingSenderId: "811231684720",
+  appId:             "1:811231684720:web:413fa324ae43c07607acb5"
+};
+
+const app  = initializeApp(firebaseConfig);
+const db   = getFirestore(app);
+const auth = getAuth(app);
+
+window._fbContrat = {
+  async saveContrat(id, data) {
+    await setDoc(doc(db, 'phenix_contrats', String(id)), data);
+  },
+  async getContratOnce(id) {
+    const snap = await getDoc(doc(db, 'phenix_contrats', String(id)));
+    return snap.exists() ? snap.data() : null;
+  }
+};
+
+window._auth = {
+  login:  (e, p) => signInWithEmailAndPassword(auth, e, p),
+  logout: () => signOut(auth),
+  current: () => auth.currentUser
+};
+window.phenixDoLogin = function(){
+  const email = (document.getElementById('pl-email').value || '').trim();
+  const pwd   = document.getElementById('pl-pwd').value || '';
+  const err   = document.getElementById('pl-err'); if (err) err.textContent = '';
+  const btn   = document.getElementById('pl-btn'); if (btn) btn.disabled = true;
+  window._auth.login(email, pwd).catch(e => {
+    const c = (e && e.code) || '';
+    if (err) err.textContent =
+      (c.indexOf('invalid-credential')>=0 || c.indexOf('wrong-password')>=0 || c.indexOf('user-not-found')>=0) ? 'E-mail ou mot de passe incorrect.' :
+      c.indexOf('operation-not-allowed')>=0 ? "Activez « E-mail/Mot de passe » dans Firebase → Authentication." :
+      c.indexOf('invalid-email')>=0 ? 'E-mail invalide.' :
+      c.indexOf('too-many-requests')>=0 ? 'Trop de tentatives, réessayez plus tard.' :
+      c.indexOf('network')>=0 ? 'Pas de connexion internet.' :
+      ('Erreur : ' + (c || (e && e.message) || ''));
+  }).finally(() => { if (btn) btn.disabled = false; });
+};
+let _dispatched = false;
+onAuthStateChanged(auth, user => {
+  const ov = document.getElementById('phenix-login');
+  if (user) {
+    if (ov) ov.style.display = 'none';
+    if (!_dispatched) { _dispatched = true; window.dispatchEvent(new Event('firebase-ready')); }
+  } else {
+    if (ov) ov.style.display = 'flex';
+  }
+});
+</script>
+
+<style>
+:root {
+  --bg:#F0F4F8; --bg2:#E4ECF3; --bg3:#D4E2EC;
+  --card:#FFFFFF;
+  --text:#0F1E3D; --text2:#4A6080; --text3:#8BA5C0;
+  --border:#C8D8E8;
+  --accent:#4A9CC7; --accent2:#2A5298; --accent-bg:#E8F4FB;
+  --navy:#1B2D5B; --navy2:#2A3F6F;
+  --green:#2D7A4F; --green-bg:#E3F5EC;
+  --amber:#8A6020; --amber-bg:#FDF3DC;
+  --red:#C0392B; --red-bg:#FDECEB;
+  --font-serif:'DM Serif Display',Georgia,serif;
+  --font-sans:'DM Sans',sans-serif;
+  --r-sm:5px; --r-md:9px; --r-lg:13px;
+  --shadow:0 1px 4px rgba(15,30,61,.07),0 1px 2px rgba(15,30,61,.04);
+  --shadow-md:0 4px 16px rgba(15,30,61,.1),0 2px 6px rgba(15,30,61,.06);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans);background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+
+#phenix-login{display:flex;position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#0F1E3D,#1B2D5B,#2A5298);align-items:center;justify-content:center;padding:20px;font-family:'DM Sans',system-ui,sans-serif}
+#phenix-login .box{background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.18);border-radius:16px;padding:34px 28px;max-width:360px;width:100%;text-align:center}
+#phenix-login .logo{font-family:'DM Serif Display',Georgia,serif;font-size:30px;color:#fff;margin-bottom:4px}
+#phenix-login .logo span{color:#7DC6E8}
+#phenix-login .sub{font-size:11px;color:rgba(255,255,255,.5);letter-spacing:.12em;text-transform:uppercase;margin-bottom:26px}
+#phenix-login input{width:100%;padding:12px 14px;margin-bottom:10px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.95);font-size:14px;outline:none;font-family:inherit}
+#phenix-login button{width:100%;padding:12px;border:none;border-radius:9px;background:linear-gradient(135deg,#4A9CC7,#2A5298);color:#fff;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}
+#pl-err{color:#FFB4A8;font-size:12.5px;margin-top:12px;min-height:16px}
+
+.topbar{background:var(--navy);color:#fff;padding:14px 24px;display:flex;align-items:center;gap:14px;box-shadow:var(--shadow-md);position:sticky;top:0;z-index:500}
+.topbar-title{font-family:var(--font-serif);font-size:19px;flex:1}
+.topbar-title span{color:#7DC6E8}
+.topbar .btn{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2);color:#fff}
+.topbar .btn:hover{background:rgba(255,255,255,.2)}
+.content{max-width:960px;margin:0 auto;padding:2rem 1.5rem 5rem}
+.page-title{font-family:var(--font-serif);font-size:26px;color:var(--navy)}
+.page-subtitle{font-size:13px;color:var(--text2);margin-top:2px}
+
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;font-size:13px;font-family:var(--font-sans);border-radius:var(--r-md);cursor:pointer;border:1.5px solid var(--border);background:var(--card);color:var(--text);transition:all .15s;font-weight:500;white-space:nowrap}
+.btn:hover{background:var(--bg);border-color:var(--accent);color:var(--navy)}
+.btn-primary{background:linear-gradient(135deg,#4A9CC7,#2A5298);border-color:transparent;color:#fff}
+.btn-primary:hover{filter:brightness(1.08);color:#fff}
+.btn-sm{padding:6px 11px;font-size:12px}
+.btn-ai{background:rgba(74,156,199,.1);border-color:rgba(74,156,199,.35);color:var(--accent2)}
+.btn-ai:hover{background:rgba(74,156,199,.2);color:var(--navy)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:1.25rem 1.5rem;margin-bottom:1.25rem;box-shadow:var(--shadow)}
+.card-title{font-size:14px;font-weight:700;color:var(--navy);display:flex;align-items:center;gap:8px;margin-bottom:1rem}
+.card-title i{color:var(--accent)}
+
+.type-toggle{display:flex;gap:10px;margin-bottom:1.25rem}
+.type-btn{flex:1;padding:16px;border:2px solid var(--border);border-radius:var(--r-lg);background:var(--card);cursor:pointer;text-align:center;transition:all .15s}
+.type-btn:hover{border-color:var(--accent)}
+.type-btn.active{border-color:var(--accent2);background:var(--accent-bg)}
+.type-btn .ti{font-size:26px;color:var(--accent2);margin-bottom:6px;display:block}
+.type-btn .tt{font-weight:700;color:var(--navy);font-size:14px}
+.type-btn .ts{font-size:11px;color:var(--text2);margin-top:2px}
+
+.warn-box{background:var(--amber-bg);color:var(--amber);border-radius:var(--r-md);padding:14px 16px;font-size:12.5px;margin-bottom:1.25rem;display:flex;gap:10px;align-items:flex-start;border:1px solid rgba(138,96,32,.25)}
+.warn-box.risk{background:var(--red-bg);color:var(--red);border-color:rgba(192,57,43,.25)}
+.warn-box i{font-size:18px;flex-shrink:0;margin-top:1px}
+.warn-box ul{margin:6px 0 0 18px}
+
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-group{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+.form-group label{font-size:11px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.06em}
+.form-group input,.form-group textarea,.form-group select{
+  font-size:13px;padding:8px 10px;border-radius:var(--r-sm);border:1.5px solid var(--border);
+  background:var(--bg);color:var(--text);font-family:var(--font-sans);
+}
+.form-group input:focus,.form-group textarea:focus,.form-group select:focus{outline:none;border-color:var(--accent)}
+.form-group textarea{resize:vertical;min-height:50px}
+
+.phase-checks{display:flex;flex-wrap:wrap;gap:6px}
+.phase-chip{padding:6px 12px;border-radius:20px;border:1.5px solid var(--border);font-size:12px;font-weight:600;cursor:pointer;background:var(--bg);color:var(--text2)}
+.phase-chip.on{background:var(--accent2);border-color:var(--accent2);color:#fff}
+
+.cat-title{font-size:11px;font-weight:700;color:var(--accent2);text-transform:uppercase;letter-spacing:.08em;margin:1.1rem 0 .5rem;padding-top:.6rem;border-top:1px solid var(--bg2)}
+.cat-title:first-child{margin-top:0;padding-top:0;border-top:none}
+
+.clause{border:1.5px solid var(--border);border-radius:var(--r-md);margin-bottom:9px;overflow:hidden}
+.clause-head{display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer;background:var(--card)}
+.clause-head:hover{background:var(--bg)}
+.clause.open .clause-head{border-bottom:1px solid var(--border)}
+.clause-check{width:18px;height:18px;flex-shrink:0;accent-color:var(--accent2);cursor:pointer}
+.clause-label{flex:1;font-size:13px;font-weight:600}
+.clause-badge{font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:20px;text-transform:uppercase;letter-spacing:.04em}
+.clause-badge.ccmi{background:var(--red-bg);color:var(--red)}
+.clause-badge.reco{background:var(--green-bg);color:var(--green)}
+.clause-chevron{color:var(--text3);transition:transform .15s;font-size:14px}
+.clause.open .clause-chevron{transform:rotate(90deg)}
+.clause-body{display:none;padding:12px;background:var(--bg)}
+.clause.open .clause-body{display:block}
+.clause-body textarea{width:100%;min-height:110px;font-size:12.5px;padding:10px;border-radius:var(--r-sm);border:1.5px solid var(--border);background:var(--card);font-family:var(--font-sans);resize:vertical;line-height:1.5}
+.clause-actions{display:flex;gap:8px;margin-top:8px;align-items:center}
+.clause-ai-note{font-size:11px;color:var(--text3);flex:1}
+
+.footer-actions{position:sticky;bottom:0;background:var(--card);border-top:1px solid var(--border);padding:14px 1.5rem;display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;box-shadow:0 -2px 10px rgba(15,30,61,.06)}
+.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;border-radius:var(--r-sm);font-size:12px;padding:8px 16px;box-shadow:var(--shadow-md);opacity:0;pointer-events:none;transition:opacity .25s;z-index:9999}
+.toast.show{opacity:1}
+.info-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:1.25rem}
+.info-field{background:var(--bg);border-radius:var(--r-sm);padding:9px 12px}
+.info-field .lbl{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px}
+.info-field .val{font-size:13px;font-weight:600;color:var(--text)}
+</style>
+</head>
+<body>
+
+<div id="phenix-login">
+  <div class="box">
+    <div class="logo">Phénix<span>-Architecture</span></div>
+    <div class="sub">Connexion sécurisée</div>
+    <input id="pl-email" type="email" autocomplete="username" placeholder="E-mail">
+    <input id="pl-pwd" type="password" autocomplete="current-password" placeholder="Mot de passe" onkeydown="if(event.key==='Enter')phenixDoLogin()">
+    <button id="pl-btn" onclick="phenixDoLogin()">Se connecter</button>
+    <div id="pl-err"></div>
+  </div>
+</div>
+
+<div id="app" style="display:none">
+  <div class="topbar">
+    <button class="btn btn-sm" onclick="window.close()"><i class="ti ti-arrow-left"></i> Retour au dossier</button>
+    <div class="topbar-title">Générateur de <span>Contrats</span></div>
+    <button class="btn btn-sm" onclick="window._auth.logout()"><i class="ti ti-logout"></i> Déconnexion</button>
+  </div>
+
+  <div class="content">
+    <div class="page-title" id="pageTitle">Contrat</div>
+    <div class="page-subtitle" id="pageSubtitle" style="margin-bottom:1.5rem">Chargement…</div>
+
+    <div id="noProjectWarn" class="warn-box" style="display:none">
+      <i class="ti ti-alert-triangle"></i>
+      <div>Aucun projet transmis depuis Phénix Dossier. Ouvrez ce module depuis la fiche projet (bouton « Générer un contrat ») pour préremplir automatiquement les informations client.</div>
+    </div>
+
+    <div class="card" id="infoCard" style="display:none">
+      <div class="card-title"><i class="ti ti-user"></i> Client &amp; projet</div>
+      <div class="info-grid">
+        <div class="info-field"><div class="lbl">Client</div><div class="val" id="i-client">—</div></div>
+        <div class="info-field"><div class="lbl">Référence</div><div class="val" id="i-ref">—</div></div>
+        <div class="info-field" style="grid-column:span 2"><div class="lbl">Adresse du projet</div><div class="val" id="i-adresse">—</div></div>
+        <div class="info-field"><div class="lbl">Surface</div><div class="val" id="i-surface">—</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><i class="ti ti-file-signature"></i> Type de contrat</div>
+      <div class="type-toggle">
+        <div class="type-btn active" id="typebtn-moe" onclick="setContractType('moe')">
+          <i class="ti ti-ruler-2"></i>
+          <div class="tt">Maîtrise d'œuvre</div>
+          <div class="ts">Conception + suivi, entreprises choisies par le client</div>
+        </div>
+        <div class="type-btn" id="typebtn-cg" onclick="setContractType('cg')">
+          <i class="ti ti-building"></i>
+          <div class="tt">Contractant général</div>
+          <div class="ts">Vous portez l'exécution des travaux</div>
+        </div>
+      </div>
+
+      <div id="warnMoe" class="warn-box" style="display:none">
+        <i class="ti ti-shield-check"></i>
+        <div><strong>Vigilance requalification CCMI.</strong> Pour une maison individuelle (≤ 2 logements), un contrat MOE peut être requalifié en CCMI si vous annoncez un prix de construction ferme avant signature des marchés de travaux, ou si le client n'a pas de liberté réelle de choix des entreprises. Gardez activées les clauses « Vigilance CCMI » ci-dessous.</div>
+      </div>
+      <div id="warnCg" class="warn-box risk" style="display:none">
+        <i class="ti ti-alert-triangle"></i>
+        <div><strong>Vérifiez le régime applicable avant de signer.</strong> Si ce projet est une maison individuelle (ou un immeuble ≤ 2 logements) et que vous prenez en charge le gros œuvre et la mise hors d'eau/hors d'air, la loi vous impose un <strong>CCMI</strong> (Code de la construction, art. L.231-2) — un simple contrat d'entreprise est insuffisant et expose à une amende de 300 000 € et à la nullité. Ce module génère un contrat d'entreprise classique ; pour un CCMI réglementaire, une trame spécifique et une relecture par un professionnel du droit sont recommandées.</div>
+      </div>
+
+      <div class="form-grid" style="margin-top:1rem">
+        <div class="form-group"><label>Nature du bien</label>
+          <select id="f-nature">
+            <option value="maison_individuelle">Maison individuelle (≤ 2 logements)</option>
+            <option value="renovation">Rénovation / extension</option>
+            <option value="collectif">Collectif / plusieurs logements</option>
+            <option value="professionnel">Local professionnel / ERP</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Date du contrat</label><input type="date" id="f-date"></div>
+        <div class="form-group"><label>Honoraires / Prix (€ HT)</label><input type="number" id="f-montant"></div>
+        <div class="form-group"><label>Lieu de signature</label><input type="text" id="f-lieu" placeholder="Saint-Georges-de-Mons"></div>
+      </div>
+
+      <div id="phaseBlock" class="form-group">
+        <label>Phases de mission confiées (MOE)</label>
+        <div class="phase-checks" id="phaseChecks"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><i class="ti ti-list-check"></i> Clauses du contrat</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:1rem">Cochez les clauses à inclure. Cliquez sur une clause pour voir / modifier son texte, ou demander une proposition adaptée par IA.</div>
+      <div id="clauseLibrary"></div>
+    </div>
+  </div>
+
+  <div class="footer-actions">
+    <button class="btn" onclick="saveContrat()"><i class="ti ti-device-floppy"></i> Enregistrer</button>
+    <button class="btn" onclick="genererWord()"><i class="ti ti-file-word"></i> Télécharger en Word</button>
+    <button class="btn btn-primary" onclick="genererPDF()"><i class="ti ti-file-download"></i> Télécharger en PDF</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const FIRM = {
+  nom: "Phénix-Architecture EURL",
+  siret: "987 989 316 00011",
+  adresse: "Saint-Georges-de-Mons, 63780, Auvergne",
+  representant: "Maxime Suchet, gérant",
+  contact: "contact@phenixarchitecte.fr · 04 73 73 00 59",
+  qualite: "maître d'œuvre (diplômé d'État en architecture, non inscrit à l'Ordre des architectes)"
+};
+
+const PHASES = ['ESQ','APS','APD','PC','DCE','ACT','DET','AOR'];
+const PHASES_LABELS = {ESQ:'Esquisse',APS:'Avant-projet sommaire',APD:'Avant-projet détaillé',PC:'Permis de construire',DCE:'Dossier de consultation',ACT:'Assistance contrats travaux',DET:'Direction exécution travaux',AOR:'Assistance opérations réception'};
+
+// ── Bibliothèque de clauses ──────────────────────────────────
+const CLAUSES_MOE = [
+  { key:'parties', cat:'Parties & objet', label:"Identification des parties", defaultOn:true,
+    text:"ENTRE LES SOUSSIGNÉS :\n{{firmNom}}, EURL, SIRET {{firmSiret}}, sise {{firmAdresse}}, représentée par {{firmRepresentant}}, agissant en qualité de {{firmQualite}}, ci-après dénommée « le Maître d'Œuvre »,\nET\n{{client}}, ci-après dénommé « le Maître d'Ouvrage »,\nIl a été convenu ce qui suit :" },
+  { key:'objet', cat:'Parties & objet', label:"Objet de la mission", defaultOn:true,
+    text:"Le présent contrat a pour objet de définir les conditions dans lesquelles le Maître d'Œuvre assure une mission de maîtrise d'œuvre pour l'opération suivante : construction/rénovation sise {{adresse}}, d'une surface de {{surface}} m², ci-après « l'Opération »." },
+  { key:'mission', cat:'Mission', label:"Étendue de la mission (phases)", defaultOn:true,
+    text:"Le Maître d'Œuvre assure les phases suivantes : {{phasesListe}}. Toute prestation non expressément listée ci-dessus est exclue de la présente mission et fera l'objet d'un avenant écrit et chiffré préalablement à son exécution." },
+  { key:'vigilance_prix', cat:'Vigilance CCMI', label:"Absence d'engagement sur un prix de construction ferme", defaultOn:true, risk:'ccmi',
+    text:"Il est expressément rappelé que le Maître d'Œuvre n'intervient pas en qualité de constructeur. Le Maître d'Œuvre n'annonce et ne garantit aucun prix ferme et définitif de construction avant que les marchés de travaux n'aient été négociés et signés directement par le Maître d'Ouvrage avec les entreprises de son choix. Les estimations transmises en phase d'études ont une valeur indicative et prévisionnelle." },
+  { key:'vigilance_choix', cat:'Vigilance CCMI', label:"Liberté de choix des entreprises", defaultOn:true, risk:'ccmi',
+    text:"Le Maître d'Ouvrage conserve l'entière liberté de sélectionner, négocier et contracter directement avec les entreprises de travaux de son choix, sur la base du dossier de consultation établi par le Maître d'Œuvre. Le rôle du Maître d'Œuvre se limite à l'assistance, au conseil et à la mise en concurrence, sans qu'aucune entreprise ne lui soit imposée." },
+  { key:'honoraires', cat:'Honoraires', label:"Montant et modalités des honoraires", defaultOn:true,
+    text:"Les honoraires du Maître d'Œuvre s'élèvent à {{montant}} € HT, décomposés par phase selon l'annexe financière. Ils sont payables selon l'échéancier suivant : acompte à la signature, puis règlements à l'achèvement de chaque phase visée à l'article Mission." },
+  { key:'avenant', cat:'Mission', label:"Modification de programme / avenant", defaultOn:true,
+    text:"Toute modification du programme initial, ajout de prestation ou évolution significative de la surface donne lieu à un avenant écrit, chiffré et signé par les deux parties préalablement à son exécution." },
+  { key:'revision', cat:'Honoraires', label:"Révision des honoraires", defaultOn:false,
+    text:"En cas d'allongement de la mission au-delà de {{dureeRevision}} mois pour une cause non imputable au Maître d'Œuvre, les honoraires restant dus pourront être révisés selon l'indice Syntec en vigueur à la date de la présente." },
+  { key:'resiliation', cat:'Résiliation', label:"Résiliation du contrat", defaultOn:true,
+    text:"Chaque partie peut résilier le présent contrat par lettre recommandée avec accusé de réception, moyennant un préavis de 30 jours. En cas de résiliation, les honoraires correspondant aux phases achevées et aux travaux engagés restent dus au Maître d'Œuvre. Toute résiliation abusive du fait du Maître d'Ouvrage ouvre droit à une indemnisation du préjudice subi." },
+  { key:'assurance', cat:'Assurances & responsabilité', label:"Assurance responsabilité civile professionnelle", defaultOn:true,
+    text:"Le Maître d'Œuvre déclare être titulaire d'une assurance responsabilité civile professionnelle couvrant les conséquences pécuniaires de sa responsabilité civile professionnelle, dont l'attestation est jointe en annexe." },
+  { key:'mediation', cat:'Litiges', label:"Médiation de la consommation", defaultOn:true,
+    text:"Conformément aux articles L.616-1 et suivants du Code de la consommation, en cas de litige non résolu à l'amiable, le Maître d'Ouvrage, s'il a la qualité de consommateur, peut recourir gratuitement au médiateur de la consommation dont les coordonnées sont : {{mediateur}}." },
+  { key:'retractation', cat:'Litiges', label:"Droit de rétractation (si contrat hors établissement)", defaultOn:true,
+    text:"Si le présent contrat est conclu hors établissement (au domicile du Maître d'Ouvrage notamment), celui-ci dispose d'un délai de rétractation de 14 jours à compter de sa signature, conformément à l'article L.221-18 du Code de la consommation, sans avoir à justifier de motif ni à supporter de pénalité." },
+  { key:'financement', cat:'Litiges', label:"Non-conditionnalité au financement (mention manuscrite recommandée)", defaultOn:false,
+    text:"Le Maître d'Ouvrage déclare, le cas échéant par mention manuscrite portée sur le présent contrat, avoir été informé que le recours à un financement bancaire est de sa seule initiative et que le remboursement des honoraires ne pourra être exigé du seul fait d'un refus de prêt, sauf accord contraire exprès entre les parties." },
+  { key:'patrimoine', cat:'Clauses spécifiques', label:"Bâti ancien / patrimoine", defaultOn:false,
+    text:"L'Opération portant sur un bâtiment existant, le Maître d'Œuvre attire l'attention du Maître d'Ouvrage sur les aléas inhérents à la rénovation (désordres cachés, structure existante, mise aux normes). Une réserve pour aléas techniques est recommandée dans le budget prévisionnel des travaux." },
+];
+
+const CLAUSES_CG = [
+  { key:'parties_cg', cat:'Parties & objet', label:"Identification des parties", defaultOn:true,
+    text:"ENTRE LES SOUSSIGNÉS :\n{{firmNom}}, EURL, SIRET {{firmSiret}}, sise {{firmAdresse}}, représentée par {{firmRepresentant}}, agissant en qualité de contractant général, ci-après dénommée « l'Entreprise »,\nET\n{{client}}, ci-après dénommé « le Maître d'Ouvrage »,\nIl a été convenu ce qui suit :" },
+  { key:'objet_cg', cat:'Parties & objet', label:"Objet et prix forfaitaire", defaultOn:true,
+    text:"L'Entreprise s'engage à réaliser les travaux décrits en annexe (DPGF) sur le bien sis {{adresse}}, d'une surface de {{surface}} m², moyennant un prix global et forfaitaire de {{montant}} € HT, non révisable sauf travaux supplémentaires acceptés par avenant." },
+  { key:'echeancier', cat:'Prix & paiement', label:"Échéancier de paiement", defaultOn:true,
+    text:"Le prix est payé selon l'échéancier suivant, établi en fonction de l'avancement des travaux : acompte à la signature, puis appels de fonds à chaque étape clé du chantier. Si le présent contrat relève du régime du CCMI, les plafonds légaux de l'article R.231-7 du Code de la construction et de l'habitation s'appliquent impérativement (15 % ouverture de chantier, 25 % fondations, 40 % mise hors d'eau, 60 % mise hors d'air, 75 % cloisons, 95 % achèvement, solde de 5 % à la réception)." },
+  { key:'delai', cat:'Délais', label:"Délai d'exécution et pénalités de retard", defaultOn:true,
+    text:"Les travaux débuteront le {{dateOuverture}} pour une durée prévisionnelle de {{dureeTravaux}}. Tout retard imputable à l'Entreprise, non justifié par une cause légitime, donne lieu à une pénalité de {{penaliteRetard}} par jour calendaire de retard." },
+  { key:'decennale', cat:'Garanties & assurances', label:"Garantie décennale", defaultOn:true,
+    text:"L'Entreprise déclare être titulaire d'une assurance responsabilité civile décennale couvrant les travaux objet du présent contrat, conformément aux articles 1792 et suivants du Code civil, dont l'attestation est jointe en annexe." },
+  { key:'do', cat:'Garanties & assurances', label:"Assurance dommages-ouvrage", defaultOn:true,
+    text:"Il est rappelé que le Maître d'Ouvrage a l'obligation légale de souscrire une assurance dommages-ouvrage avant l'ouverture du chantier, conformément à l'article L.242-1 du Code des assurances. Les références de cette police seront annexées au présent contrat." },
+  { key:'garantie_livraison', cat:'Garanties & assurances', label:"Garantie de livraison à prix et délais convenus (obligatoire si CCMI)", defaultOn:false, risk:'ccmi',
+    text:"Si le présent contrat relève du régime du contrat de construction de maison individuelle, l'Entreprise fournit une garantie de livraison à prix et délais convenus, souscrite auprès d'un établissement habilité, dont l'attestation est annexée au contrat, conformément à l'article L.231-6 du Code de la construction et de l'habitation." },
+  { key:'suspensives', cat:'Clauses suspensives', label:"Clauses suspensives (permis, financement, terrain)", defaultOn:true,
+    text:"Le présent contrat est conclu sous les conditions suspensives suivantes : obtention du permis de construire ou de l'autorisation d'urbanisme nécessaire ; obtention par le Maître d'Ouvrage du ou des financements nécessaires ; le cas échéant, acquisition définitive du terrain d'assiette. À défaut de réalisation de l'une de ces conditions dans un délai de {{delaiSuspensive}}, le contrat est résolu de plein droit sans indemnité de part ni d'autre." },
+  { key:'visite_chantier', cat:'Exécution', label:"Droit de visite du chantier", defaultOn:true, risk:'ccmi',
+    text:"Le Maître d'Ouvrage dispose d'un droit de visite du chantier avant chaque appel de fonds et lors de la réception des travaux. Ce droit ne peut être restreint par une clause imposant un préavis excessif, une telle clause étant réputée non écrite conformément à l'article L.231-3 du Code de la construction et de l'habitation lorsque le contrat relève du régime CCMI." },
+  { key:'reception', cat:'Exécution', label:"Réception des travaux et garantie de parfait achèvement", defaultOn:true,
+    text:"La réception des travaux intervient contradictoirement entre les parties, avec ou sans réserves, à l'issue de laquelle court la garantie de parfait achèvement d'un an prévue à l'article 1792-6 du Code civil. Le Maître d'Ouvrage peut se faire assister d'un professionnel habilité lors de cette opération." },
+  { key:'penale', cat:'Résiliation', label:"Clause pénale (manquement contractuel)", defaultOn:true,
+    text:"En cas de manquement de l'une des parties à ses obligations essentielles, non réparé dans un délai de 15 jours suivant mise en demeure restée infructueuse, la partie défaillante sera redevable d'une pénalité forfaitaire de {{penaliteManquement}} au titre du préjudice subi, sans préjudice de dommages et intérêts complémentaires." },
+  { key:'resiliation_cg', cat:'Résiliation', label:"Résiliation à l'initiative du Maître d'Ouvrage (clause de dédit)", defaultOn:true,
+    text:"Conformément à l'article 1794 du Code civil, le Maître d'Ouvrage peut résilier unilatéralement le présent contrat avant son achèvement, moyennant le dédommagement intégral de l'Entreprise : dépenses engagées, travaux déjà réalisés et gain manqué, dont le montant forfaitaire est fixé à {{indemniteDedit}} % du prix convenu." },
+  { key:'mediation_cg', cat:'Litiges', label:"Médiation de la consommation", defaultOn:true,
+    text:"Conformément aux articles L.616-1 et suivants du Code de la consommation, en cas de litige non résolu à l'amiable, le Maître d'Ouvrage, s'il a la qualité de consommateur, peut recourir gratuitement au médiateur de la consommation dont les coordonnées sont : {{mediateur}}." },
+  { key:'assurance_rcpro_cg', cat:'Garanties & assurances', label:"Assurance responsabilité civile professionnelle", defaultOn:true,
+    text:"L'Entreprise déclare être titulaire d'une assurance responsabilité civile professionnelle couvrant l'ensemble de son activité de contractant général, dont l'attestation est jointe en annexe." },
+];
+
+let currentProjet = null;
+let contractType = 'moe';
+let clauseState = {};      // { key: {on:bool, text:string} }
+let selectedPhases = {};   // { ESQ:true, ... }
+
+function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
+
+function loadHandoff(){
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlProjetId = urlParams.get('projet');
+  let payload = null;
+  try {
+    const raw = localStorage.getItem('phenix-open-in-contrat');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (!urlProjetId || String(parsed.projetId) === String(urlProjetId)) payload = parsed;
+    }
+  } catch(e){}
+  if (payload) currentProjet = payload;
+  else if (urlProjetId) currentProjet = { projetId:urlProjetId, nom:'', client:'', adresse:'', surface:'', ref:'' };
+
+  if (currentProjet) {
+    document.getElementById('noProjectWarn').style.display = 'none';
+    document.getElementById('infoCard').style.display = '';
+    document.getElementById('pageTitle').textContent = 'Contrat — ' + (currentProjet.nom || currentProjet.client || '');
+    document.getElementById('pageSubtitle').textContent = 'Projet ' + (currentProjet.ref || '');
+    document.getElementById('i-client').textContent  = currentProjet.client  || '—';
+    document.getElementById('i-ref').textContent      = currentProjet.ref    || '—';
+    document.getElementById('i-adresse').textContent  = currentProjet.adresse|| '—';
+    document.getElementById('i-surface').textContent  = currentProjet.surface ? currentProjet.surface + ' m²' : '—';
+    if (currentProjet.budget) document.getElementById('f-montant').value = currentProjet.budget;
+  } else {
+    document.getElementById('noProjectWarn').style.display = 'flex';
+  }
+}
+
+function renderPhaseChecks(){
+  const box = document.getElementById('phaseChecks');
+  box.innerHTML = PHASES.map(ph => `<div class="phase-chip ${selectedPhases[ph]?'on':''}" onclick="togglePhase('${ph}')" title="${PHASES_LABELS[ph]}">${ph}</div>`).join('');
+}
+function togglePhase(ph){ selectedPhases[ph] = !selectedPhases[ph]; renderPhaseChecks(); }
+
+function setContractType(type){
+  contractType = type;
+  document.getElementById('typebtn-moe').classList.toggle('active', type==='moe');
+  document.getElementById('typebtn-cg').classList.toggle('active', type==='cg');
+  document.getElementById('phaseBlock').style.display = type==='moe' ? '' : 'none';
+  updateWarnings();
+  initClauseState();
+  renderClauses();
+}
+
+function updateWarnings(){
+  const nature = document.getElementById('f-nature').value;
+  const isMaison = nature === 'maison_individuelle';
+  document.getElementById('warnMoe').style.display = (contractType==='moe' && isMaison) ? 'flex' : 'none';
+  document.getElementById('warnCg').style.display = (contractType==='cg' && isMaison) ? 'flex' : 'none';
+}
+
+function currentClauseDefs(){ return contractType==='moe' ? CLAUSES_MOE : CLAUSES_CG; }
+
+function initClauseState(){
+  clauseState = {};
+  currentClauseDefs().forEach(c => { clauseState[c.key] = { on: c.defaultOn, text: c.text }; });
+}
+
+function mergeFields(text){
+  const phasesListe = PHASES.filter(p=>selectedPhases[p]).map(p=>PHASES_LABELS[p]).join(', ') || '(à préciser)';
+  const map = {
+    firmNom: FIRM.nom, firmSiret: FIRM.siret, firmAdresse: FIRM.adresse,
+    firmRepresentant: FIRM.representant, firmQualite: FIRM.qualite,
+    client: (currentProjet && currentProjet.client) || '(client à préciser)',
+    adresse: (currentProjet && currentProjet.adresse) || '(adresse à préciser)',
+    surface: (currentProjet && currentProjet.surface) || '—',
+    montant: document.getElementById('f-montant').value || '(montant à préciser)',
+    phasesListe,
+    mediateur: '(coordonnées du médiateur de la consommation à compléter)',
+    dureeRevision: '12',
+    dateOuverture: '(date à préciser)',
+    dureeTravaux: '(durée à préciser)',
+    penaliteRetard: '(montant à préciser) €',
+    delaiSuspensive: '3 mois',
+    penaliteManquement: '(montant à préciser) €',
+    indemniteDedit: '10',
+  };
+  return text.replace(/\{\{(\w+)\}\}/g, (m,k) => map[k] !== undefined ? map[k] : m);
+}
+
+function renderClauses(){
+  const defs = currentClauseDefs();
+  const cats = [...new Set(defs.map(c=>c.cat))];
+  let html = '';
+  cats.forEach(cat => {
+    html += `<div class="cat-title">${cat}</div>`;
+    defs.filter(c=>c.cat===cat).forEach(c => {
+      const st = clauseState[c.key];
+      const badge = c.risk==='ccmi' ? '<span class="clause-badge ccmi">Vigilance CCMI</span>' : (c.defaultOn ? '<span class="clause-badge reco">Recommandée</span>' : '');
+      html += `
+        <div class="clause" id="clausebox-${c.key}">
+          <div class="clause-head" onclick="toggleClauseOpen('${c.key}')">
+            <input type="checkbox" class="clause-check" ${st.on?'checked':''} onclick="event.stopPropagation();toggleClauseOn('${c.key}')">
+            <div class="clause-label">${c.label}</div>
+            ${badge}
+            <i class="ti ti-chevron-right clause-chevron"></i>
+          </div>
+          <div class="clause-body">
+            <textarea id="clausetext-${c.key}" oninput="editClauseText('${c.key}', this.value)">${st.text}</textarea>
+            <div class="clause-actions">
+              <button class="btn btn-sm btn-ai" onclick="proposerClauseIA('${c.key}')" id="aibtn-${c.key}"><i class="ti ti-sparkles"></i> Proposer une clause adaptée (IA)</button>
+              <div class="clause-ai-note" id="ainote-${c.key}"></div>
+            </div>
+          </div>
+        </div>`;
+    });
+  });
+  document.getElementById('clauseLibrary').innerHTML = html;
+}
+
+function toggleClauseOpen(key){ document.getElementById('clausebox-'+key).classList.toggle('open'); }
+function toggleClauseOn(key){ clauseState[key].on = !clauseState[key].on; }
+function editClauseText(key, val){ clauseState[key].text = val; }
+
+async function proposerClauseIA(key){
+  const def = currentClauseDefs().find(c=>c.key===key);
+  const btn = document.getElementById('aibtn-'+key);
+  const note = document.getElementById('ainote-'+key);
+  btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2"></i> Rédaction…';
+  const nature = document.getElementById('f-nature').options[document.getElementById('f-nature').selectedIndex].text;
+  const contexte = `Dossier : client ${(currentProjet&&currentProjet.client)||'—'}, adresse ${(currentProjet&&currentProjet.adresse)||'—'}, surface ${(currentProjet&&currentProjet.surface)||'—'} m², nature du bien : ${nature}, type de contrat : ${contractType==='moe'?'maîtrise d\'œuvre':'contractant général'}, montant ${document.getElementById('f-montant').value||'—'} €.`;
+  try {
+    const res = await fetch('https://phenix-proxy.phenixarchitecte.workers.dev', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        model:'claude-sonnet-4-6', max_tokens:600,
+        system:"Tu es juriste spécialisé en droit de la construction française, rédigeant pour Phénix-Architecture (maître d'œuvre / contractant général non-architecte, Auvergne). Rédige UNIQUEMENT le texte de la clause demandée, en français juridique professionnel, sans titre ni markdown, prêt à insérer dans un contrat. Reste prudent sur le risque de requalification CCMI si pertinent. Utilise des espaces réservés entre doubles-accolades {{comme_ceci}} pour toute donnée variable manquante.",
+        messages:[{role:'user', content:`Rédige la clause « ${def.label} » (catégorie : ${def.cat}) pour ce dossier. ${contexte}\n\nClause actuelle à améliorer/adapter :\n${clauseState[key].text}`}]
+      })
+    });
+    const data = await res.json();
+    const text = data.content?.map(b=>b.text||'').join('') || '';
+    if (text) {
+      clauseState[key].text = text.trim();
+      document.getElementById('clausetext-'+key).value = text.trim();
+      note.textContent = '✓ Proposition IA insérée — relisez avant usage.';
+    } else {
+      note.textContent = '⚠️ Pas de réponse de l\'assistant.';
+    }
+  } catch(e) {
+    note.textContent = '⚠️ Assistant IA indisponible (vérifiez la connexion).';
+  }
+  btn.disabled = false; btn.innerHTML = '<i class="ti ti-sparkles"></i> Proposer une clause adaptée (IA)';
+}
+
+function collectFormData(){
+  return {
+    projetId: currentProjet ? currentProjet.projetId : null,
+    contractType,
+    nature: document.getElementById('f-nature').value,
+    date: document.getElementById('f-date').value,
+    montant: document.getElementById('f-montant').value,
+    lieu: document.getElementById('f-lieu').value,
+    phases: selectedPhases,
+    clauses: clauseState,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+async function saveContrat(){
+  if (!currentProjet || !currentProjet.projetId) { toast("Impossible d'enregistrer : aucun projet lié"); return; }
+  const id = currentProjet.projetId + '_' + contractType;
+  await window._fbContrat.saveContrat(id, collectFormData());
+  toast('✓ Contrat enregistré');
+}
+
+function assembleDocument(){
+  const defs = currentClauseDefs();
+  const title = contractType==='moe' ? "CONTRAT DE MAÎTRISE D'ŒUVRE" : "CONTRAT DE CONTRACTANT GÉNÉRAL";
+  const date = document.getElementById('f-date').value || '';
+  const lieu = document.getElementById('f-lieu').value || '';
+  const parts = defs.filter(c => clauseState[c.key].on).map((c,i) => ({
+    numero: i+1, titre: c.label, texte: mergeFields(clauseState[c.key].text)
+  }));
+  return { title, date, lieu, parts };
+}
+
+function genererPDF(){
+  const { jsPDF } = window.jspdf;
+  const d = assembleDocument();
+  const doc = new jsPDF();
+  const navy=[27,45,91], accent=[74,156,199];
+  let y=20;
+  doc.setFont('helvetica','bold'); doc.setFontSize(16); doc.setTextColor(...navy);
+  doc.text(d.title, 15, y); y+=8;
+  doc.setDrawColor(...accent); doc.line(15,y,195,y); y+=8;
+  doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(74,96,128);
+  doc.text('Fait à ' + (d.lieu||'—') + ', le ' + (d.date||'—'), 15, y); y+=10;
+
+  d.parts.forEach(p => {
+    const bodyLines = doc.splitTextToSize(p.texte, 170);
+    if (y + 10 + bodyLines.length*4.6 > 285) { doc.addPage(); y=20; }
+    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(...navy);
+    doc.text('Article ' + p.numero + ' — ' + p.titre, 15, y); y+=6;
+    doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(15,30,61);
+    doc.text(bodyLines, 15, y); y += bodyLines.length*4.6 + 6;
+  });
+
+  if (y > 250) { doc.addPage(); y=20; }
+  y += 10;
+  doc.setFontSize(9.5); doc.setTextColor(15,30,61);
+  doc.text('Le Maître d\'Œuvre / L\'Entreprise', 20, y);
+  doc.text('Le Maître d\'Ouvrage', 130, y);
+  y += 25;
+  doc.text('Signature :', 20, y);
+  doc.text('Signature :', 130, y);
+
+  const pageCount = doc.internal.getNumberOfPages();
+  for (let i=1;i<=pageCount;i++){
+    doc.setPage(i); doc.setFontSize(8); doc.setTextColor(139,165,192); doc.setFont('helvetica','normal');
+    doc.text("Phénix-Architecture EURL · Maître d'œuvre · Saint-Georges-de-Mons (63780) · contact@phenixarchitecte.fr · 04 73 73 00 59", 15, 292);
+  }
+  const client = currentProjet ? (currentProjet.client||'client') : 'client';
+  doc.save('Contrat-' + (contractType==='moe'?'MOE':'CG') + '-' + client.replace(/\s+/g,'-') + '.pdf');
+}
+
+function genererWord(){
+  const d = assembleDocument();
+  let body = `<h1 style="font-family:Georgia,serif;color:#1B2D5B">${d.title}</h1>
+  <p style="font-size:11px;color:#4A6080">Fait à ${d.lieu||'—'}, le ${d.date||'—'}</p>`;
+  d.parts.forEach(p => {
+    body += `<h3 style="color:#1B2D5B;margin-top:18px">Article ${p.numero} — ${p.titre}</h3>
+    <p style="white-space:pre-wrap;font-size:13px;line-height:1.5">${p.texte.replace(/</g,'&lt;')}</p>`;
+  });
+  body += `<table style="width:100%;margin-top:40px"><tr>
+    <td style="width:50%">Le Maître d'Œuvre / L'Entreprise<br><br><br>Signature :</td>
+    <td style="width:50%">Le Maître d'Ouvrage<br><br><br>Signature :</td>
+  </tr></table>`;
+
+  const html = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+  <head><meta charset="utf-8"><title>${d.title}</title></head>
+  <body style="font-family:Calibri,Arial,sans-serif">${body}</body></html>`;
+
+  const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const client = currentProjet ? (currentProjet.client||'client') : 'client';
+  a.href = url;
+  a.download = 'Contrat-' + (contractType==='moe'?'MOE':'CG') + '-' + client.replace(/\s+/g,'-') + '.doc';
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('✓ Fichier Word téléchargé — enregistrez-le en .docx depuis Word si besoin');
+}
+
+document.getElementById('f-nature').addEventListener('change', updateWarnings);
+
+window.addEventListener('firebase-ready', async () => {
+  document.getElementById('app').style.display = '';
+  loadHandoff();
+  renderPhaseChecks();
+  initClauseState();
+  renderClauses();
+  updateWarnings();
+
+  if (currentProjet && currentProjet.projetId) {
+    const existing = await window._fbContrat.getContratOnce(currentProjet.projetId + '_' + contractType);
+    if (existing) {
+      contractType = existing.contractType || 'moe';
+      setContractType(contractType);
+      document.getElementById('f-nature').value = existing.nature || 'maison_individuelle';
+      document.getElementById('f-date').value = existing.date || '';
+      document.getElementById('f-montant').value = existing.montant || '';
+      document.getElementById('f-lieu').value = existing.lieu || '';
+      selectedPhases = existing.phases || {};
+      renderPhaseChecks();
+      if (existing.clauses) clauseState = existing.clauses;
+      renderClauses();
+      updateWarnings();
+    }
+  }
+});
+</script>
+</body>
+</html>
