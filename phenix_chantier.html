@@ -5067,8 +5067,6 @@ async function renderPdfPlan(planIdx, plan) {
       // Store rendered page as image for PDF export
       if (!plan.renderedPages) plan.renderedPages = [];
       plan.renderedPages[pageIdx] = canvas.toDataURL('image/jpeg', 0.75);
-      // Libérer le canvas de la mémoire GPU
-      canvas.width = 0; canvas.height = 0;
 
       // Annotations layer
       const annotLayer = document.createElement('div');
