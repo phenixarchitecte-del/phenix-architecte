@@ -575,6 +575,7 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
                 <input type="number" id="param-marge" value="20" min="0" max="100" step="1" oninput="applyMargeGlobale()">
                 <button class="btn btn-sm btn-accent" onclick="applyMargeGlobale()" style="padding:4px 12px"><i class="ti ti-refresh" aria-hidden="true"></i>Appliquer</button>
                 <button class="btn btn-sm btn-outline" onclick="openImportArtisanModal()" style="padding:4px 12px"><i class="ti ti-file-import" aria-hidden="true"></i>Importer devis artisan</button>
+                <button class="btn btn-sm btn-outline" onclick="exportLotPDF()" style="padding:4px 12px;border-color:#e67e22;color:#e67e22"><i class="ti ti-send" aria-hidden="true"></i>Export PDF pour artisan</button>
               </div>
               <div class="poste-table-wrap"><table class="poste-table">
                 <thead>
@@ -2930,6 +2931,99 @@ tbody tr:nth-child(even) td{background:#F8FAFC}
   document.body.appendChild(a);a.click();
   setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},1000);
   showToast('Devis client ouvert — Imprimer pour enregistrer en PDF');
+}
+
+// ── Export PDF d'un lot pour confirmation par l'artisan (prix ACHAT, pas prix client) ──
+function exportLotPDF(){
+  const ci=state.currentChantier, li=state.currentLot;
+  if(ci===null||li===null){alert('Ouvrez d\'abord un lot.');return;}
+  const c=state.chantiers[ci];
+  const lot=c.lots[li];
+  if(!lot){alert('Lot introuvable.');return;}
+  const date=new Date().toLocaleDateString('fr-FR');
+  const ref='LOT-'+new Date().toISOString().slice(0,10).replace(/-/g,'')+'-'+(lot.num||'').replace(/\D/g,'').padStart(2,'0');
+  function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+  let totalHT=0;
+  const rows=(lot.postes||[]).map(p=>{
+    const q=parseFloat(p.q)||0;
+    const pu=parseFloat(p.puArtisan)||parseFloat(p.pu)||0;
+    const total=q*pu;
+    totalHT+=total;
+    return `<tr><td style="padding:6px 10px;font-size:11.5px;color:#334155">${esc(p.n)}</td><td style="text-align:right;padding:6px 10px;font-size:11.5px;white-space:nowrap">${q} ${esc(p.u||'u')}</td><td style="text-align:right;padding:6px 10px;font-size:11.5px">${fmt(pu)} €</td><td style="text-align:right;padding:6px 10px;font-size:11.5px;font-weight:600">${fmt(total)} €</td></tr>`;
+  }).join('');
+
+  const html=`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Bordereau ${esc(lot.nom)}</title>
+<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Segoe UI',Arial,sans-serif;color:#1E293B;background:#fff;font-size:13px}
+.devis-page{max-width:800px;margin:0 auto;padding:28px 32px}
+.header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:16px;border-bottom:3px solid #1E3A5F;margin-bottom:20px}
+.brand{font-size:22px;font-weight:800;color:#1E3A5F}.brand span{color:#3B82F6}
+.brand-sub{font-size:9.5px;color:#64748B;letter-spacing:.12em;text-transform:uppercase;margin-top:2px}
+.brand-contact{font-size:10px;color:#64748B;margin-top:6px;line-height:1.7}
+.doc-badge{background:#e67e22;color:white;font-size:11px;font-weight:700;padding:4px 12px;border-radius:4px;display:inline-block;margin-bottom:6px}
+.doc-ref{font-size:10.5px;color:#64748B;line-height:1.8;text-align:right}
+.parties{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px;background:#F8FAFC;border-radius:8px;padding:14px}
+.plabel{font-size:9px;font-weight:700;color:#94A3B8;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.pname{font-size:13px;font-weight:700;color:#1E3A5F}
+.pdetail{font-size:10.5px;color:#475569;margin-top:2px;line-height:1.6}
+.objet{background:#FEF3E7;border-left:4px solid #e67e22;padding:9px 12px;margin-bottom:16px;border-radius:0 6px 6px 0}
+.objet-lbl{font-size:9px;font-weight:700;color:#e67e22;letter-spacing:.1em;text-transform:uppercase;margin-bottom:2px}
+.objet-val{font-size:13px;font-weight:600;color:#1E3A5F}
+.objet-det{font-size:10.5px;color:#64748B;margin-top:1px}
+table{width:100%;border-collapse:collapse;margin-bottom:16px}
+thead tr{background:#1E3A5F}
+thead th{padding:8px 10px;color:#93C5FD;font-size:10px;font-weight:700;letter-spacing:.06em;text-align:left}
+thead th:not(:first-child){text-align:right}
+tbody tr:nth-child(even) td{background:#F8FAFC}
+.totaux{margin-left:auto;width:260px;border:1.5px solid #E2E8F0;border-radius:8px;overflow:hidden;margin-bottom:20px}
+.trow{display:flex;justify-content:space-between;padding:7px 12px;font-size:12px}
+.trow.main{background:#e67e22;color:white;font-size:13.5px;font-weight:700}
+.trow .lbl{color:#64748B}.trow .val{font-weight:600;color:#1E3A5F}
+.trow.main .lbl,.trow.main .val{color:white}
+.remarques{border:1.5px dashed #CBD5E1;border-radius:6px;padding:10px 12px;margin-bottom:16px;min-height:60px}
+.remarques-lbl{font-size:9px;font-weight:700;color:#94A3B8;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px}
+.conditions{font-size:9.5px;color:#94A3B8;line-height:1.8;border-top:1px solid #E2E8F0;padding-top:12px;margin-bottom:16px}
+.sigs{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:16px}
+.sig{border:1.5px solid #E2E8F0;border-radius:6px;padding:10px;min-height:72px}
+.sig-lbl{font-size:9px;font-weight:700;color:#94A3B8;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.sig-name{font-size:10.5px;color:#475569;margin-bottom:28px}
+.footer{text-align:center;font-size:9px;color:#94A3B8;border-top:1px solid #E2E8F0;padding-top:8px;margin-top:10px;line-height:1.8}
+.no-print{text-align:right;margin-bottom:14px}
+.no-print button{background:#1E3A5F;color:white;border:none;padding:8px 18px;border-radius:6px;font-size:12px;cursor:pointer}
+@media print{.no-print{display:none}body{print-color-adjust:exact;-webkit-print-color-adjust:exact}.devis-page{padding:12px 16px}}
+<\/style></head><body><div class="devis-page">
+<div class="no-print"><button onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF</button></div>
+<div class="header">
+  <div><div class="brand">Phénix<span>-Architecture</span></div><div class="brand-sub">Maître d'Œuvre · Contractant Général</div>
+  <div class="brand-contact">6 lieu-dit l'Étreille — 63780 Saint-Georges-de-Mons<br>04 73 73 00 59 · contact@phenixarchitecte.fr<br>SIRET 987 989 316 00011</div></div>
+  <div><div class="doc-badge">DEMANDE DE CONFIRMATION</div><div class="doc-ref">Réf : ${ref}<br>Date : ${date}</div></div>
+</div>
+<div class="parties">
+  <div><div class="plabel">Chantier</div><div class="pname">${esc(c.nom)}</div><div class="pdetail">${esc(c.adresse||'')}</div></div>
+  <div><div class="plabel">Entreprise</div><div class="pname">________________________</div><div class="pdetail">À compléter par vos soins</div></div>
+</div>
+<div class="objet"><div class="objet-lbl">Lot concerné</div><div class="objet-val">${esc(lot.num?lot.num+' — ':'')}${esc(lot.nom)}</div><div class="objet-det">Merci de vérifier les quantités et prix ci-dessous, et de nous retourner ce document signé ou annoté de vos corrections.</div></div>
+<table><thead><tr><th style="width:45%">Désignation</th><th style="width:15%;text-align:right">Qté</th><th style="width:15%;text-align:right">PU HT</th><th style="width:25%;text-align:right">Total HT</th></tr></thead>
+<tbody>${rows}</tbody></table>
+<div class="totaux">
+  <div class="trow main"><span class="lbl">TOTAL HT</span><span class="val">${fmt(totalHT)} €</span></div>
+</div>
+<div class="remarques"><div class="remarques-lbl">Remarques / corrections de l'entreprise</div></div>
+<div class="conditions"><strong>Merci de nous retourner ce document avec la mention "Bon pour accord" signée</strong>, ou de nous transmettre vos corrections avant le démarrage des travaux.</div>
+<div class="sigs">
+  <div class="sig"><div class="sig-lbl">Établi par</div><div class="sig-name">Maxime Suchet — Phénix-Architecture</div></div>
+  <div class="sig"><div class="sig-lbl">Bon pour accord — Entreprise</div><div class="sig-name">Nom, date et signature</div></div>
+</div>
+<div class="footer">Phénix-Architecture · SIRET 987 989 316 00011 · 6 lieu-dit l'Étreille, 63780 Saint-Georges-de-Mons<br>contact@phenixarchitecte.fr · 04 73 73 00 59 · Document confidentiel</div>
+</div><\/body><\/html>`;
+
+  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.target='_blank';a.rel='noopener';
+  document.body.appendChild(a);a.click();
+  setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},1000);
+  showToast('Bordereau lot ouvert — Imprimer pour enregistrer en PDF');
 }
 
 
