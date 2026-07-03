@@ -1970,8 +1970,8 @@ function computeChantierTotals(c){
       htClient+=q*(parseFloat(p.puClient)||parseFloat(p.pu)||0);
     });
     const base=htClient;
-    const aleas=base*(parseFloat(l.aleas||5)/100);
-    const hon=base*(parseFloat(l.honoraires||5)/100);
+    const aleas=base*(numOr(l.aleas,5)/100);
+    const hon=base*(numOr(l.honoraires,5)/100);
     htClient+=aleas+hon;
   });
   return {htArtisan,htClient};
@@ -2134,8 +2134,8 @@ function renderLotsTable(){
       travArtisan+=q*(parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
       travClient+=q*(parseFloat(p.puClient)||parseFloat(p.pu)||0);
     });
-    const aleas=travClient*(parseFloat(lot.aleas||5)/100);
-    const hon=travClient*(parseFloat(lot.honoraires||5)/100);
+    const aleas=travClient*(numOr(lot.aleas,5)/100);
+    const hon=travClient*(numOr(lot.honoraires,5)/100);
     const ht=travClient+aleas+hon;
     const tva=parseFloat(lot.tva||20)/100;
     const ttc=ht*(1+tva);
@@ -2167,8 +2167,8 @@ function computeLotAmounts(lot){
     const q=parseFloat(p.q)||0;
     travClient+=q*(parseFloat(p.puClient)||parseFloat(p.pu)||0);
   });
-  const aleas=travClient*(parseFloat(lot.aleas||5)/100);
-  const hon=travClient*(parseFloat(lot.honoraires||5)/100);
+  const aleas=travClient*(numOr(lot.aleas,5)/100);
+  const hon=travClient*(numOr(lot.honoraires,5)/100);
   const ht=travClient+aleas+hon;
   const tva=parseFloat(lot.tva||20);
   const ttc=ht*(1+tva/100);
@@ -2250,8 +2250,8 @@ function updateStats(lots){
       totalArtisan+=q*(parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
       totalClient+=q*(parseFloat(p.puClient)||parseFloat(p.pu)||0);
     });
-    const aleas=totalClient*(parseFloat(lot.aleas||5)/100);
-    const hon=totalClient*(parseFloat(lot.honoraires||5)/100);
+    const aleas=totalClient*(numOr(lot.aleas,5)/100);
+    const hon=totalClient*(numOr(lot.honoraires,5)/100);
     totalClient+=aleas+hon;
   });
   const valide=lots.filter(l=>l.statut==='Valide').length;
@@ -2295,13 +2295,13 @@ function openLotDetail(li){
   const c=state.chantiers[state.currentChantier];
   document.getElementById('detail-title').textContent=(lot.num?lot.num+' — ':'')+lot.nom;
   document.getElementById('detail-chantier-name').textContent=c.nom+(c.client?' — '+c.client:'');
-  document.getElementById('param-aleas').value=lot.aleas||5;
-  document.getElementById('param-honoraires').value=lot.honoraires||5;
+  document.getElementById('param-aleas').value=numOr(lot.aleas,5);
+  document.getElementById('param-honoraires').value=numOr(lot.honoraires,5);
   document.getElementById('param-statut').value=lot.statut||'Chiffrage';
   document.getElementById('param-notes').value=lot.notes||'';
   document.getElementById('detail-prestation').value=lot.prestation||'std';
   document.getElementById('detail-tva').value=lot.tva||20;
-  document.getElementById('param-marge').value=lot.marge||20;
+  document.getElementById('param-marge').value=numOr(lot.marge,20);
   document.getElementById('stats-row').style.display='none';
   document.getElementById('lots-table-wrap').style.display='none';
   document.getElementById('lot-detail').style.display='flex';
@@ -2329,7 +2329,7 @@ function onPrestationChange(){
       if(tmpl&&tmpl.pu[prest]){
         p.puArtisan=tmpl.pu[prest];
         p.pu=p.puArtisan;
-        const marge=parseFloat(lot.marge||20)/100;
+        const marge=numOr(lot.marge,20)/100;
         p.puClient=Math.round(p.puArtisan*(1+marge));
       }
     }
@@ -2394,9 +2394,9 @@ function updatePoste(pi,field,val){
   else if(field==='puArtisan'){
     p.puArtisan=parseFloat(val)||0;
     p.pu=p.puArtisan;
-    // Auto-update client price based on current marge
-    const marge=parseFloat(lot.marge||20)/100;
-    p.puClient=Math.round(p.puArtisan*(1+marge)*100)/100;
+    // Le prix client n'est plus recalculé automatiquement ici : il reste tel
+    // que vous l'avez saisi. Utilisez "Marge globale" pour l'appliquer
+    // volontairement à tous les postes du lot.
   }
   else if(field==='puClient'){p.puClient=parseFloat(val)||0;}
   else{p[field]=val;}
@@ -2412,7 +2412,7 @@ function deletePoste(pi){
 function addPoste(){
   const lot=state.chantiers[state.currentChantier].lots[state.currentLot];
   if(!lot.postes)lot.postes=[];
-  const marge=parseFloat(lot.marge||20)/100;
+  const marge=numOr(lot.marge,20)/100;
   lot.postes.push({n:'Nouveau poste',q:1,u:'u',puArtisan:0,puClient:0,pu:0});
   renderPostes();computeLotTotal();saveLot();
 }
@@ -2427,10 +2427,10 @@ function computeLotTotal(){
     travArtisan+=q*(parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
     travClient+=q*(parseFloat(p.puClient)||parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
   });
-  lot.aleas=parseFloat(document.getElementById('param-aleas').value)||0;
-  lot.honoraires=parseFloat(document.getElementById('param-honoraires').value)||0;
+  lot.aleas=numOr(document.getElementById('param-aleas').value,0);
+  lot.honoraires=numOr(document.getElementById('param-honoraires').value,0);
   lot.tva=parseFloat(document.getElementById('detail-tva').value)||20;
-  lot.marge=parseFloat(document.getElementById('param-marge').value)||20;
+  lot.marge=numOr(document.getElementById('param-marge').value,20);
   const aleas=travClient*(lot.aleas/100);
   const hon=travClient*(lot.honoraires/100);
   const ht=travClient+aleas+hon;
@@ -2805,8 +2805,8 @@ function exportCSVForChantier(idx){
       travArtisan+=q*(parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
       travClient+=q*(parseFloat(p.puClient)||parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
     });
-    const aleas=travClient*(parseFloat(lot.aleas||5)/100);
-    const hon=travClient*(parseFloat(lot.honoraires||5)/100);
+    const aleas=travClient*(numOr(lot.aleas,5)/100);
+    const hon=travClient*(numOr(lot.honoraires,5)/100);
     const ht=travClient+aleas+hon;
     const tva=parseFloat(lot.tva||20);
     const ttc=ht*(1+tva/100);
@@ -2843,8 +2843,8 @@ function exportPDF(){
       const q=parseFloat(p.q)||0;
       htClient+=q*(parseFloat(p.puClient)||parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
     });
-    const aleas=htClient*(parseFloat(lot.aleas||5)/100);
-    const hon=htClient*(parseFloat(lot.honoraires||5)/100);
+    const aleas=htClient*(numOr(lot.aleas,5)/100);
+    const hon=htClient*(numOr(lot.honoraires,5)/100);
     const ht=htClient+aleas+hon;
     const tva=parseFloat(lot.tva||20);
     const tvaAmt=ht*(tva/100);
@@ -2934,6 +2934,11 @@ tbody tr:nth-child(even) td{background:#F8FAFC}
 
 
 function closeModal(id){document.getElementById(id).classList.remove('open');}
+// Comme parseFloat(x)||def, mais ne remplace PAS un 0 volontaire par la valeur par défaut
+function numOr(val, def){
+  const n = parseFloat(val);
+  return Number.isFinite(n) ? n : def;
+}
 function fmt(n){return Math.round(n).toLocaleString('fr-FR');}
 
 // ─── RENDU MOBILE : lots en cards ──────────────────────────────
@@ -2975,8 +2980,8 @@ function renderLotsMobileCards(){
       travArtisan += q * (parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
       travClient  += q * (parseFloat(p.puClient)||parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
     });
-    const aleas = travClient * (parseFloat(lot.aleas||5)/100);
-    const hon   = travClient * (parseFloat(lot.honoraires||5)/100);
+    const aleas = travClient * (numOr(lot.aleas,5)/100);
+    const hon   = travClient * (numOr(lot.honoraires,5)/100);
     const ht    = travClient + aleas + hon;
     const ttc   = ht * (1 + (parseFloat(lot.tva||20)/100));
     const margeEur = travClient - travArtisan;
