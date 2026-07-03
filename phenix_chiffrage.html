@@ -1887,17 +1887,26 @@ function lotSortKey(lot){
 }
 function sortLotsInPlace(lots){
   if (!Array.isArray(lots)) return lots;
+  // On garde une référence vers le lot actuellement ouvert en détail (si présent
+  // dans ce tableau) pour que le tri ne fasse pas "sauter" state.currentLot
+  // vers un autre lot après réordonnancement.
+  const trackedLot = (state.currentLot !== null && lots[state.currentLot]) ? lots[state.currentLot] : null;
   lots.sort((a,b) => {
     const oa = (a.ordre!==undefined && a.ordre!==null) ? a.ordre : lotSortKey(a)*1000;
     const ob = (b.ordre!==undefined && b.ordre!==null) ? b.ordre : lotSortKey(b)*1000;
     if (oa !== ob) return oa - ob;
     return (a.num || a.nom || '').localeCompare(b.num || b.nom || '', 'fr', {numeric:true, sensitivity:'base'});
   });
+  if (trackedLot) {
+    const newIdx = lots.indexOf(trackedLot);
+    if (newIdx !== -1) state.currentLot = newIdx;
+  }
   return lots;
 }
 function reindexOrdre(lots){
   lots.forEach((l,i) => { l.ordre = i; });
 }
+
 function moveLot(li, dir){
   const idx=state.currentChantier;
   if(idx===null) return;
