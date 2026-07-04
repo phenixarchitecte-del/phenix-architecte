@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Notre patrimoine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600&family=Mulish:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script type="module">
+import{initializeApp}from'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import{getFirestore,doc,onSnapshot,setDoc}from'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import{getAuth,signInWithEmailAndPassword,createUserWithEmailAndPassword,signOut,onAuthStateChanged}from'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+const db=getFirestore(initializeApp({apiKey:"AIzaSyCjNKNvS6p3nqE6-_Gw9I397ZtXm2FG1ew",authDomain:"phenix-architecte-9151b.firebaseapp.com",projectId:"phenix-architecte-9151b",storageBucket:"phenix-architecte-9151b.firebasestorage.app",messagingSenderId:"811231684720",appId:"1:811231684720:web:413fa324ae43c07607acb5"}));
+const ref=doc(db,'phenix_patrimoine','foyer');
+window._fb={save:(json)=>setDoc(ref,{json,updated:Date.now()}),listen:(cb)=>onSnapshot(ref,s=>cb(s.exists()?s.data():null))};
+const authI=getAuth();
+window._auth={login:(e,p)=>signInWithEmailAndPassword(authI,e,p),signup:(e,p)=>createUserWithEmailAndPassword(authI,e,p),logout:()=>signOut(authI),current:()=>authI.currentUser,onChange:(cb)=>onAuthStateChanged(authI,cb)};
+onAuthStateChanged(authI,u=>{const ov=document.getElementById('patri-login');if(ov)ov.style.display=u?'none':'flex';});
+window.dispatchEvent(new Event('fbready'));
+</script>
+<style>
+  :root{--cream:#FBF7EF;--paper:#FFFFFF;--ink:#2D2A26;--soft:#6B6358;--line:#EAE2D4;
+    --teal:#6FA8A0;--green:#5B8C5A;--amber:#D99A4E;--terra:#C16E54;--deep:#3F6B6B;--plum:#8C7AA6;
+    --shadow:0 1px 2px rgba(45,42,38,.04),0 8px 28px rgba(45,42,38,.07);--lift:0 4px 10px rgba(45,42,38,.06),0 18px 44px rgba(45,42,38,.12)}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Mulish',sans-serif;background:var(--cream);color:var(--ink);line-height:1.55;-webkit-font-smoothing:antialiased;
+    background-image:radial-gradient(circle at 12% 8%,rgba(111,168,160,.10),transparent 42%),radial-gradient(circle at 90% 0%,rgba(193,110,84,.07),transparent 38%);min-height:100vh}
+  .wrap{max-width:960px;margin:0 auto;padding:26px 20px 80px}
+  header.top{padding:14px 4px 6px;animation:rise .7s ease both}
+  .kicker{font-size:.72rem;letter-spacing:.26em;text-transform:uppercase;color:var(--teal);font-weight:700}
+  h1{font-family:'Fraunces',serif;font-weight:500;font-size:clamp(2rem,5.5vw,2.9rem);line-height:1.05;margin:.2em 0 .15em}
+  .sub{color:var(--soft);font-size:1.0rem;max-width:42em}
+  nav.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:24px 0 20px;position:sticky;top:0;z-index:5;background:linear-gradient(var(--cream) 72%,transparent);padding:10px 0 12px}
+  .tab{font-weight:600;font-size:.9rem;border:1px solid var(--line);background:var(--paper);color:var(--soft);padding:9px 15px;border-radius:999px;cursor:pointer;transition:.25s;white-space:nowrap}
+  .tab:hover{color:var(--ink);border-color:var(--teal)}.tab.active{background:var(--deep);color:#fff;border-color:var(--deep);box-shadow:var(--shadow)}
+  section.panel{display:none;animation:fade .45s ease both}section.panel.active{display:block}
+  .card{background:var(--paper);border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow);padding:22px}.card+.card{margin-top:16px}
+  h2.sec{font-family:'Fraunces',serif;font-weight:500;font-size:1.45rem;margin:2px 4px 6px}
+  .lead{color:var(--soft);margin:0 4px 18px;font-size:.97rem;max-width:48em}
+  .hero{display:flex;gap:30px;align-items:center;flex-wrap:wrap;justify-content:center}
+  .donut-box{position:relative;width:228px;height:228px;flex:0 0 auto}
+  .donut-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+  .donut-center .lab{font-size:.68rem;letter-spacing:.18em;text-transform:uppercase;color:var(--soft);font-weight:700}
+  .donut-center .val{font-family:'Fraunces',serif;font-weight:600;font-size:1.5rem;margin-top:2px}
+  .legend{flex:1;min-width:250px;display:flex;flex-direction:column;gap:9px}
+  .leg-row{display:flex;align-items:center;gap:11px;font-size:.95rem}.dot{width:13px;height:13px;border-radius:4px;flex:0 0 auto}
+  .leg-name{flex:1}.leg-amt{font-weight:700}.leg-pct{color:var(--soft);font-size:.82rem;width:42px;text-align:right}
+  .finary{display:inline-flex;align-items:center;gap:8px;margin-top:18px;background:var(--deep);color:#fff;text-decoration:none;font-weight:700;padding:11px 18px;border-radius:12px;font-size:.92rem;transition:.2s}
+  .finary:hover{transform:translateY(-1px);box-shadow:var(--lift)}.stamp{font-size:.8rem;color:var(--soft);margin-top:14px}
+  .item{display:flex;gap:15px;align-items:flex-start}
+  .swatch{width:44px;height:44px;border-radius:12px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-family:'Fraunces',serif;font-size:1.25rem;color:#fff;font-weight:600}
+  .ibody{flex:1;min-width:0}.iname{font-weight:700;font-size:1.05rem}.itype{color:var(--soft);font-size:.9rem}
+  .badge{display:inline-block;font-size:.66rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:3px 9px;border-radius:999px;margin-top:6px;color:#fff}
+  .perf{font-size:.85rem;margin-top:8px;color:var(--soft)}.perf input{width:5ch;border:none;border-bottom:2px dashed var(--line);background:transparent;font-family:'Mulish';font-weight:700;text-align:right;outline:none;font-size:.9rem}
+  .perf input:focus{border-color:var(--teal)}
+  .tot{font-family:'Fraunces',serif;font-weight:600;font-size:1.4rem;margin-top:7px}
+  .compo{margin-top:12px;border-top:1px dashed var(--line);padding-top:12px;display:none}.compo.open{display:block}
+  .pos{display:flex;gap:8px;align-items:center;margin-bottom:7px}
+  .pos input.pn{flex:1;min-width:0;border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-family:'Mulish';font-size:.88rem;background:var(--cream)}
+  .pos input.pa{width:9ch;border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-family:'Mulish';font-size:.88rem;background:var(--cream);text-align:right}
+  .pos .x{cursor:pointer;color:var(--terra);font-weight:700;padding:2px 6px;border:none;background:none}
+  .ghost{font-size:.84rem;color:var(--teal);font-weight:700;cursor:pointer;background:none;border:none;padding:4px 0}
+  .actions{display:flex;gap:8px;margin-top:13px;flex-wrap:wrap}
+  .btn{font-weight:600;font-size:.83rem;border-radius:10px;padding:8px 13px;cursor:pointer;text-decoration:none;border:1px solid var(--line);background:var(--paper);color:var(--ink);transition:.2s;display:inline-flex;align-items:center;gap:6px}
+  .btn:hover{border-color:var(--teal);transform:translateY(-1px)}.btn.go{background:var(--teal);color:#fff;border-color:var(--teal)}.btn.danger{color:var(--terra)}
+  .editform{margin-top:13px;border-top:1px dashed var(--line);padding-top:13px;display:none;gap:10px;flex-direction:column}.editform.open{display:flex}
+  .editform label{font-size:.74rem;font-weight:700;color:var(--soft);text-transform:uppercase;letter-spacing:.05em}
+  .editform input,.editform select{font-size:.94rem;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:var(--cream);color:var(--ink);width:100%;font-family:'Mulish'}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .addbtn{width:100%;border:2px dashed var(--line);background:transparent;color:var(--soft);font-weight:700;padding:15px;border-radius:18px;cursor:pointer;font-family:'Mulish';font-size:.94rem;transition:.2s;margin-top:16px}
+  .addbtn:hover{border-color:var(--teal);color:var(--teal)}
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 16px}
+  .orgwrap{overflow-x:auto;padding:6px 0 4px}.orgwrap svg{min-width:600px;width:100%;height:auto}
+  .gloss{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+  .gitem{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:16px 17px;box-shadow:var(--shadow)}
+  .gitem h3{font-family:'Fraunces',serif;font-weight:600;font-size:1.12rem}.gitem .meta{font-size:.74rem;color:var(--soft);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin:4px 0 6px}.gitem p{font-size:.92rem}
+  .crow{display:flex;gap:12px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}
+  .crow .ico{width:38px;height:38px;border-radius:10px;background:#F4EFE4;display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex:0 0 auto}
+  .crow .cb{flex:1;min-width:0}.crow .role{font-weight:700;font-size:.94rem}
+  .crow input{font-size:.88rem;border:none;background:transparent;color:var(--soft);width:100%;outline:none;padding:2px 0;font-family:'Mulish'}
+  .crow input:focus{color:var(--ink)}.crow input.nm{font-weight:600;color:var(--ink)}
+  .infonote{background:#F4EFE4;border-radius:14px;padding:13px 15px;color:var(--soft);font-size:.9rem;margin-top:16px;display:flex;gap:10px;align-items:flex-start}.infonote b{color:var(--ink)}
+  .saved{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--deep);color:#fff;padding:10px 20px;border-radius:999px;font-size:.85rem;font-weight:600;opacity:0;transition:.3s;pointer-events:none;box-shadow:var(--lift)}.saved.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .assoc-row{display:flex;gap:6px;align-items:center;margin-bottom:6px}
+  .assoc-row input:first-child{flex:1;min-width:0}
+  .assoc-row input[data-ap]{max-width:72px;text-align:right}
+  .assoc-row .arem{padding:6px 11px;line-height:1}
+  .assoc-total{font-size:.82rem;color:var(--soft);margin:5px 0 2px}
+  .assoc-total.warn{color:var(--terra)}
+  #patri-login{position:fixed;inset:0;background:rgba(43,39,36,.55);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px}
+  #patri-login .lcard{background:var(--paper);border-radius:22px;box-shadow:var(--lift);padding:30px 26px;max-width:380px;width:100%;text-align:center;animation:rise .5s ease both}
+  #patri-login h2{font-family:'Fraunces',serif;font-weight:500;font-size:1.6rem;margin-bottom:4px}
+  #patri-login p{color:var(--soft);font-size:.92rem;margin-bottom:18px}
+  #patri-login input{width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:11px;background:var(--cream);font-family:'Mulish';font-size:.95rem;margin-bottom:10px}
+  #patri-login .lerr{color:var(--terra);font-size:.85rem;min-height:18px;margin:0 0 8px}
+  #patri-login .lwide{width:100%;justify-content:center;margin-bottom:8px}
+  #patri-login .loff{color:var(--soft);font-size:.82rem;background:none;border:none;cursor:pointer;text-decoration:underline;margin-top:8px}
+  @media(max-width:560px){.wrap{padding:18px 14px 70px}.gloss{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}.donut-box{width:200px;height:200px}}
+</style>
+</head>
+<body>
+<div id="patri-login"><div class="lcard">
+  <h2>Notre patrimoine</h2>
+  <p>Connecte-toi pour retrouver tes données sur tous tes appareils.</p>
+  <input id="pl-email" type="email" placeholder="Email" autocomplete="username">
+  <input id="pl-pwd" type="password" placeholder="Mot de passe" autocomplete="current-password">
+  <div class="lerr" id="pl-err"></div>
+  <button class="btn go lwide" id="pl-btn">Se connecter</button>
+  <button class="btn lwide" id="pl-signup">Créer le compte</button>
+  <button class="loff" id="pl-offline">Continuer hors connexion (cet appareil seulement)</button>
+</div></div>
+<div class="wrap">
+  <header class="top">
+    <div class="kicker">Patrimoine familial</div><h1>Notre patrimoine</h1>
+    <p class="sub">Une vue claire et complète : où se trouve notre argent, comment nos sociétés s'articulent, et où en sont nos biens. Données saisies à la main (ou importées) ; pour le suivi automatique en temps réel, on s'appuie sur Finary.</p>
+  </header>
+  <nav class="tabs">
+    <button class="tab active" data-t="ov">Vue d'ensemble</button><button class="tab" data-t="pl">Placements</button>
+    <button class="tab" data-t="im">Immobilier</button><button class="tab" data-t="so">Nos sociétés</button><button class="tab" data-t="re">Repères</button>
+  </nav>
+
+  <section class="panel active" id="ov"><div class="card"><div class="hero">
+    <div class="donut-box"><svg viewBox="0 0 120 120" width="100%" height="100%" id="donut"></svg><div class="donut-center"><div class="lab">Patrimoine net</div><div class="val" id="total">—</div></div></div>
+    <div class="legend" id="legend"></div></div>
+    <a class="finary" href="https://finary.com" target="_blank" rel="noopener">Voir le détail à jour sur Finary →</a><div class="stamp" id="stamp"></div>
+    <div class="actions" style="margin-top:14px"><button class="btn" id="expBtn">⤓ Sauvegarder une copie (fichier)</button><button class="btn" id="impBtn">⤒ Restaurer une copie</button><button class="btn" id="copyBtn">⧉ Copier les données</button><button class="btn" id="pasteBtn">⎀ Coller des données</button><input type="file" id="impFile" accept=".json,application/json" style="display:none"></div></div>
+    <div class="infonote"><span>◆</span><div>Chaque couleur correspond à une classe d'actif. Le total est le patrimoine <b>net</b> : valeur des biens moins les emprunts restants.</div></div>
+    <div class="card" id="syncCard"></div></section>
+
+  <section class="panel" id="pl"><h2 class="sec">Placements financiers</h2>
+    <p class="lead">Chaque enveloppe (PEA, CTO, crypto, assurance-vie, PER…) peut être dépliée pour détailler ses lignes, et porte sa performance du moment.</p>
+    <div class="toolbar"><button class="btn go" id="addAcc">+ Nouvelle enveloppe</button><button class="btn" id="csvBtn">⇪ Importer un CSV</button><input type="file" id="csvFile" accept=".csv,text/csv" style="display:none"></div>
+    <div class="toolbar" style="margin-top:-6px"><span style="font-size:.82rem;color:var(--soft);align-self:center">Ajout rapide :</span><button class="btn" data-preset="PEA|bourse">PEA</button><button class="btn" data-preset="Compte-titres (CTO)|bourse">CTO</button><button class="btn" data-preset="Assurance-vie|retraite">Assurance-vie</button><button class="btn" data-preset="PER|retraite">PER</button><button class="btn" data-preset="Cryptomonnaies|crypto">Crypto</button><button class="btn" data-preset="Livret A|liquidites">Livret</button></div>
+    <div id="csvHelp" class="infonote" style="display:none"><span>◆</span><div>Format attendu : un en-tête puis des lignes. Colonnes reconnues (peu importe l'ordre) : <b>Compte</b>, <b>Nom</b>, <b>Montant</b>, et éventuellement <b>Catégorie</b>. Séparateur «,» ou «;». Chaque ligne devient une position dans l'enveloppe correspondante.</div></div>
+    <div id="accounts"></div></section>
+
+  <section class="panel" id="im"><h2 class="sec">Immobilier</h2>
+    <p class="lead">Nos biens, avec valeur estimée et emprunt restant. La part nette (valeur − emprunt) entre dans le patrimoine.</p>
+    <div id="props"></div><button class="addbtn" id="addProp">+ Ajouter un bien</button></section>
+
+  <section class="panel" id="so"><h2 class="sec">Nos sociétés, en un schéma</h2>
+    <p class="lead">La holding Suchet-Vieira chapeaute la SCI, l'EURL Phénix et la ferme. L'activité libérale de Madame reste autonome. Tu peux tout réorganiser : chaque société se rattache librement à la holding, à une SCI, ou reste indépendante.</p>
+    <div class="card"><div class="orgwrap"><svg id="org" xmlns="http://www.w3.org/2000/svg"></svg></div></div>
+    <div class="infonote"><span>◆</span><div>Les pastilles beige sur les flèches montrent le <b>frottement fiscal</b> : le coût pour faire remonter l'argent d'une société vers sa mère. Le régime <b>mère-fille</b> rend cette remontée quasi indolore (~1,25 %). En revanche, sortir l'argent de la holding vers le compte personnel coûte la <b>flat tax (~30 %)</b> — d'où l'intérêt de réinvestir via la holding plutôt que de se distribuer des dividendes.</div></div>
+    <h2 class="sec" style="margin-top:24px">Détail et chiffres</h2>
+    <div class="toolbar"><span style="font-size:.82rem;color:var(--soft);align-self:center">Ajout rapide :</span><button class="btn" data-cpreset="Nouvelle SCI|Immobilier locatif|Mère-fille|1.25">+ SCI</button><button class="btn" data-cpreset="SAS Marchand de biens|Achat-revente|Mère-fille|1.25">+ Marchand de biens</button><button class="btn" data-cpreset="Nouvelle société|Activité|Mère-fille|1.25">+ Société d'activité</button></div>
+    <div id="companies"></div><button class="addbtn" id="addCo">+ Ajouter une entité personnalisée</button></section>
+
+  <section class="panel" id="re"><h2 class="sec">Comprendre les placements</h2><div class="gloss" id="gloss"></div>
+    <h2 class="sec" style="margin-top:26px">Nos interlocuteurs</h2><div class="card"><p class="lead" style="margin:0 0 6px">Les bonnes personnes à contacter selon le sujet.</p><div id="contacts"></div>
+    <div class="infonote"><span>◆</span><div>Des contrats de <b>prévoyance</b> sont en place. Les documents sont avec nos papiers importants ; le courtier ci-dessus en assure le suivi.</div></div></div></section>
+</div>
+<div class="saved" id="toast">Enregistré</div>
+
+<script>
+const CATS={liquidites:{name:"Liquidités",hex:"#6FA8A0"},bourse:{name:"Bourse (actions, ETF)",hex:"#5B8C5A"},crypto:{name:"Cryptomonnaies",hex:"#D99A4E"},immobilier:{name:"Immobilier (net)",hex:"#C16E54"},societes:{name:"Sociétés",hex:"#3F6B6B"},retraite:{name:"Retraite / AV",hex:"#8C7AA6"}};
+const EXPLAIN={liquidites:"Disponible immédiatement, sans risque.",bourse:"Parts d'entreprises : varie à court terme, progresse sur la durée.",crypto:"Actif numérique très volatil : part réduite, assumée comme risquée.",immobilier:"Bien immobilier ; valorisation longue.",societes:"Capital détenu dans nos entreprises.",retraite:"Épargne long terme (PER, assurance-vie), avantage fiscal."};
+const GLOSS=[{t:"Livret A / épargne",l:"Disponible · sans risque",d:"Compte d'épargne garanti, récupérable à tout moment."},{t:"PEA",l:"Récupérable · risque modéré",d:"Investir en actions européennes ; après 5 ans, gains quasi exonérés d'impôt."},{t:"Compte-titres (CTO)",l:"Récupérable · risque modéré",d:"Comme le PEA mais sans limite ni restriction de pays ; gains taxés (~30 %)."},{t:"Cryptomonnaies",l:"Volatil · risqué",d:"Actifs numériques. Fort potentiel mais très instables : part réduite."},{t:"Assurance-vie",l:"Souple · transmission",d:"Enveloppe d'épargne avantageuse après 8 ans, utile pour la transmission."},{t:"PER",l:"Bloqué jusqu'à la retraite",d:"Épargne retraite avec avantage fiscal ; fonds indisponibles jusque-là."},{t:"SCI",l:"Long terme · peu liquide",d:"Société civile détenant un bien immobilier ; perçoit les loyers."},{t:"Holding",l:"Structure",d:"Société mère qui détient nos sociétés et fait circuler le capital."},{t:"Frottement fiscal",l:"Coût de circulation",d:"L'impôt prélevé quand l'argent passe d'une poche à une autre (d'une société à sa mère, ou vers notre compte personnel)."},{t:"Régime mère-fille",l:"Quasi indolore",d:"Permet de remonter les bénéfices d'une filiale vers la holding en n'étant imposé que sur ~5 %, soit environ 1,25 % de coût."}];
+const DEF={
+ accounts:[
+  {id:1,plat:"BoursoBank",type:"PEA",cat:"bourse",url:"https://www.boursobank.com",rendement:0,amount:8000,positions:[]},
+  {id:2,plat:"BoursoBank",type:"Compte-titres (CTO)",cat:"bourse",url:"https://www.boursobank.com",rendement:0,amount:3000,positions:[]},
+  {id:3,plat:"CIC",type:"Portefeuille d'actions",cat:"bourse",url:"https://www.cic.fr",rendement:0,amount:5000,positions:[]},
+  {id:4,plat:"Plateforme crypto",type:"Cryptomonnaies",cat:"crypto",url:"https://finary.com",rendement:0,amount:2000,positions:[]},
+  {id:5,plat:"Épargne",type:"Livret A",cat:"liquidites",url:"",rendement:0,amount:15000,positions:[]}],
+ props:[{id:1,name:"Terrain à bâtir",type:"Terrain acquis, prêt à construire",value:40000,debt:0,holder:null,rate:0,months:0},{id:2,name:"Maison de bourg",type:"Bien immobilier",value:200000,debt:120000,holder:null,rate:3.5,months:240}],
+ companies:[
+  {id:1,name:"Holding Suchet-Vieira",type:"Société mère",parent:null,ca:0,benefice:0,valeur:100000,fricLabel:"",fricRate:0,associes:[{name:"Maxime Suchet",pct:50},{name:"Associé vétérinaire",pct:50}]},
+  {id:2,name:"SCI",type:"Immobilier locatif",parent:1,ca:14000,benefice:0,valeur:0,fricLabel:"Selon régime SCI",fricRate:0,associes:[{name:"Holding Suchet-Vieira",pct:100}]},
+  {id:3,name:"EURL Phénix",type:"Maîtrise d'œuvre",parent:1,ca:75000,benefice:16500,valeur:0,fricLabel:"Mère-fille",fricRate:1.25,associes:[{name:"Holding Suchet-Vieira",pct:100}]},
+  {id:4,name:"La ferme des petits poucets",type:"Ferme pédagogique",parent:1,soon:true,ca:0,benefice:0,valeur:0,fricLabel:"",fricRate:0,associes:[{name:"Holding Suchet-Vieira",pct:100}]},
+  {id:5,name:"Collaboration vétérinaire — Madame",type:"Activité libérale (autonome)",parent:null,ca:75000,benefice:0,valeur:0,fricLabel:"",fricRate:0,associes:[{name:"Madame",pct:100}]}],
+ contacts:[{role:"Expert-comptable",ico:"📒",nm:"",tel:""},{role:"Conseiller en gestion de patrimoine",ico:"🧭",nm:"",tel:""},{role:"Courtier prévoyance",ico:"🛡️",nm:"",tel:""},{role:"Notaire",ico:"⚖️",nm:"",tel:""}],
+ updated:""};
+let state=null,nid=100;
+const $=s=>document.querySelector(s),ce=(t,c)=>{const e=document.createElement(t);if(c)e.className=c;return e};
+const fmt=n=>Math.round(n).toLocaleString('fr-FR'),esc=s=>(s==null?'':(''+s).replace(/"/g,'&quot;').replace(/</g,'&lt;'));
+function num(v){let s=(v+'').replace(/[^\d.,\-]/g,'');if(s.includes(',')&&s.includes('.'))s=s.replace(/\./g,'').replace(',','.');else if(s.includes(','))s=s.replace(',','.');return parseFloat(s)||0;}
+function mapCat(s){s=(s||'').toLowerCase();if(/liquid|livret|cash|courant|espèce/.test(s))return'liquidites';if(/crypto|bitcoin|btc|eth/.test(s))return'crypto';if(/immo|scpi|pierre/.test(s))return'immobilier';if(/retraite|\bper\b|assurance|vie/.test(s))return'retraite';return'bourse';}
+const KEY='patri_v3';
+const fb={uid:null,unsub:null,lastJson:null};
+const store={async get(k){try{if(window.localStorage){const v=localStorage.getItem(k);if(v!=null)return v;}}catch(e){}
+  try{if(window.storage){const r=await window.storage.get(k);return r&&r.value;}}catch(e){}return null;},
+ async set(k,v){let ok=false;try{if(window.localStorage){localStorage.setItem(k,v);ok=true;}}catch(e){}
+  try{if(window.storage){await window.storage.set(k,v);ok=true;}}catch(e){}return ok;}};
+function normalize(){['accounts','props','companies'].forEach(k=>(state[k]||[]).forEach(o=>{nid=Math.max(nid,o.id+1);if(k==='accounts'&&!o.positions)o.positions=[];if(k==='companies'&&!o.associes)o.associes=[];}));}
+function renderAll(){renderOverview();renderStamp();renderAccounts();renderProps();renderCompanies();renderContacts();}
+async function load(){let raw=null;try{raw=await store.get(KEY);}catch(e){}if(raw){try{state=JSON.parse(raw);}catch(e){}}
+ if(!state)state=JSON.parse(JSON.stringify(DEF));normalize();}
+function sumState(s){let t=0;(s.accounts||[]).forEach(a=>{t+=(a.positions&&a.positions.length)?a.positions.reduce((x,p)=>x+(+p.amount||0),0):(+a.amount||0);});(s.props||[]).forEach(p=>{t+=(+p.value||0);});(s.companies||[]).forEach(c=>{t+=(+c.valeur||0);});return t;}
+function applyCloud(d){if(d&&d.json&&d.json!==fb.lastJson){fb.lastJson=d.json;try{state=JSON.parse(d.json);normalize();renderAll();}catch(e){}}}
+function pushNow(){if(fb.uid&&window._fb){fb.lastJson=JSON.stringify(state);window._fb.save(fb.lastJson);}}
+function initSync(){if(!window._auth)return;window._auth.onChange(u=>{fb.uid=u||null;fb.first=true;renderSync();
+  if(fb.unsub){fb.unsub();fb.unsub=null;}
+  if(!u)return;
+  fb.unsub=window._fb.listen(d=>{
+   if(fb.first){fb.first=false;const localFull=sumState(state)>0;
+    if(d&&d.json){if(d.json===JSON.stringify(state)){fb.lastJson=d.json;return;}
+      if(localFull){if(confirm('Des données existent à la fois sur cet appareil ET dans le cloud.\n\nOK : charger les données du cloud (remplace cet appareil).\nAnnuler : garder cet appareil et envoyer ses données au cloud.'))applyCloud(d);else pushNow();}
+      else applyCloud(d);}
+    else{if(localFull)pushNow();}
+   }else applyCloud(d);
+  });
+ });}
+let tT;async function save(){state.updated=new Date().toLocaleDateString('fr-FR');const ok=await store.set(KEY,JSON.stringify(state));
+ if(fb.uid&&window._fb){const j=JSON.stringify(state);fb.lastJson=j;window._fb.save(j);}
+ const t=$('#toast');t.textContent=(fb.uid?'Synchronisé ☁︎':(ok?'Enregistré ✓':'⚠ Sauvegarde auto indisponible — utilise « Sauvegarder une copie »'));t.classList.add('show');clearTimeout(tT);tT=setTimeout(()=>t.classList.remove('show'),ok?1300:3000);renderStamp();}
+function renderSync(){const el=$('#syncCard');if(!el)return;const T='<div class="ctitle" style="font-family:Fraunces,serif;font-size:1.15rem">Synchronisation multi-appareils</div>';
+ if(!window._auth){el.innerHTML=T+'<p class="lead" style="margin:6px 0 0">Connexion à Firebase en cours… Si rien n\'apparaît, ouvre le fichier depuis un domaine autorisé dans Firebase. La sauvegarde locale reste active en attendant.</p>';return;}
+ const u=window._auth.current();
+ if(fb.uid||u){el.innerHTML=T.replace('multi-appareils','active ☁︎')+`<p class="lead" style="margin:6px 0 12px">Connecté : <b>${esc((u&&u.email)||'')}</b>. Les données se synchronisent en temps réel entre tous tes appareils (et ceux de Madame, avec le même compte).</p><button class="btn" id="signout">Se déconnecter</button>`;
+  const so=$('#signout');if(so)so.addEventListener('click',()=>window._auth.logout());}
+ else{el.innerHTML=T+`<p class="lead" style="margin:6px 0 12px">Connecte-toi pour synchroniser tes données entre tous tes appareils.</p>
+   <div class="grid2"><input id="syEmail" placeholder="Email" style="padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:var(--cream);font-family:Mulish"><input id="syPwd" type="password" placeholder="Mot de passe" style="padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:var(--cream);font-family:Mulish"></div>
+   <div class="actions"><button class="btn go" id="syIn">Se connecter</button><button class="btn" id="syUp">Créer le compte</button></div>`;
+  $('#syIn').addEventListener('click',()=>window._auth.login($('#syEmail').value.trim(),$('#syPwd').value).catch(e=>alert('Connexion : '+(e.message||e.code))));
+  $('#syUp').addEventListener('click',()=>window._auth.signup($('#syEmail').value.trim(),$('#syPwd').value).catch(e=>alert('Création : '+(e.message||e.code))));}}
+function renderStamp(){$('#stamp').textContent=state.updated?('Dernière mise à jour : '+state.updated):'';}
+function accTot(a){return(a.positions&&a.positions.length)?a.positions.reduce((s,p)=>s+(+p.amount||0),0):(+a.amount||0);}
+function totals(){const by={};let assets=0,debt=0;const add=(c,v)=>{by[c]=(by[c]||0)+v;assets+=v};
+ state.accounts.forEach(a=>add(a.cat,accTot(a)));state.props.forEach(p=>{add('immobilier',+p.value||0);debt+=(+p.debt||0);});state.companies.forEach(c=>add('societes',+c.valeur||0));return{by,assets,debt,net:assets-debt};}
+function renderOverview(){const{by,assets,debt,net}=totals();$('#total').textContent=fmt(net)+' €';const svg=$('#donut');svg.innerHTML='';const C=2*Math.PI*42;let off=0;
+ const ent=Object.keys(CATS).filter(k=>by[k]>0).map(k=>({k,v:by[k]}));
+ if(!ent.length){svg.innerHTML='<circle cx="60" cy="60" r="42" fill="none" stroke="#EAE2D4" stroke-width="16"/>';$('#legend').innerHTML='<div class="leg-row" style="color:var(--soft)">Renseigne les onglets pour voir la répartition.</div>';return;}
+ ent.forEach(e=>{const len=e.v/assets*C;svg.innerHTML+=`<circle cx="60" cy="60" r="42" fill="none" stroke="${CATS[e.k].hex}" stroke-width="16" stroke-dasharray="${len} ${C-len}" stroke-dashoffset="${-off}" transform="rotate(-90 60 60)"/>`;off+=len;});
+ const leg=$('#legend');leg.innerHTML='';ent.sort((a,b)=>b.v-a.v).forEach(e=>{const r=ce('div','leg-row');r.innerHTML=`<span class="dot" style="background:${CATS[e.k].hex}"></span><span class="leg-name">${CATS[e.k].name}</span><span class="leg-amt">${fmt(e.v)} €</span><span class="leg-pct">${Math.round(e.v/assets*100)}%</span>`;leg.appendChild(r);});
+ const sep=ce('div','leg-row');sep.style.cssText='border-top:1px solid var(--line);margin-top:6px;padding-top:8px';sep.innerHTML=`<span class="leg-name">Actifs bruts</span><span class="leg-amt">${fmt(assets)} €</span><span class="leg-pct"></span>`;leg.appendChild(sep);
+ if(debt>0){const dr=ce('div','leg-row');dr.innerHTML=`<span class="leg-name" style="color:var(--terra)">− Crédits immobiliers</span><span class="leg-amt" style="color:var(--terra)">−${fmt(debt)} €</span><span class="leg-pct"></span>`;leg.appendChild(dr);}
+ const nr=ce('div','leg-row');nr.style.cssText='font-weight:700';nr.innerHTML=`<span class="leg-name">= Patrimoine net</span><span class="leg-amt">${fmt(net)} €</span><span class="leg-pct"></span>`;leg.appendChild(nr);}
+function catSelHtml(s){return Object.keys(CATS).map(k=>`<option value="${k}" ${k===s?'selected':''}>${CATS[k].name}</option>`).join('');}
+
+function renderAccounts(){const box=$('#accounts');box.innerHTML='';state.accounts.forEach(a=>{const cat=CATS[a.cat]||CATS.bourse,tot=accTot(a),hasPos=a.positions&&a.positions.length;
+ const rcol=(+a.rendement||0)>=0?'var(--green)':'var(--terra)';const sign=(+a.rendement||0)>0?'+':'';
+ const c=ce('div','card');c.innerHTML=`<div class="item"><div class="swatch" style="background:${cat.hex}">${esc((a.plat||'?').charAt(0).toUpperCase())}</div><div class="ibody">
+   <div class="iname">${esc(a.plat||'Compte')}</div><div class="itype">${esc(a.type||'')} · <span class="badge" style="background:${cat.hex};margin:0">${cat.name}</span></div>
+   <div class="perf">Performance à ce jour : <span style="color:${rcol};font-weight:700">${sign}<input data-rend="${a.id}" inputmode="decimal" value="${esc(a.rendement||0)}">%</span></div>
+   <div class="tot">${fmt(tot)} € <span style="font-size:.7rem;color:var(--soft);font-weight:600">${hasPos?'('+a.positions.length+' ligne'+(a.positions.length>1?'s':'')+')':''}</span></div>
+   <div class="actions"><button class="btn" data-compo="${a.id}">▾ Composition</button>${a.url?`<a class="btn go" href="${esc(a.url)}" target="_blank" rel="noopener">↗ Ouvrir</a>`:''}<button class="btn" data-edit="${a.id}">Modifier la fiche</button></div>
+   <div class="compo" data-cbody="${a.id}">${a.positions.map(p=>`<div class="pos"><input class="pn" data-pn="${a.id}|${p.id}" value="${esc(p.name)}" placeholder="Nom de la ligne"><input class="pa" data-pa="${a.id}|${p.id}" inputmode="numeric" value="${esc(p.amount)}"><span style="color:var(--soft)">€</span><button class="x" data-px="${a.id}|${p.id}">✕</button></div>`).join('')}
+     <button class="ghost" data-addpos="${a.id}">+ ajouter une ligne</button></div>
+   <div class="editform" data-ef="${a.id}"><div><label>Plateforme</label><input data-f="plat" value="${esc(a.plat)}"></div><div><label>Type (PEA, CTO, PER, AV…)</label><input data-f="type" value="${esc(a.type)}"></div>
+     <div><label>Catégorie</label><select data-f="cat">${catSelHtml(a.cat)}</select></div><div><label>Lien (https://…)</label><input data-f="url" value="${esc(a.url)}"></div>
+     <div><label>Montant total ${hasPos?'(ignoré : calculé depuis les lignes)':'(si pas de lignes détaillées)'}</label><input data-f="amount" inputmode="numeric" value="${esc(a.amount)}" ${hasPos?'disabled':''}></div>
+     <div class="actions"><button class="btn go" data-save="${a.id}">Enregistrer</button><button class="btn danger" data-del="${a.id}">Supprimer l'enveloppe</button></div></div></div></div>`;
+ box.appendChild(c);});wireAccounts();}
+function wireAccounts(){const box=$('#accounts');
+ box.querySelectorAll('[data-rend]').forEach(i=>i.addEventListener('change',e=>{const a=acc(e.target.dataset.rend);a.rendement=num(e.target.value);save();renderAccounts();}));
+ box.querySelectorAll('[data-compo]').forEach(b=>b.addEventListener('click',()=>box.querySelector('[data-cbody="'+b.dataset.compo+'"]').classList.toggle('open')));
+ box.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',()=>box.querySelector('[data-ef="'+b.dataset.edit+'"]').classList.toggle('open')));
+ box.querySelectorAll('[data-addpos]').forEach(b=>b.addEventListener('click',()=>{const a=acc(b.dataset.addpos);a.positions.push({id:nid++,name:"",amount:0});save();renderAccounts();renderOverview();const cb=box.querySelector('[data-cbody="'+a.id+'"]');if(cb)cb.classList.add('open');}));
+ box.querySelectorAll('[data-pn]').forEach(i=>i.addEventListener('change',e=>{const[ai,pi]=e.target.dataset.pn.split('|');const p=acc(ai).positions.find(x=>x.id==pi);p.name=e.target.value;save();}));
+ box.querySelectorAll('[data-pa]').forEach(i=>i.addEventListener('change',e=>{const[ai,pi]=e.target.dataset.pa.split('|');const p=acc(ai).positions.find(x=>x.id==pi);p.amount=num(e.target.value);save();renderAccounts();renderOverview();}));
+ box.querySelectorAll('[data-px]').forEach(b=>b.addEventListener('click',()=>{const[ai,pi]=b.dataset.px.split('|');const a=acc(ai);a.positions=a.positions.filter(x=>x.id!=pi);save();renderAccounts();renderOverview();}));
+ box.querySelectorAll('[data-save]').forEach(b=>b.addEventListener('click',()=>{const a=acc(b.dataset.save);box.querySelector('[data-ef="'+a.id+'"]').querySelectorAll('[data-f]').forEach(f=>{let v=f.value;if(f.dataset.f==='amount')v=num(v);a[f.dataset.f]=v;});save();renderAccounts();renderOverview();}));
+ box.querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click',()=>{state.accounts=state.accounts.filter(x=>x.id!=b.dataset.del);save();renderAccounts();renderOverview();}));}
+function acc(id){return state.accounts.find(x=>x.id==id);}
+
+function holderName(id){const c=state.companies.find(x=>x.id==id);return c?c.name:'En direct';}
+function holderSel(sel){let o='<option value="">En direct (aucune société)</option>';state.companies.forEach(c=>{o+=`<option value="${c.id}" ${sel==c.id?'selected':''}>${esc(c.name)}</option>`;});return o;}
+function credit(p){const C=+p.debt||0,r=(+p.rate||0)/100/12,n=+p.months||0;if(!C||!n)return null;const M=r>0?C*r/(1-Math.pow(1+r,-n)):C/n;return{M,intNext:C*r,capNext:M-C*r,totalInt:M*n-C,n};}
+function renderProps(){const box=$('#props');box.innerHTML='';state.props.forEach(p=>{const net=Math.max(0,(+p.value||0)-(+p.debt||0));const cr=credit(p);
+ const c=ce('div','card');c.innerHTML=`<div class="item"><div class="swatch" style="background:${CATS.immobilier.hex}">⌂</div><div class="ibody">
+  <div class="iname">${esc(p.name||'Bien')}</div><div class="itype">${esc(p.type||'')} · logé dans : <b>${esc(holderName(p.holder))}</b></div>
+  <div class="tot">${fmt(p.value||0)} €</div><div class="itype">Emprunt restant : ${fmt(p.debt||0)} € · Part nette : <b>${fmt(net)} €</b></div>
+  ${cr?`<div class="itype">Crédit : <b>${fmt(cr.M)} €/mois</b> · ${cr.n} mois restants</div>`:''}
+  <div class="actions"><button class="btn" data-edit="${p.id}">Modifier</button>${cr?`<button class="btn" data-amort="${p.id}">▾ Amortissement</button>`:''}</div>
+  ${cr?`<div class="compo" data-abody="${p.id}"><div style="font-size:.9rem;line-height:1.75">Prochaine mensualité : <b>${fmt(cr.M)} €</b><br>— dont intérêts : <b>${fmt(cr.intNext)} €</b><br>— dont capital remboursé : <b>${fmt(cr.capNext)} €</b><br>Intérêts restant à payer (total) : <b>${fmt(cr.totalInt)} €</b><br>Capital restant dû : <b>${fmt(p.debt||0)} €</b></div></div>`:''}
+  <div class="editform" data-ef="${p.id}"><div><label>Nom</label><input data-f="name" value="${esc(p.name)}"></div><div><label>Type</label><input data-f="type" value="${esc(p.type)}"></div>
+   <div class="grid2"><div><label>Valeur (€)</label><input data-f="value" inputmode="numeric" value="${esc(p.value)}"></div><div><label>Capital restant dû (€)</label><input data-f="debt" inputmode="numeric" value="${esc(p.debt)}"></div></div>
+   <div class="grid2"><div><label>Taux du crédit (% / an)</label><input data-f="rate" inputmode="decimal" value="${esc(p.rate||0)}"></div><div><label>Durée restante (mois)</label><input data-f="months" inputmode="numeric" value="${esc(p.months||0)}"></div></div>
+   <div><label>Logé dans (société / SCI)</label><select data-f="holder">${holderSel(p.holder)}</select></div>
+   <div class="actions"><button class="btn go" data-save="${p.id}">Enregistrer</button><button class="btn danger" data-del="${p.id}">Supprimer</button></div></div></div></div>`;box.appendChild(c);});
+ gWire('#props','props',['value','debt','rate','months'],()=>{renderProps();renderCompanies();renderOverview();},{holder:v=>v?+v:null});
+ box.querySelectorAll('[data-amort]').forEach(b=>b.addEventListener('click',()=>box.querySelector('[data-abody="'+b.dataset.amort+'"]').classList.toggle('open')));}
+
+function isDesc(of,maybe){let c=state.companies.find(x=>x.id==maybe);let guard=0;while(c&&guard++<50){if(c.parent==of)return true;c=state.companies.find(x=>x.id==c.parent);}return false;}
+function parentSel(co){let o=`<option value="">Aucune (entité autonome)</option>`;state.companies.forEach(x=>{if(x.id!=co.id&&!isDesc(co.id,x.id))o+=`<option value="${x.id}" ${co.parent==x.id?'selected':''}>${esc(x.name)}</option>`;});return o;}
+function assocTotal(co){return (co.associes||[]).reduce((s,a)=>s+(+a.pct||0),0);}
+function assocStr(co){return (co.associes||[]).filter(a=>(a.name||'').trim()||+a.pct).map(a=>`${(a.name||'—')} ${(+a.pct||0)} %`).join(' · ');}
+function assocRow(coId,i,a){return `<div class="assoc-row"><input data-an="${coId}" data-ai="${i}" placeholder="Nom de l'associé" value="${esc(a.name)}"><input data-ap="${coId}" data-ai="${i}" inputmode="decimal" placeholder="%" value="${esc(a.pct)}"><button class="btn danger arem" data-arem="${coId}" data-ai="${i}" title="Retirer">×</button></div>`;}
+function renderCompanies(){drawOrg();const box=$('#companies');box.innerHTML='';state.companies.forEach(co=>{const col=co.soon?'#8C7AA6':(co.parent==null?'#3F6B6B':'#5B8C5A');const pn=co.parent?(state.companies.find(x=>x.id==co.parent)||{}).name:'autonome';
+ const c=ce('div','card');c.innerHTML=`<div class="item"><div class="swatch" style="background:${col}">${esc((co.name||'?').charAt(0).toUpperCase())}</div><div class="ibody">
+  <div class="iname">${esc(co.name||'Société')} ${co.soon?'<span class="badge" style="background:#8C7AA6">À venir</span>':''}</div><div class="itype">${esc(co.type||'')} · rattachée à : <b>${esc(pn)}</b></div>
+  <div class="itype" style="margin-top:8px">CA : <b>${fmt(co.ca||0)} €</b> · Bénéfice : <b>${fmt(co.benefice||0)} €</b> · Valeur estimée : <b>${fmt(co.valeur||0)} €</b></div>
+  ${co.parent!=null&&co.fricLabel?`<div class="itype">Remontée vers la mère : <b>${esc(co.fricLabel)}${+co.fricRate?(' (~'+(''+co.fricRate).replace('.',',')+' %)'):''}</b></div>`:''}
+  ${(co.associes&&co.associes.length)?`<div class="itype">Associés : <b>${esc(assocStr(co))}</b>${(assocTotal(co)!=100)?` <span style="color:var(--terra)">(total ${assocTotal(co)} %)</span>`:''}</div>`:''}
+  ${(()=>{const bs=state.props.filter(p=>p.holder==co.id);return bs.length?`<div class="itype">Biens logés : <b>${bs.map(b=>esc(b.name)).join(', ')}</b> (${fmt(bs.reduce((s,b)=>s+Math.max(0,(+b.value||0)-(+b.debt||0)),0))} € nets)</div>`:'';})()}
+  <div class="actions"><button class="btn" data-edit="${co.id}">Modifier</button></div>
+  <div class="editform" data-ef="${co.id}"><div><label>Nom</label><input data-f="name" value="${esc(co.name)}"></div><div><label>Activité</label><input data-f="type" value="${esc(co.type)}"></div>
+   <div><label>Rattachée à</label><select data-f="parent">${parentSel(co)}</select></div>
+   <div class="grid2"><div><label>Chiffre d'affaires (€)</label><input data-f="ca" inputmode="numeric" value="${esc(co.ca)}"></div><div><label>Bénéfice (€)</label><input data-f="benefice" inputmode="numeric" value="${esc(co.benefice)}"></div></div>
+   <div><label>Valeur patrimoniale estimée (€)</label><input data-f="valeur" inputmode="numeric" value="${esc(co.valeur)}"></div>
+   <div class="grid2"><div><label>Frottement vers la société mère</label><input data-f="fricLabel" value="${esc(co.fricLabel||'')}" placeholder="ex. Mère-fille"></div><div><label>Taux de frottement (%)</label><input data-f="fricRate" inputmode="decimal" value="${esc(co.fricRate||0)}"></div></div>
+   <div><label>Statut</label><select data-f="soon"><option value="" ${!co.soon?'selected':''}>Active</option><option value="1" ${co.soon?'selected':''}>À venir</option></select></div>
+   <div style="margin-top:6px"><label>Associés et parts (%)</label>
+    <div data-al="${co.id}">${(co.associes||[]).map((a,i)=>assocRow(co.id,i,a)).join('')}</div>
+    <button class="btn" data-aadd="${co.id}" style="margin-top:2px">+ Ajouter un associé</button>
+    <div class="assoc-total ${(co.associes||[]).length&&assocTotal(co)!=100?'warn':''}">Total des parts : ${assocTotal(co)} %${(co.associes||[]).length&&assocTotal(co)!=100?' — devrait faire 100 %':''}</div>
+   </div>
+   <div class="actions"><button class="btn go" data-save="${co.id}">Enregistrer</button><button class="btn danger" data-del="${co.id}">Supprimer</button></div></div></div></div>`;box.appendChild(c);});
+ gWire('#companies','companies',['ca','benefice','valeur','fricRate'],renderCompanies,{parent:v=>v?+v:null,soon:v=>!!v});
+ wireAssoc();}
+function wireAssoc(){const box=$('#companies');
+ box.querySelectorAll('[data-aadd]').forEach(b=>b.addEventListener('click',()=>{const co=state.companies.find(x=>x.id==b.dataset.aadd);if(!co.associes)co.associes=[];co.associes.push({name:'',pct:0});save();renderCompanies();const ef=$('[data-ef="'+co.id+'"]');if(ef)ef.classList.add('open');}));
+ box.querySelectorAll('[data-arem]').forEach(b=>b.addEventListener('click',()=>{const co=state.companies.find(x=>x.id==b.dataset.arem);co.associes.splice(+b.dataset.ai,1);save();renderCompanies();renderOverview();const ef=$('[data-ef="'+co.id+'"]');if(ef)ef.classList.add('open');}));
+ box.querySelectorAll('[data-an]').forEach(inp=>inp.addEventListener('change',e=>{const co=state.companies.find(x=>x.id==e.target.dataset.an);co.associes[+e.target.dataset.ai].name=e.target.value;save();drawOrg();}));
+ box.querySelectorAll('[data-ap]').forEach(inp=>inp.addEventListener('change',e=>{const co=state.companies.find(x=>x.id==e.target.dataset.ap);co.associes[+e.target.dataset.ai].pct=num(e.target.value);save();drawOrg();}));}
+
+function gWire(sel,key,nums,rerender,transform){const box=$(sel);transform=transform||{};
+ box.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',()=>box.querySelector('[data-ef="'+b.dataset.edit+'"]').classList.toggle('open')));
+ box.querySelectorAll('[data-save]').forEach(b=>b.addEventListener('click',()=>{const o=state[key].find(x=>x.id==b.dataset.save);
+  box.querySelector('[data-ef="'+o.id+'"]').querySelectorAll('[data-f]').forEach(f=>{let v=f.value;if(nums.includes(f.dataset.f))v=num(v);if(transform[f.dataset.f])v=transform[f.dataset.f](v);o[f.dataset.f]=v;});save();rerender();renderOverview();}));
+ box.querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click',()=>{state[key]=state[key].filter(x=>x.id!=b.dataset.del);save();rerender();renderOverview();}));}
+
+function drawOrg(){const svg=$('#org'),bw=176,bh=86,gx=18,vgap=46;const nodes=state.companies;
+ const kids={};nodes.forEach(n=>{const p=n.parent==null?'root':n.parent;(kids[p]=kids[p]||[]).push(n);});
+ const unit=bw+gx;function subW(n){const ch=kids[n.id]||[];if(!ch.length)return unit;return Math.max(unit,ch.reduce((s,c)=>s+subW(c),0));}
+ const pos={};function place(n,depth,left){const ch=kids[n.id]||[];let cx;if(!ch.length){cx=left+unit/2;}else{let cur=left;ch.forEach(c=>{place(c,depth+1,cur);cur+=subW(c);});cx=(pos[ch[0].id].cx+pos[ch[ch.length-1].id].cx)/2;}pos[n.id]={x:cx-bw/2,y:12+depth*(bh+vgap),cx,cy:12+depth*(bh+vgap)};}
+ let cur=10,maxD=0;(kids['root']||[]).forEach(r=>{place(r,0,cur);cur+=subW(r);});
+ nodes.forEach(n=>{if(pos[n.id])maxD=Math.max(maxD,pos[n.id].y);});
+ const W=Math.max(600,cur+10),H=maxD+bh+14;let g='';
+ nodes.forEach(n=>{if(n.parent!=null&&pos[n.parent]&&pos[n.id]){const p=pos[n.parent],c=pos[n.id],my=(p.y+bh+c.y)/2;g+=`<path d="M${p.cx} ${p.y+bh} V${my} H${c.cx} V${c.y}" fill="none" stroke="#CFC6B5" stroke-width="1.4"/>`;
+   if(n.fricLabel){const txt=n.fricLabel+(+n.fricRate?(' · '+(''+n.fricRate).replace('.',',')+' %'):'');const w=txt.length*5.4+16,px=c.cx-w/2,py=my-9;g+=`<rect x="${px}" y="${py}" width="${w}" height="18" rx="9" fill="#FBF3E7" stroke="#E2C9A0" stroke-width="1"/><text x="${c.cx}" y="${py+12.5}" text-anchor="middle" font-family="Mulish" font-size="9.5" fill="#9A6A2B">${esc(txt)}</text>`;}}});
+ nodes.forEach(n=>{const o=pos[n.id];if(!o)return;const hasCh=(kids[n.id]||[]).length>0;const col=n.soon?'#8C7AA6':(n.parent==null?(hasCh?'#3F6B6B':'#8a8276'):'#5B8C5A');
+  g+=`<rect x="${o.x}" y="${o.y}" width="${bw}" height="${bh}" rx="11" fill="#fff" stroke="${n.soon?'#CFC6B5':'#EAE2D4'}" stroke-width="1.3" ${n.soon?'stroke-dasharray="5 4"':''}/><rect x="${o.x}" y="${o.y+10}" width="5" height="${bh-20}" rx="2.5" fill="${col}"/>`;
+  g+=`<text x="${o.x+16}" y="${o.y+22}" font-family="Fraunces,serif" font-size="13.5" font-weight="600" fill="#2D2A26">${esc(n.name).slice(0,24)}</text>`;
+  g+=`<text x="${o.x+16}" y="${o.y+37}" font-family="Mulish,sans-serif" font-size="9.5" fill="#6B6358">${esc(n.type).slice(0,30)}</text>`;
+  const l1=n.soon?'Projet à venir':`CA ${fmt(n.ca||0)} €${+n.benefice?(' · Bén. '+fmt(n.benefice)+' €'):''}`;g+=`<text x="${o.x+16}" y="${o.y+54}" font-family="Mulish" font-size="10" fill="#2D2A26">${esc(l1).slice(0,32)}</text>`;
+  const as=assocStr(n);if(as)g+=`<text x="${o.x+16}" y="${o.y+72}" font-family="Mulish" font-size="9.5" fill="#4A6B5A">${esc(as).slice(0,32)}${as.length>32?'…':''}</text>`;});
+ svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.innerHTML=g;}
+
+function renderGloss(){$('#gloss').innerHTML=GLOSS.map(g=>`<div class="gitem"><h3>${g.t}</h3><div class="meta">${g.l}</div><p>${g.d}</p></div>`).join('');}
+function renderContacts(){const b=$('#contacts');b.innerHTML='';state.contacts.forEach((c,i)=>{const r=ce('div','crow');r.innerHTML=`<div class="ico">${c.ico}</div><div class="cb"><div class="role">${c.role}</div><input class="nm" placeholder="Nom (à compléter)" value="${esc(c.nm)}" data-c="${i}" data-k="nm"><input placeholder="Téléphone" value="${esc(c.tel)}" data-c="${i}" data-k="tel"></div>`;b.appendChild(r);});
+ b.querySelectorAll('input').forEach(i=>i.addEventListener('change',e=>{state.contacts[e.target.dataset.c][e.target.dataset.k]=e.target.value;save();}));}
+
+$('#csvBtn').addEventListener('click',()=>{const h=$('#csvHelp');h.style.display=h.style.display==='none'?'flex':'none';$('#csvFile').click();});
+$('#csvFile').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{importCSV(rd.result);e.target.value='';};rd.readAsText(f,'utf-8');});
+function importCSV(text){const lines=text.split(/\r?\n/).filter(l=>l.trim());if(lines.length<2){alert('CSV vide ou sans données.');return;}
+ const delim=(lines[0].match(/;/g)||[]).length>=(lines[0].match(/,/g)||[]).length?';':',';
+ const split=l=>l.split(delim).map(c=>c.trim().replace(/^"|"$/g,''));
+ const hdr=split(lines[0]).map(h=>h.toLowerCase());
+ const find=keys=>hdr.findIndex(h=>keys.some(k=>h.includes(k)));
+ const iAcc=find(['compte','plateforme','enveloppe','account']),iName=find(['nom','libellé','libelle','actif','ligne','name','ticker']),iAmt=find(['montant','valoris','valeur','amount','solde']),iCat=find(['catégorie','categorie','classe','category']);
+ if(iAmt<0){alert("Impossible de trouver une colonne de montant. Vérifie l'en-tête.");return;}
+ let added=0;
+ for(let i=1;i<lines.length;i++){const r=split(lines[i]);if(!r.length||r[iAmt]==null||r[iAmt]==='')continue;
+  const accName=iAcc>=0?(r[iAcc]||'Import'):'Import';const cat=iCat>=0?mapCat(r[iCat]):'bourse';const nm=iName>=0?(r[iName]||'Ligne'):'Ligne';const amt=num(r[iAmt]);if(!amt)continue;
+  let a=state.accounts.find(x=>(x.plat||'').toLowerCase()===accName.toLowerCase());if(!a){a={id:nid++,plat:accName,type:'',cat,url:'',rendement:0,amount:0,positions:[]};state.accounts.push(a);}
+  if(!a.positions)a.positions=[];a.positions.push({id:nid++,name:nm,amount:amt});added++;}
+ save();renderAccounts();renderOverview();alert(added+' ligne(s) importée(s).');}
+
+$('#addAcc').addEventListener('click',()=>{state.accounts.push({id:nid++,plat:"Nouvelle enveloppe",type:"",cat:"bourse",url:"",rendement:0,amount:0,positions:[]});renderAccounts();renderOverview();openLast('#accounts');});
+$('#addProp').addEventListener('click',()=>{state.props.push({id:nid++,name:"Nouveau bien",type:"",value:0,debt:0});renderProps();renderOverview();openLast('#props');});
+$('#copyBtn').addEventListener('click',async()=>{const txt=JSON.stringify(state);try{await navigator.clipboard.writeText(txt);alert('Données copiées. Sur l\'autre appareil, ouvre le fichier puis « Coller des données ».');}catch(e){prompt('Copie ce texte puis colle-le sur l\'autre appareil :',txt);}});
+$('#pasteBtn').addEventListener('click',()=>{const t=prompt('Colle ici les données copiées depuis l\'autre appareil :');if(!t)return;try{const d=JSON.parse(t);if(!d||!d.accounts)throw 0;state=d;normalize();save();renderOverview();renderAccounts();renderProps();renderCompanies();renderContacts();renderStamp();alert('Données restaurées.');}catch(e){alert('Texte invalide.');}});
+$('#addCo').addEventListener('click',()=>{state.companies.push({id:nid++,name:"Nouvelle société",type:"",parent:1,ca:0,benefice:0,valeur:0,fricLabel:"Mère-fille",fricRate:1.25});renderCompanies();renderOverview();openLast('#companies');});
+function openLast(sel){const ef=document.querySelector(sel+' .card:last-child .editform');if(ef)ef.classList.add('open');}
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));t.classList.add('active');$('#'+t.dataset.t).classList.add('active');window.scrollTo({top:0,behavior:'smooth'});}));
+$('#expBtn').addEventListener('click',()=>{try{const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const u=URL.createObjectURL(blob);const a=document.createElement('a');a.href=u;a.download='notre-patrimoine-sauvegarde.json';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(u);}catch(e){alert('Export impossible.');}});
+$('#impBtn').addEventListener('click',()=>$('#impFile').click());
+$('#impFile').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{try{const d=JSON.parse(rd.result);if(!d||!d.accounts)throw 0;state=d;normalize();save();renderOverview();renderAccounts();renderProps();renderCompanies();renderContacts();renderStamp();alert('Données restaurées.');}catch(err){alert('Fichier de sauvegarde invalide.');}e.target.value='';};rd.readAsText(f,'utf-8');});
+document.querySelectorAll('[data-preset]').forEach(b=>b.addEventListener('click',()=>{const[type,cat]=b.dataset.preset.split('|');state.accounts.push({id:nid++,plat:type,type:type,cat:cat,url:"",rendement:0,amount:0,positions:[]});renderAccounts();renderOverview();openLast('#accounts');}));
+document.querySelectorAll('[data-cpreset]').forEach(b=>b.addEventListener('click',()=>{const[name,type,fl,fr]=b.dataset.cpreset.split('|');const root=state.companies.find(c=>c.parent==null);state.companies.push({id:nid++,name,type,parent:root?root.id:null,ca:0,benefice:0,valeur:0,fricLabel:fl,fricRate:+fr});renderCompanies();renderOverview();openLast('#companies');}));
+function authMsg(x){const c=(x&&x.code)||'';return (c.includes('invalid-credential')||c.includes('wrong-password')||c.includes('user-not-found'))?'E-mail ou mot de passe incorrect.':c.includes('operation-not-allowed')?'Active « E-mail/Mot de passe » dans Firebase → Authentication.':c.includes('invalid-email')?'E-mail invalide.':c.includes('too-many-requests')?'Trop de tentatives, réessaie plus tard.':c.includes('network')?'Pas de connexion internet.':('Erreur : '+(c||(x&&x.message)||''));}
+(function(){const g=id=>document.getElementById(id);
+ const lb=g('pl-btn');if(lb)lb.addEventListener('click',()=>{const e=g('pl-email').value.trim(),p=g('pl-pwd').value,er=g('pl-err');if(er)er.textContent='';if(!window._auth){if(er)er.textContent='Connexion à Firebase indisponible (hors ligne ou domaine non autorisé).';return;}window._auth.login(e,p).catch(x=>{if(er)er.textContent=authMsg(x);});});
+ const su=g('pl-signup');if(su)su.addEventListener('click',()=>{const e=g('pl-email').value.trim(),p=g('pl-pwd').value,er=g('pl-err');if(er)er.textContent='';if(!window._auth){if(er)er.textContent='Connexion à Firebase indisponible.';return;}window._auth.signup(e,p).catch(x=>{if(er)er.textContent=authMsg(x);});});
+ const off=g('pl-offline');if(off)off.addEventListener('click',()=>{const ov=g('patri-login');if(ov)ov.style.display='none';});})();
+window.addEventListener('fbready',initSync);
+(async()=>{await load();renderOverview();renderStamp();renderAccounts();renderProps();renderCompanies();renderGloss();renderContacts();renderSync();if(window._auth)initSync();})();
+</script>
+</body>
+</html>
