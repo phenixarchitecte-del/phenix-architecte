@@ -16,31 +16,7 @@ const ref=doc(db,'phenix_patrimoine','foyer');
 window._fb={save:(json)=>setDoc(ref,{json,updated:Date.now()}),listen:(cb)=>onSnapshot(ref,s=>cb(s.exists()?s.data():null))};
 const authI=getAuth();
 window._auth={login:(e,p)=>signInWithEmailAndPassword(authI,e,p),signup:(e,p)=>createUserWithEmailAndPassword(authI,e,p),logout:()=>signOut(authI),current:()=>authI.currentUser,onChange:(cb)=>onAuthStateChanged(authI,cb)};
-onAuthStateChanged(authI,u=>{
-  const ov=document.getElementById('patri-login');
-  if(ov) ov.style.display=u?'none':'flex';
-  if(u){
-    // Scoper le document Firestore sur l'UID utilisateur (migration depuis 'foyer')
-    const userRef = doc(db,'phenix_patrimoine', u.uid);
-    const foyerRef = doc(db,'phenix_patrimoine','foyer');
-    window._fb = {
-      save:(json)=>setDoc(userRef,{json,updated:Date.now()}),
-      listen:(cb)=>onSnapshot(userRef, async s=>{
-        if(!s.exists()){
-          // Migration : essayer de récupérer depuis 'foyer' si doc UID vide
-          const legacy = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js')
-            .then(m=>m.getDoc(foyerRef)).catch(()=>null);
-          if(legacy&&legacy.exists()) cb(legacy.data());
-          else cb(null);
-        } else {
-          cb(s.data());
-        }
-      })
-    };
-  }
-  // Déclencher initSync après que _auth et _fb soient prêts
-  window.dispatchEvent(new Event('fbready'));
-});
+onAuthStateChanged(authI,u=>{const ov=document.getElementById('patri-login');if(ov)ov.style.display=u?'none':'flex';});
 window.dispatchEvent(new Event('fbready'));
 </script>
 <style>
@@ -107,6 +83,12 @@ window.dispatchEvent(new Event('fbready'));
   .infonote{background:#F4EFE4;border-radius:14px;padding:13px 15px;color:var(--soft);font-size:.9rem;margin-top:16px;display:flex;gap:10px;align-items:flex-start}.infonote b{color:var(--ink)}
   .saved{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--deep);color:#fff;padding:10px 20px;border-radius:999px;font-size:.85rem;font-weight:600;opacity:0;transition:.3s;pointer-events:none;box-shadow:var(--lift)}.saved.show{opacity:1;transform:translateX(-50%) translateY(0)}
   @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .assoc-row{display:flex;gap:6px;align-items:center;margin-bottom:6px}
+  .assoc-row input:first-child{flex:1;min-width:0}
+  .assoc-row input[data-ap]{max-width:72px;text-align:right}
+  .assoc-row .arem{padding:6px 11px;line-height:1}
+  .assoc-total{font-size:.82rem;color:var(--soft);margin:5px 0 2px}
+  .assoc-total.warn{color:var(--terra)}
   #patri-login{position:fixed;inset:0;background:rgba(43,39,36,.55);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px}
   #patri-login .lcard{background:var(--paper);border-radius:22px;box-shadow:var(--lift);padding:30px 26px;max-width:380px;width:100%;text-align:center;animation:rise .5s ease both}
   #patri-login h2{font-family:'Fraunces',serif;font-weight:500;font-size:1.6rem;margin-bottom:4px}
@@ -115,19 +97,6 @@ window.dispatchEvent(new Event('fbready'));
   #patri-login .lerr{color:var(--terra);font-size:.85rem;min-height:18px;margin:0 0 8px}
   #patri-login .lwide{width:100%;justify-content:center;margin-bottom:8px}
   #patri-login .loff{color:var(--soft);font-size:.82rem;background:none;border:none;cursor:pointer;text-decoration:underline;margin-top:8px}
-  #patri-login .bio-btn{width:100%;padding:13px;border:2px solid var(--terra);border-radius:11px;background:rgba(180,90,60,.08);color:var(--terra);font-size:.95rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:14px;font-family:'Mulish'}
-  #patri-login .bio-btn:active{opacity:.8}
-  #patri-login .bio-sep{display:flex;align-items:center;gap:10px;margin-bottom:14px}
-  #patri-login .bio-sep span{color:var(--soft);font-size:.8rem;white-space:nowrap}
-  #patri-login .bio-sep::before,#patri-login .bio-sep::after{content:'';flex:1;height:1px;background:var(--line)}
-  #patri-login .enroll-box{background:rgba(180,90,60,.07);border:1.5px solid rgba(180,90,60,.3);border-radius:11px;padding:14px;margin-top:14px;display:none;text-align:left}
-  #patri-login .enroll-box strong{color:var(--terra);font-size:.9rem;display:block;margin-bottom:4px}
-  #patri-login .enroll-box p{font-size:.8rem;color:var(--soft);margin:0 0 10px}
-  #patri-login .enroll-row{display:flex;gap:8px}
-  #patri-login .reset-bio{color:var(--soft);font-size:.75rem;background:none;border:none;cursor:pointer;text-decoration:underline;margin-top:6px;display:block;width:100%;text-align:center;font-family:'Mulish'}
-  .ai-dot-p{width:5px;height:5px;border-radius:50%;background:var(--terra);display:inline-block;animation:ai-bounce .9s infinite ease-in-out}
-  .ai-dot-p:nth-child(2){animation-delay:.2s}.ai-dot-p:nth-child(3){animation-delay:.4s}
-  @keyframes ai-bounce{0%,80%,100%{transform:scale(0)}40%{transform:scale(1)}}
   @media(max-width:560px){.wrap{padding:18px 14px 70px}.gloss{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}.donut-box{width:200px;height:200px}}
 </style>
 </head>
@@ -135,34 +104,11 @@ window.dispatchEvent(new Event('fbready'));
 <div id="patri-login"><div class="lcard">
   <h2>Notre patrimoine</h2>
   <p>Connecte-toi pour retrouver tes données sur tous tes appareils.</p>
-
-  <!-- BOUTON BIOMÉTRIE (visible si enrôlé) -->
-  <div id="patri-bio-wrap" style="display:none">
-    <button class="bio-btn" id="patri-bio-btn" onclick="patriBioLogin()">
-      <span style="font-size:22px">☝️</span>
-      <span id="patri-bio-label">Se connecter avec empreinte</span>
-    </button>
-    <div class="bio-sep"><span>ou par mot de passe</span></div>
-  </div>
-
-  <!-- FORMULAIRE EMAIL — toujours visible -->
   <input id="pl-email" type="email" placeholder="Email" autocomplete="username">
   <input id="pl-pwd" type="password" placeholder="Mot de passe" autocomplete="current-password">
   <div class="lerr" id="pl-err"></div>
   <button class="btn go lwide" id="pl-btn">Se connecter</button>
   <button class="btn lwide" id="pl-signup">Créer le compte</button>
-
-  <!-- ENRÔLEMENT (après connexion réussie) -->
-  <div class="enroll-box" id="patri-enroll-wrap">
-    <strong>☝️ Activer la connexion par empreinte ?</strong>
-    <p>L'empreinte restera stockée uniquement sur cet appareil.</p>
-    <div class="enroll-row">
-      <button class="btn go" id="patri-enroll-btn" style="flex:1;justify-content:center">Activer</button>
-      <button class="btn" onclick="document.getElementById('patri-enroll-wrap').style.display='none'" style="flex:1;justify-content:center">Plus tard</button>
-    </div>
-  </div>
-
-  <button class="reset-bio" onclick="patriBioReset()">🔄 Réinitialiser l'empreinte enregistrée</button>
   <button class="loff" id="pl-offline">Continuer hors connexion (cet appareil seulement)</button>
 </div></div>
 <div class="wrap">
@@ -221,11 +167,11 @@ const DEF={
   {id:5,plat:"Épargne",type:"Livret A",cat:"liquidites",url:"",rendement:0,amount:15000,positions:[]}],
  props:[{id:1,name:"Terrain à bâtir",type:"Terrain acquis, prêt à construire",value:40000,debt:0,holder:null,rate:0,months:0},{id:2,name:"Maison de bourg",type:"Bien immobilier",value:200000,debt:120000,holder:null,rate:3.5,months:240}],
  companies:[
-  {id:1,name:"Holding Suchet-Vieira",type:"Société mère",parent:null,ca:0,benefice:0,valeur:100000,fricLabel:"",fricRate:0},
-  {id:2,name:"SCI",type:"Immobilier locatif",parent:1,ca:14000,benefice:0,valeur:0,fricLabel:"Selon régime SCI",fricRate:0},
-  {id:3,name:"EURL Phénix",type:"Maîtrise d'œuvre",parent:1,ca:75000,benefice:16500,valeur:0,fricLabel:"Mère-fille",fricRate:1.25},
-  {id:4,name:"La ferme des petits poucets",type:"Ferme pédagogique",parent:1,soon:true,ca:0,benefice:0,valeur:0,fricLabel:"",fricRate:0},
-  {id:5,name:"Collaboration vétérinaire — Madame",type:"Activité libérale (autonome)",parent:null,ca:75000,benefice:0,valeur:0,fricLabel:"",fricRate:0}],
+  {id:1,name:"Holding Suchet-Vieira",type:"Société mère",parent:null,ca:0,benefice:0,valeur:100000,fricLabel:"",fricRate:0,associes:[{name:"Maxime Suchet",pct:50},{name:"Associé vétérinaire",pct:50}]},
+  {id:2,name:"SCI",type:"Immobilier locatif",parent:1,ca:14000,benefice:0,valeur:0,fricLabel:"Selon régime SCI",fricRate:0,associes:[{name:"Holding Suchet-Vieira",pct:100}]},
+  {id:3,name:"EURL Phénix",type:"Maîtrise d'œuvre",parent:1,ca:75000,benefice:16500,valeur:0,fricLabel:"Mère-fille",fricRate:1.25,associes:[{name:"Holding Suchet-Vieira",pct:100}]},
+  {id:4,name:"La ferme des petits poucets",type:"Ferme pédagogique",parent:1,soon:true,ca:0,benefice:0,valeur:0,fricLabel:"",fricRate:0,associes:[{name:"Holding Suchet-Vieira",pct:100}]},
+  {id:5,name:"Collaboration vétérinaire — Madame",type:"Activité libérale (autonome)",parent:null,ca:75000,benefice:0,valeur:0,fricLabel:"",fricRate:0,associes:[{name:"Madame",pct:100}]}],
  contacts:[{role:"Expert-comptable",ico:"📒",nm:"",tel:""},{role:"Conseiller en gestion de patrimoine",ico:"🧭",nm:"",tel:""},{role:"Courtier prévoyance",ico:"🛡️",nm:"",tel:""},{role:"Notaire",ico:"⚖️",nm:"",tel:""}],
  updated:""};
 let state=null,nid=100;
@@ -239,12 +185,12 @@ const store={async get(k){try{if(window.localStorage){const v=localStorage.getIt
   try{if(window.storage){const r=await window.storage.get(k);return r&&r.value;}}catch(e){}return null;},
  async set(k,v){let ok=false;try{if(window.localStorage){localStorage.setItem(k,v);ok=true;}}catch(e){}
   try{if(window.storage){await window.storage.set(k,v);ok=true;}}catch(e){}return ok;}};
-function normalize(){['accounts','props','companies'].forEach(k=>(state[k]||[]).forEach(o=>{nid=Math.max(nid,o.id+1);if(k==='accounts'&&!o.positions)o.positions=[];}));}
+function normalize(){['accounts','props','companies'].forEach(k=>(state[k]||[]).forEach(o=>{nid=Math.max(nid,o.id+1);if(k==='accounts'&&!o.positions)o.positions=[];if(k==='companies'&&!o.associes)o.associes=[];}));}
 function renderAll(){renderOverview();renderStamp();renderAccounts();renderProps();renderCompanies();renderContacts();}
 async function load(){let raw=null;try{raw=await store.get(KEY);}catch(e){}if(raw){try{state=JSON.parse(raw);}catch(e){}}
  if(!state)state=JSON.parse(JSON.stringify(DEF));normalize();}
 function sumState(s){let t=0;(s.accounts||[]).forEach(a=>{t+=(a.positions&&a.positions.length)?a.positions.reduce((x,p)=>x+(+p.amount||0),0):(+a.amount||0);});(s.props||[]).forEach(p=>{t+=(+p.value||0);});(s.companies||[]).forEach(c=>{t+=(+c.valeur||0);});return t;}
-function applyCloud(d){if(d&&d.json&&d.json!==fb.lastJson){fb.lastJson=d.json;try{state=JSON.parse(d.json);normalize();renderAll();}catch(e){}}}
+function applyCloud(d){if(d&&d.json&&d.json!==fb.lastJson){fb.lastJson=d.json;try{state=JSON.parse(d.json);normalize();renderAll();save();}catch(e){}}}
 function pushNow(){if(fb.uid&&window._fb){fb.lastJson=JSON.stringify(state);window._fb.save(fb.lastJson);}}
 function initSync(){if(!window._auth)return;window._auth.onChange(u=>{fb.uid=u||null;fb.first=true;renderSync();
   if(fb.unsub){fb.unsub();fb.unsub=null;}
@@ -331,11 +277,15 @@ function renderProps(){const box=$('#props');box.innerHTML='';state.props.forEac
 
 function isDesc(of,maybe){let c=state.companies.find(x=>x.id==maybe);let guard=0;while(c&&guard++<50){if(c.parent==of)return true;c=state.companies.find(x=>x.id==c.parent);}return false;}
 function parentSel(co){let o=`<option value="">Aucune (entité autonome)</option>`;state.companies.forEach(x=>{if(x.id!=co.id&&!isDesc(co.id,x.id))o+=`<option value="${x.id}" ${co.parent==x.id?'selected':''}>${esc(x.name)}</option>`;});return o;}
+function assocTotal(co){return (co.associes||[]).reduce((s,a)=>s+(+a.pct||0),0);}
+function assocStr(co){return (co.associes||[]).filter(a=>(a.name||'').trim()||+a.pct).map(a=>`${(a.name||'—')} ${(+a.pct||0)} %`).join(' · ');}
+function assocRow(coId,i,a){return `<div class="assoc-row"><input data-an="${coId}" data-ai="${i}" placeholder="Nom de l'associé" value="${esc(a.name)}"><input data-ap="${coId}" data-ai="${i}" inputmode="decimal" placeholder="%" value="${esc(a.pct)}"><button class="btn danger arem" data-arem="${coId}" data-ai="${i}" title="Retirer">×</button></div>`;}
 function renderCompanies(){drawOrg();const box=$('#companies');box.innerHTML='';state.companies.forEach(co=>{const col=co.soon?'#8C7AA6':(co.parent==null?'#3F6B6B':'#5B8C5A');const pn=co.parent?(state.companies.find(x=>x.id==co.parent)||{}).name:'autonome';
  const c=ce('div','card');c.innerHTML=`<div class="item"><div class="swatch" style="background:${col}">${esc((co.name||'?').charAt(0).toUpperCase())}</div><div class="ibody">
   <div class="iname">${esc(co.name||'Société')} ${co.soon?'<span class="badge" style="background:#8C7AA6">À venir</span>':''}</div><div class="itype">${esc(co.type||'')} · rattachée à : <b>${esc(pn)}</b></div>
   <div class="itype" style="margin-top:8px">CA : <b>${fmt(co.ca||0)} €</b> · Bénéfice : <b>${fmt(co.benefice||0)} €</b> · Valeur estimée : <b>${fmt(co.valeur||0)} €</b></div>
   ${co.parent!=null&&co.fricLabel?`<div class="itype">Remontée vers la mère : <b>${esc(co.fricLabel)}${+co.fricRate?(' (~'+(''+co.fricRate).replace('.',',')+' %)'):''}</b></div>`:''}
+  ${(co.associes&&co.associes.length)?`<div class="itype">Associés : <b>${esc(assocStr(co))}</b>${(assocTotal(co)!=100)?` <span style="color:var(--terra)">(total ${assocTotal(co)} %)</span>`:''}</div>`:''}
   ${(()=>{const bs=state.props.filter(p=>p.holder==co.id);return bs.length?`<div class="itype">Biens logés : <b>${bs.map(b=>esc(b.name)).join(', ')}</b> (${fmt(bs.reduce((s,b)=>s+Math.max(0,(+b.value||0)-(+b.debt||0)),0))} € nets)</div>`:'';})()}
   <div class="actions"><button class="btn" data-edit="${co.id}">Modifier</button></div>
   <div class="editform" data-ef="${co.id}"><div><label>Nom</label><input data-f="name" value="${esc(co.name)}"></div><div><label>Activité</label><input data-f="type" value="${esc(co.type)}"></div>
@@ -344,8 +294,19 @@ function renderCompanies(){drawOrg();const box=$('#companies');box.innerHTML='';
    <div><label>Valeur patrimoniale estimée (€)</label><input data-f="valeur" inputmode="numeric" value="${esc(co.valeur)}"></div>
    <div class="grid2"><div><label>Frottement vers la société mère</label><input data-f="fricLabel" value="${esc(co.fricLabel||'')}" placeholder="ex. Mère-fille"></div><div><label>Taux de frottement (%)</label><input data-f="fricRate" inputmode="decimal" value="${esc(co.fricRate||0)}"></div></div>
    <div><label>Statut</label><select data-f="soon"><option value="" ${!co.soon?'selected':''}>Active</option><option value="1" ${co.soon?'selected':''}>À venir</option></select></div>
+   <div style="margin-top:6px"><label>Associés et parts (%)</label>
+    <div data-al="${co.id}">${(co.associes||[]).map((a,i)=>assocRow(co.id,i,a)).join('')}</div>
+    <button class="btn" data-aadd="${co.id}" style="margin-top:2px">+ Ajouter un associé</button>
+    <div class="assoc-total ${(co.associes||[]).length&&assocTotal(co)!=100?'warn':''}">Total des parts : ${assocTotal(co)} %${(co.associes||[]).length&&assocTotal(co)!=100?' — devrait faire 100 %':''}</div>
+   </div>
    <div class="actions"><button class="btn go" data-save="${co.id}">Enregistrer</button><button class="btn danger" data-del="${co.id}">Supprimer</button></div></div></div></div>`;box.appendChild(c);});
- gWire('#companies','companies',['ca','benefice','valeur','fricRate'],renderCompanies,{parent:v=>v?+v:null,soon:v=>!!v});}
+ gWire('#companies','companies',['ca','benefice','valeur','fricRate'],renderCompanies,{parent:v=>v?+v:null,soon:v=>!!v});
+ wireAssoc();}
+function wireAssoc(){const box=$('#companies');
+ box.querySelectorAll('[data-aadd]').forEach(b=>b.addEventListener('click',()=>{const co=state.companies.find(x=>x.id==b.dataset.aadd);if(!co.associes)co.associes=[];co.associes.push({name:'',pct:0});save();renderCompanies();const ef=$('[data-ef="'+co.id+'"]');if(ef)ef.classList.add('open');}));
+ box.querySelectorAll('[data-arem]').forEach(b=>b.addEventListener('click',()=>{const co=state.companies.find(x=>x.id==b.dataset.arem);co.associes.splice(+b.dataset.ai,1);save();renderCompanies();renderOverview();const ef=$('[data-ef="'+co.id+'"]');if(ef)ef.classList.add('open');}));
+ box.querySelectorAll('[data-an]').forEach(inp=>inp.addEventListener('change',e=>{const co=state.companies.find(x=>x.id==e.target.dataset.an);co.associes[+e.target.dataset.ai].name=e.target.value;save();drawOrg();}));
+ box.querySelectorAll('[data-ap]').forEach(inp=>inp.addEventListener('change',e=>{const co=state.companies.find(x=>x.id==e.target.dataset.ap);co.associes[+e.target.dataset.ai].pct=num(e.target.value);save();drawOrg();}));}
 
 function gWire(sel,key,nums,rerender,transform){const box=$(sel);transform=transform||{};
  box.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',()=>box.querySelector('[data-ef="'+b.dataset.edit+'"]').classList.toggle('open')));
@@ -353,7 +314,7 @@ function gWire(sel,key,nums,rerender,transform){const box=$(sel);transform=trans
   box.querySelector('[data-ef="'+o.id+'"]').querySelectorAll('[data-f]').forEach(f=>{let v=f.value;if(nums.includes(f.dataset.f))v=num(v);if(transform[f.dataset.f])v=transform[f.dataset.f](v);o[f.dataset.f]=v;});save();rerender();renderOverview();}));
  box.querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click',()=>{state[key]=state[key].filter(x=>x.id!=b.dataset.del);save();rerender();renderOverview();}));}
 
-function drawOrg(){const svg=$('#org'),bw=176,bh=74,gx=18,vgap=46;const nodes=state.companies;
+function drawOrg(){const svg=$('#org'),bw=176,bh=86,gx=18,vgap=46;const nodes=state.companies;
  const kids={};nodes.forEach(n=>{const p=n.parent==null?'root':n.parent;(kids[p]=kids[p]||[]).push(n);});
  const unit=bw+gx;function subW(n){const ch=kids[n.id]||[];if(!ch.length)return unit;return Math.max(unit,ch.reduce((s,c)=>s+subW(c),0));}
  const pos={};function place(n,depth,left){const ch=kids[n.id]||[];let cx;if(!ch.length){cx=left+unit/2;}else{let cur=left;ch.forEach(c=>{place(c,depth+1,cur);cur+=subW(c);});cx=(pos[ch[0].id].cx+pos[ch[ch.length-1].id].cx)/2;}pos[n.id]={x:cx-bw/2,y:12+depth*(bh+vgap),cx,cy:12+depth*(bh+vgap)};}
@@ -365,9 +326,9 @@ function drawOrg(){const svg=$('#org'),bw=176,bh=74,gx=18,vgap=46;const nodes=st
  nodes.forEach(n=>{const o=pos[n.id];if(!o)return;const hasCh=(kids[n.id]||[]).length>0;const col=n.soon?'#8C7AA6':(n.parent==null?(hasCh?'#3F6B6B':'#8a8276'):'#5B8C5A');
   g+=`<rect x="${o.x}" y="${o.y}" width="${bw}" height="${bh}" rx="11" fill="#fff" stroke="${n.soon?'#CFC6B5':'#EAE2D4'}" stroke-width="1.3" ${n.soon?'stroke-dasharray="5 4"':''}/><rect x="${o.x}" y="${o.y+10}" width="5" height="${bh-20}" rx="2.5" fill="${col}"/>`;
   g+=`<text x="${o.x+16}" y="${o.y+22}" font-family="Fraunces,serif" font-size="13.5" font-weight="600" fill="#2D2A26">${esc(n.name).slice(0,24)}</text>`;
-  g+=`<text x="${o.x+16}" y="${o.y+38}" font-family="Mulish,sans-serif" font-size="10" fill="#6B6358">${esc(n.type).slice(0,28)}</text>`;
-  const l1=n.soon?'Projet à venir':`CA ${fmt(n.ca||0)} €`;g+=`<text x="${o.x+16}" y="${o.y+55}" font-family="Mulish" font-size="10.5" fill="#2D2A26">${l1}</text>`;
-  if(!n.soon)g+=`<text x="${o.x+16}" y="${o.y+68}" font-family="Mulish" font-size="10.5" fill="#2D2A26">Bénéfice ${fmt(n.benefice||0)} €</text>`;});
+  g+=`<text x="${o.x+16}" y="${o.y+37}" font-family="Mulish,sans-serif" font-size="9.5" fill="#6B6358">${esc(n.type).slice(0,30)}</text>`;
+  const l1=n.soon?'Projet à venir':`CA ${fmt(n.ca||0)} €${+n.benefice?(' · Bén. '+fmt(n.benefice)+' €'):''}`;g+=`<text x="${o.x+16}" y="${o.y+54}" font-family="Mulish" font-size="10" fill="#2D2A26">${esc(l1).slice(0,32)}</text>`;
+  const as=assocStr(n);if(as)g+=`<text x="${o.x+16}" y="${o.y+72}" font-family="Mulish" font-size="9.5" fill="#4A6B5A">${esc(as).slice(0,32)}${as.length>32?'…':''}</text>`;});
  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.innerHTML=g;}
 
 function renderGloss(){$('#gloss').innerHTML=GLOSS.map(g=>`<div class="gitem"><h3>${g.t}</h3><div class="meta">${g.l}</div><p>${g.d}</p></div>`).join('');}
@@ -404,132 +365,11 @@ document.querySelectorAll('[data-preset]').forEach(b=>b.addEventListener('click'
 document.querySelectorAll('[data-cpreset]').forEach(b=>b.addEventListener('click',()=>{const[name,type,fl,fr]=b.dataset.cpreset.split('|');const root=state.companies.find(c=>c.parent==null);state.companies.push({id:nid++,name,type,parent:root?root.id:null,ca:0,benefice:0,valeur:0,fricLabel:fl,fricRate:+fr});renderCompanies();renderOverview();openLast('#companies');}));
 function authMsg(x){const c=(x&&x.code)||'';return (c.includes('invalid-credential')||c.includes('wrong-password')||c.includes('user-not-found'))?'E-mail ou mot de passe incorrect.':c.includes('operation-not-allowed')?'Active « E-mail/Mot de passe » dans Firebase → Authentication.':c.includes('invalid-email')?'E-mail invalide.':c.includes('too-many-requests')?'Trop de tentatives, réessaie plus tard.':c.includes('network')?'Pas de connexion internet.':('Erreur : '+(c||(x&&x.message)||''));}
 (function(){const g=id=>document.getElementById(id);
- const lb=g('pl-btn');if(lb)lb.addEventListener('click',()=>{const e=g('pl-email').value.trim(),p=g('pl-pwd').value,er=g('pl-err');if(er){er.style.color='var(--terra)';er.textContent='';}if(!window._auth){if(er)er.textContent='Connexion à Firebase indisponible (hors ligne ou domaine non autorisé).';return;}window._auth.login(e,p).then(cred=>{if(!localStorage.getItem('patri_bio_credId')&&window.PublicKeyCredential){PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(ok=>{if(ok){var wrap=document.getElementById('patri-enroll-wrap');wrap.style.display='block';document.getElementById('patri-enroll-btn').onclick=function(){patriBioEnroll(cred.user);};}});}}).catch(x=>{if(er)er.textContent=authMsg(x);});});
+ const lb=g('pl-btn');if(lb)lb.addEventListener('click',()=>{const e=g('pl-email').value.trim(),p=g('pl-pwd').value,er=g('pl-err');if(er)er.textContent='';if(!window._auth){if(er)er.textContent='Connexion à Firebase indisponible (hors ligne ou domaine non autorisé).';return;}window._auth.login(e,p).catch(x=>{if(er)er.textContent=authMsg(x);});});
  const su=g('pl-signup');if(su)su.addEventListener('click',()=>{const e=g('pl-email').value.trim(),p=g('pl-pwd').value,er=g('pl-err');if(er)er.textContent='';if(!window._auth){if(er)er.textContent='Connexion à Firebase indisponible.';return;}window._auth.signup(e,p).catch(x=>{if(er)er.textContent=authMsg(x);});});
  const off=g('pl-offline');if(off)off.addEventListener('click',()=>{const ov=g('patri-login');if(ov)ov.style.display='none';});})();
-window.addEventListener('fbready',()=>{
-  if(typeof initSync==='function') initSync();
-});
-(async()=>{
-  await load();
-  renderOverview();renderStamp();renderAccounts();renderProps();
-  renderCompanies();renderGloss();renderContacts();renderSync();
-})();
-</script>
-
-<script>
-// ════════════════════════════════════════════════════
-//  WEBAUTHN — Empreinte digitale (Notre Patrimoine)
-//  Dans <script> classique pour accès global garanti
-// ════════════════════════════════════════════════════
-var PATRI_BIO_KEY   = 'patri_bio_credId';
-var PATRI_BIO_EMAIL = 'patri_bio_email';
-var PATRI_BIO_CREDS = 'patri_bio_creds';
-
-function _pb64u(buf){return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');}
-function _pfromb64u(s){s=s.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';return Uint8Array.from(atob(s),c=>c.charCodeAt(0)).buffer;}
-
-async function patriBioInit(){
-  if(!window.PublicKeyCredential)return;
-  var ok=await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().catch(function(){return false;});
-  if(!ok)return;
-  document.getElementById('patri-bio-wrap').style.display='block';
-  if(!localStorage.getItem(PATRI_BIO_KEY)){
-    document.getElementById('patri-bio-label').textContent="Activer l'empreinte après connexion";
-    document.getElementById('patri-bio-btn').onclick=function(){document.getElementById('pl-pwd').focus();};
-  }
-}
-
-async function patriBioLogin(){
-  var btn=document.getElementById('patri-bio-btn');
-  var err=document.getElementById('pl-err');
-  var credId=localStorage.getItem(PATRI_BIO_KEY);
-  var savedCreds=localStorage.getItem(PATRI_BIO_CREDS);
-  err.textContent=''; err.style.color='var(--terra)';
-  if(!credId){document.getElementById('pl-pwd').focus();return;}
-  btn.disabled=true;
-  btn.innerHTML='<span class="ai-dot-p"></span><span class="ai-dot-p"></span><span class="ai-dot-p"></span>';
-  try{
-    await navigator.credentials.get({publicKey:{
-      challenge:crypto.getRandomValues(new Uint8Array(32)),
-      allowCredentials:[{type:'public-key',id:_pfromb64u(credId),transports:['internal']}],
-      userVerification:'required',timeout:60000
-    }});
-    // Empreinte OK — connexion Firebase automatique
-    if(savedCreds && window._auth){
-      var parts=atob(savedCreds).split('|||');
-      if(parts.length===2){
-        err.style.color='#5a8a60';
-        err.textContent='✓ Connexion en cours…';
-        window._auth.login(parts[0],parts[1]).catch(function(e){
-          err.style.color='var(--terra)';
-          err.textContent='Session expirée — saisissez votre mot de passe.';
-          var em=document.getElementById('pl-email');
-          em.value=parts[0]; em.style.background='#f0f7ee'; em.readOnly=true;
-          document.getElementById('pl-pwd').focus();
-        });
-        return;
-      }
-    }
-    // Fallback : pré-remplir l'email
-    var savedEmail=localStorage.getItem(PATRI_BIO_EMAIL)||'';
-    document.getElementById('pl-email').value=savedEmail;
-    document.getElementById('pl-email').style.background='#f0f7ee';
-    document.getElementById('pl-email').readOnly=true;
-    err.style.color='#5a8a60';
-    err.textContent='✓ Empreinte reconnue — saisissez votre mot de passe.';
-    document.getElementById('pl-pwd').focus();
-  }catch(e){
-    if(e.name==='NotAllowedError')err.textContent='Reconnaissance annulée.';
-    else if(e.name==='InvalidStateError')err.textContent="Empreinte invalide — cliquez sur 🔄 Réinitialiser.";
-    else err.textContent='⚠️ '+e.name+' : '+e.message;
-  }finally{
-    btn.disabled=false;
-    btn.innerHTML='<span style="font-size:22px">☝️</span><span id="patri-bio-label">Se connecter avec empreinte</span>';
-  }
-}
-
-async function patriBioEnroll(user){
-  var err=document.getElementById('pl-err');
-  var wrap=document.getElementById('patri-enroll-wrap');
-  if(!user){err.style.color='var(--terra)';err.textContent='Session non reconnue — réessayez.';return;}
-  try{
-    var cred=await navigator.credentials.create({publicKey:{
-      challenge:crypto.getRandomValues(new Uint8Array(32)),
-      rp:{name:'Notre Patrimoine',id:location.hostname},
-      user:{id:new TextEncoder().encode(user.uid),name:user.email,displayName:'Patrimoine'},
-      pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],
-      authenticatorSelection:{authenticatorAttachment:'platform',userVerification:'required',residentKey:'discouraged',requireResidentKey:false},
-      timeout:60000,attestation:'none'
-    }});
-    localStorage.setItem(PATRI_BIO_KEY,_pb64u(cred.rawId));
-    localStorage.setItem(PATRI_BIO_EMAIL,user.email);
-    // Stocker les credentials pour connexion automatique
-    var pwd=document.getElementById('pl-pwd').value;
-    if(pwd) localStorage.setItem(PATRI_BIO_CREDS,btoa(user.email+'|||'+pwd));
-    wrap.innerHTML='<strong style="color:var(--terra)">✓ Empreinte activée !</strong><p>Connexion automatique active dès maintenant.</p>';
-    setTimeout(function(){wrap.style.display='none';},3000);
-  }catch(e){
-    err.style.color='var(--terra)';
-    if(e.name==='NotAllowedError')err.textContent='Enrôlement annulé.';
-    else err.textContent='Erreur enrôlement : '+e.message;
-  }
-}
-
-function patriBioReset(){
-  if(!confirm("Supprimer l'empreinte enregistrée ?"))return;
-  localStorage.removeItem(PATRI_BIO_KEY);
-  localStorage.removeItem(PATRI_BIO_EMAIL);
-  localStorage.removeItem(PATRI_BIO_CREDS);
-  document.getElementById('patri-bio-wrap').style.display='none';
-  var err=document.getElementById('pl-err');
-  err.style.color='#5a8a60';
-  err.textContent="✓ Empreinte supprimée — reconnectez-vous pour la ré-activer.";
-  var em=document.getElementById('pl-email');
-  em.value=''; em.readOnly=false; em.style.background='';
-}
-
-document.addEventListener('DOMContentLoaded', patriBioInit);
+window.addEventListener('fbready',initSync);
+(async()=>{await load();renderOverview();renderStamp();renderAccounts();renderProps();renderCompanies();renderGloss();renderContacts();renderSync();if(window._auth)initSync();})();
 </script>
 </body>
 </html>
