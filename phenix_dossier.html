@@ -2126,6 +2126,10 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
           </select>
         </div>
       </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Assigné à</label>
+        <select id="tache-assigne"></select>
+      </div>
       <div class="form-grid">
         <div class="form-group">
           <label>Date prévue</label>
@@ -5852,6 +5856,19 @@ function filterTaches(q) { renderTaches(); }
 let _tacheEditId = null;
 let _tachePrioSelected = 'normale';
 
+// ── Collaborateurs assignables aux tâches (visible dans Phénix Suivi) ──
+// ⚠️ L'email doit correspondre EXACTEMENT au compte Firebase Auth utilisé pour se connecter à Phénix Suivi.
+const COLLABORATEURS = [
+  { email: 'contact@phenixarchitecte.fr', nom: 'Maxime' },
+  { email: 'alternante@phenixarchitecte.fr', nom: 'Alternante (email à confirmer)' },
+];
+function fillAssigneSelect(selectedEmail) {
+  const sel = document.getElementById('tache-assigne');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">— Non assigné —</option>' +
+    COLLABORATEURS.map(c => `<option value="${c.email}" ${c.email===selectedEmail?'selected':''}>${c.nom}</option>`).join('');
+}
+
 function openTacheModal(defaultStatut='todo') {
   _tacheEditId = null;
   _tachePrioSelected = 'normale';
@@ -5869,6 +5886,7 @@ function openTacheModal(defaultStatut='todo') {
   const sel = document.getElementById('tache-projet');
   sel.innerHTML = '<option value="">— Aucun projet —</option>' +
     stateDossier.projets.map(p=>`<option value="${p.id}">${p.nom}</option>`).join('');
+  fillAssigneSelect('');
   setPrio('normale');
   document.getElementById('tacheModal').classList.add('open');
 }
@@ -5891,6 +5909,7 @@ function openTacheEdit(id) {
   const sel = document.getElementById('tache-projet');
   sel.innerHTML = '<option value="">— Aucun projet —</option>' +
     stateDossier.projets.map(p=>`<option value="${p.id}" ${p.id==t.projetId?'selected':''}>${p.nom}</option>`).join('');
+  fillAssigneSelect(t.assigneA||'');
   setPrio(t.priorite||'normale');
   document.getElementById('tacheModal').classList.add('open');
 }
@@ -5917,6 +5936,8 @@ async function saveTache() {
     priorite: _tachePrioSelected,
     projetId: document.getElementById('tache-projet').value,
     phase:    document.getElementById('tache-phase').value,
+    assigneA: document.getElementById('tache-assigne').value,
+    dateLivraison: document.getElementById('tache-date').value,
     createdAt: _tacheEditId ? (stateDossier.taches.find(x=>x.id===_tacheEditId)||{}).createdAt : new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -8377,10 +8398,12 @@ async function confirmVocalTache() {
     priorite:  priorite,
     statut:    'todo',
     date:      date || '',
+    dateLivraison: date || '',
     heure:     '09:00',
     duree:     '60',
     projetId:  projetId || '',
     phase:     '',
+    assigneA:  '',
     createdAt: new Date().toISOString(),
     source:    'vocal',
   };
