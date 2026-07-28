@@ -32,6 +32,15 @@ const firebaseConfig = {
 };
 
 const app     = initializeApp(firebaseConfig);
+// ════════════════════════════════════════════════════════════
+//  FIREBASE APP CHECK — protection anti-bots (reCAPTCHA v3)
+// ════════════════════════════════════════════════════════════
+import { initializeAppCheck, ReCaptchaV3Provider } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js';
+const RECAPTCHA_SITE_KEY = '6LeObWktAAAAAL9eyppDRtLp5yZTyBaF4ZNKXNIO';
+try {
+  initializeAppCheck(app, { provider: new ReCaptchaV3Provider(RECAPTCHA_SITE_KEY), isTokenAutoRefreshEnabled: true });
+} catch (e) { console.warn('App Check non initialisé :', e); }
+
 const db      = getFirestore(app);
 const storage = getStorage(app);
 const auth    = getAuth(app);
@@ -208,18 +217,37 @@ body{font-family:var(--font-sans);background:var(--bg);color:var(--text);font-si
   <div class="box">
     <div class="logo">Phénix<span>-Architecture</span></div>
     <div class="sub">Connexion sécurisée</div>
+    <div id="pl-bio-wrap" style="display:none;margin-bottom:16px">
+      <button id="pl-bio-btn" onclick="phenixBioLogin()" style="width:100%;padding:14px;border:2px solid rgba(77,184,232,.6);border-radius:9px;background:rgba(77,184,232,.12);color:#4A9CC7;font-size:15px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px">
+        <span style="font-size:24px">☝️</span><span id="pl-bio-label">Se connecter avec empreinte</span>
+      </button>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:14px;margin-bottom:14px">
+        <div style="flex:1;height:1px;background:rgba(0,0,0,.1)"></div>
+        <span style="font-size:11px;color:rgba(0,0,0,.35);letter-spacing:.08em">ou par mot de passe</span>
+        <div style="flex:1;height:1px;background:rgba(0,0,0,.1)"></div>
+      </div>
+    </div>
     <input id="pl-email" type="email" autocomplete="username" placeholder="E-mail">
     <input id="pl-pwd" type="password" autocomplete="current-password" placeholder="Mot de passe" onkeydown="if(event.key==='Enter')phenixDoLogin()">
     <button id="pl-btn" onclick="phenixDoLogin()">Se connecter</button>
     <div id="pl-err"></div>
+    <div style="margin-top:14px;text-align:center">
+      <button onclick="phenixBioReset()" style="background:none;border:none;color:rgba(0,0,0,.3);font-size:11px;cursor:pointer;font-family:inherit;padding:6px">🔄 Réinitialiser l'empreinte enregistrée</button>
+    </div>
+    <div id="pl-enroll-wrap" style="display:none;margin-top:16px;padding:14px;background:rgba(74,156,199,.1);border:1.5px solid rgba(74,156,199,.3);border-radius:9px">
+      <div style="font-size:13px;color:#2A5298;font-weight:600;margin-bottom:6px">☝️ Activer la connexion par empreinte ?</div>
+      <div style="font-size:11px;color:rgba(0,0,0,.55);margin-bottom:12px">Votre empreinte restera stockée uniquement sur cet appareil.</div>
+      <div style="display:flex;gap:8px">
+        <button id="pl-enroll-btn" style="flex:1;padding:9px;border:none;border-radius:7px;background:linear-gradient(135deg,#4A9CC7,#2A5298);color:#fff;font-size:13px;font-weight:600;cursor:pointer">Activer</button>
+        <button onclick="document.getElementById('pl-enroll-wrap').style.display='none'" style="flex:1;padding:9px;border:1.5px solid rgba(0,0,0,.15);border-radius:7px;background:transparent;color:rgba(0,0,0,.5);font-size:13px;cursor:pointer">Plus tard</button>
+      </div>
+    </div>
   </div>
 </div>
 
 <div id="app" style="display:none">
   <div class="topbar">
-    <button class="btn btn-sm" onclick="window.close()"><i class="ti ti-arrow-left"></i> Retour au dossier</button>
     <div class="topbar-title">Dossier <span>Financement</span></div>
-    <button class="btn btn-sm" onclick="window._auth.logout()"><i class="ti ti-logout"></i> Déconnexion</button>
   </div>
 
   <div class="content">
@@ -871,5 +899,150 @@ window.addEventListener('firebase-ready', async () => {
   }
 });
 </script>
+<script>
+// ════════════════════════════════════════════════════════════
+//  WEBAUTHN — Authentification biométrique (empreinte / Face ID)
+//  Même mécanisme que Dossier — la clé stockée est partagée
+//  (même origine) donc un enrôlement fait dans Dossier fonctionne ici aussi.
+// ════════════════════════════════════════════════════════════
+const BIO_KEY      = 'phenix_bio_credId';
+const BIO_EMAIL_KEY= 'phenix_bio_email';
+function _b64u(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,''); }
+function _fromb64u(s){ s=s.replace(/-/g,'+').replace(/_/g,'/'); while(s.length%4) s+='='; return Uint8Array.from(atob(s),c=>c.charCodeAt(0)).buffer; }
+
+async function phenixBioInit(){
+  if(!window.PublicKeyCredential) return;
+  const hasPlatform = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().catch(()=>false);
+  if(!hasPlatform) return;
+  const bioWrap = document.getElementById('pl-bio-wrap');
+  if(!bioWrap) return;
+  bioWrap.style.display = 'block';
+  const credId = localStorage.getItem(BIO_KEY);
+  if(!credId){
+    document.getElementById('pl-bio-label').textContent = 'Activer l\'empreinte après connexion';
+    document.getElementById('pl-bio-btn').onclick = () => { document.getElementById('pl-pwd').focus(); };
+  }
+}
+
+function phenixBioReset(){
+  if(!confirm('Supprimer l\'empreinte enregistrée ? Vous devrez la ré-enregistrer après votre prochaine connexion.')) return;
+  localStorage.removeItem(BIO_KEY);
+  localStorage.removeItem(BIO_EMAIL_KEY);
+  localStorage.removeItem('phenix_bio_creds');
+  const lbl = document.getElementById('pl-bio-label'); if(lbl) lbl.textContent = 'Activer l\'empreinte après connexion';
+  const btn = document.getElementById('pl-bio-btn'); if(btn) btn.onclick = () => document.getElementById('pl-pwd').focus();
+  const err = document.getElementById('pl-err');
+  if(err){ err.style.color = '#7DC6E8'; err.textContent = '✓ Empreinte supprimée — connectez-vous avec email/mdp pour la ré-activer.'; }
+}
+
+async function phenixBioLogin(){
+  const btn = document.getElementById('pl-bio-btn');
+  const err = document.getElementById('pl-err');
+  const credId = localStorage.getItem(BIO_KEY);
+  if(err){ err.textContent = ''; err.style.color = '#FFB4A8'; }
+  if(!credId){ document.getElementById('pl-pwd').focus(); return; }
+  btn.disabled = true;
+  btn.innerHTML = '<span style="font-size:18px">⏳</span> <span>Vérification empreinte…</span>';
+  try {
+    await navigator.credentials.get({
+      publicKey: {
+        challenge: crypto.getRandomValues(new Uint8Array(32)),
+        allowCredentials: [{ type: 'public-key', id: _fromb64u(credId), transports: ['internal'] }],
+        userVerification: 'required',
+        timeout: 60000
+      }
+    });
+    const savedCreds = localStorage.getItem('phenix_bio_creds');
+    if(savedCreds && window._auth){
+      const parts = atob(savedCreds).split('|||');
+      if(parts.length === 2){
+        err.style.color = '#4db8e8'; err.textContent = '✓ Connexion en cours…';
+        window._auth.login(parts[0], parts[1]).catch(() => {
+          err.style.color = '#FFB4A8';
+          err.textContent = 'Session expirée — saisissez votre mot de passe.';
+          const em = document.getElementById('pl-email');
+          em.value = parts[0]; em.style.background = '#e8f5e9'; em.readOnly = true;
+          document.getElementById('pl-pwd').focus();
+        });
+        return;
+      }
+    }
+    const savedEmail = localStorage.getItem(BIO_EMAIL_KEY) || '';
+    document.getElementById('pl-email').value = savedEmail;
+    document.getElementById('pl-email').style.background = '#e8f5e9';
+    document.getElementById('pl-email').readOnly = true;
+    err.style.color = '#4db8e8'; err.textContent = '✓ Empreinte reconnue — saisissez votre mot de passe.';
+    document.getElementById('pl-pwd').focus();
+  } catch(e){
+    if(e.name === 'NotAllowedError') err.textContent = 'Reconnaissance annulée.';
+    else if(e.name === 'InvalidStateError') err.textContent = 'Empreinte invalide — cliquez sur 🔄 Réinitialiser.';
+    else err.textContent = '⚠️ ' + e.name + ' : ' + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<span style="font-size:24px">☝️</span> <span>Se connecter avec empreinte</span>';
+  }
+}
+
+async function phenixBioEnroll(userOverride){
+  const err = document.getElementById('pl-err');
+  const wrap = document.getElementById('pl-enroll-wrap');
+  const user = userOverride || (window._auth && window._auth.current());
+  if(!user){ if(err) err.textContent = 'Session non reconnue — réessayez dans quelques secondes.'; return; }
+  try {
+    const encoder = new TextEncoder();
+    const credential = await navigator.credentials.create({
+      publicKey: {
+        challenge: crypto.getRandomValues(new Uint8Array(32)),
+        rp: { name: 'Phénix-Architecture', id: location.hostname },
+        user: { id: encoder.encode(user.uid), name: user.email, displayName: 'Phénix' },
+        pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+        authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'discouraged', requireResidentKey: false },
+        excludeCredentials: [],
+        timeout: 60000,
+        attestation: 'none'
+      }
+    });
+    localStorage.setItem(BIO_KEY, _b64u(credential.rawId));
+    localStorage.setItem(BIO_EMAIL_KEY, user.email);
+    const pwd = document.getElementById('pl-pwd').value;
+    if(pwd) localStorage.setItem('phenix_bio_creds', btoa(user.email + '|||' + pwd));
+    if(wrap){ wrap.innerHTML = '<div style="color:#7DC6E8;font-size:13px;font-weight:600">✓ Empreinte activée — connexion automatique dès maintenant !</div>'; setTimeout(()=>{ wrap.style.display='none'; }, 3000); }
+  } catch(e){
+    if(err) err.textContent = e.name === 'NotAllowedError' ? 'Enrôlement annulé.' : ('Erreur enrôlement : ' + e.message);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', phenixBioInit);
+window.phenixBioLogin  = phenixBioLogin;
+window.phenixBioEnroll = phenixBioEnroll;
+window.phenixBioReset  = phenixBioReset;
+
+// Propose l'enrôlement après une connexion email réussie
+const _origDoLogin_bio = window.phenixDoLogin;
+window.phenixDoLogin = function(){
+  const email = (document.getElementById('pl-email').value || '').trim();
+  const pwd   = document.getElementById('pl-pwd').value || '';
+  const err   = document.getElementById('pl-err'); if(err){ err.style.color='#FFB4A8'; err.textContent=''; }
+  const btn   = document.getElementById('pl-btn'); if(btn) btn.disabled = true;
+  window._auth.login(email, pwd).then((cred) => {
+    const user = cred.user;
+    if(!localStorage.getItem(BIO_KEY) && window.PublicKeyCredential){
+      PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(ok => {
+        if(ok){
+          const wrap = document.getElementById('pl-enroll-wrap');
+          if(wrap){ wrap.style.display='block'; document.getElementById('pl-enroll-btn').onclick = () => phenixBioEnroll(user); }
+        }
+      });
+    }
+  }).catch((e) => {
+    const c = (e && e.code) || '';
+    if(err) err.textContent =
+      c.indexOf('user-not-found')>=0 || c.indexOf('wrong-password')>=0 || c.indexOf('invalid-credential')>=0 ? 'Email ou mot de passe incorrect.' :
+      c.indexOf('network')>=0 ? 'Pas de connexion internet.' :
+      ('Erreur : ' + (c || (e && e.message) || ''));
+  }).finally(() => { if(btn) btn.disabled = false; });
+};
+</script>
+
 </body>
 </html>

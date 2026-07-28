@@ -11,7 +11,17 @@
 import{initializeApp}from'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import{getFirestore,collection,doc,onSnapshot,setDoc,deleteDoc}from'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 import{getAuth,signInWithEmailAndPassword,signOut,onAuthStateChanged}from'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-const db=getFirestore(initializeApp({apiKey:"AIzaSyCjNKNvS6p3nqE6-_Gw9I397ZtXm2FG1ew",authDomain:"phenix-architecte-9151b.firebaseapp.com",projectId:"phenix-architecte-9151b",storageBucket:"phenix-architecte-9151b.firebasestorage.app",messagingSenderId:"811231684720",appId:"1:811231684720:web:413fa324ae43c07607acb5"}));
+const app=initializeApp({apiKey:"AIzaSyCjNKNvS6p3nqE6-_Gw9I397ZtXm2FG1ew",authDomain:"phenix-architecte-9151b.firebaseapp.com",projectId:"phenix-architecte-9151b",storageBucket:"phenix-architecte-9151b.firebasestorage.app",messagingSenderId:"811231684720",appId:"1:811231684720:web:413fa324ae43c07607acb5"});
+// ════════════════════════════════════════════════════════════
+//  FIREBASE APP CHECK — protection anti-bots (reCAPTCHA v3)
+// ════════════════════════════════════════════════════════════
+import { initializeAppCheck, ReCaptchaV3Provider } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js';
+const RECAPTCHA_SITE_KEY = '6LeObWktAAAAAL9eyppDRtLp5yZTyBaF4ZNKXNIO';
+try {
+  initializeAppCheck(app, { provider: new ReCaptchaV3Provider(RECAPTCHA_SITE_KEY), isTokenAutoRefreshEnabled: true });
+} catch (e) { console.warn('App Check non initialisé :', e); }
+
+const db=getFirestore(app);
 window._fb={
   save:a=>setDoc(doc(db,'phenix_artisans',String(a.id)),a),
   del:id=>deleteDoc(doc(db,'phenix_artisans',String(id))),
@@ -228,15 +238,35 @@ select.fs:focus{border-color:var(--acc)}
   <div style="background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.18);border-radius:16px;padding:34px 28px;max-width:360px;width:100%;text-align:center">
     <div style="font-family:'DM Serif Display',Georgia,serif;font-size:30px;color:#fff;margin-bottom:4px">Phénix<span style="color:#7DC6E8">-Architecture</span></div>
     <div style="font-size:11px;color:rgba(255,255,255,.5);letter-spacing:.12em;text-transform:uppercase;margin-bottom:26px">Connexion sécurisée</div>
+    <div id="pl-bio-wrap" style="display:none;margin-bottom:16px">
+      <button id="pl-bio-btn" onclick="phenixBioLogin()" style="width:100%;padding:14px;border:2px solid rgba(77,184,232,.6);border-radius:9px;background:rgba(77,184,232,.12);color:#7DC6E8;font-size:15px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px">
+        <span style="font-size:24px">☝️</span><span id="pl-bio-label">Se connecter avec empreinte</span>
+      </button>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:14px;margin-bottom:14px">
+        <div style="flex:1;height:1px;background:rgba(255,255,255,.15)"></div>
+        <span style="font-size:11px;color:rgba(255,255,255,.35);letter-spacing:.08em">ou par mot de passe</span>
+        <div style="flex:1;height:1px;background:rgba(255,255,255,.15)"></div>
+      </div>
+    </div>
     <input id="pl-email" type="email" autocomplete="username" placeholder="E-mail" style="width:100%;padding:12px 14px;margin-bottom:10px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.95);font-size:14px;outline:none">
     <input id="pl-pwd" type="password" autocomplete="current-password" placeholder="Mot de passe" onkeydown="if(event.key==='Enter')phenixDoLogin()" style="width:100%;padding:12px 14px;margin-bottom:14px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.95);font-size:14px;outline:none">
     <button id="pl-btn" onclick="phenixDoLogin()" style="width:100%;padding:12px;border:none;border-radius:9px;background:linear-gradient(135deg,#4A9CC7,#2A5298);color:#fff;font-size:15px;font-weight:600;cursor:pointer">Se connecter</button>
     <div id="pl-err" style="color:#FFB4A8;font-size:12.5px;margin-top:12px;min-height:16px"></div>
+    <div style="margin-top:14px;text-align:center">
+      <button onclick="phenixBioReset()" style="background:none;border:none;color:rgba(255,255,255,.25);font-size:11px;cursor:pointer;font-family:inherit;padding:6px">🔄 Réinitialiser l'empreinte enregistrée</button>
+    </div>
+    <div id="pl-enroll-wrap" style="display:none;margin-top:16px;padding:14px;background:rgba(77,184,232,.1);border:1.5px solid rgba(77,184,232,.3);border-radius:9px">
+      <div style="font-size:13px;color:#7DC6E8;font-weight:600;margin-bottom:6px">☝️ Activer la connexion par empreinte ?</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.55);margin-bottom:12px">Votre empreinte restera stockée uniquement sur cet appareil.</div>
+      <div style="display:flex;gap:8px">
+        <button id="pl-enroll-btn" style="flex:1;padding:9px;border:none;border-radius:7px;background:linear-gradient(135deg,#4A9CC7,#2A5298);color:#fff;font-size:13px;font-weight:600;cursor:pointer">Activer</button>
+        <button onclick="document.getElementById('pl-enroll-wrap').style.display='none'" style="flex:1;padding:9px;border:1.5px solid rgba(255,255,255,.2);border-radius:7px;background:transparent;color:rgba(255,255,255,.6);font-size:13px;cursor:pointer">Plus tard</button>
+      </div>
+    </div>
   </div>
 </div>
 <div class="app">
 <aside class="sb">
-  <div class="sb-logo"><div class="sb-icon">🏛</div><div><div class="sb-name">Phénix-Architecture</div><div class="sb-sub">Annuaire Artisans</div></div></div>
   <div class="sb-sep">Navigation</div>
   <div class="sb-it on" onclick="goPage('ann',this)"><i class="ti ti-address-book"></i> Annuaire <span class="sb-badge" id="nb-tot">0</span></div>
   <div class="sb-it" onclick="goPage('fav',this)"><i class="ti ti-star"></i> Favoris <span class="sb-badge" id="nb-fav">0</span></div>
@@ -435,6 +465,7 @@ const ini=n=>(n||'').split(' ').map(w=>w[0]||'').slice(0,2).join('').toUpperCase
 const VMET={'plombier':'Plomberie','plomberie':'Plomberie','electricien':'Électricité','electricite':'Électricité','macon':'Maçonnerie','maconnerie':'Maçonnerie','charpentier':'Charpente','charpente':'Charpente','couvreur':'Couverture','couverture':'Couverture','toiture':'Couverture','menuisier':'Menuiserie','menuiserie':'Menuiserie','carreleur':'Carrelage','carrelage':'Carrelage','peintre':'Peinture','peinture':'Peinture','isolation':'Isolation','isolateur':'Isolation','platrier':'Plâtrerie','platrerie':'Plâtrerie','terrassement':'Terrassement','terrassier':'Terrassement','serrurier':'Serrurerie / Métallerie','serrurerie':'Serrurerie / Métallerie','metallier':'Serrurerie / Métallerie','metallerie':'Serrurerie / Métallerie','chauffagiste':'Chauffage / CVC','chauffage':'Chauffage / CVC','cvc':'Chauffage / CVC','climatisation':'Chauffage / CVC','demolition':'Démolition','genie civil':'Génie civil','vrd':'VRD','voirie':'VRD'};
 const DEPTNAMES={'03':['allier','moulins','montlucon','vichy','yzeure'],'63':['puy de dome','puy-de-dome','clermont','clermont ferrand','riom','issoire','thiers','cournon','chamalieres'],'15':['cantal','aurillac','saint flour'],'43':['haute loire','haute-loire','le puy','le puy en velay','brioude','yssingeaux'],'42':['loire','saint etienne','roanne','montbrison'],'19':['correze','tulle','brive'],'23':['creuse','gueret'],'87':['haute vienne','haute-vienne','limoges'],'07':['ardeche','privas','aubenas'],'12':['aveyron','rodez','millau'],'48':['lozere','mende'],'01':['ain','bourg en bresse']};
 const norm=s=>(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+const esc=s=>(s===null||s===undefined)?'':String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
 function initFB(){const t=setInterval(()=>{if(window._fb){clearInterval(t);window._fb.listen(l=>{arts=l;renderAll();sync(false);});}},200);}
 function sync(on){document.getElementById('sdot').className='sdot'+(on?' s':'');document.getElementById('slbl').textContent=on?'Enregistrement…':'Synchronisé';}
@@ -479,7 +510,7 @@ function filMet(m){document.getElementById('fmet').value=m;goPage('ann',document
 function renderAnn(){if(_voiceQuery){renderVoiceResults();return;}const q=(document.getElementById('q').value||'').toLowerCase(),met=document.getElementById('fmet').value,note=parseInt(document.getElementById('fnote').value)||0,dispo=document.getElementById('fdispo').value;let l=arts.filter(a=>{if(q&&![(a.nom||''),(a.entreprise||''),(a.ville||''),(a.metier||'')].some(v=>v.toLowerCase().includes(q)))return false;if(met&&a.metier!==met)return false;if(note&&(parseInt(a.note)||0)<note)return false;if(dispo&&a.dispo!==dispo)return false;return true;});l.sort((a,b)=>(b.favori||0)-(a.favori||0)||(parseInt(b.note)||0)-(parseInt(a.note)||0));document.getElementById('ann-grid').innerHTML=l.length?l.map(a=>cHtml(a)).join(''):`<div class="empty" style="grid-column:1/-1"><i class="ti ti-address-book"></i><div class="empty-t">Aucun artisan</div><div style="font-size:12px">Ajoutez votre premier artisan</div></div>`;}
 function renderFav(){const l=arts.filter(a=>a.favori==1).sort((a,b)=>(parseInt(b.note)||0)-(parseInt(a.note)||0));document.getElementById('fav-grid').innerHTML=l.length?l.map(a=>cHtml(a)).join(''):`<div class="empty" style="grid-column:1/-1"><i class="ti ti-star"></i><div class="empty-t">Aucun favori</div></div>`;}
 
-function cHtml(a){const col=mc(a.metier);return`<div class="ac" onclick="openEdit('${a.id}')">${a.favori==1?'<span class="fb">⭐</span>':''}<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px"><div class="av" style="background:linear-gradient(135deg,${col},${col}99)">${ini(a.nom)}</div><div style="flex:1;min-width:0"><div class="ac-nom">${a.nom||'—'}</div><div class="ac-ent">${a.entreprise||'Artisan indépendant'}</div><div class="mt"><span style="width:6px;height:6px;border-radius:50%;background:${col};display:inline-block"></span>${a.metier||'—'}</div></div></div><div>${a.ville?`<div class="ac-row"><i class="ti ti-map-pin"></i>${a.ville}${a.rayon?' · '+a.rayon+' km':''}</div>`:''} ${a.tel?`<div class="ac-row"><i class="ti ti-phone"></i>${a.tel}</div>`:''}</div><div class="ac-ft"><div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">${stH(a.note)}${disH(a.dispo)}${tarH(a.tarif)}</div><div style="display:flex;gap:3px" onclick="event.stopPropagation()">${a.tel?`<a href="tel:${a.tel}" class="btn btn-sm btn-i"><i class="ti ti-phone"></i></a>`:''}<button class="btn btn-sm btn-i" onclick="togFav('${a.id}')"><i class="ti ti-star${a.favori==1?'-filled':''}"></i></button></div></div></div>`;}
+function cHtml(a){const col=mc(a.metier);return`<div class="ac" onclick="openEdit('${a.id}')">${a.favori==1?'<span class="fb">⭐</span>':''}<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px"><div class="av" style="background:linear-gradient(135deg,${col},${col}99)">${ini(a.nom)}</div><div style="flex:1;min-width:0"><div class="ac-nom">${esc(a.nom)||'—'}</div><div class="ac-ent">${esc(a.entreprise)||'Artisan indépendant'}</div><div class="mt"><span style="width:6px;height:6px;border-radius:50%;background:${col};display:inline-block"></span>${esc(a.metier)||'—'}</div></div></div><div>${a.ville?`<div class="ac-row"><i class="ti ti-map-pin"></i>${esc(a.ville)}${a.rayon?' · '+a.rayon+' km':''}</div>`:''} ${a.tel?`<div class="ac-row"><i class="ti ti-phone"></i>${esc(a.tel)}</div>`:''}</div><div class="ac-ft"><div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">${stH(a.note)}${disH(a.dispo)}${tarH(a.tarif)}</div><div style="display:flex;gap:3px" onclick="event.stopPropagation()">${a.tel?`<a href="tel:${esc(a.tel)}" class="btn btn-sm btn-i"><i class="ti ti-phone"></i></a>`:''}<button class="btn btn-sm btn-i" onclick="togFav('${a.id}')"><i class="ti ti-star${a.favori==1?'-filled':''}"></i></button></div></div></div>`;}
 
 function calcSc(a,lieu,bud){let s=0;const d=[];if(a.favori==1){s+=2;d.push({i:'🤝',l:'Favori',p:2});}const n=parseInt(a.note)||0;if(n>0){const p=Math.round(n/5*2*10)/10;s+=p;d.push({i:'⭐',l:n+'★',p});}if(a.dispo==='disponible'){s+=2;d.push({i:'✅',l:'Dispo',p:2});}else if(a.dispo==='contactez')s+=0.5;if(lieu){const l=lieu.toLowerCase();if((a.ville||'').toLowerCase().includes(l)){s+=2;d.push({i:'📍',l:'Même zone',p:2});}else if((a.zones||'').toLowerCase().includes(l)){s+=1;d.push({i:'📍',l:'Zone proche',p:1});}}else s+=1;if(bud==='serre'){if(a.tarif==='economique'){s+=2;d.push({i:'💚',l:'Tarif ok',p:2});}else if(a.tarif==='premium')s-=1;else s+=1;}else if(bud==='moyen'){if(!a.tarif||a.tarif==='moyen'){s+=2;d.push({i:'💚',l:'Tarif ok',p:2});}else s+=1;}else if(bud==='confortable'){if(a.tarif==='premium'){s+=2;d.push({i:'💚',l:'Tarif ok',p:2});}else s+=1;}else s+=1;return{score:Math.min(Math.max(Math.round(s*10)/10,0),10),details:d};}
 const scC=s=>s>=8?'#2D7A4F':s>=6?'#4A9CC7':s>=4?'#8A6020':'#C0392B';
@@ -1557,5 +1588,150 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('ov').addEventListener('click',e=>{if(e.target===document.getElementById('ov'))closeM();});
 });
 </script>
+<script>
+// ════════════════════════════════════════════════════════════
+//  WEBAUTHN — Authentification biométrique (empreinte / Face ID)
+//  Même mécanisme que Dossier — la clé stockée est partagée
+//  (même origine) donc un enrôlement fait dans Dossier fonctionne ici aussi.
+// ════════════════════════════════════════════════════════════
+const BIO_KEY      = 'phenix_bio_credId';
+const BIO_EMAIL_KEY= 'phenix_bio_email';
+function _b64u(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,''); }
+function _fromb64u(s){ s=s.replace(/-/g,'+').replace(/_/g,'/'); while(s.length%4) s+='='; return Uint8Array.from(atob(s),c=>c.charCodeAt(0)).buffer; }
+
+async function phenixBioInit(){
+  if(!window.PublicKeyCredential) return;
+  const hasPlatform = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().catch(()=>false);
+  if(!hasPlatform) return;
+  const bioWrap = document.getElementById('pl-bio-wrap');
+  if(!bioWrap) return;
+  bioWrap.style.display = 'block';
+  const credId = localStorage.getItem(BIO_KEY);
+  if(!credId){
+    document.getElementById('pl-bio-label').textContent = 'Activer l\'empreinte après connexion';
+    document.getElementById('pl-bio-btn').onclick = () => { document.getElementById('pl-pwd').focus(); };
+  }
+}
+
+function phenixBioReset(){
+  if(!confirm('Supprimer l\'empreinte enregistrée ? Vous devrez la ré-enregistrer après votre prochaine connexion.')) return;
+  localStorage.removeItem(BIO_KEY);
+  localStorage.removeItem(BIO_EMAIL_KEY);
+  localStorage.removeItem('phenix_bio_creds');
+  const lbl = document.getElementById('pl-bio-label'); if(lbl) lbl.textContent = 'Activer l\'empreinte après connexion';
+  const btn = document.getElementById('pl-bio-btn'); if(btn) btn.onclick = () => document.getElementById('pl-pwd').focus();
+  const err = document.getElementById('pl-err');
+  if(err){ err.style.color = '#7DC6E8'; err.textContent = '✓ Empreinte supprimée — connectez-vous avec email/mdp pour la ré-activer.'; }
+}
+
+async function phenixBioLogin(){
+  const btn = document.getElementById('pl-bio-btn');
+  const err = document.getElementById('pl-err');
+  const credId = localStorage.getItem(BIO_KEY);
+  if(err){ err.textContent = ''; err.style.color = '#FFB4A8'; }
+  if(!credId){ document.getElementById('pl-pwd').focus(); return; }
+  btn.disabled = true;
+  btn.innerHTML = '<span style="font-size:18px">⏳</span> <span>Vérification empreinte…</span>';
+  try {
+    await navigator.credentials.get({
+      publicKey: {
+        challenge: crypto.getRandomValues(new Uint8Array(32)),
+        allowCredentials: [{ type: 'public-key', id: _fromb64u(credId), transports: ['internal'] }],
+        userVerification: 'required',
+        timeout: 60000
+      }
+    });
+    const savedCreds = localStorage.getItem('phenix_bio_creds');
+    if(savedCreds && window._auth){
+      const parts = atob(savedCreds).split('|||');
+      if(parts.length === 2){
+        err.style.color = '#4db8e8'; err.textContent = '✓ Connexion en cours…';
+        window._auth.login(parts[0], parts[1]).catch(() => {
+          err.style.color = '#FFB4A8';
+          err.textContent = 'Session expirée — saisissez votre mot de passe.';
+          const em = document.getElementById('pl-email');
+          em.value = parts[0]; em.style.background = '#e8f5e9'; em.readOnly = true;
+          document.getElementById('pl-pwd').focus();
+        });
+        return;
+      }
+    }
+    const savedEmail = localStorage.getItem(BIO_EMAIL_KEY) || '';
+    document.getElementById('pl-email').value = savedEmail;
+    document.getElementById('pl-email').style.background = '#e8f5e9';
+    document.getElementById('pl-email').readOnly = true;
+    err.style.color = '#4db8e8'; err.textContent = '✓ Empreinte reconnue — saisissez votre mot de passe.';
+    document.getElementById('pl-pwd').focus();
+  } catch(e){
+    if(e.name === 'NotAllowedError') err.textContent = 'Reconnaissance annulée.';
+    else if(e.name === 'InvalidStateError') err.textContent = 'Empreinte invalide — cliquez sur 🔄 Réinitialiser.';
+    else err.textContent = '⚠️ ' + e.name + ' : ' + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<span style="font-size:24px">☝️</span> <span>Se connecter avec empreinte</span>';
+  }
+}
+
+async function phenixBioEnroll(userOverride){
+  const err = document.getElementById('pl-err');
+  const wrap = document.getElementById('pl-enroll-wrap');
+  const user = userOverride || (window._auth && window._auth.current());
+  if(!user){ if(err) err.textContent = 'Session non reconnue — réessayez dans quelques secondes.'; return; }
+  try {
+    const encoder = new TextEncoder();
+    const credential = await navigator.credentials.create({
+      publicKey: {
+        challenge: crypto.getRandomValues(new Uint8Array(32)),
+        rp: { name: 'Phénix-Architecture', id: location.hostname },
+        user: { id: encoder.encode(user.uid), name: user.email, displayName: 'Phénix' },
+        pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+        authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'discouraged', requireResidentKey: false },
+        excludeCredentials: [],
+        timeout: 60000,
+        attestation: 'none'
+      }
+    });
+    localStorage.setItem(BIO_KEY, _b64u(credential.rawId));
+    localStorage.setItem(BIO_EMAIL_KEY, user.email);
+    const pwd = document.getElementById('pl-pwd').value;
+    if(pwd) localStorage.setItem('phenix_bio_creds', btoa(user.email + '|||' + pwd));
+    if(wrap){ wrap.innerHTML = '<div style="color:#7DC6E8;font-size:13px;font-weight:600">✓ Empreinte activée — connexion automatique dès maintenant !</div>'; setTimeout(()=>{ wrap.style.display='none'; }, 3000); }
+  } catch(e){
+    if(err) err.textContent = e.name === 'NotAllowedError' ? 'Enrôlement annulé.' : ('Erreur enrôlement : ' + e.message);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', phenixBioInit);
+window.phenixBioLogin  = phenixBioLogin;
+window.phenixBioEnroll = phenixBioEnroll;
+window.phenixBioReset  = phenixBioReset;
+
+// Propose l'enrôlement après une connexion email réussie
+const _origDoLogin_bio = window.phenixDoLogin;
+window.phenixDoLogin = function(){
+  const email = (document.getElementById('pl-email').value || '').trim();
+  const pwd   = document.getElementById('pl-pwd').value || '';
+  const err   = document.getElementById('pl-err'); if(err){ err.style.color='#FFB4A8'; err.textContent=''; }
+  const btn   = document.getElementById('pl-btn'); if(btn) btn.disabled = true;
+  window._auth.login(email, pwd).then((cred) => {
+    const user = cred.user;
+    if(!localStorage.getItem(BIO_KEY) && window.PublicKeyCredential){
+      PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(ok => {
+        if(ok){
+          const wrap = document.getElementById('pl-enroll-wrap');
+          if(wrap){ wrap.style.display='block'; document.getElementById('pl-enroll-btn').onclick = () => phenixBioEnroll(user); }
+        }
+      });
+    }
+  }).catch((e) => {
+    const c = (e && e.code) || '';
+    if(err) err.textContent =
+      c.indexOf('user-not-found')>=0 || c.indexOf('wrong-password')>=0 || c.indexOf('invalid-credential')>=0 ? 'Email ou mot de passe incorrect.' :
+      c.indexOf('network')>=0 ? 'Pas de connexion internet.' :
+      ('Erreur : ' + (c || (e && e.message) || ''));
+  }).finally(() => { if(btn) btn.disabled = false; });
+};
+</script>
+
 </body>
 </html>

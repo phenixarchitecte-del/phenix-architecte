@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Phénix-Architecture — Suivi collaborateur</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#F0F4F8;--bg2:#E4ECF3;--card:#fff;--navy:#0F1E3D;--blue:#4A9CC7;
+  --ink:#1B2D5B;--mute:#5E7A92;--border:#D4E0ED;
+  --danger:#B83232;--danger-bg:#FDE8E8;
+  --warn:#9A6000;--warn-bg:#FFF3CD;
+  --ok:#2D6A4F;--ok-bg:#D8F3DC;
+  --info:#185FA5;--info-bg:#E3EFF9;
+  --r:10px;--r-lg:14px;
+}
+html,body{height:100%}
+body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(--ink);margin:0;padding:0;display:flex;flex-direction:column;overflow:hidden}
+
+/* ── SHELL LAYOUT ── */
+/* .shell et .shell-body définis plus bas avec la gestion de hauteur complète */
+.shell-nav{order:2;width:100%;flex-shrink:0;background:var(--navy);display:flex;flex-direction:row;align-items:stretch;justify-content:space-around;padding:6px 4px;gap:2px;padding-bottom:max(6px,env(safe-area-inset-bottom));overflow-x:auto;-webkit-overflow-scrolling:touch}
+.shell-nav-item{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;flex:1;min-width:56px;padding:6px 2px;color:rgba(255,255,255,.55);cursor:pointer;border-radius:9px;transition:all .15s;position:relative;-webkit-tap-highlight-color:transparent}
+.shell-nav-item:hover{background:rgba(255,255,255,.08);color:#fff}
+.shell-nav-item.active{background:rgba(74,156,199,.22);color:#fff}
+.shell-nav-item.active::before{content:'';position:absolute;top:-6px;left:50%;transform:translateX(-50%);width:20px;height:3px;background:#4A9CC7;border-radius:0 0 3px 3px}
+.shell-nav-item .ti{font-size:19px;flex-shrink:0}
+.shell-nav-item span.lbl{display:block;font-size:10px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+
+@media(max-width:480px){
+  .shell-nav-item{min-width:48px}
+  .shell-nav-item span.lbl{font-size:9px}
+  .shell-nav-item .ti{font-size:18px}
+}
+.shell-view{display:none;flex:1;min-height:0}
+.shell-view.active{display:flex;flex-direction:column;flex:1;min-height:0}
+.module-frame-wrap{flex:1;min-height:0;display:flex;flex-direction:column;background:var(--bg)}
+.module-frame{flex:1;min-height:0;border:none;width:100%}
+.module-placeholder{flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;color:var(--mute);gap:8px}
+.module-placeholder i{font-size:40px;opacity:.4}
+@media(max-width:780px){}
+
+
+/* ── LOGIN ── */
+#login-overlay{display:flex;position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#0A1422,#1B2D5B,#2A5298);align-items:center;justify-content:center;padding:20px}
+.login-box{background:rgba(255,255,255,.08);border:1.5px solid rgba(255,255,255,.18);border-radius:18px;padding:36px 30px;max-width:360px;width:100%;text-align:center}
+.login-logo{font-family:'DM Serif Display',Georgia,serif;font-size:32px;color:#fff;margin-bottom:3px}
+.login-logo span{color:#7DC6E8}
+.login-sub{font-size:11px;color:rgba(255,255,255,.5);letter-spacing:.14em;text-transform:uppercase;margin-bottom:28px}
+.login-input{width:100%;padding:12px 14px;margin-bottom:10px;border-radius:9px;border:1.5px solid rgba(255,255,255,.18);background:rgba(255,255,255,.93);font-size:14px;outline:none;font-family:inherit}
+.login-btn{width:100%;padding:13px;border:none;border-radius:9px;background:linear-gradient(135deg,#4A9CC7,#2A5298);color:#fff;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}
+.login-err{color:#FFB4A8;font-size:12.5px;margin-top:12px;min-height:18px}
+
+/* ── TOPBAR ── */
+.topbar{background:var(--navy);padding:0 20px;height:54px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;z-index:100}
+#shell-root{flex:1;min-height:0;display:flex;flex-direction:column}
+.shell{display:flex;flex-direction:column;height:100%;min-height:0}
+.shell-body{order:1;flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;overflow-y:auto;-webkit-overflow-scrolling:touch}
+@media(max-width:600px){
+  .topbar{padding:0 12px}
+  .topbar-brand{font-size:15px}
+  .topbar-brand span[style]{display:none}
+  .sync-label,.sync-dot{display:none}
+}
+.topbar-brand{font-family:'DM Serif Display',Georgia,serif;font-size:20px;color:#fff;letter-spacing:.02em}
+.topbar-brand span{color:#7DC6E8}
+.topbar-right{display:flex;align-items:center;gap:12px}
+.sync-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#5EEE90;margin-right:5px}
+.sync-label{font-size:12px;color:rgba(255,255,255,.6)}
+.user-chip{background:rgba(255,255,255,.12);border-radius:99px;padding:4px 12px;font-size:12px;color:#fff;font-weight:500}
+.logout-btn{background:none;border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:5px 10px;color:rgba(255,255,255,.7);cursor:pointer;font-size:12px;font-family:inherit}
+.logout-btn:hover{background:rgba(255,255,255,.1)}
+
+/* ── MAIN LAYOUT ── */
+.main{max-width:860px;margin:0 auto;padding:20px 16px 60px}
+
+/* ── STATS ── */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:18px}
+@media(max-width:600px){.stats{grid-template-columns:repeat(2,1fr)}}
+.stat-card{background:var(--card);border:.5px solid var(--border);border-radius:var(--r);padding:12px 14px;text-align:center}
+.stat-n{font-size:26px;font-weight:700;line-height:1}
+.stat-l{font-size:11px;color:var(--mute);margin-top:4px}
+.n-danger{color:var(--danger)}.n-warn{color:var(--warn)}.n-ok{color:var(--ok)}.n-info{color:var(--info)}
+
+/* ── FILTRES ── */
+.filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.fil{font-size:12px;padding:5px 13px;border-radius:99px;border:.5px solid var(--border);background:var(--card);cursor:pointer;font-weight:500;color:var(--ink);font-family:inherit;transition:all .15s}
+.fil:hover{border-color:var(--blue);color:var(--blue)}
+.fil.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+.fil-mine{border-color:var(--blue);color:var(--blue)}
+.fil-mine.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+
+/* ── SECTIONS ── */
+.section-sep{font-size:11px;font-weight:700;color:var(--mute);text-transform:uppercase;letter-spacing:.1em;margin:18px 0 8px;display:flex;align-items:center;gap:6px}
+.section-sep::after{content:'';flex:1;height:1px;background:var(--border)}
+
+/* ── CARDS ── */
+.card{background:var(--card);border:.5px solid var(--border);border-radius:var(--r-lg);padding:14px 16px;margin-bottom:10px;transition:box-shadow .15s}
+.card:hover{box-shadow:0 2px 12px rgba(15,30,61,.08)}
+.card.is-danger{border-color:#E9A0A0}
+.card.is-muted{opacity:.72}
+.card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px}
+.card-left{flex:1;min-width:0}
+.badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 9px;border-radius:99px;letter-spacing:.05em;margin-bottom:6px}
+.badge-danger{background:var(--danger-bg);color:var(--danger)}
+.badge-warn{background:var(--warn-bg);color:var(--warn)}
+.badge-info{background:var(--info-bg);color:var(--info)}
+.badge-ok{background:var(--ok-bg);color:var(--ok)}
+.badge-neutral{background:var(--bg2);color:var(--mute)}
+.card-title{font-size:15px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-sub{font-size:12px;color:var(--mute);margin-top:2px}
+.card-due{text-align:right;flex-shrink:0}
+.due-label{font-size:10px;color:var(--mute);white-space:nowrap}
+.due-date{font-size:13px;font-weight:600;margin-top:2px;white-space:nowrap}
+.due-date.late{color:var(--danger)}
+.due-date.soon{color:var(--warn)}
+
+/* ── PHASE BAR ── */
+.phase-bar{display:flex;gap:3px;margin-bottom:10px;flex-wrap:wrap}
+.phase-step{font-size:10px;padding:2px 8px;border-radius:4px;background:var(--bg2);color:var(--mute);font-weight:600}
+.phase-step.current{background:var(--blue);color:#fff}
+.phase-step.done{background:var(--ok-bg);color:var(--ok)}
+
+/* ── TÂCHES ── */
+.tasks-panel{background:var(--bg);border-radius:8px;padding:10px 12px}
+.tasks-label{font-size:10px;font-weight:700;color:var(--mute);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
+.task-row{display:flex;align-items:flex-start;gap:8px;padding:4px 0;border-bottom:.5px solid var(--border)}
+.task-row:last-child{border-bottom:none}
+.task-cb{width:16px;height:16px;accent-color:var(--navy);cursor:pointer;margin-top:2px;flex-shrink:0}
+.task-body{flex:1;min-width:0}
+.task-titre{font-size:13px;color:var(--ink);line-height:1.3}
+.task-titre.done{color:var(--mute);text-decoration:line-through}
+.task-meta{display:flex;gap:6px;align-items:center;margin-top:2px;flex-wrap:wrap}
+.task-prio{font-size:10px;padding:1px 7px;border-radius:99px;font-weight:600}
+.task-prio.urgent{background:var(--danger-bg);color:var(--danger)}
+.task-prio.haute{background:var(--warn-bg);color:var(--warn)}
+.task-prio.normale{background:var(--bg2);color:var(--mute)}
+.task-deadline{font-size:10px;color:var(--mute)}
+.task-deadline.late{color:var(--danger);font-weight:600}
+.task-assigne{font-size:10px;color:var(--info);background:var(--info-bg);padding:1px 7px;border-radius:99px}
+.no-tasks{font-size:12px;color:var(--mute);font-style:italic;padding:4px 0}
+
+/* ── AVANCEMENT ── */
+.progress-wrap{margin-top:8px;margin-bottom:2px}
+.progress-label{display:flex;justify-content:space-between;font-size:11px;color:var(--mute);margin-bottom:3px}
+.progress-bar{height:5px;background:var(--bg2);border-radius:99px;overflow:hidden}
+.progress-fill{height:100%;background:var(--blue);border-radius:99px;transition:width .3s}
+
+/* ── EMPTY ── */
+.empty{text-align:center;padding:40px 20px;color:var(--mute);font-size:14px}
+.empty i{font-size:36px;display:block;margin-bottom:8px;opacity:.4}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:20px;right:20px;background:var(--ink);color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;z-index:9999;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.show{opacity:1}
+
+@media(max-width:600px){.card-top{flex-direction:column}.card-due{text-align:left}}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-overlay">
+  <div class="login-box">
+    <div class="login-logo">Phénix<span>-Architecture</span></div>
+    <div class="login-sub">Espace collaborateur</div>
+    <div id="pl-bio-wrap" style="display:none;margin-bottom:16px">
+      <button id="pl-bio-btn" onclick="phenixBioLogin()" style="width:100%;padding:14px;border:2px solid rgba(77,184,232,.6);border-radius:9px;background:rgba(77,184,232,.12);color:#7DC6E8;font-size:15px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;font-family:inherit">
+        <span style="font-size:24px">☝️</span><span id="pl-bio-label">Se connecter avec empreinte</span>
+      </button>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:14px;margin-bottom:14px">
+        <div style="flex:1;height:1px;background:rgba(255,255,255,.15)"></div>
+        <span style="font-size:11px;color:rgba(255,255,255,.35);letter-spacing:.08em">ou par mot de passe</span>
+        <div style="flex:1;height:1px;background:rgba(255,255,255,.15)"></div>
+      </div>
+    </div>
+    <input id="pl-email" type="email" autocomplete="username" placeholder="E-mail" class="login-input">
+    <input id="pl-pwd" type="password" autocomplete="current-password" placeholder="Mot de passe" class="login-input" onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="login-btn" id="pl-btn" onclick="doLogin()">Se connecter</button>
+    <div class="login-err" id="pl-err"></div>
+    <div style="margin-top:14px;text-align:center">
+      <button onclick="phenixBioReset()" style="background:none;border:none;color:rgba(255,255,255,.25);font-size:11px;cursor:pointer;font-family:inherit;padding:6px">🔄 Réinitialiser l'empreinte enregistrée</button>
+    </div>
+    <div id="pl-enroll-wrap" style="display:none;margin-top:16px;padding:14px;background:rgba(77,184,232,.1);border:1.5px solid rgba(77,184,232,.3);border-radius:9px">
+      <div style="font-size:13px;color:#7DC6E8;font-weight:600;margin-bottom:6px">☝️ Activer la connexion par empreinte ?</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.55);margin-bottom:12px">Votre empreinte restera stockée uniquement sur cet appareil.</div>
+      <div style="display:flex;gap:8px">
+        <button id="pl-enroll-btn" style="flex:1;padding:9px;border:none;border-radius:7px;background:linear-gradient(135deg,#4A9CC7,#2A5298);color:#fff;font-size:13px;font-weight:600;cursor:pointer">Activer</button>
+        <button onclick="document.getElementById('pl-enroll-wrap').style.display='none'" style="flex:1;padding:9px;border:1.5px solid rgba(255,255,255,.2);border-radius:7px;background:transparent;color:rgba(255,255,255,.6);font-size:13px;cursor:pointer">Plus tard</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="topbar-brand">Phénix<span>-Architecture</span> &nbsp;<span style="font-family:'DM Sans',sans-serif;font-size:12px;color:rgba(255,255,255,.5);font-weight:400">Suite</span></div>
+  <div class="topbar-right">
+    <span><span class="sync-dot" id="syncDot"></span><span class="sync-label" id="syncLabel">Connexion…</span></span>
+    <span class="user-chip" id="userChip">—</span>
+    <button class="logout-btn" onclick="doLogout()"><i class="ti ti-logout" style="font-size:13px"></i></button>
+  </div>
+</div>
+
+<div id="shell-root" style="display:none">
+<div class="shell">
+
+  <!-- SIDEBAR -->
+  <div class="shell-nav">
+    <div class="shell-nav-item active" data-view="module" data-module="dossier" data-tip="Tableau de bord" onclick="shellOpenModule('dossier',this)"><i class="ti ti-layout-dashboard"></i><span class="lbl">Dossier</span></div>
+    <div class="shell-nav-item" data-view="dashboard" data-tip="Suivi d'équipe" onclick="shellShowView('dashboard',this)"><i class="ti ti-list-check"></i><span class="lbl">Suivi</span></div>
+    <div class="shell-nav-item" data-view="module" data-module="chiffrage" data-tip="Chiffrage" onclick="shellOpenModule('chiffrage',this)"><i class="ti ti-calculator"></i><span class="lbl">Chiffrage</span></div>
+    <div class="shell-nav-item" data-view="module" data-module="contrat" data-tip="Contrats" onclick="shellOpenModule('contrat',this)"><i class="ti ti-signature"></i><span class="lbl">Contrats</span></div>
+    <div class="shell-nav-item" data-view="module" data-module="chantier" data-tip="Chantier" onclick="shellOpenModule('chantier',this)"><i class="ti ti-building"></i><span class="lbl">Chantier</span></div>
+    <div class="shell-nav-item" data-view="module" data-module="permis" data-tip="Permis de construire" onclick="shellOpenModule('permis',this)"><i class="ti ti-clipboard-check"></i><span class="lbl">Permis</span></div>
+    <div class="shell-nav-item" data-view="module" data-module="financement" data-tip="Financement" onclick="shellOpenModule('financement',this)"><i class="ti ti-building-bank"></i><span class="lbl">Financ.</span></div>
+    <div class="shell-nav-item" data-view="module" data-module="annuaire" data-tip="Annuaire artisans" onclick="shellOpenModule('annuaire',this)"><i class="ti ti-address-book"></i><span class="lbl">Artisan</span></div>
+    <div class="shell-nav-item" data-view="module" data-module="parametres" data-tip="Paramètres" onclick="shellOpenModule('parametres',this)"><i class="ti ti-settings"></i><span class="lbl">Paramètres</span></div>
+  </div>
+
+  <div class="shell-body">
+
+    <!-- VUE : TÂCHES (ancien tableau de bord Suivi) -->
+    <div class="shell-view" id="shell-view-dashboard">
+<div class="main" id="main-content" style="display:none">
+
+  <!-- STATS -->
+  <div class="stats">
+    <div class="stat-card"><div class="stat-n" id="st-actifs">—</div><div class="stat-l">Dossiers actifs</div></div>
+    <div class="stat-card"><div class="stat-n n-danger" id="st-retard">—</div><div class="stat-l">En retard</div></div>
+    <div class="stat-card"><div class="stat-n n-warn" id="st-todo">—</div><div class="stat-l">Tâches à faire</div></div>
+    <div class="stat-card"><div class="stat-n n-info" id="st-attente">—</div><div class="stat-l">En attente client</div></div>
+  </div>
+
+  <!-- FILTRES -->
+  <div class="filters">
+    <button class="fil active" data-filter="all" onclick="setFilter('all',this)">Tous</button>
+    <button class="fil" data-filter="ESQ,APS,APD" onclick="setFilter('ESQ,APS,APD',this)">Avant-Projet</button>
+    <button class="fil" data-filter="PC" onclick="setFilter('PC',this)">Permis de construire</button>
+    <button class="fil" data-filter="DCE,ACT" onclick="setFilter('DCE,ACT',this)">DCE / Contrats</button>
+    <button class="fil" data-filter="DET,AOR" onclick="setFilter('DET,AOR',this)">Chantier</button>
+    <button class="fil fil-mine" data-filter="mine" onclick="setFilter('mine',this)">⚡ Mes tâches</button>
+  </div>
+
+  <!-- LISTE -->
+  <div id="cards-container"></div>
+
+</div>
+    </div><!-- /shell-view-dashboard -->
+
+    <!-- VUE : MODULE EN IFRAME (Dossier = accueil par défaut) -->
+    <div class="shell-view active" id="shell-view-module">
+      <div class="module-frame-wrap">
+        <div id="module-frame-container" style="flex:1;display:flex;flex-direction:column"></div>
+      </div>
+    </div><!-- /shell-view-module -->
+
+  </div><!-- /shell-body -->
+</div><!-- /shell -->
+</div><!-- /shell-root -->
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp }   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getFirestore, collection, onSnapshot, doc, updateDoc }
+                           from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged }
+                           from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+
+const firebaseConfig = {
+  apiKey:            "AIzaSyCjNKNvS6p3nqE6-_Gw9I397ZtXm2FG1ew",
+  authDomain:        "phenix-architecte-9151b.firebaseapp.com",
+  projectId:         "phenix-architecte-9151b",
+  storageBucket:     "phenix-architecte-9151b.firebasestorage.app",
+  messagingSenderId: "811231684720",
+  appId:             "1:811231684720:web:413fa324ae43c07607acb5"
+};
+
+const app  = initializeApp(firebaseConfig);
+// ════════════════════════════════════════════════════════════
+//  FIREBASE APP CHECK — protection anti-bots (reCAPTCHA v3)
+// ════════════════════════════════════════════════════════════
+import { initializeAppCheck, ReCaptchaV3Provider } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js';
+const RECAPTCHA_SITE_KEY = '6LeObWktAAAAAL9eyppDRtLp5yZTyBaF4ZNKXNIO';
+try {
+  initializeAppCheck(app, { provider: new ReCaptchaV3Provider(RECAPTCHA_SITE_KEY), isTokenAutoRefreshEnabled: true });
+} catch (e) { console.warn('App Check non initialisé :', e); }
+
+const db   = getFirestore(app);
+const auth = getAuth(app);
+window._auth = { login:(e,p)=>signInWithEmailAndPassword(auth,e,p), current:()=>auth.currentUser };
+
+// ─── état global ───────────────────────────────────────────────
+let projets  = [];
+let taches   = [];
+let me       = '';   // email du collaborateur connecté
+let curFilter = 'all';
+let unsubProjets = null;
+let unsubTaches  = null;
+
+// ─── phases ────────────────────────────────────────────────────
+const PHASES = ['ESQ','APS','APD','PC','DCE','ACT','DET','AOR'];
+const PHASE_LABELS = {
+  ESQ:'Esquisse',APS:'Avant-Projet Sommaire',APD:'Avant-Projet Définitif',
+  PC:'Permis de construire',DCE:'DCE',ACT:'Assistance Contrats',
+  DET:'Direction travaux',AOR:'Réception travaux'
+};
+const PHASE_GROUP = {
+  ESQ:'Avant-Projet',APS:'Avant-Projet',APD:'Avant-Projet',
+  PC:'Permis de construire',DCE:'DCE / Contrats',ACT:'DCE / Contrats',
+  DET:'Chantier',AOR:'Chantier'
+};
+
+// ─── auth ───────────────────────────────────────────────────────
+onAuthStateChanged(auth, user => {
+  const ov = document.getElementById('login-overlay');
+  if (user) {
+    me = (user.email || '').toLowerCase();
+    ov.style.display = 'none';
+    document.getElementById('shell-root').style.display = '';
+    document.getElementById('main-content').style.display = '';
+    document.getElementById('userChip').textContent = me.split('@')[0];
+    startListeners();
+    // Dossier = page d'accueil du shell, ouverte automatiquement à la connexion
+    shellOpenModule('dossier', document.querySelector('.shell-nav-item[data-module="dossier"]'));
+  } else {
+    ov.style.display = 'flex';
+    document.getElementById('shell-root').style.display = 'none';
+    document.getElementById('main-content').style.display = 'none';
+    if (unsubProjets) { unsubProjets(); unsubProjets = null; }
+    if (unsubTaches)  { unsubTaches();  unsubTaches  = null; }
+  }
+});
+
+window.doLogin = function() {
+  const email = document.getElementById('pl-email').value.trim();
+  const pwd   = document.getElementById('pl-pwd').value;
+  const btn   = document.getElementById('pl-btn');
+  const err   = document.getElementById('pl-err');
+  err.textContent = '';
+  btn.disabled = true; btn.textContent = 'Connexion…';
+  signInWithEmailAndPassword(auth, email, pwd)
+    .catch(e => {
+      const c = e.code || '';
+      err.textContent =
+        c.includes('invalid-credential') || c.includes('wrong-password') ? 'Identifiants incorrects.' :
+        c.includes('user-not-found') ? 'Compte introuvable.' :
+        c.includes('too-many-requests') ? 'Trop de tentatives.' :
+        ('Erreur : ' + (c || e.message));
+    })
+    .finally(() => { btn.disabled = false; btn.textContent = 'Se connecter'; });
+};
+
+window.doLogout = function() {
+  signOut(auth);
+};
+
+// ─── listeners Firebase ─────────────────────────────────────────
+function startListeners() {
+  setSyncStatus('sync','Chargement…');
+
+  unsubProjets = onSnapshot(collection(db,'phenix_projets'), snap => {
+    projets = snap.docs.map(d => d.data());
+    render();
+  });
+  unsubTaches = onSnapshot(collection(db,'phenix_taches'), snap => {
+    taches = snap.docs.map(d => d.data());
+    render();
+    setSyncStatus('ok','En direct');
+  });
+}
+
+// ─── filtres ────────────────────────────────────────────────────
+window.setFilter = function(f, btn) {
+  curFilter = f;
+  document.querySelectorAll('.fil').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  render();
+};
+
+// ─── toggle tâche ───────────────────────────────────────────────
+window.toggleTache = async function(id, checked) {
+  const newStatut = checked ? 'done' : 'todo';
+  try {
+    await updateDoc(doc(db,'phenix_taches', String(id)), { statut: newStatut, updatedAt: new Date().toISOString() });
+    toast(checked ? '✅ Tâche marquée achevée' : '↩ Tâche remise à faire');
+  } catch(e) { toast('⚠️ Erreur : ' + e.message); }
+};
+
+// ─── utilitaires ────────────────────────────────────────────────
+function isoToDate(s) { return s ? new Date(s.includes('T') ? s : s+'T00:00:00') : null; }
+function fmtDate(s)   {
+  const d = isoToDate(s); if (!d) return null;
+  return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'});
+}
+function isLate(s)    { const d=isoToDate(s); return d && d < new Date() && d.toDateString() !== new Date().toDateString(); }
+function isSoon(s)    {
+  const d=isoToDate(s); if(!d) return false;
+  const diff=(d - new Date())/(1000*60*60*24);
+  return diff>=0 && diff<=5;
+}
+
+function tachesProjet(projetId) {
+  return taches.filter(t => String(t.projetId) === String(projetId) && t.statut !== 'done');
+}
+function tachesProjetAll(projetId) {
+  return taches.filter(t => String(t.projetId) === String(projetId));
+}
+
+function projetHasRetard(proj) {
+  return tachesProjet(proj.id).some(t => isLate(t.dateLivraison));
+}
+
+// ─── RENDER ─────────────────────────────────────────────────────
+function render() {
+  const today   = new Date();
+  const actifs  = projets.filter(p => p.statut !== 'cloture' && p.statut !== 'archive');
+
+  // stats
+  document.getElementById('st-actifs').textContent  = actifs.length;
+  document.getElementById('st-retard').textContent  = actifs.filter(projetHasRetard).length;
+  document.getElementById('st-todo').textContent    = taches.filter(t => t.statut === 'todo' || t.statut === 'doing').length;
+  document.getElementById('st-attente').textContent = actifs.filter(p => p.statut === 'etude' || p.statut === 'demarrage').length;
+
+  // filtrer les projets
+  let filtered = actifs;
+  if (curFilter === 'mine') {
+    const mesIds = new Set(taches.filter(t => (t.assigneA||'') === me).map(t => String(t.projetId)));
+    filtered = actifs.filter(p => mesIds.has(String(p.id)));
+  } else if (curFilter !== 'all') {
+    const phases = curFilter.split(',');
+    filtered = actifs.filter(p => phases.includes(p.phase));
+  }
+
+  // trier : en retard → actif avec tâches → en attente
+  filtered.sort((a,b) => {
+    const ar = projetHasRetard(a) ? 0 : tachesProjet(a.id).length > 0 ? 1 : 2;
+    const br = projetHasRetard(b) ? 0 : tachesProjet(b.id).length > 0 ? 1 : 2;
+    return ar - br;
+  });
+
+  const cont = document.getElementById('cards-container');
+
+  if (!filtered.length) {
+    cont.innerHTML = `<div class="empty"><i class="ti ti-folder-off"></i>Aucun dossier à afficher pour ce filtre.</div>`;
+    return;
+  }
+
+  // groupes
+  let html = '';
+  const groupes = [
+    { key:'retard', label:'🔴 En retard',          test: p => projetHasRetard(p) },
+    { key:'todo',   label:'🟡 Tâches à produire',   test: p => !projetHasRetard(p) && tachesProjet(p.id).length > 0 },
+    { key:'wait',   label:'🔵 En attente / instruction', test: p => !projetHasRetard(p) && tachesProjet(p.id).length === 0 },
+  ];
+
+  groupes.forEach(g => {
+    const group = filtered.filter(g.test);
+    if (!group.length) return;
+    html += `<div class="section-sep">${g.label}</div>`;
+    group.forEach(p => { html += cardHtml(p, g.key); });
+  });
+
+  cont.innerHTML = html;
+}
+
+function cardHtml(p, groupe) {
+  const tasks     = tachesProjetAll(p.id);
+  const tasksTodo = tasks.filter(t => t.statut !== 'done');
+  const hasRetard = projetHasRetard(p);
+
+  // badge principal
+  let badge = '', badgeCls = '';
+  if (hasRetard)                        { badge='EN RETARD';         badgeCls='badge-danger'; }
+  else if (tasksTodo.length > 0)        { badge='À PRODUIRE';        badgeCls='badge-warn'; }
+  else if (tasks.length > 0)            { badge='TÂCHES ACHEVÉES';   badgeCls='badge-ok'; }
+  else                                  { badge='EN ATTENTE';        badgeCls='badge-info'; }
+
+  // date la plus proche parmi les tâches
+  const deadlines = tasksTodo.map(t => t.dateLivraison).filter(Boolean).sort();
+  const dueDate   = deadlines[0] || null;
+  const dueLabel  = dueDate ? fmtDate(dueDate) : null;
+  const dueCls    = dueDate && isLate(dueDate) ? 'late' : dueDate && isSoon(dueDate) ? 'soon' : '';
+
+  // phase bar
+  const ci = PHASES.indexOf(p.phase);
+  const phaseBar = PHASES.map((ph,i) => {
+    const cls = i < ci ? 'done' : i === ci ? 'current' : '';
+    return `<span class="phase-step ${cls}" title="${PHASE_LABELS[ph]||ph}">${ph}</span>`;
+  }).join('');
+
+  // tâches
+  let tasksHtml = '';
+  if (tasks.length === 0) {
+    tasksHtml = `<div class="no-tasks">Aucune tâche enregistrée pour ce dossier</div>`;
+  } else {
+    // priorité : urgent > haute > normale, puis todo avant done
+    const sorted = [...tasks].sort((a,b) => {
+      const pmap = {urgent:0,haute:1,normale:2};
+      const ps = (pmap[a.priorite]||2) - (pmap[b.priorite]||2);
+      if (ps !== 0) return ps;
+      if (a.statut==='done' && b.statut!=='done') return 1;
+      if (b.statut==='done' && a.statut!=='done') return -1;
+      return 0;
+    });
+    sorted.forEach(t => {
+      const isDone     = t.statut === 'done';
+      const tlabel     = isDone ? `<span class="task-titre done">${esc(t.titre)}</span>` : `<span class="task-titre">${esc(t.titre)}</span>`;
+      const prioCls    = t.priorite || 'normale';
+      const prioLabel  = prioCls === 'urgent' ? '🔴 Urgent' : prioCls === 'haute' ? '🟡 Haute' : '';
+      const dlabel     = t.dateLivraison ? `<span class="task-deadline ${isLate(t.dateLivraison)&&!isDone?'late':''}">📅 ${fmtDate(t.dateLivraison)}</span>` : '';
+      const assigneeHtml = t.assigneA ? `<span class="task-assigne">${esc(t.assigneA.split('@')[0])}</span>` : '';
+      const mine       = (t.assigneA||'').toLowerCase() === me;
+      const border     = mine ? 'border-left:2.5px solid var(--blue);padding-left:8px;margin-left:-8px' : '';
+      tasksHtml += `
+        <div class="task-row" style="${border}">
+          <input class="task-cb" type="checkbox" ${isDone?'checked':''} onchange="toggleTache('${esc(String(t.id))}',this.checked)">
+          <div class="task-body">
+            ${tlabel}
+            <div class="task-meta">
+              ${prioLabel ? `<span class="task-prio ${prioCls}">${prioLabel}</span>` : ''}
+              ${dlabel}
+              ${assigneeHtml}
+            </div>
+          </div>
+        </div>`;
+    });
+  }
+
+  const avancement = parseInt(p.avancement) || 0;
+  const cardCls    = hasRetard ? 'card is-danger' : groupe === 'wait' ? 'card is-muted' : 'card';
+
+  return `
+  <div class="${cardCls}">
+    <div class="card-top">
+      <div class="card-left">
+        <span class="badge ${badgeCls}">${badge}</span>
+        <div class="card-title">${esc(p.nom||p.ref||'—')}</div>
+        <div class="card-sub">${esc(p.client||'—')}${p.adresse ? ' · '+esc(p.adresse) : ''}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
+        ${dueLabel ? `<div class="card-due"><div class="due-label">Livraison</div><div class="due-date ${dueCls}">${dueLabel}</div></div>` : ''}
+        <button onclick="event.stopPropagation();shellOpenProjet('${esc(String(p.id))}','${esc(p.nom||p.ref||'')}')" style="font-size:11px;padding:4px 10px;border-radius:99px;border:1px solid var(--blue);color:var(--blue);background:#fff;cursor:pointer;font-family:inherit;white-space:nowrap"><i class="ti ti-folder-open" style="font-size:12px"></i> Ouvrir</button>
+      </div>
+    </div>
+
+    <div class="phase-bar">${phaseBar}</div>
+
+    <div class="progress-wrap">
+      <div class="progress-label"><span>Avancement</span><span>${avancement} %</span></div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${avancement}%"></div></div>
+    </div>
+
+    <div class="tasks-panel" style="margin-top:10px">
+      <div class="tasks-label">Tâches <span style="font-weight:400;color:var(--mute)">(${tasksTodo.length} restante${tasksTodo.length>1?'s':''})</span></div>
+      ${tasksHtml}
+    </div>
+  </div>`;
+}
+
+function esc(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─── sync status ────────────────────────────────────────────────
+function setSyncStatus(state, label) {
+  const dot = document.getElementById('syncDot');
+  const lbl = document.getElementById('syncLabel');
+  dot.style.background = state==='ok' ? '#5EEE90' : state==='sync' ? '#F0C040' : '#FF7070';
+  lbl.textContent = label;
+}
+
+// ─── toast ──────────────────────────────────────────────────────
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+window.toast = toast;
+
+// ═══════════════════════════════════════════════════════════════
+//  PHÉNIX SHELL — navigation entre le tableau de bord et les modules
+// ═══════════════════════════════════════════════════════════════
+const MODULES = {
+  dossier:      { src: 'phenix_dossier.html',           title: 'Dossiers — projets, devis, facturation' },
+  comptabilite: { src: 'phenix_dossier.html',            title: 'Comptabilité', gotoPage: 'comptabilite' },
+  chiffrage:    { src: 'phenix_chiffrage.html',          title: 'Chiffrage — métré & devis artisans' },
+  contrat:      { src: 'phenix_contrat.html',            title: 'Contrats — MOE / contractant général' },
+  chantier:     { src: 'phenix_chantier.html',           title: 'Chantier — suivi de travaux' },
+  permis:       { src: 'phenix_permis.html',             title: 'Permis de construire' },
+  financement:  { src: 'phenix_financement.html',        title: 'Dossier de financement' },
+  annuaire:     { src: 'Phenix_Annuaire_Artisans.html',  title: 'Annuaire artisans' },
+  parametres:   { src: null,                              title: 'Paramètres' },
+};
+
+let shellCurrentFrame = null;   // référence à l'iframe actuellement chargée
+let shellCurrentModule = null;
+let shellPendingOrder  = null;  // ordre à transmettre dès que le module signale qu'il est prêt
+
+window.shellShowView = function(view, el) {
+  document.querySelectorAll('.shell-view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.shell-nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('shell-view-' + view).classList.add('active');
+  if (el) el.classList.add('active');
+};
+
+window.shellOpenModule = function(name, el, order) {
+  const mod = MODULES[name];
+  if (!mod) return;
+  shellShowView('module', el);
+  const container = document.getElementById('module-frame-container');
+
+  if (!mod.src) {
+    container.innerHTML = `<div class="module-placeholder"><i class="ti ti-tool"></i><div>Module « ${mod.title} » à venir dans le shell.</div></div>`;
+    shellCurrentFrame = null;
+    return;
+  }
+
+  // Recharger l'iframe seulement si on change de module (évite de perdre l'état en cours)
+  if (shellCurrentModule !== name || !shellCurrentFrame) {
+    container.innerHTML = `<iframe class="module-frame" id="module-iframe" src="${mod.src}"></iframe>`;
+    shellCurrentFrame = document.getElementById('module-iframe');
+    shellCurrentModule = name;
+  }
+
+  shellPendingOrder = order || (mod.gotoPage ? { source:'phenix-shell', action:'goto-page', page: mod.gotoPage } : null);
+};
+
+// Ouvrir directement un projet précis dans le module Dossier depuis le tableau de bord
+window.shellOpenProjet = function(id, nom) {
+  const el = document.querySelector('.shell-nav-item[data-module="dossier"]');
+  shellOpenModule('dossier', el, { source:'phenix-shell', action:'open-projet', id: id });
+  // Si l'iframe est déjà chargée sur Dossier, on peut envoyer l'ordre tout de suite
+  if (shellCurrentFrame && shellCurrentModule === 'dossier') {
+    try { shellCurrentFrame.contentWindow.postMessage(shellPendingOrder, '*'); } catch(e) {}
+  }
+};
+
+// Réception des signaux "prêt" envoyés par les modules chargés en iframe
+window.addEventListener('message', (ev) => {
+  const msg = ev.data;
+  if (!msg || !msg.source) return;
+  if (msg.source === 'phenix-dossier' && msg.ready && shellPendingOrder && shellCurrentFrame) {
+    try { shellCurrentFrame.contentWindow.postMessage(shellPendingOrder, '*'); } catch(e) {}
+    shellPendingOrder = null;
+  }
+  // Dossier ou Chantier demande à basculer vers un autre module
+  if ((msg.source === 'phenix-dossier' || msg.source === 'phenix-chantier') && msg.action === 'open-module' && MODULES[msg.module]) {
+    const navEl = document.querySelector('.shell-nav-item[data-module="' + msg.module + '"]');
+    shellOpenModule(msg.module, navEl || null);
+  }
+});
+</script>
+<script>
+// ════════════════════════════════════════════════════════════
+//  WEBAUTHN — Authentification biométrique (empreinte / Face ID)
+//  Même mécanisme que Dossier — la clé stockée est partagée
+//  (même origine) donc un enrôlement fait dans Dossier fonctionne ici aussi.
+// ════════════════════════════════════════════════════════════
+const BIO_KEY      = 'phenix_bio_credId';
+const BIO_EMAIL_KEY= 'phenix_bio_email';
+function _b64u(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,''); }
+function _fromb64u(s){ s=s.replace(/-/g,'+').replace(/_/g,'/'); while(s.length%4) s+='='; return Uint8Array.from(atob(s),c=>c.charCodeAt(0)).buffer; }
+
+async function phenixBioInit(){
+  if(!window.PublicKeyCredential) return;
+  const hasPlatform = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().catch(()=>false);
+  if(!hasPlatform) return;
+  const bioWrap = document.getElementById('pl-bio-wrap');
+  if(!bioWrap) return;
+  bioWrap.style.display = 'block';
+  const credId = localStorage.getItem(BIO_KEY);
+  if(!credId){
+    document.getElementById('pl-bio-label').textContent = 'Activer l\'empreinte après connexion';
+    document.getElementById('pl-bio-btn').onclick = () => { document.getElementById('pl-pwd').focus(); };
+  }
+}
+
+function phenixBioReset(){
+  if(!confirm('Supprimer l\'empreinte enregistrée ? Vous devrez la ré-enregistrer après votre prochaine connexion.')) return;
+  localStorage.removeItem(BIO_KEY);
+  localStorage.removeItem(BIO_EMAIL_KEY);
+  localStorage.removeItem('phenix_bio_creds');
+  const lbl = document.getElementById('pl-bio-label'); if(lbl) lbl.textContent = 'Activer l\'empreinte après connexion';
+  const btn = document.getElementById('pl-bio-btn'); if(btn) btn.onclick = () => document.getElementById('pl-pwd').focus();
+  const err = document.getElementById('pl-err');
+  if(err){ err.style.color = '#7DC6E8'; err.textContent = '✓ Empreinte supprimée — connectez-vous avec email/mdp pour la ré-activer.'; }
+}
+
+async function phenixBioLogin(){
+  const btn = document.getElementById('pl-bio-btn');
+  const err = document.getElementById('pl-err');
+  const credId = localStorage.getItem(BIO_KEY);
+  if(err){ err.textContent = ''; err.style.color = '#FFB4A8'; }
+  if(!credId){ document.getElementById('pl-pwd').focus(); return; }
+  btn.disabled = true;
+  btn.innerHTML = '<span style="font-size:18px">⏳</span> <span>Vérification empreinte…</span>';
+  try {
+    await navigator.credentials.get({
+      publicKey: {
+        challenge: crypto.getRandomValues(new Uint8Array(32)),
+        allowCredentials: [{ type: 'public-key', id: _fromb64u(credId), transports: ['internal'] }],
+        userVerification: 'required',
+        timeout: 60000
+      }
+    });
+    const savedCreds = localStorage.getItem('phenix_bio_creds');
+    if(savedCreds && window._auth){
+      const parts = atob(savedCreds).split('|||');
+      if(parts.length === 2){
+        err.style.color = '#4db8e8'; err.textContent = '✓ Connexion en cours…';
+        window._auth.login(parts[0], parts[1]).catch(() => {
+          err.style.color = '#FFB4A8';
+          err.textContent = 'Session expirée — saisissez votre mot de passe.';
+          const em = document.getElementById('pl-email');
+          em.value = parts[0]; em.style.background = '#e8f5e9'; em.readOnly = true;
+          document.getElementById('pl-pwd').focus();
+        });
+        return;
+      }
+    }
+    const savedEmail = localStorage.getItem(BIO_EMAIL_KEY) || '';
+    document.getElementById('pl-email').value = savedEmail;
+    document.getElementById('pl-email').style.background = '#e8f5e9';
+    document.getElementById('pl-email').readOnly = true;
+    err.style.color = '#4db8e8'; err.textContent = '✓ Empreinte reconnue — saisissez votre mot de passe.';
+    document.getElementById('pl-pwd').focus();
+  } catch(e){
+    if(e.name === 'NotAllowedError') err.textContent = 'Reconnaissance annulée.';
+    else if(e.name === 'InvalidStateError') err.textContent = 'Empreinte invalide — cliquez sur 🔄 Réinitialiser.';
+    else err.textContent = '⚠️ ' + e.name + ' : ' + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<span style="font-size:24px">☝️</span> <span>Se connecter avec empreinte</span>';
+  }
+}
+
+async function phenixBioEnroll(userOverride){
+  const err = document.getElementById('pl-err');
+  const wrap = document.getElementById('pl-enroll-wrap');
+  const user = userOverride || (window._auth && window._auth.current());
+  if(!user){ if(err) err.textContent = 'Session non reconnue — réessayez dans quelques secondes.'; return; }
+  try {
+    const encoder = new TextEncoder();
+    const credential = await navigator.credentials.create({
+      publicKey: {
+        challenge: crypto.getRandomValues(new Uint8Array(32)),
+        rp: { name: 'Phénix-Architecture', id: location.hostname },
+        user: { id: encoder.encode(user.uid), name: user.email, displayName: 'Phénix' },
+        pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+        authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'discouraged', requireResidentKey: false },
+        excludeCredentials: [],
+        timeout: 60000,
+        attestation: 'none'
+      }
+    });
+    localStorage.setItem(BIO_KEY, _b64u(credential.rawId));
+    localStorage.setItem(BIO_EMAIL_KEY, user.email);
+    const pwd = document.getElementById('pl-pwd').value;
+    if(pwd) localStorage.setItem('phenix_bio_creds', btoa(user.email + '|||' + pwd));
+    if(wrap){ wrap.innerHTML = '<div style="color:#7DC6E8;font-size:13px;font-weight:600">✓ Empreinte activée — connexion automatique dès maintenant !</div>'; setTimeout(()=>{ wrap.style.display='none'; }, 3000); }
+  } catch(e){
+    if(err) err.textContent = e.name === 'NotAllowedError' ? 'Enrôlement annulé.' : ('Erreur enrôlement : ' + e.message);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', phenixBioInit);
+window.phenixBioLogin  = phenixBioLogin;
+window.phenixBioEnroll = phenixBioEnroll;
+window.phenixBioReset  = phenixBioReset;
+
+// Propose l'enrôlement après une connexion email réussie (le shell utilise doLogin, pas phenixDoLogin)
+const _origDoLogin_bio = window.doLogin;
+window.doLogin = function(){
+  const email = (document.getElementById('pl-email').value || '').trim();
+  const pwd   = document.getElementById('pl-pwd').value || '';
+  const err   = document.getElementById('pl-err'); if(err){ err.style.color='#FFB4A8'; err.textContent=''; }
+  const btn   = document.getElementById('pl-btn'); if(btn) btn.disabled = true;
+  window._auth.login(email, pwd).then((cred) => {
+    const user = cred.user;
+    if(!localStorage.getItem(BIO_KEY) && window.PublicKeyCredential){
+      PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(ok => {
+        if(ok){
+          const wrap = document.getElementById('pl-enroll-wrap');
+          if(wrap){ wrap.style.display='block'; document.getElementById('pl-enroll-btn').onclick = () => phenixBioEnroll(user); }
+        }
+      });
+    }
+  }).catch((e) => {
+    const c = (e && e.code) || '';
+    if(err) err.textContent =
+      c.indexOf('user-not-found')>=0 || c.indexOf('wrong-password')>=0 || c.indexOf('invalid-credential')>=0 ? 'Email ou mot de passe incorrect.' :
+      c.indexOf('network')>=0 ? 'Pas de connexion internet.' :
+      ('Erreur : ' + (c || (e && e.message) || ''));
+  }).finally(() => { if(btn) btn.disabled = false; });
+};
+</script>
+
+</body>
+</html>

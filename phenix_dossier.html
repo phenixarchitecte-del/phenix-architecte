@@ -40,6 +40,25 @@ const app = initializeApp(firebaseConfig);
 const db      = getFirestore(app);
 const storage = getStorage(app);
 
+// ════════════════════════════════════════════════════════════
+//  FIREBASE APP CHECK — protection anti-bots (reCAPTCHA v3)
+//  Décidé mais jamais activé jusqu'ici. Étapes pour l'activer :
+//  1. Firebase Console → App Check → Enregistrer une clé reCAPTCHA v3
+//     pour le domaine où l'app est hébergée
+//  2. Remplacer RECAPTCHA_SITE_KEY ci-dessous par cette clé
+//  3. Répéter cet import + ce bloc dans chaque fichier de la suite
+//     (même clé pour tous, cf. décision prise)
+//  4. Une fois testé partout, activer "Enforce" dans la Console
+//     pour Firestore/Storage (sinon App Check tourne mais ne bloque rien)
+// ════════════════════════════════════════════════════════════
+import { initializeAppCheck, ReCaptchaV3Provider } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js';
+const RECAPTCHA_SITE_KEY = '6LeObWktAAAAAL9eyppDRtLp5yZTyBaF4ZNKXNIO';
+try {
+  if (!RECAPTCHA_SITE_KEY.startsWith('REMPLACER')) {
+    initializeAppCheck(app, { provider: new ReCaptchaV3Provider(RECAPTCHA_SITE_KEY), isTokenAutoRefreshEnabled: true });
+  }
+} catch (e) { console.warn('App Check non initialisé :', e); }
+
 // ── Collections Firestore ──────────────────────────────────
 const PROJETS_COL    = collection(db, 'phenix_projets');
 const CHARGES_COL      = collection(db, 'phenix_charges');
@@ -2499,13 +2518,6 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
 
 <div class="app">
   <aside class="sidebar" id="sidebar_d">
-    <div class="sidebar-logo" onclick="switchApp('chantier')" style="cursor:pointer" title="→ Gestion de Chantier">
-      <div class="logo-icon" style="background:linear-gradient(135deg,#1B2D5B,#4A9CC7)"><i class="ti ti-briefcase"></i></div>
-      <div class="logo-text-block">
-        <div class="logo-phoenix">Phénix</div>
-        <div class="logo-sub" style="display:flex;align-items:center;gap:4px">Dossier&nbsp;<i class="ti ti-arrows-exchange" style="font-size:9px;opacity:.8"></i>&nbsp;Chantier</div>
-      </div>
-    </div>
     <div class="nav-section">Projets</div>
     <div class="nav-item active" onclick="show_d('dashboard',this)"><i class="ti ti-layout-dashboard"></i> Tableau de bord</div>
     <div class="nav-item" onclick="show_d('projets',this)"><i class="ti ti-building"></i> Projets <span class="nav-badge" id="navBadgeProjets">0</span></div>
@@ -4375,6 +4387,13 @@ function show_d(id, el) {
   // Fermer le drawer sur mobile après navigation
   closeSidebar_d();
 }
+// Échappement HTML — évite qu'un champ client (nom, adresse, notes…) contenant
+// des caractères spéciaux (< > & ") ne casse l'affichage ou n'injecte du HTML.
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 function toast_d(msg) {
   const t=document.getElementById('toast_d'); t.textContent=msg; t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'),3000);
@@ -4492,8 +4511,8 @@ function renderProjectTable() {
   if (!filtered.length){tbody.innerHTML='<tr><td colspan="10"><div class="empty-state" style="padding:2rem"><div class="empty-icon"><i class="ti ti-building"></i></div><div class="empty-title">Aucun projet</div></div></td></tr>';return;}
   tbody.innerHTML=filtered.map(p=>`
     <tr data-status="${p.statut}" onclick="openProjectModal(${p.id})" style="cursor:pointer">
-      <td class="td-muted" style="padding-left:16px">${p.ref||'—'}</td>
-      <td><strong>${p.nom}</strong></td><td>${p.client}</td>
+      <td class="td-muted" style="padding-left:16px">${esc(p.ref)||'—'}</td>
+      <td><strong>${esc(p.nom)}</strong></td><td>${esc(p.client)}</td>
       <td>${typeBadge(p.type)}</td><td style="font-size:12px">${p.mission||'—'}</td>
       <td><strong>${p.phase||'—'}</strong></td>
       <td>${progressHtml(p.avancement)}</td>
@@ -4507,9 +4526,9 @@ function renderProjectCards() {
   if (!stateDossier.projets.length){grid.innerHTML='<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon"><i class="ti ti-building"></i></div><div class="empty-title">Aucun projet</div></div>';return;}
   grid.innerHTML=stateDossier.projets.map(p=>`
     <div class="project-card" onclick="openProjectModal(${p.id})">
-      <div class="pc-ref">${p.ref||'—'}</div>
-      <div class="pc-name">${p.nom}</div>
-      <div class="pc-client"><i class="ti ti-user" style="font-size:12px"></i> ${p.client}</div>
+      <div class="pc-ref">${esc(p.ref)||'—'}</div>
+      <div class="pc-name">${esc(p.nom)}</div>
+      <div class="pc-client"><i class="ti ti-user" style="font-size:12px"></i> ${esc(p.client)}</div>
       <div class="pc-meta">${typeBadge(p.type)} ${statutBadge(p.statut)}</div>
       <div class="pc-progress-label"><span>${p.phase||'—'}</span><strong>${p.avancement||0}%</strong></div>
       <div class="pc-progress-bar"><div class="pc-progress-fill" style="width:${p.avancement||0}%"></div></div>
@@ -4753,6 +4772,17 @@ async function deleteCurrentProject() {
   toast_d('🗑️ Projet supprimé.');
 }
 
+// Navigation intermodule : si ce module tourne dans le shell (iframe), on demande
+// au shell de basculer vers le module cible plutôt que d'ouvrir un nouvel onglet.
+// Le handoff localStorage (déjà écrit juste avant l'appel) reste inchangé : le
+// module cible le lit normalement au chargement, que ce soit en onglet ou en iframe.
+function phenixNavigateToModule(moduleName, standaloneUrl) {
+  if (window.parent && window.parent !== window) {
+    try { window.parent.postMessage({source:'phenix-dossier', action:'open-module', module: moduleName}, '*'); return; } catch(e) {}
+  }
+  window.open(standaloneUrl, '_blank');
+}
+
 function openInChiffrage(id) {
   const p = stateDossier.projets.find(x => x.id == id);
   if (!p) return;
@@ -4775,7 +4805,7 @@ function openInChiffrage(id) {
   // Ouvrir Phénix Chiffrage — adapter l'URL si besoin
   const chiffrageUrl = 'phenix_chiffrage.html';
   toast_d('📐 Ouverture de Phénix Chiffrage…');
-  setTimeout(() => window.open(chiffrageUrl, '_blank'), 400);
+  setTimeout(() => phenixNavigateToModule('chiffrage', chiffrageUrl), 400);
 }
 
 function openInPermis(id) {
@@ -4797,7 +4827,7 @@ function openInPermis(id) {
   localStorage.setItem('phenix-open-in-permis', JSON.stringify(payload));
   const permisUrl = 'phenix_permis.html';
   toast_d('📋 Ouverture de Phénix Permis…');
-  setTimeout(() => window.open(permisUrl, '_blank'), 400);
+  setTimeout(() => phenixNavigateToModule('permis', permisUrl), 400);
 }
 
 function openInFinancement(id) {
@@ -4820,7 +4850,7 @@ function openInFinancement(id) {
   localStorage.setItem('phenix-open-in-financement', JSON.stringify(payload));
   const financementUrl = 'phenix_financement.html?projet=' + encodeURIComponent(p.id);
   toast_d('🏦 Ouverture du Dossier Financement…');
-  setTimeout(() => window.open(financementUrl, '_blank'), 400);
+  setTimeout(() => phenixNavigateToModule('financement', financementUrl), 400);
 }
 
 function openInContrat(id) {
@@ -4844,7 +4874,7 @@ function openInContrat(id) {
   localStorage.setItem('phenix-open-in-contrat', JSON.stringify(payload));
   const contratUrl = 'phenix_contrat.html?projet=' + encodeURIComponent(p.id);
   toast_d('📝 Ouverture du Générateur de Contrats…');
-  setTimeout(() => window.open(contratUrl, '_blank'), 400);
+  setTimeout(() => phenixNavigateToModule('contrat', contratUrl), 400);
 }
 
 function openEditModal(id) {
@@ -5189,7 +5219,7 @@ function payProgressHtml(f) {
 
 function nomProjet(projetId) {
   const p = stateDossier.projets.find(x=>x.id==projetId);
-  return p ? p.nom : '—';
+  return p ? esc(p.nom) : '—';
 }
 
 // Render page facturation complète
@@ -6693,6 +6723,49 @@ async function confirmImportPdf() {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════
+//  PHÉNIX SUITE — Réception d'ordres depuis le shell (postMessage)
+//  Permet au shell (phenix_shell.html) d'ouvrir directement un
+//  projet ou une page précise quand ce module est chargé en iframe.
+// ═══════════════════════════════════════════════════════════════
+window.addEventListener('message', (ev) => {
+  const msg = ev.data;
+  if (!msg || msg.source !== 'phenix-shell') return;
+
+  function tryRun(fn, tries) {
+    tries = tries || 0;
+    const ready = stateDossier && Array.isArray(stateDossier.projets) && stateDossier.projets.length > 0;
+    if (ready || tries > 15) { fn(); return; }
+    setTimeout(() => tryRun(fn, tries + 1), 300);
+  }
+
+  if (msg.action === 'open-projet' && msg.id != null) {
+    tryRun(() => { try { openProjectModal(msg.id); } catch(e) {} });
+  } else if (msg.action === 'goto-page' && msg.page) {
+    tryRun(() => {
+      try {
+        const navEl = document.querySelector(`#app-dossier .nav-item[onclick*="show_d('${msg.page}'"]`);
+        show_d(msg.page, navEl || null);
+      } catch(e) {}
+    });
+  }
+});
+// Signale au parent que ce module est prêt à recevoir des ordres
+try { window.parent.postMessage({source:'phenix-dossier', ready:true}, '*'); } catch(e) {}
+
+// Si embarqué dans le shell : neutraliser le logo-switcher interne vers Chantier
+// (le rail de navigation du shell fait déjà ce travail — éviter le doublon de bouton)
+if (window.parent && window.parent !== window) {
+  const _logo = document.querySelector('#app-dossier .sidebar-logo');
+  if (_logo) {
+    _logo.removeAttribute('onclick');
+    _logo.style.cursor = 'default';
+    _logo.removeAttribute('title');
+    const _sub = _logo.querySelector('.logo-sub');
+    if (_sub) _sub.textContent = 'Gestion de dossier';
+  }
+}
+
 // Visualiser un PDF attaché
 function viewPdf(factureId) {
   const f = stateDossier.factures.find(x=>x.id===factureId);
@@ -6709,25 +6782,14 @@ function viewPdf(factureId) {
 <script>
 
 // ═══════════════════════════════════════════════════════════════
-//  PHÉNIX SUITE — Bascule entre Gestion de Chantier et Dossier
+//  PHÉNIX SUITE — bascule vers Chantier (via le shell si embarqué)
 // ═══════════════════════════════════════════════════════════════
 function switchApp(target) {
-  const appC = document.getElementById('app-chantier');
-  const appD = document.getElementById('app-dossier');
-  if (!appC || !appD) return;
-  if (target === 'dossier') {
-    appC.style.display = 'none';
-    appD.style.display = '';
-    try { syncHonorairesToDossier(); } catch(e) {}
-    // Activer la page dashboard et la rendre
-    try { show_d('dashboard'); } catch(e) { try { renderDashboard_d(); } catch(e2) {} }
-    localStorage.setItem('phenix-active-module', 'dossier');
-  } else {
-    appD.style.display = 'none';
-    appC.style.display = '';
-    try { loadSharedHonoraires(); refreshAll(); } catch(e) {}
-    localStorage.setItem('phenix-active-module', 'chantier');
+  if (target !== 'chantier') return;
+  if (window.parent && window.parent !== window) {
+    try { window.parent.postMessage({source:'phenix-dossier', action:'open-module', module: 'chantier'}, '*'); return; } catch(e) {}
   }
+  window.location.href = 'phenix_chantier.html';
 }
 // ════════════════════════════════════════════════════════════
 //  MODULE COMPTABILITÉ — Phénix-Architecture
@@ -8475,13 +8537,6 @@ function nextWeekday(targetDay) {
   d.setDate(today.getDate() + diff);
   return d.toISOString().split('T')[0];
 }
-
-</script>
-<script>
-function switchApp(target) {
-  if (target === 'chantier') window.location.href = 'phenix_chantier.html';
-}
-</script>
 
 <!-- ══════════════════════════════════════════════════════════
      MODULE VOCAL — Bouton FAB + Panel flottant

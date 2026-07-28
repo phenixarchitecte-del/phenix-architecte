@@ -37,6 +37,15 @@ const firebaseConfig = {
 // ════════════════════════════════════════════════════════════
 
 const app = initializeApp(firebaseConfig);
+// ════════════════════════════════════════════════════════════
+//  FIREBASE APP CHECK — protection anti-bots (reCAPTCHA v3)
+// ════════════════════════════════════════════════════════════
+import { initializeAppCheck, ReCaptchaV3Provider } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js';
+const RECAPTCHA_SITE_KEY = '6LeObWktAAAAAL9eyppDRtLp5yZTyBaF4ZNKXNIO';
+try {
+  initializeAppCheck(app, { provider: new ReCaptchaV3Provider(RECAPTCHA_SITE_KEY), isTokenAutoRefreshEnabled: true });
+} catch (e) { console.warn('App Check non initialisé :', e); }
+
 const db      = getFirestore(app);
 const storage = getStorage(app);
 
@@ -2278,14 +2287,6 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
   <!-- Overlay sidebar mobile -->
   <div class="sidebar-overlay" id="chantierSidebarOverlay" onclick="closeChanSidebar()"></div>
 <aside class="sidebar" id="chantierSidebar">
-    <div class="sidebar-logo" onclick="switchApp('dossier')" style="cursor:pointer" title="→ Gestion de Dossier">
-      <div class="logo-icon"><i class="ti ti-crane"></i></div>
-      <div>
-        <div class="logo-phoenix">Phénix-Architecture</div>
-        <div class="logo-sub" style="display:flex;align-items:center;gap:4px">Chantier&nbsp;<i class="ti ti-arrows-exchange" style="font-size:9px;opacity:.8"></i>&nbsp;Dossier</div>
-      </div>
-    </div>
-
     <!-- Sélecteur chantier actif -->
     <div class="sidebar-chantier-selector">
       <label>Chantier actif</label>
@@ -6074,7 +6075,22 @@ document.querySelectorAll('#chantierSidebar .nav-item').forEach(el => {
 </script>
 <script>
 function switchApp(target) {
-  if (target === 'dossier') window.location.href = 'phenix_dossier.html';
+  if (target === 'dossier') {
+    if (window.parent && window.parent !== window) {
+      try { window.parent.postMessage({source:'phenix-chantier', action:'open-module', module: 'dossier'}, '*'); return; } catch(e) {}
+    }
+    window.location.href = 'phenix_dossier.html';
+  }
+}
+if (window.parent && window.parent !== window) {
+  const _logoC = document.querySelector('#app-chantier .sidebar-logo');
+  if (_logoC) {
+    _logoC.removeAttribute('onclick');
+    _logoC.style.cursor = 'default';
+    _logoC.removeAttribute('title');
+    const _subC = _logoC.querySelector('.logo-sub');
+    if (_subC) _subC.textContent = 'Suivi de chantier';
+  }
 }
 </script>
 
