@@ -83,12 +83,63 @@ window.dispatchEvent(new Event('fbready'));
   .infonote{background:#F4EFE4;border-radius:14px;padding:13px 15px;color:var(--soft);font-size:.9rem;margin-top:16px;display:flex;gap:10px;align-items:flex-start}.infonote b{color:var(--ink)}
   .saved{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--deep);color:#fff;padding:10px 20px;border-radius:999px;font-size:.85rem;font-weight:600;opacity:0;transition:.3s;pointer-events:none;box-shadow:var(--lift)}.saved.show{opacity:1;transform:translateX(-50%) translateY(0)}
   @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .pline{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+  .pline input{padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--cream);font-family:Mulish;font-size:.88rem}
+  .pline input:first-child{flex:1;min-width:0}
+  .pline input.pamt{max-width:110px;text-align:right}
+  .pline .prem{padding:6px 11px;line-height:1}
+  .cred-row{border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px}
+  .cred-top{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+  .cred-top input{flex:1;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--cream);font-family:Mulish;font-size:.88rem}
+  .cred-top .crem{padding:6px 11px;line-height:1}
+  .cred-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .cred-grid label{font-size:.72rem;color:var(--soft);display:block;margin-bottom:3px}
+  .cred-grid input{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--cream);font-family:Mulish;font-size:.85rem;box-sizing:border-box}
+  .hrow{display:flex;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);font-size:.88rem}
+  .hrow .hd{width:80px;color:var(--soft)}
+  .hrow .ht{flex:1;font-weight:600}
+  .hrow .hv{width:110px;text-align:right;font-weight:600}
   .assoc-row{display:flex;gap:6px;align-items:center;margin-bottom:6px}
   .assoc-row input:first-child{flex:1;min-width:0}
   .assoc-row input[data-ap]{max-width:72px;text-align:right}
   .assoc-row .arem{padding:6px 11px;line-height:1}
   .assoc-total{font-size:.82rem;color:var(--soft);margin:5px 0 2px}
   .assoc-total.warn{color:var(--terra)}
+  #printExport{display:none}
+  @media print{
+   body *{visibility:hidden}
+   #printExport,#printExport *{visibility:visible}
+   #printExport{display:block;position:absolute;top:0;left:0;width:100%;margin:0;padding:0}
+   @page{margin:16mm 14mm}
+  }
+  .bexp,.bexp *{-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}
+  .bexp{font-family:'Mulish',sans-serif;color:#2D2A26;font-size:12.5px;line-height:1.5}
+  .bexp .bhead{background:#FBF7EF;border-radius:14px;margin:0 0 20px;padding:22px 24px;border-bottom:3px solid #3F6B6B}
+  .bexp .bkicker{font-family:'Mulish';font-size:.72rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#6B6358;margin-bottom:6px}
+  .bexp .btitle{font-family:'Fraunces',serif;font-weight:600;font-size:2.1rem;color:#2D2A26}
+  .bexp .bsub{color:#5A5650;font-size:.95rem;margin-top:3px}
+  .bexp .bmeta{width:100%;margin-bottom:8px;border-collapse:collapse}
+  .bexp .bmeta td{padding:3px 0;font-size:.92rem}
+  .bexp .bmeta td:first-child{color:#5A5650;width:180px}
+  .bexp .bmeta td:last-child{font-weight:600}
+  .bexp .bsec{font-family:'Fraunces',serif;font-weight:600;font-size:1.08rem;color:#2D2A26;margin:24px 0 10px;padding-left:12px;border-left:3px solid #3F6B6B;break-after:avoid;page-break-after:avoid}
+  .bexp table.btab{width:100%;border-collapse:collapse;margin-bottom:4px;break-inside:avoid;page-break-inside:avoid}
+  .bexp table.btab thead{display:table-header-group}
+  .bexp table.btab tr{break-inside:avoid;page-break-inside:avoid}
+  .bexp table.btab th{text-align:left;font-size:.76rem;text-transform:uppercase;letter-spacing:.04em;color:#6B6358;padding:6px 9px;border-bottom:1.5px solid #2D2A26}
+  .bexp table.btab td{padding:7px 9px;border-bottom:1px solid #EEE8DA;vertical-align:top}
+  .bexp table.btab.zebra tbody tr:nth-child(even) td{background:#FAF6EC}
+  .bexp table.btab td .sub{color:#5A5650;font-size:.82rem;margin-top:1px}
+  .bexp table.btab td.r,.bexp table.btab th.r{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .bexp table.btab tr.tot td{font-weight:700;font-size:1.05rem;border-top:1.5px solid #2D2A26;border-bottom:none}
+  .bexp .bkpi-row{display:flex;gap:12px;margin:4px 0 6px;page-break-inside:avoid}
+  .bexp .bkpi{flex:1;background:#FBF7EF;border-radius:10px;padding:14px 16px;border:1px solid #E8E2D4}
+  .bexp .bkpi.main{background:#EFF2EE;border-color:#CBDBD3}
+  .bexp .bkl{font-size:.74rem;color:#6B6358;text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px}
+  .bexp .bkv{font-family:'Fraunces',serif;font-weight:600;font-size:1.55rem;color:#2D2A26}
+  .bexp .bnote{margin-top:26px;padding-top:12px;border-top:1px solid #D8D0C0;font-size:.78rem;color:#5A5650;font-style:italic}
+  .bexp .borgwrap{margin:6px 0 4px;page-break-inside:avoid}
+  .bexp .borgwrap svg{width:100%;height:auto;display:block}
   #patri-login{position:fixed;inset:0;background:rgba(43,39,36,.55);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px}
   #patri-login .lcard{background:var(--paper);border-radius:22px;box-shadow:var(--lift);padding:30px 26px;max-width:380px;width:100%;text-align:center;animation:rise .5s ease both}
   #patri-login h2{font-family:'Fraunces',serif;font-weight:500;font-size:1.6rem;margin-bottom:4px}
@@ -97,7 +148,7 @@ window.dispatchEvent(new Event('fbready'));
   #patri-login .lerr{color:var(--terra);font-size:.85rem;min-height:18px;margin:0 0 8px}
   #patri-login .lwide{width:100%;justify-content:center;margin-bottom:8px}
   #patri-login .loff{color:var(--soft);font-size:.82rem;background:none;border:none;cursor:pointer;text-decoration:underline;margin-top:8px}
-  @media(max-width:560px){.wrap{padding:18px 14px 70px}.gloss{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}.donut-box{width:200px;height:200px}}
+  @media(max-width:560px){.wrap{padding:18px 14px 70px}.gloss{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}.donut-box{width:200px;height:200px}.cred-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -112,20 +163,27 @@ window.dispatchEvent(new Event('fbready'));
   <button class="loff" id="pl-offline">Continuer hors connexion (cet appareil seulement)</button>
 </div></div>
 <div class="wrap">
+<div id="printExport"></div>
   <header class="top">
     <div class="kicker">Patrimoine familial</div><h1>Notre patrimoine</h1>
     <p class="sub">Une vue claire et complète : où se trouve notre argent, comment nos sociétés s'articulent, et où en sont nos biens. Données saisies à la main (ou importées) ; pour le suivi automatique en temps réel, on s'appuie sur Finary.</p>
   </header>
   <nav class="tabs">
     <button class="tab active" data-t="ov">Vue d'ensemble</button><button class="tab" data-t="pl">Placements</button>
-    <button class="tab" data-t="im">Immobilier</button><button class="tab" data-t="so">Nos sociétés</button><button class="tab" data-t="re">Repères</button>
+    <button class="tab" data-t="im">Immobilier</button><button class="tab" data-t="pe">Perso</button><button class="tab" data-t="so">Nos sociétés</button><button class="tab" data-t="re">Repères</button>
   </nav>
 
   <section class="panel active" id="ov"><div class="card"><div class="hero">
     <div class="donut-box"><svg viewBox="0 0 120 120" width="100%" height="100%" id="donut"></svg><div class="donut-center"><div class="lab">Patrimoine net</div><div class="val" id="total">—</div></div></div>
     <div class="legend" id="legend"></div></div>
     <a class="finary" href="https://finary.com" target="_blank" rel="noopener">Voir le détail à jour sur Finary →</a><div class="stamp" id="stamp"></div>
-    <div class="actions" style="margin-top:14px"><button class="btn" id="expBtn">⤓ Sauvegarder une copie (fichier)</button><button class="btn" id="impBtn">⤒ Restaurer une copie</button><button class="btn" id="copyBtn">⧉ Copier les données</button><button class="btn" id="pasteBtn">⎀ Coller des données</button><input type="file" id="impFile" accept=".json,application/json" style="display:none"></div></div>
+    <div class="actions" style="margin-top:14px"><button class="btn" id="expBtn">⤓ Sauvegarder une copie (fichier)</button><button class="btn" id="impBtn">⤒ Restaurer une copie</button><button class="btn" id="copyBtn">⧉ Copier les données</button><button class="btn" id="pasteBtn">⎀ Coller des données</button><input type="file" id="impFile" accept=".json,application/json" style="display:none"></div>
+    <div class="card" style="margin-top:14px">
+     <div class="ctitle" style="font-family:Fraunces,serif;font-size:1.15rem">Export pour la banque</div>
+     <p class="lead" style="margin:6px 0 12px">Génère un document de synthèse (PDF) présentant l'ensemble du patrimoine, dans un format clair pour un dossier bancaire.</p>
+     <div><label style="font-size:.82rem;color:var(--soft);display:block;margin-bottom:5px">Titulaire(s) du dossier (figurera sur le document)</label><input id="bankHolder" placeholder="ex. Maxime et [Épouse] Suchet" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:var(--cream);font-family:Mulish;font-size:.92rem;margin-bottom:10px"></div>
+     <button class="btn go" id="pdfBankBtn">🏦 Exporter en PDF pour la banque</button>
+    </div></div>
     <div class="infonote"><span>◆</span><div>Chaque couleur correspond à une classe d'actif. Le total est le patrimoine <b>net</b> : valeur des biens moins les emprunts restants.</div></div>
     <div class="card" id="syncCard"></div></section>
 
@@ -134,11 +192,35 @@ window.dispatchEvent(new Event('fbready'));
     <div class="toolbar"><button class="btn go" id="addAcc">+ Nouvelle enveloppe</button><button class="btn" id="csvBtn">⇪ Importer un CSV</button><input type="file" id="csvFile" accept=".csv,text/csv" style="display:none"></div>
     <div class="toolbar" style="margin-top:-6px"><span style="font-size:.82rem;color:var(--soft);align-self:center">Ajout rapide :</span><button class="btn" data-preset="PEA|bourse">PEA</button><button class="btn" data-preset="Compte-titres (CTO)|bourse">CTO</button><button class="btn" data-preset="Assurance-vie|retraite">Assurance-vie</button><button class="btn" data-preset="PER|retraite">PER</button><button class="btn" data-preset="Cryptomonnaies|crypto">Crypto</button><button class="btn" data-preset="Livret A|liquidites">Livret</button></div>
     <div id="csvHelp" class="infonote" style="display:none"><span>◆</span><div>Format attendu : un en-tête puis des lignes. Colonnes reconnues (peu importe l'ordre) : <b>Compte</b>, <b>Nom</b>, <b>Montant</b>, et éventuellement <b>Catégorie</b>. Séparateur «,» ou «;». Chaque ligne devient une position dans l'enveloppe correspondante.</div></div>
-    <div id="accounts"></div></section>
+    <div id="accounts"></div>
+    <div class="card" style="margin-top:16px">
+     <div class="ctitle" style="font-family:Fraunces,serif;font-size:1.15rem">Historique de la progression</div>
+     <p class="lead" style="margin:6px 0 12px">Un point s'enregistre automatiquement chaque jour où tu modifies tes placements — de quoi suivre la trajectoire dans la durée.</p>
+     <svg viewBox="0 0 680 170" width="100%" height="170" id="histChart" style="display:block"></svg>
+     <div id="histTable" style="margin-top:10px"></div>
+    </div></section>
 
   <section class="panel" id="im"><h2 class="sec">Immobilier</h2>
     <p class="lead">Nos biens, avec valeur estimée et emprunt restant. La part nette (valeur − emprunt) entre dans le patrimoine.</p>
     <div id="props"></div><button class="addbtn" id="addProp">+ Ajouter un bien</button></section>
+
+  <section class="panel" id="pe"><h2 class="sec">Situation personnelle & endettement</h2>
+    <p class="lead">Revenus, crédits personnels, et simulation du taux d'endettement — pour préparer un dossier bancaire. Le crédit d'un bien détenu en direct (voir l'onglet Immobilier) est repris ici automatiquement : le modifier à un endroit le modifie partout.</p>
+
+    <div class="card"><div class="ctitle" style="font-family:Fraunces,serif;font-size:1.15rem">Revenus du foyer</div>
+     <p class="lead" style="margin:6px 0 10px">Salaires, rémunérations, revenus libéraux… (hors loyers des biens en direct, déjà repris plus bas).</p>
+     <div id="revenus"></div><button class="btn" id="addRevenu" style="margin-top:4px">+ Ajouter un revenu</button></div>
+
+    <div class="card" style="margin-top:14px"><div class="ctitle" style="font-family:Fraunces,serif;font-size:1.15rem">Crédits personnels</div>
+     <p class="lead" style="margin:6px 0 10px">Crédit auto, conso… (hors crédits immobiliers, déjà repris plus bas).</p>
+     <div id="credits"></div><button class="btn" id="addCredit" style="margin-top:4px">+ Ajouter un crédit</button></div>
+
+    <div class="card" style="margin-top:14px"><div class="ctitle" style="font-family:Fraunces,serif;font-size:1.15rem">Crédits & loyers immobiliers liés</div>
+     <p class="lead" style="margin:6px 0 10px">Biens détenus en direct (non logés dans une société) — repris automatiquement depuis l'onglet Immobilier.</p>
+     <div id="credLies"></div></div>
+
+    <div class="card" style="margin-top:14px" id="ratioCard"></div>
+  </section>
 
   <section class="panel" id="so"><h2 class="sec">Nos sociétés, en un schéma</h2>
     <p class="lead">La holding Suchet-Vieira chapeaute la SCI, l'EURL Phénix et la ferme. L'activité libérale de Madame reste autonome. Tu peux tout réorganiser : chaque société se rattache librement à la holding, à une SCI, ou reste indépendante.</p>
@@ -165,7 +247,7 @@ const DEF={
   {id:3,plat:"CIC",type:"Portefeuille d'actions",cat:"bourse",url:"https://www.cic.fr",rendement:0,amount:5000,positions:[]},
   {id:4,plat:"Plateforme crypto",type:"Cryptomonnaies",cat:"crypto",url:"https://finary.com",rendement:0,amount:2000,positions:[]},
   {id:5,plat:"Épargne",type:"Livret A",cat:"liquidites",url:"",rendement:0,amount:15000,positions:[]}],
- props:[{id:1,name:"Terrain à bâtir",type:"Terrain acquis, prêt à construire",value:40000,debt:0,holder:null,rate:0,months:0},{id:2,name:"Maison de bourg",type:"Bien immobilier",value:200000,debt:120000,holder:null,rate:3.5,months:240}],
+ props:[{id:1,name:"Terrain à bâtir",type:"Terrain acquis, prêt à construire",value:40000,debt:0,holder:null,rate:0,months:0,loyer:0},{id:2,name:"Maison de bourg",type:"Bien immobilier",value:200000,debt:120000,holder:null,rate:3.5,months:240,loyer:0}],
  companies:[
   {id:1,name:"Holding Suchet-Vieira",type:"Société mère",parent:null,ca:0,benefice:0,valeur:100000,fricLabel:"",fricRate:0,associes:[{name:"Maxime Suchet",pct:50},{name:"Associé vétérinaire",pct:50}]},
   {id:2,name:"SCI",type:"Immobilier locatif",parent:1,ca:14000,benefice:0,valeur:0,fricLabel:"Selon régime SCI",fricRate:0,associes:[{name:"Holding Suchet-Vieira",pct:100}]},
@@ -173,6 +255,9 @@ const DEF={
   {id:4,name:"La ferme des petits poucets",type:"Ferme pédagogique",parent:1,soon:true,ca:0,benefice:0,valeur:0,fricLabel:"",fricRate:0,associes:[{name:"Holding Suchet-Vieira",pct:100}]},
   {id:5,name:"Collaboration vétérinaire — Madame",type:"Activité libérale (autonome)",parent:null,ca:75000,benefice:0,valeur:0,fricLabel:"",fricRate:0,associes:[{name:"Madame",pct:100}]}],
  contacts:[{role:"Expert-comptable",ico:"📒",nm:"",tel:""},{role:"Conseiller en gestion de patrimoine",ico:"🧭",nm:"",tel:""},{role:"Courtier prévoyance",ico:"🛡️",nm:"",tel:""},{role:"Notaire",ico:"⚖️",nm:"",tel:""}],
+ revenus:[{id:1,name:"Rémunération gérant — Phénix",amount:0},{id:2,name:"Revenus libéraux — Madame (véto)",amount:0}],
+ credits:[{id:1,name:"Crédit automobile",amount:0,debt:0,ech:""}],
+ history:[],
  updated:""};
 let state=null,nid=100;
 const $=s=>document.querySelector(s),ce=(t,c)=>{const e=document.createElement(t);if(c)e.className=c;return e};
@@ -185,7 +270,7 @@ const store={async get(k){try{if(window.localStorage){const v=localStorage.getIt
   try{if(window.storage){const r=await window.storage.get(k);return r&&r.value;}}catch(e){}return null;},
  async set(k,v){let ok=false;try{if(window.localStorage){localStorage.setItem(k,v);ok=true;}}catch(e){}
   try{if(window.storage){await window.storage.set(k,v);ok=true;}}catch(e){}return ok;}};
-function normalize(){['accounts','props','companies'].forEach(k=>(state[k]||[]).forEach(o=>{nid=Math.max(nid,o.id+1);if(k==='accounts'&&!o.positions)o.positions=[];if(k==='companies'&&!o.associes)o.associes=[];}));}
+function normalize(){['accounts','props','companies'].forEach(k=>(state[k]||[]).forEach(o=>{nid=Math.max(nid,o.id+1);if(k==='accounts'&&!o.positions)o.positions=[];if(k==='companies'&&!o.associes)o.associes=[];}));if(!state.history)state.history=[];if(!state.revenus)state.revenus=[];if(!state.credits)state.credits=[];}
 function renderAll(){renderOverview();renderStamp();renderAccounts();renderProps();renderCompanies();renderContacts();}
 async function load(){let raw=null;try{raw=await store.get(KEY);}catch(e){}if(raw){try{state=JSON.parse(raw);}catch(e){}}
  if(!state)state=JSON.parse(JSON.stringify(DEF));normalize();}
@@ -204,7 +289,13 @@ function initSync(){if(!window._auth)return;window._auth.onChange(u=>{fb.uid=u||
    }else applyCloud(d);
   });
  });}
-let tT;async function save(){state.updated=new Date().toLocaleDateString('fr-FR');const ok=await store.set(KEY,JSON.stringify(state));
+function fmtDate(d){const[y,m,dd]=d.split('-');return `${dd}/${m}/${y.slice(2)}`;}
+function logHistory(){const day=new Date().toISOString().slice(0,10);const by={};state.accounts.forEach(a=>{by[a.cat]=(by[a.cat]||0)+accTot(a);});const total=Object.values(by).reduce((s,v)=>s+v,0);
+ if(!state.history)state.history=[];const idx=state.history.findIndex(h=>h.date===day);const entry={date:day,total,by};
+ if(idx>=0)state.history[idx]=entry;else state.history.push(entry);
+ state.history.sort((a,b)=>a.date<b.date?-1:(a.date>b.date?1:0));
+ if(state.history.length>1500)state.history=state.history.slice(-1500);}
+let tT;async function save(){logHistory();state.updated=new Date().toLocaleDateString('fr-FR');const ok=await store.set(KEY,JSON.stringify(state));
  if(fb.uid&&window._fb){const j=JSON.stringify(state);fb.lastJson=j;window._fb.save(j);}
  const t=$('#toast');t.textContent=(fb.uid?'Synchronisé ☁︎':(ok?'Enregistré ✓':'⚠ Sauvegarde auto indisponible — utilise « Sauvegarder une copie »'));t.classList.add('show');clearTimeout(tT);tT=setTimeout(()=>t.classList.remove('show'),ok?1300:3000);renderStamp();}
 function renderSync(){const el=$('#syncCard');if(!el)return;const T='<div class="ctitle" style="font-family:Fraunces,serif;font-size:1.15rem">Synchronisation multi-appareils</div>';
@@ -244,7 +335,7 @@ function renderAccounts(){const box=$('#accounts');box.innerHTML='';state.accoun
      <div><label>Catégorie</label><select data-f="cat">${catSelHtml(a.cat)}</select></div><div><label>Lien (https://…)</label><input data-f="url" value="${esc(a.url)}"></div>
      <div><label>Montant total ${hasPos?'(ignoré : calculé depuis les lignes)':'(si pas de lignes détaillées)'}</label><input data-f="amount" inputmode="numeric" value="${esc(a.amount)}" ${hasPos?'disabled':''}></div>
      <div class="actions"><button class="btn go" data-save="${a.id}">Enregistrer</button><button class="btn danger" data-del="${a.id}">Supprimer l'enveloppe</button></div></div></div></div>`;
- box.appendChild(c);});wireAccounts();}
+ box.appendChild(c);});wireAccounts();renderHistory();}
 function wireAccounts(){const box=$('#accounts');
  box.querySelectorAll('[data-rend]').forEach(i=>i.addEventListener('change',e=>{const a=acc(e.target.dataset.rend);a.rendement=num(e.target.value);save();renderAccounts();}));
  box.querySelectorAll('[data-compo]').forEach(b=>b.addEventListener('click',()=>box.querySelector('[data-cbody="'+b.dataset.compo+'"]').classList.toggle('open')));
@@ -256,6 +347,29 @@ function wireAccounts(){const box=$('#accounts');
  box.querySelectorAll('[data-save]').forEach(b=>b.addEventListener('click',()=>{const a=acc(b.dataset.save);box.querySelector('[data-ef="'+a.id+'"]').querySelectorAll('[data-f]').forEach(f=>{let v=f.value;if(f.dataset.f==='amount')v=num(v);a[f.dataset.f]=v;});save();renderAccounts();renderOverview();}));
  box.querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click',()=>{state.accounts=state.accounts.filter(x=>x.id!=b.dataset.del);save();renderAccounts();renderOverview();}));}
 function acc(id){return state.accounts.find(x=>x.id==id);}
+let histShowAll=false;
+function drawHistChart(){const svg=$('#histChart');if(!svg)return;const h=(state.history||[]).slice().sort((a,b)=>a.date<b.date?-1:(a.date>b.date?1:0));
+ if(h.length<2){svg.innerHTML='';return;}
+ const W=680,H=170,padL=58,padR=14,padT=14,padB=26;const vals=h.map(x=>x.total);
+ const min=Math.min(0,...vals),max=Math.max(...vals)||1,span=(max-min)||1;
+ const X=i=>padL+(W-padL-padR)*(h.length>1?i/(h.length-1):0),Y=v=>padT+(H-padT-padB)*(1-(v-min)/span);
+ let g=`<line x1="${padL}" y1="${Y(max)}" x2="${W-padR}" y2="${Y(max)}" stroke="#EAE2D4" stroke-width="1"/><text x="4" y="${Y(max)+4}" font-family="Mulish" font-size="9.5" fill="#6B6358">${fmt(max)} €</text>`;
+ g+=`<line x1="${padL}" y1="${Y(min)}" x2="${W-padR}" y2="${Y(min)}" stroke="#EAE2D4" stroke-width="1"/><text x="4" y="${Y(min)+4}" font-family="Mulish" font-size="9.5" fill="#6B6358">${fmt(min)} €</text>`;
+ const pts=h.map((pt,i)=>`${X(i)},${Y(pt.total)}`).join(' ');
+ g+=`<polyline points="${pts}" fill="none" stroke="#5B8C5A" stroke-width="2.3" stroke-linejoin="round"/>`;
+ h.forEach((pt,i)=>{g+=`<circle cx="${X(i)}" cy="${Y(pt.total)}" r="2.8" fill="#5B8C5A"/>`;});
+ g+=`<text x="${padL}" y="${H-6}" font-family="Mulish" font-size="9.5" fill="#6B6358">${fmtDate(h[0].date)}</text>`;
+ g+=`<text x="${W-padR}" y="${H-6}" text-anchor="end" font-family="Mulish" font-size="9.5" fill="#6B6358">${fmtDate(h[h.length-1].date)}</text>`;
+ svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.innerHTML=g;}
+function renderHistory(){drawHistChart();const box=$('#histTable');if(!box)return;
+ const h=(state.history||[]).slice().sort((a,b)=>a.date<b.date?-1:(a.date>b.date?1:0));
+ if(h.length<2){box.innerHTML=`<div class="itype" style="color:var(--soft)">${h.length?'Un seul point pour l\'instant — reviens après une prochaine modification pour voir la progression.':'Pas encore d\'historique : il se construit automatiquement, une fois par jour, à chaque modification de tes placements.'}</div>`;return;}
+ const rev=h.slice().reverse();const list=histShowAll?rev:rev.slice(0,12);
+ box.innerHTML=list.map(pt=>{const idx=h.findIndex(x=>x.date===pt.date);const prev=idx>0?h[idx-1]:null;const delta=prev?pt.total-prev.total:null;
+  const dcol=delta==null?'var(--soft)':(delta>=0?'var(--green)':'var(--terra)');const dsign=delta==null?'':(delta>=0?'+':'');
+  return `<div class="hrow"><span class="hd">${fmtDate(pt.date)}</span><span class="ht">${fmt(pt.total)} €</span><span class="hv" style="color:${dcol}">${delta==null?'—':dsign+fmt(delta)+' €'}</span></div>`;}).join('');
+ if(h.length>12)box.innerHTML+=`<button class="btn" id="histToggle" style="margin-top:10px">${histShowAll?'Réduire':'Afficher tout l\'historique ('+h.length+' points)'}</button>`;
+ const tb=$('#histToggle');if(tb)tb.addEventListener('click',()=>{histShowAll=!histShowAll;renderHistory();});}
 
 function holderName(id){const c=state.companies.find(x=>x.id==id);return c?c.name:'En direct';}
 function holderSel(sel){let o='<option value="">En direct (aucune société)</option>';state.companies.forEach(c=>{o+=`<option value="${c.id}" ${sel==c.id?'selected':''}>${esc(c.name)}</option>`;});return o;}
@@ -265,15 +379,53 @@ function renderProps(){const box=$('#props');box.innerHTML='';state.props.forEac
   <div class="iname">${esc(p.name||'Bien')}</div><div class="itype">${esc(p.type||'')} · logé dans : <b>${esc(holderName(p.holder))}</b></div>
   <div class="tot">${fmt(p.value||0)} €</div><div class="itype">Emprunt restant : ${fmt(p.debt||0)} € · Part nette : <b>${fmt(net)} €</b></div>
   ${cr?`<div class="itype">Crédit : <b>${fmt(cr.M)} €/mois</b> · ${cr.n} mois restants</div>`:''}
+  ${(+p.loyer||0)?`<div class="itype">Loyer perçu : <b>${fmt(p.loyer)} €/mois</b>${cr?` · Flux net : <b style="color:${((+p.loyer||0)-cr.M)>=0?'var(--green)':'var(--terra)'}">${((+p.loyer||0)-cr.M)>=0?'+':''}${fmt((+p.loyer||0)-cr.M)} €/mois</b>`:''}</div>`:''}
   <div class="actions"><button class="btn" data-edit="${p.id}">Modifier</button>${cr?`<button class="btn" data-amort="${p.id}">▾ Amortissement</button>`:''}</div>
   ${cr?`<div class="compo" data-abody="${p.id}"><div style="font-size:.9rem;line-height:1.75">Prochaine mensualité : <b>${fmt(cr.M)} €</b><br>— dont intérêts : <b>${fmt(cr.intNext)} €</b><br>— dont capital remboursé : <b>${fmt(cr.capNext)} €</b><br>Intérêts restant à payer (total) : <b>${fmt(cr.totalInt)} €</b><br>Capital restant dû : <b>${fmt(p.debt||0)} €</b></div></div>`:''}
   <div class="editform" data-ef="${p.id}"><div><label>Nom</label><input data-f="name" value="${esc(p.name)}"></div><div><label>Type</label><input data-f="type" value="${esc(p.type)}"></div>
    <div class="grid2"><div><label>Valeur (€)</label><input data-f="value" inputmode="numeric" value="${esc(p.value)}"></div><div><label>Capital restant dû (€)</label><input data-f="debt" inputmode="numeric" value="${esc(p.debt)}"></div></div>
    <div class="grid2"><div><label>Taux du crédit (% / an)</label><input data-f="rate" inputmode="decimal" value="${esc(p.rate||0)}"></div><div><label>Durée restante (mois)</label><input data-f="months" inputmode="numeric" value="${esc(p.months||0)}"></div></div>
+   <div><label>Loyer perçu (€ / mois)</label><input data-f="loyer" inputmode="numeric" value="${esc(p.loyer||0)}" placeholder="0 si non loué"></div>
    <div><label>Logé dans (société / SCI)</label><select data-f="holder">${holderSel(p.holder)}</select></div>
    <div class="actions"><button class="btn go" data-save="${p.id}">Enregistrer</button><button class="btn danger" data-del="${p.id}">Supprimer</button></div></div></div></div>`;box.appendChild(c);});
- gWire('#props','props',['value','debt','rate','months'],()=>{renderProps();renderCompanies();renderOverview();},{holder:v=>v?+v:null});
- box.querySelectorAll('[data-amort]').forEach(b=>b.addEventListener('click',()=>box.querySelector('[data-abody="'+b.dataset.amort+'"]').classList.toggle('open')));}
+ gWire('#props','props',['value','debt','rate','months','loyer'],()=>{renderProps();renderCompanies();renderOverview();},{holder:v=>v?+v:null});
+ box.querySelectorAll('[data-amort]').forEach(b=>b.addEventListener('click',()=>box.querySelector('[data-abody="'+b.dataset.amort+'"]').classList.toggle('open')));renderPerso();}
+
+function goTab(id){document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));const btn=document.querySelector('.tab[data-t="'+id+'"]');if(btn)btn.classList.add('active');const panel=$('#'+id);if(panel)panel.classList.add('active');window.scrollTo({top:0,behavior:'smooth'});}
+function linkedProps(){return state.props.filter(p=>p.holder==null);}
+function renderRevenus(){const box=$('#revenus');box.innerHTML=state.revenus.map(r=>`<div class="pline"><input placeholder="Nom du revenu" data-rn="${r.id}" value="${esc(r.name)}"><input class="pamt" inputmode="numeric" placeholder="€/mois" data-ra="${r.id}" value="${esc(r.amount)}"><button class="btn danger prem" data-rrem="${r.id}">×</button></div>`).join('')||'<div class="itype" style="color:var(--soft)">Aucun revenu renseigné.</div>';
+ box.querySelectorAll('[data-rn]').forEach(i=>i.addEventListener('change',e=>{const r=state.revenus.find(x=>x.id==e.target.dataset.rn);r.name=e.target.value;save();}));
+ box.querySelectorAll('[data-ra]').forEach(i=>i.addEventListener('change',e=>{const r=state.revenus.find(x=>x.id==e.target.dataset.ra);r.amount=num(e.target.value);save();renderRatio();}));
+ box.querySelectorAll('[data-rrem]').forEach(b=>b.addEventListener('click',()=>{state.revenus=state.revenus.filter(x=>x.id!=b.dataset.rrem);save();renderRevenus();renderRatio();}));}
+function renderCredits(){const box=$('#credits');box.innerHTML=state.credits.map(c=>`<div class="cred-row"><div class="cred-top"><input placeholder="Nom du crédit" data-cn="${c.id}" value="${esc(c.name)}"><button class="btn danger crem" data-crem="${c.id}">×</button></div>
+ <div class="cred-grid"><div><label>Mensualité (€/mois)</label><input inputmode="numeric" data-cm="${c.id}" value="${esc(c.amount)}"></div><div><label>Capital restant dû (€)</label><input inputmode="numeric" data-cd="${c.id}" value="${esc(c.debt||0)}"></div><div><label>Échéance</label><input placeholder="ex. déc. 2028" data-ce="${c.id}" value="${esc(c.ech||'')}"></div></div></div>`).join('')||'<div class="itype" style="color:var(--soft)">Aucun crédit personnel renseigné.</div>';
+ box.querySelectorAll('[data-cn]').forEach(i=>i.addEventListener('change',e=>{const c=state.credits.find(x=>x.id==e.target.dataset.cn);c.name=e.target.value;save();}));
+ box.querySelectorAll('[data-cm]').forEach(i=>i.addEventListener('change',e=>{const c=state.credits.find(x=>x.id==e.target.dataset.cm);c.amount=num(e.target.value);save();renderRatio();}));
+ box.querySelectorAll('[data-cd]').forEach(i=>i.addEventListener('change',e=>{const c=state.credits.find(x=>x.id==e.target.dataset.cd);c.debt=num(e.target.value);save();}));
+ box.querySelectorAll('[data-ce]').forEach(i=>i.addEventListener('change',e=>{const c=state.credits.find(x=>x.id==e.target.dataset.ce);c.ech=e.target.value;save();}));
+ box.querySelectorAll('[data-crem]').forEach(b=>b.addEventListener('click',()=>{state.credits=state.credits.filter(x=>x.id!=b.dataset.crem);save();renderCredits();renderRatio();}));}
+function renderCredLies(){const box=$('#credLies');if(!box)return;const ps=linkedProps();
+ if(!ps.length){box.innerHTML='<div class="itype" style="color:var(--soft)">Aucun bien détenu en direct pour l\'instant — vérifie que le champ « Logé dans » est sur « En direct » dans l\'onglet Immobilier.</div>';return;}
+ box.innerHTML=ps.map(p=>{const cr=credit(p);return `<div class="itype" style="padding:8px 0;border-bottom:1px solid var(--line)"><b>${esc(p.name||'Bien')}</b> — Valeur ${fmt(p.value||0)} €${cr?` · Mensualité <b>${fmt(cr.M)} €</b>`:' · aucun crédit en cours'}${(+p.loyer||0)?` · Loyer perçu <b>${fmt(p.loyer)} €/mois</b>`:''}</div>`;}).join('')
+  +'<button class="btn" id="goImmoBtn" style="margin-top:10px">→ Modifier dans l\'onglet Immobilier</button>';
+ const gb=$('#goImmoBtn');if(gb)gb.addEventListener('click',()=>goTab('im'));}
+function persoTotals(){const ps=linkedProps();const revBase=state.revenus.reduce((s,r)=>s+(+r.amount||0),0);const loyerLie=ps.reduce((s,p)=>s+(+p.loyer||0),0);
+ const revPondere=revBase+loyerLie*0.7;const chargesPerso=state.credits.reduce((s,c)=>s+(+c.amount||0),0);
+ const chargesLiees=ps.reduce((s,p)=>{const cr=credit(p);return s+(cr?cr.M:0);},0);const chargesTotal=chargesPerso+chargesLiees;
+ const taux=revPondere>0?(chargesTotal/revPondere*100):0;return{revBase,loyerLie,revPondere,chargesPerso,chargesLiees,chargesTotal,taux};}
+function renderRatio(){const el=$('#ratioCard');if(!el)return;const t=persoTotals();const col=t.taux<=35?'var(--green)':'var(--terra)';
+ el.innerHTML=`<div class="ctitle" style="font-family:Fraunces,serif;font-size:1.15rem">Taux d'endettement (indicatif)</div>
+ <table style="width:100%;margin:10px 0;border-collapse:collapse">
+  <tr><td style="padding:3px 0;color:var(--soft)">Revenus (salaires, etc.)</td><td style="padding:3px 0;text-align:right;font-weight:600">${fmt(t.revBase)} €/mois</td></tr>
+  <tr><td style="padding:3px 0;color:var(--soft)">Loyers liés (comptés à 70 %)</td><td style="padding:3px 0;text-align:right;font-weight:600">${fmt(t.loyerLie*0.7)} €/mois</td></tr>
+  <tr><td style="padding:5px 0;border-top:1px solid var(--line)">Revenus retenus</td><td style="padding:5px 0;border-top:1px solid var(--line);text-align:right;font-weight:700">${fmt(t.revPondere)} €/mois</td></tr>
+  <tr><td style="padding:3px 0;color:var(--soft)">Charges — crédits personnels</td><td style="padding:3px 0;text-align:right;font-weight:600">${fmt(t.chargesPerso)} €/mois</td></tr>
+  <tr><td style="padding:3px 0;color:var(--soft)">Charges — crédits immobiliers liés</td><td style="padding:3px 0;text-align:right;font-weight:600">${fmt(t.chargesLiees)} €/mois</td></tr>
+  <tr><td style="padding:5px 0;border-top:1px solid var(--line)">Charges retenues</td><td style="padding:5px 0;border-top:1px solid var(--line);text-align:right;font-weight:700">${fmt(t.chargesTotal)} €/mois</td></tr>
+ </table>
+ <div style="font-family:Fraunces,serif;font-size:1.7rem;font-weight:600;color:${col}">${t.taux.toFixed(1)} %</div>
+ <p class="lead" style="margin-top:6px">Seuil usuel retenu par les banques : 35 % (recommandation HCSF). Ce calcul est indicatif : chaque établissement applique ses propres règles (pondération des loyers, primes, reste à vivre…) — à affiner avec ton banquier ou courtier.</p>`;}
+function renderPerso(){renderRevenus();renderCredits();renderCredLies();renderRatio();}
 
 function isDesc(of,maybe){let c=state.companies.find(x=>x.id==maybe);let guard=0;while(c&&guard++<50){if(c.parent==of)return true;c=state.companies.find(x=>x.id==c.parent);}return false;}
 function parentSel(co){let o=`<option value="">Aucune (entité autonome)</option>`;state.companies.forEach(x=>{if(x.id!=co.id&&!isDesc(co.id,x.id))o+=`<option value="${x.id}" ${co.parent==x.id?'selected':''}>${esc(x.name)}</option>`;});return o;}
@@ -353,14 +505,62 @@ function importCSV(text){const lines=text.split(/\r?\n/).filter(l=>l.trim());if(
 
 $('#addAcc').addEventListener('click',()=>{state.accounts.push({id:nid++,plat:"Nouvelle enveloppe",type:"",cat:"bourse",url:"",rendement:0,amount:0,positions:[]});renderAccounts();renderOverview();openLast('#accounts');});
 $('#addProp').addEventListener('click',()=>{state.props.push({id:nid++,name:"Nouveau bien",type:"",value:0,debt:0});renderProps();renderOverview();openLast('#props');});
+function orgSVGMarkup(){drawOrg();const svg=document.getElementById('org');return svg?svg.outerHTML:'';}
+function bankHTML(){const{by,assets,debt,net}=totals();const dateStr=new Date().toLocaleDateString('fr-FR',{day:'2-digit',month:'long',year:'numeric'});
+ let catRows='';Object.keys(CATS).forEach(k=>{const v=by[k]||0;if(v>0)catRows+=`<tr><td>${esc(CATS[k].name)}</td><td class="r">${fmt(v)} €</td><td class="r">${Math.round(v/assets*100)} %</td></tr>`;});
+ let propRows='';state.props.forEach(p=>{const cr=credit(p);const netp=Math.max(0,(+p.value||0)-(+p.debt||0));
+  propRows+=`<tr><td>${esc(p.name||'Bien')}<div class="sub">${esc(p.type||'')}</div></td><td class="r">${fmt(p.value||0)} €</td><td class="r">${fmt(p.debt||0)} €</td><td class="r">${fmt(netp)} €</td><td class="r">${cr?fmt(cr.M)+' €/mois':'—'}</td><td class="r">${(+p.loyer||0)?fmt(p.loyer)+' €/mois':'—'}</td></tr>`;});
+ let accRows='';state.accounts.forEach(a=>{const t=accTot(a);if(!t)return;accRows+=`<tr><td>${esc(a.plat||'Enveloppe')}<div class="sub">${esc(a.type||'')}</div></td><td>${CATS[a.cat]?esc(CATS[a.cat].name):''}</td><td class="r">${fmt(t)} €</td></tr>`;});
+ let coRows='';state.companies.filter(c=>!c.soon).forEach(c=>{coRows+=`<tr><td>${esc(c.name)}<div class="sub">${esc(c.type||'')}${assocStr(c)?' · '+esc(assocStr(c)):''}</div></td><td class="r">${fmt(c.ca||0)} €</td><td class="r">${fmt(c.benefice||0)} €</td><td class="r">${fmt(c.valeur||0)} €</td></tr>`;});
+ const t=persoTotals();
+ let revRows='';state.revenus.forEach(r=>{if(!(+r.amount))return;revRows+=`<tr><td>${esc(r.name||'Revenu')}</td><td class="r">${fmt(r.amount)} €/mois</td></tr>`;});
+ linkedProps().forEach(p=>{if(+p.loyer)revRows+=`<tr><td>Loyer — ${esc(p.name||'bien en direct')}</td><td class="r">${fmt(p.loyer)} €/mois</td></tr>`;});
+ let credRows='';state.credits.forEach(c=>{if(!(+c.amount))return;credRows+=`<tr><td>${esc(c.name||'Crédit')}${c.ech?`<div class="sub">Échéance : ${esc(c.ech)}</div>`:''}</td><td class="r">${fmt(c.amount)} €/mois</td></tr>`;});
+ linkedProps().forEach(p=>{const cr=credit(p);if(cr)credRows+=`<tr><td>Crédit immobilier — ${esc(p.name||'bien en direct')}</td><td class="r">${fmt(cr.M)} €/mois</td></tr>`;});
+ return `<div class="bexp">
+  <div class="bhead"><div class="bkicker">Dossier patrimonial</div><div class="btitle">Situation patrimoniale</div><div class="bsub">Document de synthèse — usage bancaire</div></div>
+  <table class="bmeta"><tr><td>Titulaire(s)</td><td>${esc(state.bankHolder||'—')}</td></tr><tr><td>Date d'établissement</td><td>${dateStr}</td></tr></table>
+
+  ${coRows?`<div class="bsec">Structure du groupe</div><div class="borgwrap">${orgSVGMarkup()}</div>`:''}
+
+  <div class="bsec">Synthèse globale</div>
+  <div class="bkpi-row">
+   <div class="bkpi"><div class="bkl">Actifs bruts</div><div class="bkv">${fmt(assets)} €</div></div>
+   <div class="bkpi"><div class="bkl">Emprunts</div><div class="bkv" style="color:#B15A3E">− ${fmt(debt)} €</div></div>
+   <div class="bkpi main"><div class="bkl">Patrimoine net</div><div class="bkv" style="color:#3F6B6B">${fmt(net)} €</div></div>
+  </div>
+
+  <div class="bsec">Répartition par classe d'actif</div>
+  <table class="btab zebra"><thead><tr><th>Classe d'actif</th><th class="r">Montant</th><th class="r">% des actifs</th></tr></thead><tbody>${catRows}</tbody></table>
+
+  ${propRows?`<div class="bsec">Patrimoine immobilier</div><table class="btab zebra"><thead><tr><th>Bien</th><th class="r">Valeur</th><th class="r">Emprunt restant</th><th class="r">Valeur nette</th><th class="r">Mensualité</th><th class="r">Loyer perçu</th></tr></thead><tbody>${propRows}</tbody></table>`:''}
+  ${accRows?`<div class="bsec">Placements financiers</div><table class="btab zebra"><thead><tr><th>Enveloppe</th><th>Catégorie</th><th class="r">Valorisation</th></tr></thead><tbody>${accRows}</tbody></table>`:''}
+  ${coRows?`<div class="bsec">Nos sociétés — détail</div><table class="btab zebra"><thead><tr><th>Société</th><th class="r">CA annuel</th><th class="r">Bénéfice</th><th class="r">Valeur estimée</th></tr></thead><tbody>${coRows}</tbody></table>`:''}
+  ${revRows?`<div class="bsec">Revenus mensuels du foyer</div><table class="btab zebra"><thead><tr><th>Source</th><th class="r">Montant</th></tr></thead><tbody>${revRows}</tbody></table>`:''}
+  ${credRows?`<div class="bsec">Charges de crédit mensuelles</div><table class="btab zebra"><thead><tr><th>Crédit</th><th class="r">Mensualité</th></tr></thead><tbody>${credRows}</tbody></table>`:''}
+
+  <div class="bsec">Taux d'endettement (indicatif)</div>
+  <div class="bkpi-row">
+   <div class="bkpi"><div class="bkl">Revenus retenus</div><div class="bkv" style="font-size:1.3rem">${fmt(t.revPondere)} €/mois</div></div>
+   <div class="bkpi"><div class="bkl">Charges retenues</div><div class="bkv" style="font-size:1.3rem">${fmt(t.chargesTotal)} €/mois</div></div>
+   <div class="bkpi main"><div class="bkl">Taux d'endettement</div><div class="bkv" style="color:${t.taux<=35?'#4E7A50':'#B15A3E'}">${t.taux.toFixed(1)} %</div></div>
+  </div>
+
+  <div class="bnote">Les valorisations immobilières, mobilières et des participations figurant dans ce document sont des estimations établies par le foyer, à titre indicatif ; elles n'engagent pas de tiers évaluateur agréé. Document généré le ${dateStr}.</div>
+ </div>`;}
+function exportBankPDF(){$('#printExport').innerHTML=bankHTML();window.print();}
+$('#pdfBankBtn').addEventListener('click',exportBankPDF);
+$('#bankHolder').addEventListener('change',e=>{state.bankHolder=e.target.value;save();});
 $('#copyBtn').addEventListener('click',async()=>{const txt=JSON.stringify(state);try{await navigator.clipboard.writeText(txt);alert('Données copiées. Sur l\'autre appareil, ouvre le fichier puis « Coller des données ».');}catch(e){prompt('Copie ce texte puis colle-le sur l\'autre appareil :',txt);}});
-$('#pasteBtn').addEventListener('click',()=>{const t=prompt('Colle ici les données copiées depuis l\'autre appareil :');if(!t)return;try{const d=JSON.parse(t);if(!d||!d.accounts)throw 0;state=d;normalize();save();renderOverview();renderAccounts();renderProps();renderCompanies();renderContacts();renderStamp();alert('Données restaurées.');}catch(e){alert('Texte invalide.');}});
+$('#pasteBtn').addEventListener('click',()=>{const t=prompt('Colle ici les données copiées depuis l\'autre appareil :');if(!t)return;try{const d=JSON.parse(t);if(!d||!d.accounts)throw 0;state=d;normalize();save();renderOverview();renderAccounts();renderProps();renderCompanies();renderContacts();renderStamp();const bh=$('#bankHolder');if(bh)bh.value=state.bankHolder||'';alert('Données restaurées.');}catch(e){alert('Texte invalide.');}});
 $('#addCo').addEventListener('click',()=>{state.companies.push({id:nid++,name:"Nouvelle société",type:"",parent:1,ca:0,benefice:0,valeur:0,fricLabel:"Mère-fille",fricRate:1.25});renderCompanies();renderOverview();openLast('#companies');});
 function openLast(sel){const ef=document.querySelector(sel+' .card:last-child .editform');if(ef)ef.classList.add('open');}
-document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));t.classList.add('active');$('#'+t.dataset.t).classList.add('active');window.scrollTo({top:0,behavior:'smooth'});}));
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>goTab(t.dataset.t)));
+$('#addRevenu').addEventListener('click',()=>{state.revenus.push({id:nid++,name:"Nouveau revenu",amount:0});save();renderRevenus();renderRatio();});
+$('#addCredit').addEventListener('click',()=>{state.credits.push({id:nid++,name:"Nouveau crédit",amount:0,debt:0,ech:""});save();renderCredits();renderRatio();});
 $('#expBtn').addEventListener('click',()=>{try{const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const u=URL.createObjectURL(blob);const a=document.createElement('a');a.href=u;a.download='notre-patrimoine-sauvegarde.json';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(u);}catch(e){alert('Export impossible.');}});
 $('#impBtn').addEventListener('click',()=>$('#impFile').click());
-$('#impFile').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{try{const d=JSON.parse(rd.result);if(!d||!d.accounts)throw 0;state=d;normalize();save();renderOverview();renderAccounts();renderProps();renderCompanies();renderContacts();renderStamp();alert('Données restaurées.');}catch(err){alert('Fichier de sauvegarde invalide.');}e.target.value='';};rd.readAsText(f,'utf-8');});
+$('#impFile').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{try{const d=JSON.parse(rd.result);if(!d||!d.accounts)throw 0;state=d;normalize();save();renderOverview();renderAccounts();renderProps();renderCompanies();renderContacts();renderStamp();const bh=$('#bankHolder');if(bh)bh.value=state.bankHolder||'';alert('Données restaurées.');}catch(err){alert('Fichier de sauvegarde invalide.');}e.target.value='';};rd.readAsText(f,'utf-8');});
 document.querySelectorAll('[data-preset]').forEach(b=>b.addEventListener('click',()=>{const[type,cat]=b.dataset.preset.split('|');state.accounts.push({id:nid++,plat:type,type:type,cat:cat,url:"",rendement:0,amount:0,positions:[]});renderAccounts();renderOverview();openLast('#accounts');}));
 document.querySelectorAll('[data-cpreset]').forEach(b=>b.addEventListener('click',()=>{const[name,type,fl,fr]=b.dataset.cpreset.split('|');const root=state.companies.find(c=>c.parent==null);state.companies.push({id:nid++,name,type,parent:root?root.id:null,ca:0,benefice:0,valeur:0,fricLabel:fl,fricRate:+fr});renderCompanies();renderOverview();openLast('#companies');}));
 function authMsg(x){const c=(x&&x.code)||'';return (c.includes('invalid-credential')||c.includes('wrong-password')||c.includes('user-not-found'))?'E-mail ou mot de passe incorrect.':c.includes('operation-not-allowed')?'Active « E-mail/Mot de passe » dans Firebase → Authentication.':c.includes('invalid-email')?'E-mail invalide.':c.includes('too-many-requests')?'Trop de tentatives, réessaie plus tard.':c.includes('network')?'Pas de connexion internet.':('Erreur : '+(c||(x&&x.message)||''));}
@@ -369,7 +569,7 @@ function authMsg(x){const c=(x&&x.code)||'';return (c.includes('invalid-credenti
  const su=g('pl-signup');if(su)su.addEventListener('click',()=>{const e=g('pl-email').value.trim(),p=g('pl-pwd').value,er=g('pl-err');if(er)er.textContent='';if(!window._auth){if(er)er.textContent='Connexion à Firebase indisponible.';return;}window._auth.signup(e,p).catch(x=>{if(er)er.textContent=authMsg(x);});});
  const off=g('pl-offline');if(off)off.addEventListener('click',()=>{const ov=g('patri-login');if(ov)ov.style.display='none';});})();
 window.addEventListener('fbready',initSync);
-(async()=>{await load();renderOverview();renderStamp();renderAccounts();renderProps();renderCompanies();renderGloss();renderContacts();renderSync();if(window._auth)initSync();})();
+(async()=>{await load();renderOverview();renderStamp();renderAccounts();renderProps();renderCompanies();renderPerso();renderGloss();renderContacts();renderSync();const bh=$('#bankHolder');if(bh)bh.value=state.bankHolder||'';if(window._auth)initSync();})();
 </script>
 </body>
 </html>
