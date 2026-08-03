@@ -1125,7 +1125,8 @@ function parseVoiceQuery(tx){
   let rest=q;
   keys.forEach(k=>{rest=rest.split(k).join(' ');});
   if(dept){(DEPTNAMES[dept]||[]).forEach(n=>{rest=rest.split(n).join(' ');});rest=rest.split(dept).join(' ');}
-  rest=rest.replace(/\b(a|de|du|des|dans|le|la|les|un|une|et|pour|chez|sur|me|moi|trouve|trouver|cherche|chercher|montre|montrer|liste|donne|donner|veux|peux|stp|svp|artisan|artisans|entreprise|societe|departement|secteur|coin|pres|proche|autour|environ|ville|commune)\b/g,' ');
+  rest=rest.replace(/\b(a|de|du|des|dans|le|la|les|un|une|et|pour|chez|sur|me|moi|je|j|d|l|m|n|s|c|t|qu|ai|as|ma|mon|mes|ton|ta|tes|son|sa|ses|besoin|trouve|trouver|cherche|chercher|montre|montrer|liste|donne|donner|veux|peux|stp|svp|artisan|artisans|entreprise|societe|departement|secteur|coin|pres|proche|autour|environ|ville|commune)\b/g,' ');
+  rest=rest.replace(/[-']+/g,' '); // fragments type "d'" ou "-ferrand" laissés par le découpage précédent
   const termes=rest.split(/\s+/).map(w=>w.trim()).filter(w=>w.length>=2);
   return{metier,dept,termes};
 }

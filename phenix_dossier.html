@@ -2308,7 +2308,9 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
       <div id="importView-csv" style="display:none">
         <div style="background:var(--accent-bg);border:1.5px solid var(--accent);border-radius:var(--r-md);padding:12px 14px;margin-bottom:1rem;font-size:13px;color:var(--accent2)">
           <strong>Format CSV attendu (séparateur ;)</strong><br>
-          Colonnes : <code style="font-size:11px;background:var(--bg);padding:1px 5px;border-radius:3px">type;numero;projetNom;phase;objet;dateEmission;dateEcheance;montantHt;tva;montantPaye;statut;notes</code>
+          Colonnes : <code style="font-size:11px;background:var(--bg);padding:1px 5px;border-radius:3px">type;numero;projetNom;phase;objet;dateEmission;dateEcheance;datePaiement;montantHt;tva;montantPaye;statut;notes</code>
+          <div style="margin-top:6px;font-size:12px">La colonne <strong>datePaiement</strong> est optionnelle mais recommandée : c'est elle qui détermine le mois où l'encaissement apparaît en Comptabilité. Sans elle, l'appli se rabat sur la date d'émission — ce qui peut décaler vos chiffres si vos clients paient avec délai.</div>
+          <div style="margin-top:4px;font-size:12px">Si un champ texte (objet, notes…) contient lui-même un point-virgule, entourez-le de guillemets : <code style="font-size:11px;background:var(--bg);padding:1px 5px;border-radius:3px">"Honoraires ESQ; APS; APD"</code> — sinon il coupera la ligne au mauvais endroit.</div>
         </div>
         <div style="margin-bottom:.75rem">
           <button class="btn btn-sm" onclick="downloadCsvTemplate()" style="font-size:12px"><i class="ti ti-download"></i> Télécharger le modèle CSV</button>
@@ -2522,6 +2524,7 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
     <div class="nav-item active" onclick="show_d('dashboard',this)"><i class="ti ti-layout-dashboard"></i> Tableau de bord</div>
     <div class="nav-item" onclick="show_d('projets',this)"><i class="ti ti-building"></i> Projets <span class="nav-badge" id="navBadgeProjets">0</span></div>
     <div class="nav-item" onclick="show_d('phases',this)"><i class="ti ti-list-check"></i> Phases &amp; suivi</div>
+    <div class="nav-item" onclick="show_d('checklist',this)"><i class="ti ti-checklist"></i> Checklist projet</div>
     <div class="nav-item" onclick="show_d('reunions',this)"><i class="ti ti-file-description"></i> Comptes Rendus <span class="nav-badge" id="navBadgeReunions">0</span></div>
     <div class="nav-item" onclick="show_d('taches',this)"><i class="ti ti-checkbox"></i> Tâches <span class="nav-badge" id="navBadgeTaches">0</span></div>
     <div class="nav-item" onclick="show_d('agenda',this)"><i class="ti ti-calendar"></i> Agenda &amp; échéances</div>
@@ -2536,6 +2539,7 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
     <div class="nav-section">Sécurité</div>
     <div class="nav-item" onclick="exportToutJSON()" title="Sauvegarder toutes vos données"><i class="ti ti-database-export"></i> Exporter tout</div>
     <div class="nav-item" onclick="importToutJSON()" title="Restaurer vos données depuis un fichier de sauvegarde"><i class="ti ti-database-import"></i> Restaurer</div>
+    <div class="nav-item" onclick="reparerLiaisonFactureCompta()" title="Corrige les factures payées sans date de paiement enregistrée"><i class="ti ti-link"></i> Réparer Facture↔Compta</div>
     <input type="file" id="restore-file-input" accept=".json" style="display:none" onchange="handleRestoreFile(this.files[0])">
     <div class="nav-item" onclick="nettoyerFacturesFantomes()" title="Supprimer les factures sans projet ni numéro"><i class="ti ti-trash"></i> Nettoyer données</div>
     <div class="nav-item" onclick="openChangePwd()"><i class="ti ti-lock"></i> Mot de passe</div>
@@ -2648,6 +2652,16 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
           <select class="btn" id="phaseSelect" onchange="renderPhases(this.value)" style="padding:7px 12px;font-size:13px;border-radius:var(--r-md)"></select>
         </div>
         <div id="phasesContent"><div class="empty-state"><div class="empty-icon"><i class="ti ti-list-check"></i></div><div class="empty-title">Aucun projet</div></div></div>
+      </div>
+
+      <!-- ═══ CHECKLIST PROJET — vue exhaustive de toutes les tâches ═══ -->
+      <div class="page" id="page-checklist">
+        <div class="page-header">
+          <div><div class="page-title">Checklist projet</div><div class="page-subtitle">Vue d'ensemble de tous les dossiers, puis détail tâche par tâche</div></div>
+          <select class="btn" id="checklistSelect" onchange="renderChecklist(this.value)" style="padding:7px 12px;font-size:13px;border-radius:var(--r-md)"></select>
+        </div>
+        <div id="checklistOverview" style="margin-bottom:16px"></div>
+        <div id="checklistContent"><div class="empty-state"><div class="empty-icon"><i class="ti ti-checklist"></i></div><div class="empty-title">Aucun projet</div></div></div>
       </div>
 
 
@@ -4347,6 +4361,7 @@ function refreshAllViews() {
   if (id==='dashboard') renderDashboard_d();
   else if (id==='projets') renderProjets();
   else if (id==='phases') renderPhasesPage();
+  else if (id==='checklist') renderChecklistPage();
   else if (id==='reunions') renderReunions();
   else if (id==='agenda') renderAgenda();
   else if (id==='taches') renderTaches();
@@ -4374,11 +4389,12 @@ function show_d(id, el) {
     : (document.getElementById('page-'+id) || document.getElementById('page-'+id+'_d'));
   if (_pageEl) _pageEl.classList.add('active');
   if (el) el.classList.add('active');
-  const titles={dashboard:'Tableau de bord',projets:'Projets',phases:'Phases & suivi',reunions:'Comptes Rendus de Réunion',agenda:'Agenda & échéances',taches:'Tâches',calendrier:'Calendrier',devis:'Devis & honoraires',facturation:'Facturation',comptabilite:'Comptabilité',docs:'Bibliothèque',new:'Nouveau projet'};
+  const titles={dashboard:'Tableau de bord',projets:'Projets',phases:'Phases & suivi',checklist:'Checklist projet',reunions:'Comptes Rendus de Réunion',agenda:'Agenda & échéances',taches:'Tâches',calendrier:'Calendrier',devis:'Devis & honoraires',facturation:'Facturation',comptabilite:'Comptabilité',docs:'Bibliothèque',new:'Nouveau projet'};
   document.getElementById('topbarTitle_d').textContent = titles[id]||'';
   if (id==='dashboard') renderDashboard_d();
   if (id==='projets') renderProjets();
   if (id==='phases') renderPhasesPage();
+  if (id==='checklist') renderChecklistPage();
   if (id==='agenda') renderAgenda();
   if (id==='taches') renderTaches();
   if (id==='calendrier') renderCalendrier();
@@ -5023,6 +5039,318 @@ function renderPhases(id) {
         </div>
       </div>
     </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  CHECKLIST PROJET — vue exhaustive de toutes les tâches d'un
+//  projet de maîtrise d'œuvre / contractant général, de la prise
+//  de contact à la livraison. Organisée en grands groupes (calés
+//  sur les phases loi MOP) puis en sous-groupes de tâches précises.
+//  Pensée pour qu'un salarié puisse s'y référer sans connaître
+//  tout le métier par cœur.
+// ═══════════════════════════════════════════════════════════════
+const CHECKLIST_TEMPLATE = [
+  { id:'avp', titre:'Avant-projet & prise de mandat', icone:'ti-handshake', sousGroupes:[
+    { id:'contact', titre:'Premier contact & qualification', taches:[
+      'Prise de contact initiale et écoute du besoin',
+      'Qualification du budget et des délais souhaités',
+      'RDV découverte / visite du terrain ou du bien existant',
+      'Vérification de la faisabilité (PLU, servitudes, zone protégée, ABF)',
+      'Étude de faisabilité sommaire (constructibilité, orientation, accès)',
+    ]},
+    { id:'devis', titre:'Devis & contractualisation', taches:[
+      'Établissement du programme avec le client',
+      'Chiffrage des honoraires (module Chiffrage)',
+      'Édition et envoi de la proposition d\'honoraires / devis',
+      'Choix du type de contrat (maîtrise d\'œuvre ou contractant général)',
+      'Vigilance requalification CCMI si maison individuelle ≤ 2 logements',
+      'Génération du contrat (module Contrat)',
+      'Signature du contrat par le client',
+      'Ouverture du dossier projet dans Phénix Dossier',
+    ]},
+    { id:'financement', titre:'Financement (si applicable)', taches:[
+      'Constitution du dossier de financement (module Financement)',
+      'Envoi des pièces à la banque ou au courtier',
+      'Suivi de l\'accord de prêt',
+    ]},
+  ]},
+  { id:'conception', titre:'Conception (ESQ → APD)', icone:'ti-pencil', sousGroupes:[
+    { id:'esq', titre:'ESQ — Esquisse', taches:[
+      'Relevé du terrain / de l\'existant',
+      'Analyse approfondie du programme et des besoins',
+      'Étude d\'implantation et d\'orientation',
+      'Premières esquisses et partis architecturaux',
+      'Présentation au client et validation de l\'esquisse',
+    ]},
+    { id:'aps', titre:'APS — Avant-projet sommaire', taches:[
+      'Plans, coupes et façades au 1/200e',
+      'Estimation sommaire du coût des travaux',
+      'Validation du parti architectural par le client',
+    ]},
+    { id:'apd', titre:'APD — Avant-projet définitif', taches:[
+      'Plans, coupes et façades au 1/100e',
+      'Définition des surfaces détaillées (SHAB, surface de plancher)',
+      'Choix des systèmes constructifs et des matériaux',
+      'Estimation définitive du coût prévisionnel (précision ±10%)',
+      'Vérification de conformité RE2020 / réglementation thermique',
+      'Vérification accessibilité PMR si applicable',
+      'Validation définitive du programme par le client',
+    ]},
+  ]},
+  { id:'pc', titre:'Permis de construire (PC)', icone:'ti-stamp', sousGroupes:[
+    { id:'montage', titre:'Montage du dossier', taches:[
+      'Plan de situation et plan de masse',
+      'Plans, coupes et façades réglementaires',
+      'Notice descriptive (PC4)',
+      'Insertion paysagère / photomontages',
+      'Étude et attestation RE2020 si nécessaire',
+      'Constitution du dossier via le module Permis',
+    ]},
+    { id:'instruction', titre:'Dépôt & instruction', taches:[
+      'Dépôt du dossier en mairie',
+      'Affichage réglementaire du panneau chez le client',
+      'Suivi du délai d\'instruction',
+      'Réponse aux éventuelles demandes de pièces complémentaires',
+      'Réception de l\'arrêté (accord, refus ou prescriptions)',
+      'Gestion d\'un éventuel recours de tiers',
+      'Purge du délai de recours des tiers (2 mois)',
+    ]},
+  ]},
+  { id:'consultation', titre:'Consultation des entreprises (DCE / ACT)', icone:'ti-file-search', sousGroupes:[
+    { id:'dce', titre:'DCE — Dossier de consultation', taches:[
+      'CCTP détaillé par lot',
+      'DPGF / cadre de décomposition des prix',
+      'Plans d\'exécution nécessaires à la consultation',
+      'Planning prévisionnel de travaux',
+    ]},
+    { id:'act', titre:'ACT — Choix des entreprises', taches:[
+      'Identification et sollicitation des artisans (module Annuaire)',
+      'Envoi des dossiers de consultation aux entreprises',
+      'Réception et analyse des devis artisans (import IA — Chiffrage)',
+      'Négociation et mise au point des offres',
+      'Rapport d\'analyse des offres',
+      'Validation du choix des entreprises par le client',
+      'Édition des marchés de travaux / bons de commande',
+      'Signature des marchés par les entreprises retenues',
+    ]},
+    { id:'financement-travaux', titre:'Financement des travaux', taches:[
+      'Vérification du déblocage des fonds',
+      'Souscription de l\'assurance dommage-ouvrage',
+    ]},
+  ]},
+  { id:'chantier', titre:'Chantier & exécution (DET)', icone:'ti-building', sousGroupes:[
+    { id:'preparation', titre:'Préparation de chantier', taches:[
+      'Déclaration d\'ouverture de chantier (DOC) en mairie',
+      'Constat d\'huissier avant travaux si bâti mitoyen',
+      'Installation de chantier (base vie, clôture, panneau)',
+      'Réunion de démarrage avec les entreprises',
+      'Création du chantier dans le module Chantier',
+    ]},
+    { id:'suivi', titre:'Suivi hebdomadaire / mensuel', taches:[
+      'Visites de chantier régulières',
+      'Comptes-rendus de réunion de chantier (CR vocal)',
+      'Suivi de l\'avancement par lot',
+      'Suivi budgétaire (engagé / payé / restant)',
+      'Validation des situations de travaux et des factures',
+      'Gestion des éventuels avenants ou travaux modificatifs',
+      'Contrôle qualité et conformité aux plans',
+      'Relance des entreprises en cas de retard',
+      'Gestion des non-conformités et réserves en cours de chantier',
+    ]},
+    { id:'securite', titre:'Sécurité & réglementaire', taches:[
+      'Suivi du respect des règles de sécurité de chantier',
+      'Suivi des déclarations complémentaires si travaux modificatifs',
+    ]},
+  ]},
+  { id:'reception', titre:'Réception & livraison (AOR)', icone:'ti-key', sousGroupes:[
+    { id:'reception-travaux', titre:'Réception des travaux', taches:[
+      'Pré-visite avant réception',
+      'Organisation des opérations préalables à la réception (OPR)',
+      'Procès-verbal de réception (avec ou sans réserves)',
+      'Liste des réserves formalisée',
+    ]},
+    { id:'leve-reserves', titre:'Levée des réserves', taches:[
+      'Suivi et relance des entreprises pour la levée des réserves',
+      'Constat de la levée effective des réserves',
+    ]},
+    { id:'cloture-admin', titre:'Clôture administrative', taches:[
+      'Déclaration attestant l\'achèvement et la conformité des travaux (DAACT)',
+      'Dépôt de la DAACT en mairie',
+      'Suivi du délai de contestation de conformité (3 mois)',
+      'Constitution du Dossier des Ouvrages Exécutés (DOE)',
+      'Remise du DOE au client',
+      'Remise des notices d\'entretien et garanties fabricants',
+    ]},
+    { id:'cloture-fin', titre:'Clôture financière', taches:[
+      'Facturation du solde d\'honoraires',
+      'Solde des situations de travaux des entreprises',
+      'Clôture comptable du dossier',
+    ]},
+    { id:'garanties', titre:'Garanties & suivi après livraison', taches:[
+      'Rappel de la garantie de parfait achèvement (GPA, 1 an)',
+      'Visite de fin de garantie de parfait achèvement',
+      'Information du client sur les garanties biennale et décennale',
+      'Archivage complet du dossier',
+    ]},
+  ]},
+];
+
+// Identifiant stable basé sur le texte de la tâche (pas sur sa position) : si une
+// tâche est insérée ou déplacée plus tard dans le modèle, les coches déjà faites
+// restent attachées à la bonne tâche au lieu de glisser sur la suivante.
+function _checklistItemId(groupId, sgId, texteOuIdx, taches) {
+  let texte = texteOuIdx;
+  if (typeof texteOuIdx === 'number' && Array.isArray(taches)) texte = taches[texteOuIdx];
+  let h = 0;
+  const s = String(texte||'');
+  for (let i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0; }
+  return `${groupId}__${sgId}__${(h>>>0).toString(36)}`;
+}
+
+function _checklistCounts(p) {
+  const done = p.checklist || {};
+  let total = 0, faits = 0;
+  const parGroupe = {};
+  CHECKLIST_TEMPLATE.forEach(g => {
+    let gTotal = 0, gFaits = 0;
+    g.sousGroupes.forEach(sg => {
+      sg.taches.forEach((tacheTxt, idx) => {
+        gTotal++; total++;
+        if (done[_checklistItemId(g.id, sg.id, tacheTxt)]) { gFaits++; faits++; }
+      });
+    });
+    parGroupe[g.id] = { total: gTotal, faits: gFaits };
+  });
+  return { total, faits, parGroupe };
+}
+
+function renderChecklistPage() {
+  const sel = document.getElementById('checklistSelect');
+  sel.innerHTML = stateDossier.projets.map(p => `<option value="${p.id}">${esc(p.nom)}</option>`).join('');
+  if (!stateDossier.projets.length) {
+    document.getElementById('checklistOverview').innerHTML = '';
+    document.getElementById('checklistContent').innerHTML = '<div class="empty-state"><div class="empty-icon"><i class="ti ti-checklist"></i></div><div class="empty-title">Aucun projet</div></div>';
+    return;
+  }
+  renderChecklistOverview();
+  renderChecklist(stateDossier.projets[0].id);
+}
+
+function renderChecklistOverview() {
+  // Vue d'ensemble : où en est chaque dossier, triée par avancement croissant
+  // (les dossiers les moins avancés — donc ceux qui demandent le plus d'attention — en premier).
+  const lignes = stateDossier.projets.map(p => {
+    const c = _checklistCounts(p);
+    const pct = c.total ? Math.round(c.faits / c.total * 100) : 0;
+    return { p, pct, faits: c.faits, total: c.total };
+  }).sort((a, b) => a.pct - b.pct);
+
+  document.getElementById('checklistOverview').innerHTML = `
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border);font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.04em">
+        Vue d'ensemble — ${lignes.length} dossier(s)
+      </div>
+      <div style="max-height:280px;overflow-y:auto">
+        ${lignes.map(l => `
+          <div onclick="document.getElementById('checklistSelect').value='${l.p.id}';renderChecklist('${l.p.id}');document.getElementById('checklistContent').scrollIntoView({behavior:'smooth'})"
+               style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--border);cursor:pointer" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(l.p.nom)}</div>
+              <div style="font-size:11px;color:var(--text3)">${esc(l.p.client||'')}${l.p.phase?' · '+esc(l.p.phase):''}</div>
+            </div>
+            <div style="width:120px;flex-shrink:0">
+              <div class="horiz-bar-track" style="height:6px"><div class="horiz-bar-fill" style="width:${l.pct}%;background:${l.pct===100?'var(--green)':'var(--blue)'}"></div></div>
+            </div>
+            <div style="width:70px;flex-shrink:0;text-align:right;font-size:12px;color:var(--text2)">${l.faits}/${l.total}</div>
+            <span class="badge ${l.pct===100?'badge-green':'badge-blue'}" style="width:44px;text-align:center;flex-shrink:0">${l.pct}%</span>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderChecklist(id) {
+  const p = stateDossier.projets.find(x => x.id == id);
+  if (!p) return;
+  const counts = _checklistCounts(p);
+  const pctGlobal = counts.total ? Math.round(counts.faits / counts.total * 100) : 0;
+  let _premierGroupeOuvert = false;
+
+  document.getElementById('checklistContent').innerHTML = `
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-header">
+        <div><div class="card-title">${esc(p.nom)}</div><div class="card-subtitle">${counts.faits} / ${counts.total} tâches réalisées</div></div>
+        <span class="badge ${pctGlobal===100?'badge-green':'badge-blue'}">${pctGlobal}%</span>
+      </div>
+      <div class="horiz-bar-track" style="height:8px;margin-top:4px"><div class="horiz-bar-fill" style="width:${pctGlobal}%"></div></div>
+    </div>
+    ${CHECKLIST_TEMPLATE.map(g => {
+      const gc = counts.parGroupe[g.id];
+      const gPct = gc.total ? Math.round(gc.faits / gc.total * 100) : 0;
+      // Le premier groupe pas encore terminé s'ouvre par défaut (même à 0%),
+      // pour qu'il y ait toujours quelque chose d'actionnable à l'écran.
+      const groupOpen = !_premierGroupeOuvert && gc.faits < gc.total;
+      if (groupOpen) _premierGroupeOuvert = true;
+      return `
+      <div class="card checklist-group" style="margin-bottom:10px;padding:0;overflow:hidden">
+        <div class="checklist-group-header" onclick="toggleChecklistGroup(this)" style="cursor:pointer;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;background:${gPct===100?'var(--green-bg)':'var(--bg)'}">
+          <div style="display:flex;align-items:center;gap:10px">
+            <i class="ti ${g.icone}" style="font-size:18px;color:${gPct===100?'var(--green)':'var(--accent)'}"></i>
+            <div>
+              <div style="font-weight:700;font-size:14px">${esc(g.titre)}</div>
+              <div style="font-size:11.5px;color:var(--text3)">${gc.faits} / ${gc.total} tâches</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <span class="badge ${gPct===100?'badge-green':'badge-gray'}">${gPct}%</span>
+            <i class="ti ti-chevron-down checklist-chevron" style="transition:transform .15s${groupOpen?';transform:rotate(180deg)':''}"></i>
+          </div>
+        </div>
+        <div class="checklist-group-body" style="${groupOpen?'':'display:none'}">
+          ${g.sousGroupes.map(sg => `
+            <div class="checklist-subgroup" style="padding:10px 16px 10px 20px;border-top:1px solid var(--border)">
+              <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">${esc(sg.titre)}</div>
+              ${sg.taches.map((t, idx) => {
+                const itemId = _checklistItemId(g.id, sg.id, t);
+                const checked = !!(p.checklist && p.checklist[itemId]);
+                return `<label class="checklist-item" style="display:flex;align-items:flex-start;gap:8px;padding:5px 0;cursor:pointer;font-size:13px;${checked?'color:var(--text3);text-decoration:line-through':''}">
+                  <input type="checkbox" ${checked?'checked':''} onchange="toggleChecklistItem('${p.id}','${itemId}',this.checked)" style="margin-top:3px;flex-shrink:0">
+                  <span>${esc(t)}</span>
+                </label>`;
+              }).join('')}
+            </div>
+          `).join('')}
+        </div>
+      </div>`;
+    }).join('')}
+  `;
+}
+
+function toggleChecklistGroup(headerEl) {
+  const body = headerEl.nextElementSibling;
+  const chevron = headerEl.querySelector('.checklist-chevron');
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : '';
+  if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
+}
+
+async function toggleChecklistItem(projetId, itemId, valeur) {
+  const p = stateDossier.projets.find(x => x.id == projetId);
+  if (!p) return;
+  if (!p.checklist) p.checklist = {};
+  if (valeur) p.checklist[itemId] = true; else delete p.checklist[itemId];
+  await saveProjet(p);
+  if (typeof renderChecklistOverview === 'function') renderChecklistOverview();
+  // On mémorise quels groupes étaient ouverts pour les rouvrir après le rafraîchissement
+  const ouverts = [...document.querySelectorAll('.checklist-group-body')]
+    .map((el, i) => el.style.display !== 'none' ? i : -1).filter(i => i >= 0);
+  renderChecklist(projetId);
+  const bodies = document.querySelectorAll('.checklist-group-body');
+  const headers = document.querySelectorAll('.checklist-group-header');
+  ouverts.forEach(i => {
+    if (bodies[i]) { bodies[i].style.display = ''; const c = headers[i]?.querySelector('.checklist-chevron'); if (c) c.style.transform = 'rotate(180deg)'; }
+  });
 }
 
 // ── AGENDA ─────────────────────────────────────────────────
@@ -5705,23 +6033,30 @@ async function deleteFacture_d(id) {
   toast_d('🗑️ Supprimé.');
 }
 
+let _convertingDevis = new Set();
 async function convertDevisToFacture(id) {
+  if (_convertingDevis.has(id)) return; // évite une collision de numéro sur double-clic
   const f = stateDossier.factures.find(x=>x.id===id);
   if (!f||!confirm('Convertir ce devis en facture ?')) return;
-  const factureId = 'fact-'+Date.now();
-  const updated = {...f, type:'facture', statut:'emise', id:factureId,
-    numero: autoNumero('facture'), devisOrigine: f.id};
-  stateDossier.factures.push(updated);
-  // Le devis d'origine n'est plus "en attente" : on le marque accepté et on garde le lien.
-  const idx = stateDossier.factures.findIndex(x=>x.id===id);
-  if (idx>=0) {
-    stateDossier.factures[idx].statut = 'accepte';
-    stateDossier.factures[idx].factureLiee = factureId;
-    await saveFactureDb(stateDossier.factures[idx]);
+  _convertingDevis.add(id);
+  try {
+    const factureId = 'fact-'+Date.now();
+    const updated = {...f, type:'facture', statut:'emise', id:factureId,
+      numero: autoNumero('facture'), devisOrigine: f.id};
+    stateDossier.factures.push(updated);
+    // Le devis d'origine n'est plus "en attente" : on le marque accepté et on garde le lien.
+    const idx = stateDossier.factures.findIndex(x=>x.id===id);
+    if (idx>=0) {
+      stateDossier.factures[idx].statut = 'accepte';
+      stateDossier.factures[idx].factureLiee = factureId;
+      await saveFactureDb(stateDossier.factures[idx]);
+    }
+    await saveFactureDb(updated);
+    renderFacturation();
+    toast_d('✅ Devis converti en facture (devis marqué accepté).');
+  } finally {
+    _convertingDevis.delete(id);
   }
-  await saveFactureDb(updated);
-  renderFacturation();
-  toast_d('✅ Devis converti en facture (devis marqué accepté).');
 }
 
 function autoNumero(type) {
@@ -5870,7 +6205,7 @@ function tacheCardHtml(t, today, st) {
 
   return `<div class="tache-card ${prioClass}" onclick="openTacheEdit('${t.id}')">
     <div class="tache-card-actions">${prevBtn}${nextBtn}${delBtn}</div>
-    <div class="tache-card-title">${t.titre}</div>
+    <div class="tache-card-title">${esc(t.titre)}</div>
     <div class="tache-card-meta">
       ${prioBadge}
       ${d?`<span class="tache-date ${isLate?'late':''}"><i class="ti ti-calendar" style="font-size:10px"></i> ${d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short'})}</span>`:''}
@@ -6385,8 +6720,8 @@ async function confirmImportJson() {
 //  IMPORT CSV
 // ════════════════════════════════════════════════════════════
 function downloadCsvTemplate() {
-  const header = 'type;numero;projetNom;phase;objet;dateEmission;dateEcheance;montantHt;tva;montantPaye;statut;notes';
-  const example= 'facture;FAC-2025-001;Maison Martin;APD;Honoraires APD;2025-01-15;2025-02-14;5000;20;5000;payee;';
+  const header = 'type;numero;projetNom;phase;objet;dateEmission;dateEcheance;datePaiement;montantHt;tva;montantPaye;statut;notes';
+  const example= 'facture;FAC-2025-001;Maison Martin;APD;Honoraires APD;2025-01-15;2025-02-14;2025-02-10;5000;20;5000;payee;';
   const csv = header + '\n' + example;
   const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
   const url = URL.createObjectURL(blob);
@@ -6410,10 +6745,30 @@ function handleCsvFile(file) {
     const lines = text.split(/\r?\n/).filter(l=>l.trim());
     if (lines.length < 2) { toast_d('⚠️ Fichier CSV vide ou invalide.'); return; }
     const sep = lines[0].includes(';') ? ';' : ',';
-    const headers = lines[0].split(sep).map(h=>h.replace(/^"|"$/g,'').trim().toLowerCase());
+    // Parseur CSV respectant les champs entre guillemets (RFC4180 simplifié) :
+    // un champ "Honoraires ESQ; APS; APD" ne doit PAS être coupé sur ses points-virgules
+    // internes tant qu'il reste entre guillemets. "" à l'intérieur = un guillemet littéral.
+    function parseCsvLine(line, sep) {
+      const out = []; let cur = ''; let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (inQuotes) {
+          if (c === '"') {
+            if (line[i+1] === '"') { cur += '"'; i++; } else { inQuotes = false; }
+          } else cur += c;
+        } else {
+          if (c === '"') inQuotes = true;
+          else if (c === sep) { out.push(cur); cur = ''; }
+          else cur += c;
+        }
+      }
+      out.push(cur);
+      return out.map(v => v.trim());
+    }
+    const headers = parseCsvLine(lines[0], sep).map(h=>h.toLowerCase());
     const rows = [];
     for (let i=1; i<lines.length; i++) {
-      const vals = lines[i].split(sep).map(v=>v.replace(/^"|"$/g,'').trim());
+      const vals = parseCsvLine(lines[i], sep);
       const obj = {};
       headers.forEach((h,j) => obj[h] = vals[j]||'');
       if (!obj.montantht && !obj['montantht']) continue;
@@ -6423,6 +6778,15 @@ function handleCsvFile(file) {
     const factures = rows.map(r => {
       const projetNom = r.projetnom || r['projet nom'] || r.projet || '';
       const projet = stateDossier.projets.find(p=>p.nom&&p.nom.toLowerCase()===projetNom.toLowerCase());
+      const montantPaye = parseFloat(r.montantpaye)||0;
+      const statut = r.statut || (r.type==='devis'?'en_attente':'emise');
+      // Date de paiement : celle du CSV si fournie, sinon date d'émission par défaut
+      // dès lors que la facture est marquée payée/partielle (plutôt que de laisser vide,
+      // ce qui décalerait silencieusement l'encaissement en Comptabilité).
+      let datePaiement = r.datepaiement || r['date paiement'] || '';
+      if (!datePaiement && (statut === 'payee' || statut === 'partiel') && montantPaye > 0) {
+        datePaiement = r.dateemission || r.date || '';
+      }
       return {
         id: 'fact-csv-'+Date.now()+'-'+Math.random().toString(36).slice(2,6),
         type: r.type === 'devis' ? 'devis' : 'facture',
@@ -6432,10 +6796,11 @@ function handleCsvFile(file) {
         objet: r.objet || '',
         dateEmission: r.dateemission || r.date || '',
         dateEcheance: r.dateecheance || '',
+        datePaiement,
         montantHt: parseFloat(r.montantht)||0,
         tva: parseFloat(r.tva)||20,
-        montantPaye: parseFloat(r.montantpaye)||0,
-        statut: r.statut || (r.type==='devis'?'en_attente':'emise'),
+        montantPaye,
+        statut,
         notes: r.notes || '',
       };
     }).filter(f=>f.montantHt>0);
@@ -6565,12 +6930,13 @@ async function analyzeWithAI(base64) {
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 1000,
         system: `Analyse cette facture et retourne UNIQUEMENT ce JSON valide, sans markdown :
-{"type":"facture","numero":"","objet":"","dateEmission":"","dateEcheance":"","montantHt":0,"tva":20,"montantPaye":0,"statut":"emise","notes":"","clientNom":"","projetNom":"","pourcentage":0,"baseHonoraires":0,"prixUnitaireHt":0}
+{"type":"facture","numero":"","objet":"","dateEmission":"","dateEcheance":"","datePaiement":"","montantHt":0,"tva":20,"montantPaye":0,"statut":"emise","notes":"","clientNom":"","projetNom":"","pourcentage":0,"baseHonoraires":0,"prixUnitaireHt":0}
 
 INSTRUCTIONS STRICTES - tableau avec colonnes Libellé / Qté / Unité / PU HT / Montant HT :
 1. "montantHt" = valeur de la colonne "Montant HT" ou "Total HT" (ex: 644.36)
 2. "prixUnitaireHt" = valeur de la colonne "PU HT" (ex: 2147.87)  
 3. "tva" = taux TVA en % (ex: 20)
+0bis. "datePaiement" = cherche activement toute mention d'un paiement déjà effectué : tampon "payé"/"réglé"/"acquitté", date de virement/prélèvement/chèque encaissé, mention manuscrite de règlement. Si trouvée, indique cette date, ET mets "statut":"payee" et "montantPaye"=montantHt (ou le montant réellement réglé si un paiement partiel est indiqué, avec "statut":"partiel"). Si le document ne montre AUCUNE preuve de paiement (facture simplement émise, en attente), laisse "datePaiement" vide et "statut":"emise" — ne jamais recopier la date d'émission ou d'échéance dans datePaiement.
 4. POUR "pourcentage" : regarder UNIQUEMENT la colonne "Qté" (pas le libellé)
    - Si Qté est un nombre décimal < 1 : multiplier par 100 → ex: Qté=0,30 → pourcentage=30
    - Si Qté est un entier entre 1 et 100 avec "%" dans le libellé → pourcentage=Qté
@@ -6618,6 +6984,17 @@ EXEMPLE : ligne "Commissionnement 10% | Qté:0,30 | forfait | PU HT:2147,87 | Mo
     // Si base manquante mais puHt fourni
     if (!base && puHt > 0) base = puHt;
 
+    const statutPdf = parsed.statut||(parsed.type==='devis'?'en_attente':'emise');
+    const montantPayePdf = parseFloat(parsed.montantPaye)||0;
+    const dateEmissionPdf = parsed.dateEmission||new Date().toISOString().split('T')[0];
+    // Date de paiement : celle extraite par l'IA si présente, sinon date d'émission
+    // par défaut dès lors que le document est marqué payé (même logique que la saisie
+    // manuelle et l'import CSV — évite qu'un import laisse la Comptabilité désynchronisée).
+    let datePaiementPdf = parsed.datePaiement || '';
+    if (!datePaiementPdf && (statutPdf === 'payee' || statutPdf === 'partiel') && montantPayePdf > 0) {
+      datePaiementPdf = dateEmissionPdf;
+    }
+
     _importPdfData = {
       id: 'fact-pdf-'+Date.now(),
       type: parsed.type||'facture',
@@ -6625,12 +7002,13 @@ EXEMPLE : ligne "Commissionnement 10% | Qté:0,30 | forfait | PU HT:2147,87 | Mo
       projetId: forcedProjetId || (projet ? projet.id : '') || (parsed.projetNom||''),
       phase: '',
       objet: parsed.objet||'',
-      dateEmission: parsed.dateEmission||new Date().toISOString().split('T')[0],
+      dateEmission: dateEmissionPdf,
       dateEcheance: parsed.dateEcheance||'',
+      datePaiement: datePaiementPdf,
       montantHt: mHt,
       tva: parseFloat(parsed.tva)||20,
-      montantPaye: parseFloat(parsed.montantPaye)||0,
-      statut: parsed.statut||(parsed.type==='devis'?'en_attente':'emise'),
+      montantPaye: montantPayePdf,
+      statut: statutPdf,
       notes: parsed.notes||'',
       pdfData: _pdfBase64,
       pdfName: _pdfFileName,
@@ -8039,6 +8417,47 @@ function confirmDeleteComm(id) {
   renderCommissions();
   renderFactParProjet();
   toast_d('🗑️ Commission supprimée.');
+}
+
+// ── Réparation Facture↔Comptabilité ────────────────────────
+// Corrige les factures déjà enregistrées (avant la correction du bug
+// d'import CSV / PDF IA) qui sont marquées payées mais n'ont pas de
+// date de paiement — la Comptabilité les comptait alors sur le mois
+// de la date d'émission au lieu du mois réel d'encaissement.
+async function reparerLiaisonFactureCompta() {
+  const aReparer = (stateDossier.factures || []).filter(f =>
+    f.type !== 'devis' &&
+    (f.statut === 'payee' || f.statut === 'partiel') &&
+    (parseFloat(f.montantPaye) || 0) > 0 &&
+    !f.datePaiement
+  );
+
+  if (aReparer.length === 0) {
+    toast_d('✅ Rien à réparer — toutes les factures payées ont déjà une date de paiement.');
+    return;
+  }
+
+  const detail = aReparer.slice(0, 10).map(f =>
+    `• ${f.numero || '(sans numéro)'} — ${nomProjet(f.projetId) || f.projetId || '?'} — ${fmtEur_d(f.montantHt)}`
+  ).join('\n');
+
+  const ok = confirm(
+    `${aReparer.length} facture(s) payée(s) sans date de paiement trouvée(s) :\n\n${detail}` +
+    (aReparer.length > 10 ? `\n… et ${aReparer.length - 10} autre(s)` : '') +
+    `\n\nPour chacune, la date de paiement sera fixée à sa date d'émission (à défaut d'une date plus précise), afin que la Comptabilité les compte au bon mois.\n\nContinuer ?`
+  );
+  if (!ok) return;
+
+  let count = 0;
+  for (const f of aReparer) {
+    f.datePaiement = f.dateEmission || f.datePaiement;
+    if (f.datePaiement) { await saveFactureDb(f); count++; }
+  }
+
+  renderFacturation();
+  if (typeof renderComptabilite === 'function') renderComptabilite();
+  if (typeof renderDashboard_d === 'function') renderDashboard_d();
+  toast_d(`✅ ${count} facture(s) réparée(s) — Facturation et Comptabilité sont maintenant alignées.`);
 }
 
 function exportToutJSON() {

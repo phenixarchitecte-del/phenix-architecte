@@ -2120,7 +2120,7 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
         <div class="form-group"><label>Date</label><input id="fac-date" type="date"></div>
         <div class="form-group"><label>Montant HT (€) *</label><input id="fac-ht" type="number" placeholder="0"></div>
         <div class="form-group"><label>Statut</label>
-          <select id="fac-statut"><option value="a_valider">À valider</option><option value="validee">Validée</option><option value="payee">Payée</option><option value="retard"><option value="litige">Litige</option></select>
+          <select id="fac-statut"><option value="a_valider">À valider</option><option value="validee">Validée</option><option value="payee">Payée</option><option value="retard">En retard</option><option value="litige">Litige</option></select>
         </div>
       </div>
       <div class="form-group"><label>Commentaire</label><textarea id="fac-notes" rows="2" placeholder="Objet, acompte n°, situation n°…"></textarea></div>
@@ -2502,7 +2502,7 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
                     <option value="a_valider">À valider</option>
                     <option value="validee">Validée</option>
                     <option value="payee">Payée</option>
-                    <option value="retard">
+                    <option value="retard">En retard</option>
                     <option value="litige">Litige</option>
                   </select>
                 </div>
@@ -4068,6 +4068,7 @@ async function importFromChiffrage() {
       if (existing) {
         existing.ht = item.montantHt;
         existing.tva = item.tva;
+        existing.statut = mapStatutChiffrage(item.statut);
         if (item.num && !existing.nom.startsWith(item.num)) existing.nom = composedNom;
         updated++;
       } else {

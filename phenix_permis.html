@@ -769,7 +769,7 @@ Tous les champs avec valeurs à renseigner pour ce dossier.
 Exigences spécifiques à la pièce ${piece.ref} en France (2025-2026).`;
 
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await fetch('https://phenix-proxy.phenixarchitecte.workers.dev', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -954,7 +954,7 @@ Sois précis, concret, utile pour un maître d'œuvre qui va travailler sur Arch
     });
     content.push({ type: 'text', text: prompt });
 
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await fetch('https://phenix-proxy.phenixarchitecte.workers.dev', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1500, messages: [{ role: 'user', content }] })
@@ -1081,7 +1081,7 @@ L'architecte demande l'ajustement suivant : "${question}"
 Propose une version améliorée de cette variante en gardant le même format (NOM, CONCEPT, DESCRIPTION, SCHEMA, AVANTAGES, POINTS_ATTENTION), mais en intégrant la demande d'ajustement.`;
 
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await fetch('https://phenix-proxy.phenixarchitecte.workers.dev', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1000,
         messages: [{ role: 'user', content: prompt2 }] })

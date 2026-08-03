@@ -413,7 +413,7 @@ function loadHandoff(){
     document.getElementById('i-ref').textContent      = currentProjet.ref    || '—';
     document.getElementById('i-adresse').textContent  = currentProjet.adresse|| '—';
     document.getElementById('i-surface').textContent  = currentProjet.surface ? currentProjet.surface + ' m²' : '—';
-    if (currentProjet.budget) document.getElementById('f-montant').value = currentProjet.budget;
+    if (currentProjet.honoraires) document.getElementById('f-montant').value = currentProjet.honoraires;
   } else {
     document.getElementById('noProjectWarn').style.display = 'flex';
   }

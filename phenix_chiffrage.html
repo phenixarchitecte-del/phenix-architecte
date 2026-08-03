@@ -2859,6 +2859,25 @@ function exportPDF(){
   if(ci===null){alert('Sélectionnez un chantier');return;}
   const c=state.chantiers[ci];
   sortLotsInPlace(c.lots||[]);
+
+  // Garde-fou : ne jamais envoyer un devis client avec un prix manquant
+  // (auparavant, un prix client vide se rabattait silencieusement sur le prix
+  // d'achat artisan — corrigé, mais il faut maintenant prévenir plutôt que
+  // d'afficher 0 € en silence).
+  const postesSansPrixClient = [];
+  (c.lots||[]).forEach(lot => (lot.postes||[]).forEach(p => {
+    if (!(parseFloat(p.puClient) > 0) && !(parseFloat(p.pu) > 0)) {
+      postesSansPrixClient.push(`${lot.nom || lot.num || 'Lot'} — ${p.n || 'poste sans nom'}`);
+    }
+  }));
+  if (postesSansPrixClient.length) {
+    const liste = postesSansPrixClient.slice(0,8).join('\n  ');
+    const suite = postesSansPrixClient.length > 8 ? `\n  … et ${postesSansPrixClient.length - 8} autre(s)` : '';
+    if (!confirm(`⚠️ ${postesSansPrixClient.length} poste(s) n'ont pas de prix client renseigné :\n\n  ${liste}${suite}\n\nSans marge appliquée, ces postes afficheraient 0 € dans le devis. Continuer quand même ?`)) {
+      return;
+    }
+  }
+
   const date=new Date().toLocaleDateString('fr-FR');
   const ref='DEV-'+new Date().toISOString().slice(0,10).replace(/-/g,'')+'-'+(ci+1).toString().padStart(3,'0');
   function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
@@ -2868,7 +2887,7 @@ function exportPDF(){
     let htClient=0;
     (lot.postes||[]).forEach(p=>{
       const q=parseFloat(p.q)||0;
-      htClient+=q*(parseFloat(p.puClient)||parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
+      htClient+=q*(parseFloat(p.puClient)||parseFloat(p.pu)||0);
     });
     const aleas=htClient*(numOr(lot.aleas,5)/100);
     const hon=htClient*(numOr(lot.honoraires,5)/100);
@@ -2879,7 +2898,7 @@ function exportPDF(){
     totalHT+=ht; totalTVA+=tvaAmt; totalTTC+=ttc;
     const rows=(lot.postes||[]).map(p=>{
       const q=parseFloat(p.q)||0;
-      const pu=parseFloat(p.puClient)||parseFloat(p.puArtisan)||parseFloat(p.pu)||0;
+      const pu=parseFloat(p.puClient)||parseFloat(p.pu)||0;
       return `<tr><td style="padding:5px 8px 5px 22px;font-size:11px;color:#334155">${esc(p.n)}</td><td style="text-align:right;padding:5px 8px;font-size:11px;white-space:nowrap">${q} ${esc(p.u||'u')}</td><td style="text-align:right;padding:5px 8px;font-size:11px">${fmt(pu)} €</td><td style="text-align:right;padding:5px 8px;font-size:11px;font-weight:600">${fmt(q*pu)} €</td></tr>`;
     }).join('');
     return `<tr style="background:#1E3A5F"><td colspan="3" style="padding:8px 10px;color:#93C5FD;font-size:11.5px;font-weight:700">${esc(lot.num?lot.num+' — ':'')}${esc(lot.nom)}</td><td style="text-align:right;padding:8px 10px;color:white;font-size:12px;font-weight:700">${fmt(ttc)} € TTC</td></tr>${rows}<tr style="background:#F1F5F9"><td colspan="3" style="padding:4px 8px;font-size:10.5px;color:#64748B;text-align:right">Sous-total HT</td><td style="text-align:right;padding:4px 8px;font-size:10.5px;color:#1E3A5F;font-weight:600">${fmt(ht)} €</td></tr>`;
