@@ -490,6 +490,9 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
   <div class="nav-item" onclick="showPage('renovation')" id="nav-renovation">
     <i class="ti ti-refresh" aria-hidden="true"></i> Rénovation IA
   </div>
+  <div class="nav-item" onclick="showPage('neuf')" id="nav-neuf">
+    <i class="ti ti-building-community" aria-hidden="true"></i> Neuf IA
+  </div>
   <div class="nav-item" onclick="showPage('export')" id="nav-export">
     <i class="ti ti-file-export" aria-hidden="true"></i> Export
   </div>
@@ -1370,6 +1373,64 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
 
       <!-- Statut IA -->
       <div class="reno-ia-status" id="reno-ia-status"></div>
+
+    </div>
+  </div>
+
+  <!-- PAGE NEUF IA -->
+  <div class="page" id="page-neuf" style="overflow-y:auto">
+    <div class="page-header">
+      <div class="page-title">Neuf IA</div>
+      <div class="page-sub">Chargez votre dossier PDF complet — page de garde, plan de masse, plans par niveau, façades, visuel 3D — l'IA analyse l'ensemble et génère le chiffrage complet</div>
+      <div class="page-actions">
+        <button class="btn btn-primary" onclick="neufLancerIA()" id="btn-neuf-analyser" style="display:none;background:linear-gradient(135deg,#2A5298,#27AE60);border-color:#2A5298"><i class="ti ti-robot"></i>Analyser par IA</button>
+      </div>
+    </div>
+    <div style="padding:20px 28px;flex:1;display:flex;flex-direction:column;gap:16px">
+
+      <!-- Zone de dépôt PDF -->
+      <div id="neuf-drop-area">
+        <div class="plan-drop-zone" id="neuf-drop-zone" onclick="document.getElementById('neuf-pdf-input').click()"
+             style="max-width:600px;margin:0 auto;border-color:rgba(42,82,152,.4);background:linear-gradient(135deg,rgba(42,82,152,.04),rgba(39,174,96,.04))">
+          <input type="file" id="neuf-pdf-input" accept=".pdf,.jpg,.jpeg,.png,.webp" multiple style="display:none" onchange="neufHandleDossier(this.files)">
+          <i class="ti ti-file-type-pdf" style="font-size:48px;display:block;margin-bottom:12px;color:#2A5298"></i>
+          <div style="font-weight:700;font-size:15px;color:var(--text)">Glissez votre dossier PDF ici</div>
+          <div style="font-size:13px;margin-top:6px;color:var(--text2)">ou cliquez pour parcourir</div>
+          <div style="font-size:12px;margin-top:10px;color:var(--text3);line-height:1.7">
+            PDF multi-pages complet · Plusieurs fichiers acceptés<br>
+            L'IA identifie automatiquement<br>
+            <strong style="color:#2A5298">Page de garde / Plan de masse / Plans par niveau / Façades / Visuel 3D</strong>
+          </div>
+        </div>
+      </div>
+
+      <!-- Aperçu des pages extraites -->
+      <div id="neuf-pages-preview" style="display:none">
+        <div style="font-size:12px;font-weight:700;color:var(--nav);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">
+          <span id="neuf-pages-count"></span>
+          <button class="btn btn-sm btn-outline" onclick="neufReset()"><i class="ti ti-x"></i>Changer de dossier</button>
+        </div>
+        <div id="neuf-pages-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:4px"></div>
+        <div style="font-size:11px;color:var(--text3);margin-top:6px">
+          💡 Vérifiez que chaque page est bien identifiée. Vous pouvez retirer une page qui ne doit pas être analysée (ex. page administrative).
+        </div>
+      </div>
+
+      <!-- Prompt libre -->
+      <div class="reno-prompt-zone" id="neuf-prompt-zone" style="display:none">
+        <div class="reno-prompt-label">
+          <i class="ti ti-message-2" style="font-size:16px;color:var(--accent)"></i>
+          Précisions sur le projet <span style="font-weight:400;color:var(--text3)">(facultatif mais recommandé)</span>
+        </div>
+        <textarea class="reno-prompt-textarea" id="neuf-prompt"
+          placeholder="Ex : Maison individuelle plain-pied, 120 m² habitable, ossature parpaing, charpente traditionnelle, couverture tuile mécanique, isolation par l'intérieur, chauffage PAC air/eau, finitions standard gamme intermédiaire. Terrain en léger dévers, prévoir terrassement adapté."></textarea>
+        <div class="reno-prompt-hint">
+          💡 Précisez ce qui n'est pas lisible sur les plans : nature du terrain, mode constructif souhaité, niveau de finition, équipements spécifiques (PAC, poêle, domotique…), contraintes d'accès chantier.
+        </div>
+      </div>
+
+      <!-- Statut IA -->
+      <div class="reno-ia-status" id="neuf-ia-status"></div>
 
     </div>
   </div>
@@ -4867,6 +4928,327 @@ window.renoHandleDossier = renoHandleDossier;
 window.renoSupprimerPage = renoSupprimerPage;
 window.renoReset = renoReset;
 window.renoLancerIA = renoLancerIA;
+
+// ════════════════════════════════════════════════════════════
+//  NEUF IA — Chiffrage complet d'une construction neuve à partir
+//  d'un dossier PDF complet (page de garde, plan de masse, plans
+//  par niveau, façades/coupes, visuel 3D)
+// ════════════════════════════════════════════════════════════
+var neufPages = [];
+
+(function(){
+  setTimeout(() => {
+    const zone = document.getElementById('neuf-drop-zone');
+    if(!zone) return;
+    zone.ondragover = e => { e.preventDefault(); zone.style.borderColor='#2A5298'; };
+    zone.ondragleave = () => { zone.style.borderColor=''; };
+    zone.ondrop = e => {
+      e.preventDefault(); zone.style.borderColor='';
+      if(e.dataTransfer.files.length) neufHandleDossier(e.dataTransfer.files);
+    };
+  }, 500);
+})();
+
+async function neufHandleDossier(files) {
+  if(!files || !files.length) return;
+  neufPages = [];
+  showToast('📄 Extraction des pages en cours…');
+  const statusEl = document.getElementById('neuf-ia-status');
+  statusEl.className = 'reno-ia-status running';
+  statusEl.style.display = 'flex';
+  statusEl.innerHTML = '<div class="ai-loading"><div class="ai-dot" style="background:#2A5298"></div><div class="ai-dot" style="background:#2A5298"></div><div class="ai-dot" style="background:#2A5298"></div></div><span>Extraction des pages PDF…</span>';
+
+  for(const file of Array.from(files)) {
+    const ext = file.name.split('.').pop().toLowerCase();
+    if(ext === 'pdf') {
+      await neufExtractPdfPages(file);
+    } else {
+      await new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onload = e => {
+          const img = new Image();
+          img.onload = () => {
+            const cv = document.createElement('canvas');
+            cv.width = img.width; cv.height = img.height;
+            cv.getContext('2d').drawImage(img, 0, 0);
+            const thumbCv = document.createElement('canvas');
+            const ratio = Math.min(1, 300 / img.width);
+            thumbCv.width = img.width*ratio; thumbCv.height = img.height*ratio;
+            thumbCv.getContext('2d').drawImage(img, 0, 0, thumbCv.width, thumbCv.height);
+            neufPages.push({
+              b64: cv.toDataURL('image/jpeg', 0.88).split(',')[1], mime:'image/jpeg',
+              titre: neufDetectTitrePage([], file.name, neufPages.length+1),
+              pageNum: neufPages.length+1, fichier: file.name,
+              thumb: thumbCv.toDataURL('image/jpeg', 0.7)
+            });
+            resolve();
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+  }
+  statusEl.style.display = 'none';
+  if(!neufPages.length) { showToast('⚠️ Aucune page exploitable trouvée'); return; }
+  neufAfficherApercu();
+}
+
+async function neufExtractPdfPages(file) {
+  await new Promise((resolve) => {
+    const doExtract = async () => {
+      if(typeof pdfjsLib === 'undefined') { showToast('⚠️ PDF.js non disponible'); resolve(); return; }
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      const reader = new FileReader();
+      reader.onload = async e => {
+        try {
+          const pdf = await pdfjsLib.getDocument({data: new Uint8Array(e.target.result)}).promise;
+          const nb = pdf.numPages;
+          for(let p = 1; p <= nb; p++) {
+            const page = await pdf.getPage(p);
+            const textContent = await page.getTextContent();
+            const textes = textContent.items.map(i => i.str).filter(s => s.trim().length > 2);
+            const titre = neufDetectTitrePage(textes, file.name, p);
+            const viewport = page.getViewport({scale: 2.5});
+            const tmp = document.createElement('canvas');
+            tmp.width = viewport.width; tmp.height = viewport.height;
+            await page.render({canvasContext: tmp.getContext('2d'), viewport}).promise;
+            const thumbVp = page.getViewport({scale: 0.3});
+            const thumbCv = document.createElement('canvas');
+            thumbCv.width = thumbVp.width; thumbCv.height = thumbVp.height;
+            await page.render({canvasContext: thumbCv.getContext('2d'), viewport: thumbVp}).promise;
+            const b64 = tmp.toDataURL('image/jpeg', 0.88).split(',')[1];
+            const thumb = thumbCv.toDataURL('image/jpeg', 0.7);
+            neufPages.push({ b64, mime:'image/jpeg', titre, pageNum:p, fichier:file.name, thumb });
+          }
+          resolve();
+        } catch(err) { showToast('⚠️ Erreur PDF p.'+p+' : '+err.message); resolve(); }
+      };
+      reader.readAsArrayBuffer(file);
+    };
+    if(typeof pdfjsLib !== 'undefined') { doExtract(); return; }
+    const existing = document.getElementById('pdfjs-script');
+    if(existing) { doExtract(); return; }
+    const s = document.createElement('script');
+    s.id = 'pdfjs-script';
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload = doExtract;
+    s.onerror = () => { showToast('⚠️ PDF.js non disponible'); resolve(); };
+    document.head.appendChild(s);
+  });
+}
+
+// ── Détection automatique du rôle de chaque page d'un dossier NEUF ──
+function neufDetectTitrePage(textes, nomFichier, pageNum) {
+  const full = textes.join(' ').toUpperCase();
+
+  const patterns = [
+    [/PAGE\s+DE\s+GARDE|PERMIS\s+DE\s+CONSTRUIRE|DEMANDE\s+DE\s+PERMIS|CERFA/i, 'Page de garde'],
+    [/PLAN\s+DE\s+MASSE|PLAN\s+MASSE|IMPLANTATION/i, 'Plan de masse'],
+    [/PLAN\s+DE\s+SITUATION/i, 'Plan de situation'],
+    [/PLAN\s+(RDC|R\.?D\.?C\.?|REZ[- ]DE[- ]CHAUSS[EÉ]E)/i, 'Plan RDC'],
+    [/PLAN\s+(R\+1|PREMIER[- ]ETAGE|1ER[- ]ETAGE)/i, 'Plan R+1'],
+    [/PLAN\s+(R\+2|DEUXI[EÈ]ME[- ]ETAGE|2[EÈ]ME[- ]ETAGE)/i, 'Plan R+2'],
+    [/PLAN\s+(COMBLES?)/i, 'Plan combles'],
+    [/PLAN\s+(SOUS-SOL|CAVE|GARAGE)/i, 'Plan sous-sol/garage'],
+    [/PLAN\s+(TOITURE|CHARPENTE)/i, 'Plan toiture/charpente'],
+    [/FA[CÇ]ADES?/i, 'Façades'],
+    [/COUPE/i, 'Coupe'],
+    [/PERSPECTIVE|VISUEL\s*3D|AXONOM[EÉ]TRIE|RENDU\s*3D|VUE\s*3D/i, 'Visuel 3D'],
+  ];
+
+  for(const texte of textes) {
+    for(const [pat, label] of patterns) {
+      if(pat.test(texte)) return label;
+    }
+  }
+  for(const [pat, label] of patterns) {
+    if(pat.test(full)) return label;
+  }
+  return `${nomFichier.replace(/\.[^.]+$/,'')} — Page ${pageNum}`;
+}
+
+function neufDetectTypeFromTitre(titre) {
+  const t = titre.toUpperCase();
+  if(/PAGE DE GARDE/.test(t)) return 'garde';
+  if(/PLAN DE MASSE|SITUATION/.test(t)) return 'masse';
+  if(/PLAN (RDC|R\+1|R\+2|COMBLES|SOUS-SOL|TOITURE)/.test(t)) return 'plan';
+  if(/FA[CÇ]ADE|COUPE/.test(t)) return 'facade';
+  if(/VISUEL 3D|PERSPECTIVE|AXONOM|RENDU|VUE 3D/.test(t)) return 'visuel3d';
+  return 'autre';
+}
+
+function neufTypeLabel(type) {
+  return {garde:'Page de garde', masse:'Plan de masse', plan:'Plan', facade:'Façade/Coupe', visuel3d:'Visuel 3D', autre:'Autre'}[type]||type;
+}
+
+function neufAfficherApercu() {
+  document.getElementById('neuf-drop-area').style.display = 'none';
+  document.getElementById('neuf-pages-preview').style.display = '';
+  document.getElementById('neuf-prompt-zone').style.display = '';
+  document.getElementById('btn-neuf-analyser').style.display = '';
+
+  const count = document.getElementById('neuf-pages-count');
+  count.textContent = `${neufPages.length} page${neufPages.length>1?'s':''} extraite${neufPages.length>1?'s':''} — rôles détectés automatiquement`;
+
+  const grid = document.getElementById('neuf-pages-grid');
+  grid.innerHTML = '';
+  neufPages.forEach((pg, i) => {
+    const card = document.createElement('div');
+    card.style.cssText = 'background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r-md);overflow:hidden;position:relative';
+    const type = neufDetectTypeFromTitre(pg.titre);
+    const colors = {garde:'#8e44ad', masse:'#e67e22', plan:'#2A5298', facade:'#16a085', visuel3d:'#27ae60', autre:'var(--border2)'};
+    const col = colors[type] || colors.autre;
+    card.innerHTML = `
+      <div style="height:4px;background:${col}"></div>
+      <img src="${pg.thumb}" style="width:100%;height:90px;object-fit:contain;background:#f8f9fa;display:block">
+      <div style="padding:6px 8px">
+        <div style="font-size:10px;font-weight:700;color:${col};text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">${neufTypeLabel(type)}</div>
+        <div style="font-size:10px;color:var(--text);line-height:1.4;word-break:break-word">${pg.titre}</div>
+        <div style="font-size:9px;color:var(--text3);margin-top:2px">Page ${pg.pageNum}</div>
+      </div>
+      <button onclick="neufSupprimerPage(${i})"
+        style="position:absolute;top:8px;right:6px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.5);color:#fff;font-size:11px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1">×</button>`;
+    grid.appendChild(card);
+  });
+
+  showToast(`✅ ${neufPages.length} page(s) prête(s) — vérifiez, précisez le projet si besoin, puis lancez l'analyse`);
+}
+
+function neufSupprimerPage(idx) {
+  neufPages.splice(idx, 1);
+  if(neufPages.length === 0) { neufReset(); return; }
+  neufAfficherApercu();
+}
+
+function neufReset() {
+  neufPages = [];
+  document.getElementById('neuf-drop-area').style.display = '';
+  document.getElementById('neuf-pages-preview').style.display = 'none';
+  document.getElementById('neuf-prompt-zone').style.display = 'none';
+  document.getElementById('btn-neuf-analyser').style.display = 'none';
+  document.getElementById('neuf-ia-status').style.display = 'none';
+  document.getElementById('neuf-pdf-input').value = '';
+}
+
+async function neufLancerIA() {
+  const PROXY = 'https://phenix-proxy.phenixarchitecte.workers.dev';
+  if(!neufPages.length) { showToast('⚠️ Chargez d\'abord un dossier'); return; }
+
+  const hasPlan = neufPages.some(pg => neufDetectTypeFromTitre(pg.titre) === 'plan');
+  if(!hasPlan) showToast('⚠️ Aucun plan de niveau détecté — vérifiez le dossier chargé');
+
+  const prompt = (document.getElementById('neuf-prompt')||{}).value?.trim()||'';
+  const statusEl = document.getElementById('neuf-ia-status');
+  statusEl.className = 'reno-ia-status running';
+  statusEl.style.display = 'flex';
+  statusEl.innerHTML = `<div class="ai-loading"><div class="ai-dot" style="background:#2A5298"></div><div class="ai-dot" style="background:#2A5298"></div><div class="ai-dot" style="background:#2A5298"></div></div><span>Analyse du dossier complet en cours sur ${neufPages.length} page(s)…</span>`;
+
+  const systemPrompt = `Tu es un expert en chiffrage BTP français et en lecture de dossiers de plans d'architecture, spécialisé en CONSTRUCTION NEUVE.
+Tu reçois un dossier complet composé de plusieurs pages étiquetées par leur rôle : Page de garde, Plan de masse, Plan(s) par niveau (RDC, R+1, combles…), Façades/Coupes, Visuel 3D.
+
+MÉTHODE D'ANALYSE — croise TOUTES les pages fournies, elles se complètent :
+1. La page de garde donne le contexte administratif (souvent peu utile au chiffrage, ignore-la sauf si elle contient une surface ou un descriptif).
+2. Le plan de masse donne l'implantation sur le terrain, l'orientation, les accès, la présence d'un dénivelé ou de réseaux — utile pour le lot VRD/Terrassement.
+3. Les plans par niveau donnent les surfaces, cotes, cloisonnement, menuiseries (lis les cotes annotées, ex "140×215").
+4. Les façades/coupes donnent la hauteur du bâtiment, la pente de toiture, le type de couverture, le nombre de niveaux réel.
+5. Le visuel 3D donne des indices sur les matériaux et finitions extérieures (bardage, enduit, type de toiture, menuiseries) — utilise-le pour affiner les choix de matériaux, pas pour les quantités.
+6. La hauteur sous plafond par défaut est 2.50 m si non indiquée.
+7. Calcule les linéaires de murs extérieurs/intérieurs et les surfaces de chaque pièce à partir des plans.
+8. Génère un chiffrage COMPLET (pas différentiel, c'est une construction neuve) : tous les lots, du terrassement aux finitions.
+9. Retourne UNIQUEMENT un JSON valide, sans markdown, sans texte avant ou après.
+
+FORMAT JSON ATTENDU :
+{
+  "projet": {
+    "type": "neuf",
+    "surface_plancher": 0.0,
+    "surface_habitable": 0.0,
+    "perimetre_exterieur": 0.0,
+    "hsp": 2.50,
+    "nb_niveaux": 1,
+    "nb_pieces": 0,
+    "description": "résumé en 1 ligne"
+  },
+  "pieces": [
+    {"nom": "Salon / Salle à manger", "surface": 0.0, "perimetre": 0.0}
+  ],
+  "menuiseries": {
+    "fenetres": [{"designation": "Fenêtre PVC DV", "largeur": 1.40, "hauteur": 2.15, "quantite": 1, "cotes_plan": "140×215"}],
+    "portes_fenetres": [{"designation": "Porte-fenêtre PVC DV 2vx", "largeur": 2.40, "hauteur": 2.10, "quantite": 1}],
+    "portes_entree": [{"designation": "Porte d'entrée sécurisée", "largeur": 0.90, "hauteur": 2.10, "quantite": 1}],
+    "portes_interieures": [{"designation": "Porte intérieure", "largeur": 0.83, "hauteur": 2.10, "quantite": 1}]
+  },
+  "lots": [
+    {"num":"LOT 01","nom":"VRD / Terrassement","postes":[{"n":"Terrassement général","q":0,"u":"m³","pu_artisan":45.0,"pu_client":54.0}]}
+  ]
+}
+
+LOTS À GÉNÉRER (construction neuve complète) :
+LOT 01 VRD / Terrassement · LOT 02 Gros œuvre / Fondations / Maçonnerie · LOT 03 Charpente / Couverture
+LOT 04 Menuiseries extérieures · LOT 05 Isolation / Cloisons · LOT 06 Électricité · LOT 07 Plomberie / Sanitaire
+LOT 08 Chauffage / VMC · LOT 09 Menuiseries intérieures · LOT 10 Carrelage / Revêtements de sol
+LOT 11 Peinture / Enduits intérieurs · LOT 12 Façades / Enduit extérieur
+
+TARIFS DE RÉFÉRENCE AUVERGNE 2025 (std) :
+Terrassement 50€/m³, Fondations 260€/ml, Dalle BA 130€/m², Mur parpaing 20 120€/m²
+Charpente trad 85€/m², Couverture tuile 90€/m²
+Fenêtre PVC DV 950€/u, Porte-fenêtre PVC 1800€/u, Porte d'entrée 2800€/u
+Isolation combles 40€/m², Doublage 45€/m², Cloison plâtre 52€/m²
+Tableau élec 1400€/u, Prises+inter 3500€/ff, Luminaires 2800€/ff
+SDB complète 7500€/ff, WC suspendu 1500€/u, PAC air/eau 8500€/u
+Porte int 450€/u, Carrelage sol 70€/m², Parquet 48€/m²
+Peinture murs 20€/m², Enduit façade 38€/m²
+Les pu_client = pu_artisan × 1.20 (marge 20% par défaut).
+Sois précis et exhaustif. Si une valeur n'est pas lisible, estime-la de façon cohérente avec le reste du dossier.`;
+
+  const content = [];
+  if(prompt) content.push({type:'text', text:`PRÉCISIONS DU MAÎTRE D'ŒUVRE :\n${prompt}\n\nDOSSIER JOINT (${neufPages.length} pages) :`});
+  else content.push({type:'text', text:`Analyse ce dossier de ${neufPages.length} pages et génère le chiffrage complet de cette construction neuve :`});
+
+  neufPages.forEach((pg, i) => {
+    content.push({type:'text', text:`\n[PAGE ${i+1}/${neufPages.length} — "${pg.titre}"]`});
+    content.push({type:'image', source:{type:'base64', media_type:pg.mime, data:pg.b64}});
+  });
+
+  try {
+    const res = await fetch(PROXY, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        model:'claude-sonnet-4-6', max_tokens:8000,
+        system: systemPrompt, messages:[{role:'user', content}]
+      })
+    });
+    if(!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
+    const data = await res.json();
+    if(data.error) throw new Error(data.error.message||JSON.stringify(data.error));
+
+    const raw = (data.content||[]).map(b=>b.text||'').join('');
+    const clean = raw.replace(/```json|```/g,'').trim();
+    const parsed = JSON.parse(clean.slice(clean.indexOf('{'), clean.lastIndexOf('}')+1));
+
+    statusEl.style.display = 'none';
+
+    const nomInput = document.getElementById('ia-chantier-nom');
+    if(nomInput && !nomInput.value) nomInput.value = parsed.projet?.description||'';
+    const surfInput = document.getElementById('ia-chantier-surface');
+    if(surfInput && !surfInput.value && parsed.projet?.surface_plancher)
+      surfInput.value = parsed.projet.surface_plancher;
+    document.getElementById('ia-chantier-type').value = 'Construction neuve';
+
+    _ouvrirModalResultats(parsed);
+
+  } catch(err) {
+    statusEl.className = 'reno-ia-status error';
+    statusEl.innerHTML = `⚠️ ${err.message}`;
+    showToast('❌ ' + err.message.slice(0,80));
+  }
+}
+
+window.neufHandleDossier = neufHandleDossier;
+window.neufSupprimerPage = neufSupprimerPage;
+window.neufReset = neufReset;
+window.neufLancerIA = neufLancerIA;
 </script>
 <script>
 // ════════════════════════════════════════════════════════════
