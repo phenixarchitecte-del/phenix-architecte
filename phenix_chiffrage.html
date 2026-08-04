@@ -1479,7 +1479,7 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
     <div id="import-dossier-zone" style="background:rgba(74,156,199,0.09);border:1px solid rgba(74,156,199,0.28);border-radius:8px;padding:11px 13px;margin-bottom:14px">
       <div style="font-size:10px;font-weight:700;color:#4A9CC7;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px">⚡ Importer depuis Phénix Dossier</div>
       <div style="display:flex;gap:8px;align-items:center">
-        <select id="f-import-projet" style="flex:1;background:var(--surface,#1a2a4a);border:1px solid var(--border,rgba(74,156,199,0.2));border-radius:6px;padding:7px 10px;color:var(--text,#fff);font-size:12px;font-family:inherit">
+        <select id="f-import-projet" onchange="importFromDossier()" style="flex:1;background:var(--surface,#1a2a4a);border:1px solid var(--border,rgba(74,156,199,0.2));border-radius:6px;padding:7px 10px;color:var(--text,#fff);font-size:12px;font-family:inherit">
           <option value="">— Sélectionner un projet Dossier —</option>
         </select>
         <button class="btn btn-sm" onclick="importFromDossier()" style="background:#4A9CC7;color:#fff;border:none;padding:7px 12px;font-size:12px;white-space:nowrap;flex-shrink:0">Importer</button>
@@ -2123,6 +2123,12 @@ async function loadProjetsFromDossier() {
     status.style.display = '';
   } catch(e) {
     sel.innerHTML = '<option value="">— Erreur de chargement —</option>';
+    const status = document.getElementById('import-dossier-status');
+    if (status) {
+      status.textContent = '⚠️ ' + (e.code || e.message || 'Erreur inconnue') + ' — vérifiez les règles Firestore / App Check';
+      status.style.color = '#c0392b';
+      status.style.display = '';
+    }
     console.warn('Phénix Dossier import error:', e);
   }
 }
