@@ -685,6 +685,10 @@ async function phenixBioInit(){
   if(!credId){
     document.getElementById('pl-bio-label').textContent = 'Activer l\'empreinte après connexion';
     document.getElementById('pl-bio-btn').onclick = () => { document.getElementById('pl-pwd').focus(); };
+  } else {
+    // Empreinte déjà activée : on la propose automatiquement, sans clic,
+    // dès l'arrivée sur l'écran de connexion.
+    setTimeout(() => { try { phenixBioLogin(); } catch(e) {} }, 350);
   }
 }
 

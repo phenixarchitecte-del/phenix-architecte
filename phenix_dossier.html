@@ -399,7 +399,11 @@ async function phenixBioInit(){
       document.getElementById('pl-pwd').focus();
     };
   }
-  // Si enrôlé : bouton pointe vers phenixBioLogin (déjà en place via onclick HTML)
+  else {
+    // Empreinte déjà activée : on la propose automatiquement, sans clic,
+    // dès l'arrivée sur l'écran de connexion.
+    setTimeout(() => { try { phenixBioLogin(); } catch(e) {} }, 350);
+  }
 }
 
 // Bascule affichage formulaire email

@@ -6108,6 +6108,9 @@ async function chantierBioInit(){
   if(!localStorage.getItem(CHANTIER_BIO_KEY)){
     var l=document.getElementById('pl-bio-label');if(l)l.textContent="Activer l'empreinte après connexion";
     var b=document.getElementById('pl-bio-btn');if(b)b.onclick=()=>{var p=document.getElementById('pl-pwd');if(p)p.focus();};
+  } else {
+    // Empreinte déjà activée : proposée automatiquement, sans clic
+    setTimeout(()=>{ try{ chantierBioLogin(); }catch(e){} }, 350);
   }
 }
 async function chantierBioLogin(){
