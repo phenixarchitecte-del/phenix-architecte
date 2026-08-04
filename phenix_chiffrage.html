@@ -4246,10 +4246,15 @@ function validerQuestionnaire() {
 
 // La vraie ouverture de la modal résultats (après questionnaire)
 function _ouvrirModalResultats(data) {
+  // Correction : cette fonction est appelée directement par Rénovation IA et Neuf IA
+  // (sans passer par le questionnaire), donc la variable globale doit être synchronisée
+  // ici — sinon "Créer les lots" ne trouve plus les données au moment de confirmer.
+  iaResultData = data;
   const projet = data.projet || {};
   const pieces = data.pieces || [];
   const menus = data.menuiseries || {};
   const lots = data.lots || [];
+
 
   const selC = document.getElementById('ia-dest-chantier');
   selC.innerHTML = '<option value="">— Créer un nouveau chantier —</option>';
