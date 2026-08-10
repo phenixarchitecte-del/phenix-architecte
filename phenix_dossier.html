@@ -2098,7 +2098,7 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal_d('factureModal')">Annuler</button>
-      <button class="btn btn-primary" onclick="saveFacture_d()"><i class="ti ti-check"></i> Enregistrer</button>
+      <button class="btn btn-primary" id="fact-save-btn" onclick="saveFacture_d()"><i class="ti ti-check"></i> Enregistrer</button>
     </div>
   </div>
 </div>
@@ -2544,6 +2544,7 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
     <div class="nav-item" onclick="exportToutJSON()" title="Sauvegarder toutes vos données"><i class="ti ti-database-export"></i> Exporter tout</div>
     <div class="nav-item" onclick="importToutJSON()" title="Restaurer vos données depuis un fichier de sauvegarde"><i class="ti ti-database-import"></i> Restaurer</div>
     <div class="nav-item" onclick="reparerLiaisonFactureCompta()" title="Corrige les factures payées sans date de paiement enregistrée"><i class="ti ti-link"></i> Réparer Facture↔Compta</div>
+    <div class="nav-item" onclick="detecterFacturesDupliquees()" title="Détecte les factures enregistrées deux fois par erreur"><i class="ti ti-copy-off"></i> Détecter les doublons</div>
     <input type="file" id="restore-file-input" accept=".json" style="display:none" onchange="handleRestoreFile(this.files[0])">
     <div class="nav-item" onclick="nettoyerFacturesFantomes()" title="Supprimer les factures sans projet ni numéro"><i class="ti ti-trash"></i> Nettoyer données</div>
     <div class="nav-item" onclick="openChangePwd()"><i class="ti ti-lock"></i> Mot de passe</div>
@@ -5976,13 +5977,20 @@ function calcFactPaiement() {
   } else p.style.display='none';
 }
 
+let _savingFacture = false;
 async function saveFacture_d() {
+  if (_savingFacture) return; // évite qu'un double-clic crée deux factures identiques
   const ht = parseFloat(document.getElementById('fact-montant-ht').value);
   if (!ht||ht<=0) { toast_d('⚠️ Veuillez saisir un montant HT.'); return; }
   const projetId = document.getElementById('fact-projet-id').value;
   if (!projetId) { toast_d('⚠️ Veuillez sélectionner un projet.'); return; }
   const numero = document.getElementById('fact-numero').value.trim();
   if (!numero) { toast_d('⚠️ Veuillez saisir un numéro.'); return; }
+  _savingFacture = true;
+  const saveBtn = document.getElementById('fact-save-btn');
+  if (saveBtn) saveBtn.disabled = true;
+
+  try {
 
   const f = {
     id: editingFactureId || ('fact-'+Date.now()),
@@ -6017,12 +6025,21 @@ async function saveFacture_d() {
   closeModal_d('factureModal');
   await saveFactureDb(f);
   renderFacturation();
+  // La date (émission ou paiement) a pu changer : rafraîchir la Comptabilité tout de
+  // suite, plutôt que d'attendre que l'utilisateur change de page et y revienne.
+  if (typeof renderComptabilite === 'function') renderComptabilite();
+  if (typeof renderDashboard_d === 'function') renderDashboard_d();
   // Si la modal projet est ouverte, rafraîchir l'onglet facturation
   if (document.getElementById('projectModal').classList.contains('open') && currentProjectId) {
     renderProjectFacturation(currentProjectId);
     document.getElementById('projFactCount').textContent = stateDossier.factures.filter(x=>x.projetId==currentProjectId).length;
   }
   toast_d('✅ '+(f.type==='devis'?'Devis':'Facture')+' enregistré'+(f.type==='devis'?'':'e')+'.');
+
+  } finally {
+    _savingFacture = false;
+    if (saveBtn) saveBtn.disabled = false;
+  }
 }
 
 async function deleteFacture_d(id) {
@@ -8427,6 +8444,74 @@ function confirmDeleteComm(id) {
 // Corrige les factures déjà enregistrées (avant la correction du bug
 // d'import CSV / PDF IA) qui sont marquées payées mais n'ont pas de
 // date de paiement — la Comptabilité les comptait alors sur le mois
+// ── Détection des factures dupliquées ──────────────────────
+// Distingue deux cas bien différents :
+//  - vrai doublon : même numéro, même montant, même date, même projet
+//    → enregistrement strictement identique créé deux fois (ex. double-clic
+//      sur "Enregistrer" avant la correction) → sans danger de supprimer le second
+//  - collision de numéro : même numéro mais contenu différent (montant, date,
+//    statut...) → ce sont deux factures réelles distinctes qui portent par
+//    erreur le même numéro → on ne supprime rien, on propose de renuméroter
+async function detecterFacturesDupliquees() {
+  const factures = stateDossier.factures || [];
+  const parNumero = {};
+  factures.forEach(f => {
+    const key = (f.numero||'').trim();
+    if (!key) return;
+    (parNumero[key] = parNumero[key] || []).push(f);
+  });
+
+  const vraisDoublons = [];   // { garder, supprimer }
+  const collisions = [];      // [f1, f2, ...] même numéro, contenu différent
+
+  Object.values(parNumero).forEach(group => {
+    if (group.length < 2) return;
+    const signature = f => [f.montantHt, f.dateEmission, f.projetId, f.type, f.statut].join('|');
+    const sigRef = signature(group[0]);
+    const toutIdentique = group.every(f => signature(f) === sigRef);
+    if (toutIdentique) {
+      // garde le plus ancien (id le plus petit / premier créé), propose de retirer les autres
+      const [garder, ...supprimer] = group;
+      supprimer.forEach(f => vraisDoublons.push({ garder, supprimer: f }));
+    } else {
+      collisions.push(group);
+    }
+  });
+
+  if (!vraisDoublons.length && !collisions.length) {
+    toast_d('✅ Aucune facture en double détectée.');
+    return;
+  }
+
+  let message = '';
+  if (vraisDoublons.length) {
+    message += `${vraisDoublons.length} facture(s) strictement identique(s) trouvée(s) en double :\n` +
+      vraisDoublons.slice(0,8).map(d => `• ${d.supprimer.numero} — ${nomProjet(d.supprimer.projetId)} — ${fmtEur_d(d.supprimer.montantHt)}`).join('\n') +
+      (vraisDoublons.length > 8 ? `\n… et ${vraisDoublons.length-8} autre(s)` : '') + '\n\n';
+  }
+  if (collisions.length) {
+    message += `⚠️ ${collisions.length} numéro(s) utilisé(s) par plusieurs factures DIFFÉRENTES (pas des doublons, à renuméroter manuellement) :\n` +
+      collisions.slice(0,8).map(g => `• ${g[0].numero} — ${g.length} factures distinctes (${g.map(f=>nomProjet(f.projetId)).join(', ')})`).join('\n') +
+      (collisions.length > 8 ? `\n… et ${collisions.length-8} autre(s)` : '');
+  }
+
+  if (vraisDoublons.length) {
+    const ok = confirm(message + (collisions.length ? '\n\n' : '') +
+      (vraisDoublons.length ? `Supprimer les ${vraisDoublons.length} doublon(s) strict(s) listé(s) ci-dessus ? (les collisions de numéro, elles, ne seront pas touchées)` : ''));
+    if (ok) {
+      for (const d of vraisDoublons) {
+        stateDossier.factures = stateDossier.factures.filter(f => f.id !== d.supprimer.id);
+        await removeFactureDb(d.supprimer.id);
+      }
+      renderFacturation();
+      if (typeof renderComptabilite === 'function') renderComptabilite();
+      toast_d(`✅ ${vraisDoublons.length} doublon(s) supprimé(s).`);
+    }
+  } else {
+    alert(message);
+  }
+}
+
 // de la date d'émission au lieu du mois réel d'encaissement.
 async function reparerLiaisonFactureCompta() {
   const aReparer = (stateDossier.factures || []).filter(f =>
