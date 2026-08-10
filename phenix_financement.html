@@ -924,7 +924,18 @@ async function phenixBioInit(){
   } else {
     // Empreinte déjà activée : on la propose automatiquement, sans clic,
     // dès l'arrivée sur l'écran de connexion.
-    setTimeout(() => { try { phenixBioLogin(); } catch(e) {} }, 350);
+    // WebAuthn exige un vrai geste utilisateur (obligatoire sur mobile) : un simple délai
+    // programmé (setTimeout) ne suffit pas et échoue silencieusement, surtout sur téléphone.
+    // On déclenche donc dès le tout premier tap/clic de l'utilisateur n'importe où sur
+    // l'écran de connexion — ça reste un vrai geste, donc autorisé, tout en étant quasi
+    // automatique (pas besoin de viser le bouton précisément).
+    const _bioAutoTrigger = () => {
+      document.removeEventListener('pointerdown', _bioAutoTrigger);
+      document.removeEventListener('touchstart', _bioAutoTrigger);
+      try { phenixBioLogin(); } catch(e) {}
+    };
+    document.addEventListener('pointerdown', _bioAutoTrigger, { once: true, passive: true });
+    document.addEventListener('touchstart', _bioAutoTrigger, { once: true, passive: true });
   }
 }
 
@@ -978,9 +989,10 @@ async function phenixBioLogin(){
     err.style.color = '#4db8e8'; err.textContent = '✓ Empreinte reconnue — saisissez votre mot de passe.';
     document.getElementById('pl-pwd').focus();
   } catch(e){
-    if(e.name === 'NotAllowedError') err.textContent = 'Reconnaissance annulée.';
-    else if(e.name === 'InvalidStateError') err.textContent = 'Empreinte invalide — cliquez sur 🔄 Réinitialiser.';
-    else err.textContent = '⚠️ ' + e.name + ' : ' + e.message;
+    err.style.color = '#E74C3C'; err.style.fontWeight = '600';
+    if(e.name === 'NotAllowedError') err.textContent = '⚠️ Reconnaissance refusée — vérifiez que Face ID/empreinte est bien activé pour ce navigateur dans les réglages de votre téléphone, puis réessayez avec le bouton.';
+    else if(e.name === 'InvalidStateError') err.textContent = '⚠️ Empreinte invalide — cliquez sur 🔄 Réinitialiser puis reconnectez-vous par mot de passe pour la ré-enregistrer.';
+    else err.textContent = '⚠️ Erreur : ' + e.name + ' — ' + e.message;
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<span style="font-size:24px">☝️</span> <span>Se connecter avec empreinte</span>';

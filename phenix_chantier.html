@@ -6109,8 +6109,15 @@ async function chantierBioInit(){
     var l=document.getElementById('pl-bio-label');if(l)l.textContent="Activer l'empreinte après connexion";
     var b=document.getElementById('pl-bio-btn');if(b)b.onclick=()=>{var p=document.getElementById('pl-pwd');if(p)p.focus();};
   } else {
-    // Empreinte déjà activée : proposée automatiquement, sans clic
-    setTimeout(()=>{ try{ chantierBioLogin(); }catch(e){} }, 350);
+    // WebAuthn exige un vrai geste utilisateur, surtout sur mobile — un setTimeout seul
+    // échoue silencieusement. On déclenche donc au premier tap réel de l'utilisateur.
+    var _cBioAutoTrigger = function(){
+      document.removeEventListener('pointerdown', _cBioAutoTrigger);
+      document.removeEventListener('touchstart', _cBioAutoTrigger);
+      try{ chantierBioLogin(); }catch(e){}
+    };
+    document.addEventListener('pointerdown', _cBioAutoTrigger, { once:true, passive:true });
+    document.addEventListener('touchstart', _cBioAutoTrigger, { once:true, passive:true });
   }
 }
 async function chantierBioLogin(){
@@ -6129,9 +6136,10 @@ async function chantierBioLogin(){
     var pw=document.getElementById('pl-pwd');if(pw)pw.focus();
   }catch(e){
     if(!err)return;
-    if(e.name==='NotAllowedError')err.textContent='Reconnaissance annulée.';
-    else if(e.name==='InvalidStateError')err.textContent='Empreinte invalide — réinitialisez.';
-    else err.textContent='⚠️ '+e.name+' : '+e.message;
+    err.style.color='#E74C3C'; err.style.fontWeight='600';
+    if(e.name==='NotAllowedError')err.textContent='⚠️ Reconnaissance refusée — vérifiez que Face ID/empreinte est activé pour ce navigateur dans les réglages du téléphone, puis réessayez avec le bouton.';
+    else if(e.name==='InvalidStateError')err.textContent='⚠️ Empreinte invalide — cliquez sur 🔄 Réinitialiser puis reconnectez-vous par mot de passe.';
+    else err.textContent='⚠️ Erreur : '+e.name+' — '+e.message;
   }finally{
     if(btn){btn.disabled=false;btn.innerHTML='<span style="font-size:24px">☝️</span><span id="pl-bio-label">Se connecter avec empreinte</span>';}
   }
