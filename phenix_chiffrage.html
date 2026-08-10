@@ -1465,6 +1465,24 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
         <div class="export-desc">Génère un récapitulatif professionnel en-tête Phénix-Architecture avec décomposition par lots, paramètres (aléas, honoraires) et total général TTC.</div>
         <button class="btn btn-accent" onclick="exportPDF()" style="min-height:48px;font-size:14px"><i class="ti ti-file-type-pdf" aria-hidden="true"></i>Générer le devis client PDF</button>
       </div>
+      <div class="export-card">
+        <div class="export-title"><i class="ti ti-clipboard-list" style="color:var(--accent);margin-right:6px" aria-hidden="true"></i>DPGF — Consultation des entreprises</div>
+        <div class="export-desc">Document à envoyer aux artisans <strong>avant chiffrage</strong> : contexte du projet, désignation et quantitatif de chaque poste, <strong>sans aucun prix</strong> — à eux de compléter et vous retourner.</div>
+        <div style="margin-bottom:12px">
+          <select id="dpgf-chantier-select" onchange="dpgfRemplirLots()" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;background:var(--surface2);width:100%">
+            <option value="">— Sélectionner un chantier —</option>
+          </select>
+        </div>
+        <div id="dpgf-lots-select" style="margin-bottom:12px;display:none">
+          <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Lots à inclure</div>
+          <div id="dpgf-lots-checklist" style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:8px;background:var(--surface2)"></div>
+        </div>
+        <div id="dpgf-contexte-zone" style="margin-bottom:12px;display:none">
+          <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Contexte et conception du projet <span style="font-weight:400;text-transform:none;color:var(--text3)">(modifiable, apparaîtra en tête du document)</span></div>
+          <textarea id="dpgf-contexte" rows="4" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;font-size:12.5px;font-family:inherit;background:var(--surface2);resize:vertical" placeholder="Décrivez le projet, son contexte, les intentions de conception…"></textarea>
+        </div>
+        <button class="btn btn-accent" onclick="exportDPGF()" style="min-height:48px;font-size:14px"><i class="ti ti-file-type-pdf" aria-hidden="true"></i>Générer le DPGF pour consultation</button>
+      </div>
     </div>
   </div>
 
@@ -2179,7 +2197,7 @@ function saveNewChantier(){
 }
 
 function renderChantierSelects(){
-  ['chantier-select','export-chantier-select'].forEach(id=>{
+  ['chantier-select','export-chantier-select','dpgf-chantier-select'].forEach(id=>{
     const sel=document.getElementById(id);
     if(!sel)return;
     const cur=sel.value;
@@ -3046,6 +3064,128 @@ tbody tr:nth-child(even) td{background:#F8FAFC}
   document.body.appendChild(a);a.click();
   setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},1000);
   showToast('Devis client ouvert — Imprimer pour enregistrer en PDF');
+}
+
+// ── DPGF — document de consultation des entreprises (sans prix) ──
+function dpgfRemplirLots(){
+  const ci = document.getElementById('dpgf-chantier-select').value;
+  const lotsBox = document.getElementById('dpgf-lots-select');
+  const ctxBox = document.getElementById('dpgf-contexte-zone');
+  if(ci === '' || !state.chantiers[ci]){
+    lotsBox.style.display = 'none';
+    ctxBox.style.display = 'none';
+    return;
+  }
+  const c = state.chantiers[ci];
+  const checklist = document.getElementById('dpgf-lots-checklist');
+  checklist.innerHTML = (c.lots||[]).map((lot, li) =>
+    `<label style="display:flex;align-items:center;gap:8px;font-size:12.5px;padding:3px 0;cursor:pointer">
+      <input type="checkbox" class="dpgf-lot-chk" value="${li}" checked>
+      ${esc_dpgf(lot.num?lot.num+' — ':'')}${esc_dpgf(lot.nom)} <span style="color:var(--text3)">(${(lot.postes||[]).length} poste${(lot.postes||[]).length>1?'s':''})</span>
+    </label>`
+  ).join('') || '<div style="color:var(--text3);font-size:12px">Aucun lot dans ce chantier</div>';
+  lotsBox.style.display = '';
+  ctxBox.style.display = '';
+  const ctxEl = document.getElementById('dpgf-contexte');
+  if(!ctxEl.dataset.touched) ctxEl.value = c.notes || '';
+  ctxEl.oninput = () => { ctxEl.dataset.touched = '1'; };
+}
+function esc_dpgf(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function exportDPGF(){
+  const ci = document.getElementById('dpgf-chantier-select').value;
+  if(ci === '' || !state.chantiers[ci]){ showToast('⚠️ Sélectionnez un chantier'); return; }
+  const c = state.chantiers[ci];
+  const lisIndexCoches = [...document.querySelectorAll('.dpgf-lot-chk')].filter(x=>x.checked).map(x=>parseInt(x.value));
+  const lots = (c.lots||[]).filter((_, li) => lisIndexCoches.includes(li));
+  if(!lots.length){ showToast('⚠️ Sélectionnez au moins un lot'); return; }
+  const contexte = document.getElementById('dpgf-contexte').value.trim();
+
+  const date = new Date().toLocaleDateString('fr-FR');
+  const ref = 'DPGF-' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '-' + (parseInt(ci)+1).toString().padStart(3,'0');
+
+  const lotsHTML = lots.map(lot => {
+    const rows = (lot.postes||[]).map(p => {
+      const q = parseFloat(p.q)||0;
+      return `<tr><td style="padding:6px 8px 6px 22px;font-size:11px;color:#334155">${esc_dpgf(p.n)}</td><td style="text-align:right;padding:6px 8px;font-size:11px;white-space:nowrap">${q} ${esc_dpgf(p.u||'u')}</td><td style="padding:6px 8px;border-left:1px dashed #CBD5E1;width:90px"></td><td style="padding:6px 8px;border-left:1px dashed #CBD5E1;width:100px"></td></tr>`;
+    }).join('');
+    return `<tr><td colspan="4" style="background:#1E3A5F;padding:8px 10px;color:#93C5FD;font-size:11.5px;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact">${esc_dpgf(lot.num?lot.num+' — ':'')}${esc_dpgf(lot.nom)}</td></tr>${rows}`;
+  }).join('');
+
+  const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>DPGF ${esc_dpgf(c.nom)}</title>
+<style>*{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}body{font-family:'Segoe UI',Arial,sans-serif;color:#1E293B;background:#fff;font-size:13px}
+.devis-page{max-width:800px;margin:0 auto;padding:28px 32px}
+.header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:16px;border-bottom:3px solid #1E3A5F;margin-bottom:20px}
+.brand{font-size:22px;font-weight:800;color:#1E3A5F}.brand span{color:#3B82F6}
+.brand-sub{font-size:9.5px;color:#64748B;letter-spacing:.12em;text-transform:uppercase;margin-top:2px}
+.brand-contact{font-size:10px;color:#64748B;margin-top:6px;line-height:1.7}
+.doc-badge{background:#1E3A5F;color:white;font-size:11px;font-weight:700;padding:4px 12px;border-radius:4px;display:inline-block;margin-bottom:6px}
+.doc-ref{font-size:10.5px;color:#64748B;line-height:1.8;text-align:right}
+.parties{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px;background:#F8FAFC;border-radius:8px;padding:14px}
+.plabel{font-size:9px;font-weight:700;color:#94A3B8;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.pname{font-size:13px;font-weight:700;color:#1E3A5F}
+.pdetail{font-size:10.5px;color:#475569;margin-top:2px;line-height:1.6}
+.contexte{background:#EFF6FF;border-left:4px solid #3B82F6;padding:12px 14px;margin-bottom:18px;border-radius:0 6px 6px 0}
+.contexte-lbl{font-size:9px;font-weight:700;color:#3B82F6;letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px}
+.contexte-txt{font-size:11.5px;color:#334155;line-height:1.7;white-space:pre-wrap}
+table{width:100%;border-collapse:collapse;margin-bottom:18px}
+thead tr{background:#1E3A5F}
+thead th{padding:8px 10px;color:#93C5FD;font-size:10px;font-weight:700;letter-spacing:.06em;text-align:left}
+thead th:not(:first-child){text-align:center}
+tbody tr:nth-child(even) td{background:#F8FAFC}
+.reponse{border:1.5px solid #E2E8F0;border-radius:8px;padding:14px 16px;margin-top:10px;margin-bottom:24px;page-break-inside:avoid}
+.reponse-lbl{font-size:9px;font-weight:700;color:#94A3B8;letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px}
+.reponse-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:11px}
+.reponse-field{border-bottom:1px solid #CBD5E1;padding-bottom:16px;color:#94A3B8}
+.footer{text-align:center;font-size:9px;color:#94A3B8;border-top:1px solid #E2E8F0;padding-top:8px;margin-top:10px;line-height:1.8}
+.no-print{margin:16px 0;text-align:center}
+.no-print button{background:#1E3A5F;color:white;border:none;padding:8px 18px;border-radius:6px;font-size:12px;cursor:pointer}
+@media print{.no-print{display:none}}
+</style></head><body>
+<div class="devis-page">
+  <div class="header">
+    <div>
+      <div class="brand">Phénix<span>-Architecture</span></div>
+      <div class="brand-sub">Maître d'œuvre · Contractant général</div>
+      <div class="brand-contact">6 lieu-dit l'Étreille — 63780 Saint-Georges-de-Mons<br>04 73 73 00 59 · contact@phenixarchitecte.fr<br>SIRET 987 989 316 00011</div>
+    </div>
+    <div>
+      <div class="doc-badge">DPGF — CONSULTATION</div>
+      <div class="doc-ref">Réf : ${ref}<br>Date d'envoi : ${date}<br>Réponse attendue sous 15 jours</div>
+    </div>
+  </div>
+  <div class="parties">
+    <div><div class="plabel">Maître d'ouvrage</div><div class="pname">${esc_dpgf(c.client)||'—'}</div><div class="pdetail">${esc_dpgf(c.adresse)||''}</div></div>
+    <div><div class="plabel">Projet</div><div class="pname">${esc_dpgf(c.nom)}</div><div class="pdetail">${esc_dpgf(c.type)||''}${c.surface?' · '+c.surface+' m²':''}</div></div>
+  </div>
+  ${contexte ? `<div class="contexte"><div class="contexte-lbl">Contexte et conception du projet</div><div class="contexte-txt">${esc_dpgf(contexte)}</div></div>` : ''}
+  <table>
+    <thead><tr><th>Désignation</th><th>Quantitatif</th><th>PU HT proposé</th><th>Total HT proposé</th></tr></thead>
+    <tbody>${lotsHTML}</tbody>
+  </table>
+  <div class="reponse">
+    <div class="reponse-lbl">Cadre de réponse de l'entreprise</div>
+    <div class="reponse-grid">
+      <div class="reponse-field">Entreprise / Raison sociale</div>
+      <div class="reponse-field">SIRET</div>
+      <div class="reponse-field">Nom et qualité du signataire</div>
+      <div class="reponse-field">Date</div>
+    </div>
+    <div style="margin-top:16px;font-size:10px;color:#94A3B8">Cachet et signature :</div>
+    <div style="height:60px"></div>
+  </div>
+  <div class="footer">Phénix-Architecture · SIRET 987 989 316 00011 · 6 lieu-dit l'Étreille, 63780 Saint-Georges-de-Mons<br>contact@phenixarchitecte.fr · 04 73 73 00 59 · Document de consultation — quantitatif non contractuel</div>
+  <div class="no-print"><button onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF</button></div>
+</div>
+</body></html>`;
+
+  const blob = new Blob([html], {type:'text/html;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.target = '_blank'; a.rel = 'noopener';
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+  showToast('DPGF ouvert — Imprimer pour enregistrer en PDF');
 }
 
 // ── Export PDF d'un lot pour confirmation par l'artisan (prix ACHAT, pas prix client) ──
