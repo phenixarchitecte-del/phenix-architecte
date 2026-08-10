@@ -529,6 +529,7 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
         </select>
         <button class="btn btn-primary" onclick="openNewLotModal()"><i class="ti ti-plus" aria-hidden="true"></i>Nouveau lot</button>
           <button class="btn btn-outline" onclick="exportPDF()" style="border-color:#4A9CC7;color:#4A9CC7"><i class="ti ti-file-type-pdf" aria-hidden="true"></i>Devis client PDF</button>
+          <button class="btn btn-outline" onclick="exportDPGF()" style="border-color:#1E3A5F;color:#1E3A5F"><i class="ti ti-clipboard-list" aria-hidden="true"></i>DPGF consultation</button>
           <button class="btn btn-outline" onclick="openImportArtisanModalGlobal()" style="border-color:#e74c3c;color:#e74c3c"><i class="ti ti-file-import" aria-hidden="true"></i>Importer devis artisan (IA)</button>
           <button class="btn btn-outline" onclick="exportToFinancement()" style="border-color:#2D7A4F;color:#2D7A4F"><i class="ti ti-coin" aria-hidden="true"></i>Envoyer vers Financement</button>
           <button class="btn btn-outline" onclick="exportToChantier()" style="border-color:#1B2D5B;color:#1B2D5B"><i class="ti ti-building-factory-2" aria-hidden="true"></i>Envoyer vers Chantier</button>
@@ -3093,13 +3094,28 @@ function dpgfRemplirLots(){
 function esc_dpgf(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
 function exportDPGF(){
-  const ci = document.getElementById('dpgf-chantier-select').value;
-  if(ci === '' || !state.chantiers[ci]){ showToast('⚠️ Sélectionnez un chantier'); return; }
+  const quickCi = state.currentChantier;
+  const selEl = document.getElementById('dpgf-chantier-select');
+  const selCi = selEl ? selEl.value : '';
+  const ci = quickCi !== null ? quickCi : (selCi !== '' ? parseInt(selCi) : null);
+  if(ci === null || !state.chantiers[ci]){ showToast('⚠️ Sélectionnez un chantier'); return; }
   const c = state.chantiers[ci];
-  const lisIndexCoches = [...document.querySelectorAll('.dpgf-lot-chk')].filter(x=>x.checked).map(x=>parseInt(x.value));
-  const lots = (c.lots||[]).filter((_, li) => lisIndexCoches.includes(li));
-  if(!lots.length){ showToast('⚠️ Sélectionnez au moins un lot'); return; }
-  const contexte = document.getElementById('dpgf-contexte').value.trim();
+
+  // Depuis la page Export, la sélection fine des lots + le contexte modifié sont pris en
+  // compte. Depuis le bouton rapide (page Lots & Chiffrage), on prend tous les lots et
+  // les notes du chantier telles quelles.
+  const chkBoxes = document.querySelectorAll('.dpgf-lot-chk');
+  let lots;
+  if(chkBoxes.length){
+    const lisIndexCoches = [...chkBoxes].filter(x=>x.checked).map(x=>parseInt(x.value));
+    lots = (c.lots||[]).filter((_, li) => lisIndexCoches.includes(li));
+  } else {
+    lots = c.lots||[];
+  }
+  if(!lots.length){ showToast('⚠️ Ce chantier n\'a aucun lot à inclure dans le DPGF'); return; }
+
+  const ctxEl = document.getElementById('dpgf-contexte');
+  const contexte = (ctxEl ? ctxEl.value : (c.notes||'')).trim();
 
   const date = new Date().toLocaleDateString('fr-FR');
   const ref = 'DPGF-' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '-' + (parseInt(ci)+1).toString().padStart(3,'0');
