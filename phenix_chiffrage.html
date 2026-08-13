@@ -108,6 +108,12 @@ tr:hover td{background:var(--accent-bg)}
 .back-btn{cursor:pointer;color:var(--text2);font-size:13px;display:flex;align-items:center;gap:5px;padding:6px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);background:transparent;font-family:var(--font-sans)}
 .back-btn:hover{background:var(--accent-bg);border-color:var(--accent);color:var(--nav)}
 .lot-title-detail{font-family:var(--font-serif);font-size:22px;font-weight:400;color:var(--nav)}
+.lot-title-edit-row{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.lot-title-input{font-family:var(--font-serif);font-weight:400;color:var(--nav);border:1px solid transparent;border-radius:6px;background:transparent;padding:2px 6px;transition:border-color .12s,background .12s}
+.lot-title-input:hover{border-color:var(--border)}
+.lot-title-input:focus{outline:none;border-color:var(--accent);background:var(--surface2)}
+.lot-title-input-num{font-size:22px;width:150px;min-width:90px;flex-shrink:0}
+.lot-title-input-nom{font-size:22px;flex:1;min-width:180px}
 .detail-body{padding:20px 28px;flex:1}
 .detail-grid{display:grid;grid-template-columns:1fr 340px;gap:20px}
 .detail-section-title{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--text2);font-weight:700;margin-bottom:12px}
@@ -572,8 +578,11 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
     <div id="lot-detail" style="display:none;flex-direction:column;flex:1">
       <div class="lot-detail-header">
         <button class="back-btn" onclick="closeLotDetail()"><i class="ti ti-arrow-left" aria-hidden="true"></i>Retour</button>
-        <div>
-          <div class="lot-title-detail" id="detail-title">LOT 01 — VRD / Terrassement</div>
+        <div style="flex:1">
+          <div class="lot-title-edit-row">
+            <input type="text" id="detail-num" class="lot-title-input lot-title-input-num" placeholder="N° lot" oninput="saveLotIdentity()">
+            <input type="text" id="detail-nom" class="lot-title-input lot-title-input-nom" placeholder="Désignation du lot" oninput="saveLotIdentity()">
+          </div>
           <div style="font-size:12px;color:var(--text3)" id="detail-chantier-name"></div>
         </div>
         <div style="margin-left:auto;display:flex;gap:8px">
@@ -2139,15 +2148,19 @@ function getProgress(c){
 function computeChantierTotals(c){
   let htArtisan=0,htClient=0;
   (c.lots||[]).forEach(l=>{
+    let lotArtisan=0, lotClient=0;
     (l.postes||[]).forEach(p=>{
       const q=parseFloat(p.q)||0;
-      htArtisan+=q*(parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
-      htClient+=q*(parseFloat(p.puClient)||parseFloat(p.pu)||0);
+      lotArtisan+=q*(parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
+      lotClient+=q*(parseFloat(p.puClient)||parseFloat(p.pu)||0);
     });
-    const base=htClient;
-    const aleas=base*(numOr(l.aleas,5)/100);
-    const hon=base*(numOr(l.honoraires,5)/100);
-    htClient+=aleas+hon;
+    // Aléas/honoraires calculés sur le sous-total de CE lot uniquement,
+    // pas sur le cumulé de tous les lots déjà traités.
+    const aleas=lotClient*(numOr(l.aleas,5)/100);
+    const hon=lotClient*(numOr(l.honoraires,5)/100);
+    lotClient+=aleas+hon;
+    htArtisan+=lotArtisan;
+    htClient+=lotClient;
   });
   return {htArtisan,htClient};
 }
@@ -2199,6 +2212,10 @@ async function loadProjetsFromDossier() {
   sel.innerHTML = '<option value="">— Chargement… —</option>';
   try {
     // Même projet Firebase que Phénix Dossier : collection phenix_projets
+    // (résolveur autonome — voir _phenixFbRefs — car les imports du haut
+    // de fichier ne sont pas toujours visibles ici selon le mode de
+    // chargement de la page ; cf. bug déjà rencontré sur le pont Appels d'offres)
+    const { db, collection, getDocs } = await _phenixFbRefs();
     const snap = await getDocs(collection(db, 'phenix_projets'));
     const projets = [];
     snap.forEach(d => projets.push(d.data()));
@@ -2502,14 +2519,18 @@ window.exportToAppelsOffres = exportToAppelsOffres;
 function updateStats(lots){
   let totalArtisan=0,totalClient=0;
   lots.forEach(lot=>{
+    let lotArtisan=0, lotClient=0;
     (lot.postes||[]).forEach(p=>{
       const q=parseFloat(p.q)||0;
-      totalArtisan+=q*(parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
-      totalClient+=q*(parseFloat(p.puClient)||parseFloat(p.pu)||0);
+      lotArtisan+=q*(parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
+      lotClient+=q*(parseFloat(p.puClient)||parseFloat(p.pu)||0);
     });
-    const aleas=totalClient*(numOr(lot.aleas,5)/100);
-    const hon=totalClient*(numOr(lot.honoraires,5)/100);
-    totalClient+=aleas+hon;
+    // Aléas/honoraires calculés sur le sous-total de CE lot uniquement.
+    const aleas=lotClient*(numOr(lot.aleas,5)/100);
+    const hon=lotClient*(numOr(lot.honoraires,5)/100);
+    lotClient+=aleas+hon;
+    totalArtisan+=lotArtisan;
+    totalClient+=lotClient;
   });
   const valide=lots.filter(l=>l.statut==='Valide').length;
   document.getElementById('stat-lots').textContent=lots.length;
@@ -2550,7 +2571,8 @@ function openLotDetail(li){
   state.currentLot=li;
   const lot=state.chantiers[state.currentChantier].lots[li];
   const c=state.chantiers[state.currentChantier];
-  document.getElementById('detail-title').textContent=(lot.num?lot.num+' — ':'')+lot.nom;
+  document.getElementById('detail-num').value=lot.num||'';
+  document.getElementById('detail-nom').value=lot.nom||'';
   document.getElementById('detail-chantier-name').textContent=c.nom+(c.client?' — '+c.client:'');
   document.getElementById('param-aleas').value=numOr(lot.aleas,5);
   document.getElementById('param-honoraires').value=numOr(lot.honoraires,5);
@@ -2701,6 +2723,23 @@ function computeLotTotal(){
   document.getElementById('tot-tva').textContent=fmt(tvaAmt)+' € ('+lot.tva+'%)';
   document.getElementById('tot-ttc').textContent=fmt(ttc)+' €';
   saveLot();
+}
+
+// Sauvegarde le numéro et la désignation du lot, édités en direct
+// dans l'en-tête du détail (débounce léger pour ne pas spammer saveState).
+let _saveLotIdentityTimer = null;
+function saveLotIdentity(){
+  const li=state.currentLot;
+  if(li===null)return;
+  const lot=state.chantiers[state.currentChantier].lots[li];
+  lot.num=document.getElementById('detail-num').value.trim();
+  lot.nom=document.getElementById('detail-nom').value.trim();
+  clearTimeout(_saveLotIdentityTimer);
+  _saveLotIdentityTimer=setTimeout(()=>{
+    saveState();
+    if(typeof renderLotsTableOrCards === "function") renderLotsTableOrCards(); else renderLotsTable();
+    renderChantierGrid();
+  }, 400);
 }
 
 function saveLot(){
