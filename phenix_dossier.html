@@ -1987,6 +1987,7 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
       <div class="modal-tab active" id="tab-fiche" onclick="switchModalTab('fiche')"><i class="ti ti-file-description"></i> Fiche projet</div>
       <div class="modal-tab" id="tab-facturation-proj" onclick="switchModalTab('facturation-proj')"><i class="ti ti-receipt-2"></i> Facturation <span id="projFactCount" style="background:var(--accent-bg);color:var(--accent);font-size:10px;padding:1px 6px;border-radius:20px;margin-left:4px;font-weight:700">0</span></div>
       <div class="modal-tab" id="tab-historique" onclick="switchModalTab('historique')"><i class="ti ti-history"></i> Historique <span id="histCount" style="background:var(--accent-bg);color:var(--accent);font-size:10px;padding:1px 6px;border-radius:20px;margin-left:4px;font-weight:700">0</span></div>
+      <div class="modal-tab" id="tab-marge" onclick="switchModalTab('marge')"><i class="ti ti-scale"></i> Marge</div>
     </div>
 
     <!-- Barre de progression de phase — fixe, visible en permanence sur l'onglet Fiche -->
@@ -2011,6 +2012,10 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
       <!-- Contenu onglet Historique -->
       <div class="modal-tab-content" id="tabcontent-historique">
         <div id="projectHistoriqueBody"></div>
+      </div>
+      <!-- Contenu onglet Marge -->
+      <div class="modal-tab-content" id="tabcontent-marge">
+        <div id="projectMargeBody"></div>
       </div>
     </div>
 
@@ -2287,7 +2292,7 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
 </div>
 
 <!-- ══ MODAL IMPORT ══════════════════════════════════════════ -->
-<div class="modal-overlay" id="importModalOverlay" onclick="if(event.target===this)closeModal_d('importModal')" style="display:none;position:fixed;inset:0;background:rgba(15,30,61,.55);z-index:150;align-items:center;justify-content:center">
+<div class="modal-overlay" id="importModalOverlay" onmousedown="this._downOnSelf=(event.target===this)" onmouseup="if(this._downOnSelf&&event.target===this)closeModal_d('importModal');this._downOnSelf=false" style="display:none;position:fixed;inset:0;background:rgba(15,30,61,.55);z-index:150;align-items:center;justify-content:center">
   <div class="modal" id="importModal" style="max-width:560px;width:100%;max-height:90vh;overflow-y:auto">
     <div class="modal-header" style="display:flex;align-items:center;justify-content:space-between;padding:1.25rem 1.5rem;border-bottom:1.5px solid var(--border);flex-shrink:0">
       <div style="font-family:var(--font-serif);font-size:17px;color:var(--navy)" id="importModalTitle">Importer des documents</div>
@@ -2915,6 +2920,7 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn" onclick="openChargeModal()"><i class="ti ti-plus"></i> Nouvelle charge</button>
+            <button class="btn" onclick="openImportChargeIA()" style="border-color:#e74c3c;color:#e74c3c"><i class="ti ti-file-import"></i> Importer facture artisan (IA)</button>
             <button class="btn btn-primary" onclick="openRemuModal()" style="background:linear-gradient(135deg,#8e44ad,#6c3483);border-color:#8e44ad">
               <i class="ti ti-user-dollar"></i> Rémunération & Cotisations
             </button>
@@ -3057,7 +3063,7 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
       </div>
 
       <!-- MODAL RÉMUNÉRATION & COTISATIONS -->
-<div class="modal-overlay" id="remuModal" onclick="if(event.target===this)closeModal_d('remuModal')">
+<div class="modal-overlay" id="remuModal" onmousedown="this._downOnSelf=(event.target===this)" onmouseup="if(this._downOnSelf&&event.target===this)closeModal_d('remuModal');this._downOnSelf=false">
   <div class="modal" style="max-width:600px">
     <div class="modal-header">
       <div class="modal-title" id="remu-modal-title">Rémunération & Cotisations</div>
@@ -3174,7 +3180,7 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
 
       <!-- MODAL CHARGE -->
 <!-- MODAL COMMISSION ARTISAN -->
-<div class="modal-overlay" id="commModal" onclick="if(event.target===this)closeCommModal()" class="modal-overlay" style="z-index:200">
+<div class="modal-overlay" id="commModal" onmousedown="this._downOnSelf=(event.target===this)" onmouseup="if(this._downOnSelf&&event.target===this)closeCommModal();this._downOnSelf=false" class="modal-overlay" style="z-index:200">
   <div class="modal" style="max-width:560px">
     <div class="modal-header">
       <div class="modal-title" id="comm-modal-title">Nouvelle commission artisan</div>
@@ -3213,7 +3219,7 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
   </div>
 </div>
 
-      <div class="modal-overlay" id="chargeModal" onclick="if(event.target===this)closeChargeModal()">
+      <div class="modal-overlay" id="chargeModal" onmousedown="this._downOnSelf=(event.target===this)" onmouseup="if(this._downOnSelf&&event.target===this)closeChargeModal();this._downOnSelf=false">
         <div class="modal" style="max-width:560px">
           <div class="modal-header">
             <div class="modal-title" id="charge-modal-title">Nouvelle charge</div>
@@ -3229,6 +3235,7 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
                 <label class="form-label">Catégorie *</label>
                 <select class="form-input" id="ch-categorie">
                   <option value="">— Choisir —</option>
+                  <option value="sous_traitance">🔨 Sous-traitance artisan (contractant général)</option>
                   <option value="deplacement">🚗 Déplacements</option>
                   <option value="assurance">📋 Assurances</option>
                   <option value="honoraires_ext">👔 Honoraires externes</option>
@@ -3240,6 +3247,10 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
                   <option value="social">💰 Charges sociales</option>
                   <option value="autre">📌 Autre</option>
                 </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Projet lié <span style="font-weight:400;color:var(--text3)">(optionnel — pour voir la marge réelle du chantier)</span></label>
+                <select class="form-input" id="ch-projet-id"><option value="">— Aucun projet lié —</option></select>
               </div>
               <div class="form-group">
                 <label class="form-label">Type</label>
@@ -3295,6 +3306,29 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
             <button class="btn btn-danger btn-sm" id="btn-del-charge" style="display:none;margin-right:auto" onclick="deleteCharge()"><i class="ti ti-trash"></i> Supprimer</button>
             <button class="btn" onclick="closeChargeModal()">Annuler</button>
             <button class="btn btn-primary" onclick="saveCharge()"><i class="ti ti-check"></i> Enregistrer</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ IMPORT FACTURE ARTISAN PAR IA (→ charge sous-traitance) ═══ -->
+      <div class="modal-overlay" id="chargeIaModal" onmousedown="this._downOnSelf=(event.target===this)" onmouseup="if(this._downOnSelf&&event.target===this)closeChargeIaModal();this._downOnSelf=false">
+        <div class="modal" style="max-width:480px">
+          <div class="modal-header">
+            <div class="modal-title">Importer une facture artisan par IA</div>
+            <button class="btn btn-sm" onclick="closeChargeIaModal()"><i class="ti ti-x"></i></button>
+          </div>
+          <div class="modal-body">
+            <div id="charge-ia-drop-zone" onclick="document.getElementById('charge-ia-file-input').click()"
+                 style="border:2px dashed var(--border);border-radius:var(--r-md);padding:28px 16px;text-align:center;cursor:pointer;background:var(--bg2)">
+              <div style="font-size:28px;color:var(--accent);margin-bottom:8px"><i class="ti ti-file-type-pdf"></i></div>
+              <div style="font-weight:600;color:var(--navy)">Déposer la facture artisan (PDF)</div>
+              <div style="font-size:12px;color:var(--text2);margin-top:4px">ou cliquez pour parcourir</div>
+              <input type="file" id="charge-ia-file-input" accept=".pdf" style="display:none" onchange="handleChargeIaPdf(this.files[0])">
+            </div>
+            <div id="charge-ia-status" style="display:none;margin-top:14px"></div>
+            <div style="font-size:11.5px;color:var(--text3);margin-top:12px;line-height:1.6">
+              L'IA détecte le montant, la date, l'entreprise et l'objet, puis pré-remplit le formulaire "Nouvelle charge" (catégorie Sous-traitance) — tu n'auras plus qu'à choisir le projet lié et confirmer.
+            </div>
           </div>
         </div>
       </div>
@@ -4701,7 +4735,7 @@ function openProjectModal(id) {
 }
 
 function switchModalTab(tab) {
-  ['fiche','facturation-proj','historique'].forEach(t=>{
+  ['fiche','facturation-proj','historique','marge'].forEach(t=>{
     const tabEl = document.getElementById('tab-'+t);
     const contentEl = document.getElementById('tabcontent-'+t);
     if (tabEl) tabEl.classList.toggle('active', t===tab);
@@ -4713,6 +4747,62 @@ function switchModalTab(tab) {
   if (tab==='facturation-proj' && currentProjectId) {
     renderProjectFacturation(currentProjectId);
   }
+  if (tab==='marge' && currentProjectId) {
+    renderProjectMarge(currentProjectId);
+  }
+}
+
+// ── Marge réelle d'un projet (facturé client − charges liées, ex. sous-traitance artisans) ──
+function renderProjectMarge(projetId) {
+  const body = document.getElementById('projectMargeBody');
+  if (!body) return;
+
+  const factures = stateDossier.factures.filter(f => f.projetId==projetId && f.type!=='devis');
+  const factureHT = factures.reduce((s,f)=>s+(parseFloat(f.montantHt)||0),0);
+  const encaisseHT = factures.reduce((s,f)=>s+(parseFloat(f.montantPaye)||0),0);
+
+  const charges = (stateDossier.charges||[]).filter(c => String(c.projetId||'')===String(projetId));
+  const chargesHT = charges.reduce((s,c)=>s+(parseFloat(c.montantHt)||0),0);
+
+  const margeSurFacture = factureHT - chargesHT;
+  const margeSurEncaisse = encaisseHT - chargesHT;
+  const tauxMarge = factureHT > 0 ? Math.round(margeSurFacture/factureHT*100) : 0;
+
+  if (!charges.length) {
+    body.innerHTML = `
+      <div class="empty-state" style="padding:32px 20px">
+        <div class="empty-icon"><i class="ti ti-scale"></i></div>
+        <div class="empty-title">Aucune charge liée à ce projet</div>
+        <div style="font-size:12.5px;color:var(--text2);max-width:380px;margin:8px auto 0;line-height:1.6">
+          Si tu es contractant général sur ce projet (tu factures le client pour un montant qui inclut le prix des artisans), lie leurs paiements à ce projet depuis <strong>Comptabilité → Nouvelle charge</strong> (catégorie "Sous-traitance artisan"), en choisissant ce projet dans le champ "Projet lié". Ils apparaîtront ici automatiquement.
+        </div>
+      </div>`;
+    return;
+  }
+
+  body.innerHTML = `
+    <div style="padding:20px">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
+        <div class="stat-card"><div class="stat-l">Facturé au client HT</div><div class="stat-n" style="color:#4A9CC7">${fmtEur_d(factureHT)}</div></div>
+        <div class="stat-card"><div class="stat-l">Charges liées (sous-traitance…)</div><div class="stat-n" style="color:var(--red)">${fmtEur_d(chargesHT)}</div></div>
+        <div class="stat-card"><div class="stat-l">Marge réelle</div><div class="stat-n" style="color:${margeSurFacture>=0?'var(--green)':'var(--red)'}">${fmtEur_d(margeSurFacture)}</div><div style="font-size:11px;color:var(--text3)">${tauxMarge}% du facturé</div></div>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:16px">
+        Sur la base de l'encaissé réel (plutôt que du facturé) : marge = <strong style="color:${margeSurEncaisse>=0?'var(--green)':'var(--red)'}">${fmtEur_d(margeSurEncaisse)}</strong>
+      </div>
+      <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Charges liées à ce projet (${charges.length})</div>
+      <table class="data-table">
+        <thead><tr><th>Libellé</th><th>Catégorie</th><th>Date</th><th style="text-align:right">Montant HT</th></tr></thead>
+        <tbody>
+          ${charges.map(c=>`<tr>
+            <td>${esc(c.libelle)}</td>
+            <td>${esc(c.categorie==='sous_traitance'?'Sous-traitance':c.categorie)}</td>
+            <td>${c.date?new Date(c.date).toLocaleDateString('fr-FR'):'—'}</td>
+            <td style="text-align:right;font-weight:600">${fmtEur_d(c.montantHt)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
 }
 
 function renderHistorique(p) {
@@ -8087,6 +8177,110 @@ function renderBilanAnnuel() {
 
   container.innerHTML = html + _buildCompteResultat(annee, moisData);
 }
+// ── Import facture artisan par IA → pré-remplit le formulaire Charge (sous-traitance) ──
+// Les champs <input type="date"> n'acceptent QUE le format strict AAAA-MM-JJ —
+// toute autre valeur assignée en JS est silencieusement ignorée (champ vide).
+// Cette fonction convertit les formats plausibles qu'une IA peut renvoyer
+// (JJ/MM/AAAA, JJ-MM-AAAA, AAAA/MM/JJ, avec ou sans zéro de tête…) vers ce format.
+function normaliserDateAAAAMMJJ(s) {
+  if (!s) return '';
+  s = String(s).trim();
+  // Déjà au bon format (avec éventuellement une heure à la suite)
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+  // JJ/MM/AAAA ou JJ-MM-AAAA (format français courant)
+  m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  // AAAA/MM/JJ
+  m = s.match(/^(\d{4})[\/](\d{1,2})[\/](\d{1,2})$/);
+  if (m) return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+  // Dernier recours : laisser le navigateur essayer de comprendre
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+  return '';
+}
+
+function openImportChargeIA() {
+  document.getElementById('charge-ia-file-input').value = '';
+  document.getElementById('charge-ia-status').style.display = 'none';
+  document.getElementById('charge-ia-drop-zone').innerHTML = `
+    <div style="font-size:28px;color:var(--accent);margin-bottom:8px"><i class="ti ti-file-type-pdf"></i></div>
+    <div style="font-weight:600;color:var(--navy)">Déposer la facture artisan (PDF)</div>
+    <div style="font-size:12px;color:var(--text2);margin-top:4px">ou cliquez pour parcourir</div>
+    <input type="file" id="charge-ia-file-input" accept=".pdf" style="display:none" onchange="handleChargeIaPdf(this.files[0])">`;
+  document.getElementById('chargeIaModal').classList.add('open');
+}
+function closeChargeIaModal() {
+  document.getElementById('chargeIaModal').classList.remove('open');
+}
+
+function handleChargeIaPdf(file) {
+  if (!file) return;
+  document.getElementById('charge-ia-drop-zone').innerHTML = `
+    <div style="font-size:28px;color:var(--red);margin-bottom:6px"><i class="ti ti-file-text"></i></div>
+    <div style="font-weight:600;color:var(--navy)">${file.name}</div>
+    <div style="font-size:12px;color:var(--text2)">${(file.size/1024).toFixed(0)} Ko</div>`;
+  const reader = new FileReader();
+  reader.onload = e => analyzeChargeIA(e.target.result.split(',')[1]);
+  reader.readAsDataURL(file);
+}
+
+async function analyzeChargeIA(base64) {
+  const status = document.getElementById('charge-ia-status');
+  status.style.display = 'block';
+  status.innerHTML = `<div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--accent2);background:var(--accent-bg);border:1.5px solid var(--accent);border-radius:var(--r-md);padding:12px 14px"><div class="ai-loading"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div></div> Analyse de la facture en cours…</div>`;
+  try {
+    const res = await fetch('https://phenix-proxy.phenixarchitecte.workers.dev', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 800,
+        system: `Analyse cette facture émise par un artisan/une entreprise sous-traitante et retourne UNIQUEMENT ce JSON valide, sans markdown :
+{"entreprise":"","objet":"","date":"","montantHt":0,"tva":20,"tvaDeductible":true}
+
+RÈGLES :
+- "entreprise" : nom de l'entreprise qui A ÉMIS la facture (l'artisan/le sous-traitant, pas le destinataire)
+- "objet" : résumé très court des prestations (ex: "Maçonnerie — ouverture menuiserie", 6 mots maximum)
+- "date" : date d'émission de la facture, format AAAA-MM-JJ
+- "montantHt" : montant total HT de la facture (nombre décimal)
+- "tva" : taux de TVA principal appliqué (nombre, ex 20, 10, 5.5, 0)
+- "tvaDeductible" : true sauf mention contraire évidente`,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
+            { type: 'text', text: 'Analyse cette facture artisan et extrais les informations.' }
+          ]
+        }]
+      })
+    });
+    if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message||JSON.stringify(data.error));
+    const text = (data.content||[]).map(b=>b.text||'').join('');
+    const parsed = JSON.parse(text.replace(/```json|```/g,'').trim());
+
+    closeChargeIaModal();
+    openChargeModal();
+    document.getElementById('ch-categorie').value = 'sous_traitance';
+    document.getElementById('ch-libelle').value = 'Sous-traitance — ' + (parsed.entreprise||'Artisan') + (parsed.objet?' ('+parsed.objet+')':'');
+    document.getElementById('ch-montant-ht').value = parseFloat(parsed.montantHt)||'';
+    document.getElementById('ch-tva-taux').value = String(parsed.tva ?? 20);
+    document.getElementById('ch-tva-ded').value = parsed.tvaDeductible===false ? '0' : '1';
+    if (parsed.date) {
+      const dateNorm = normaliserDateAAAAMMJJ(parsed.date);
+      if (dateNorm) document.getElementById('ch-date').value = dateNorm;
+    }
+    document.getElementById('ch-type').value = 'variable';
+    document.getElementById('ch-frequence').value = 'ponctuel';
+    calcChargeTTC();
+    toast_d('✅ Facture analysée — vérifiez les montants et choisissez le projet lié avant d\'enregistrer.');
+  } catch(err) {
+    status.innerHTML = `<div style="background:var(--red-bg,#fdecea);border:1.5px solid var(--red);border-radius:var(--r-md);padding:12px 14px;font-size:13px;color:var(--red)">⚠️ ${err.message} — vous pouvez saisir la charge manuellement à la place.</div>`;
+  }
+}
+
 function openChargeModal() {
   _editChargeId = null;
   document.getElementById('charge-modal-title').textContent = 'Nouvelle charge';
@@ -8101,6 +8295,11 @@ function openChargeModal() {
   document.getElementById('ch-date').value      = new Date().toISOString().split('T')[0];
   document.getElementById('ch-frequence').value = 'mensuel';
   document.getElementById('ch-notes').value     = '';
+  const projSel = document.getElementById('ch-projet-id');
+  if (projSel) {
+    projSel.innerHTML = '<option value="">— Aucun projet lié —</option>' +
+      stateDossier.projets.map(p=>`<option value="${p.id}">${esc(p.nom)}</option>`).join('');
+  }
   document.getElementById('chargeModal').classList.add('open');
 }
 
@@ -8119,6 +8318,11 @@ function openEditCharge(id) {
   document.getElementById('ch-date').value       = c.date||'';
   document.getElementById('ch-frequence').value  = c.frequence||'mensuel';
   document.getElementById('ch-notes').value      = c.notes||'';
+  const projSel = document.getElementById('ch-projet-id');
+  if (projSel) {
+    projSel.innerHTML = '<option value="">— Aucun projet lié —</option>' +
+      stateDossier.projets.map(p=>`<option value="${p.id}" ${String(p.id)===String(c.projetId||'')?'selected':''}>${esc(p.nom)}</option>`).join('');
+  }
   calcChargeTTC();
   document.getElementById('chargeModal').classList.add('open');
 }
@@ -8146,6 +8350,7 @@ async function saveCharge() {
     id:         _editChargeId || 'charge-'+Date.now(),
     libelle,
     categorie,
+    projetId:   document.getElementById('ch-projet-id')?.value || '',
     type:       document.getElementById('ch-type').value,
     montantHt:  montantHt,
     tvaTaux:    parseFloat(document.getElementById('ch-tva-taux').value)||20,

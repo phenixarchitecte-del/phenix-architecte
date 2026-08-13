@@ -87,6 +87,15 @@ window._fb = {
   async deleteFacture(id) {
     await deleteDoc(doc(db, 'phenix_factures', String(id)));
   },
+  // Sauvegarde une charge (collection partagée avec Phénix Dossier — utilisé pour
+  // créer automatiquement une charge "sous-traitance" quand une facture artisan
+  // passe au statut "payée", voir saveFacture() plus bas).
+  async saveCharge(c) {
+    await setDoc(doc(db, 'phenix_charges', String(c.id)), c);
+  },
+  async deleteCharge(id) {
+    await deleteDoc(doc(db, 'phenix_charges', String(id)));
+  },
   // Écoute les factures en temps réel
   listenFactures(callback) {
     return onSnapshot(FACTURES_COL, snap => {
@@ -4617,6 +4626,44 @@ function saveFacture() {
   if (editId) { const i = state.factures.findIndex(x => x.id == editId); state.factures[i] = fac; }
   else state.factures.push(fac);
   saveLocal(); closeModal('modalFacture'); toast('✅ Situation enregistrée.'); renderFinancier();
+  syncChargeSousTraitance(fac);
+}
+
+// ── Solution C : synchronise automatiquement une charge "sous-traitance" dans
+// Phénix Dossier quand une facture artisan est marquée payée, pour que la marge
+// réelle du projet (contractant général) se calcule sans double saisie. ──
+async function syncChargeSousTraitance(fac) {
+  if (!window._fb || !window._fb.saveCharge) return;
+  const chargeId = 'charge-auto-chantier-' + fac.id;
+  const chantier = state.chantiers.find(c => c.id == fac.chantierId);
+  const projetId = chantier ? chantier.projetId : null;
+
+  if (fac.statut !== 'payee' || !projetId) {
+    // Statut changé (ou plus payée) : retire la charge auto si elle existait
+    try { await window._fb.deleteCharge(chargeId); } catch(e) {}
+    return;
+  }
+
+  const lot = fac.lotId ? state.lots.find(l => l.id == fac.lotId) : null;
+  const libelle = 'Sous-traitance — ' + (lot ? lot.nom : (chantier ? chantier.nom : 'Chantier')) +
+    (fac.num ? ' (' + fac.num + ')' : '');
+
+  try {
+    await window._fb.saveCharge({
+      id: chargeId,
+      libelle,
+      categorie: 'sous_traitance',
+      projetId: String(projetId),
+      type: 'variable',
+      montantHt: fac.ht,
+      tvaTaux: 20,
+      tvaDed: 1,
+      date: fac.date || new Date().toISOString().split('T')[0],
+      frequence: 'ponctuel',
+      notes: 'Créée automatiquement depuis Chantier — facture ' + (fac.num||fac.id),
+      updatedAt: new Date().toISOString(),
+    });
+  } catch(e) { console.warn('syncChargeSousTraitance:', e); }
 }
 
 function deleteFacture() {
@@ -4624,6 +4671,9 @@ function deleteFacture() {
   if (!confirm('Supprimer cette facture ?')) return;
   state.factures = state.factures.filter(f => f.id != id);
   saveLocal(); closeModal('modalFacture'); toast('🗑️ Supprimé.'); renderFinancier();
+  if (window._fb && window._fb.deleteCharge) {
+    window._fb.deleteCharge('charge-auto-chantier-' + id).catch(()=>{});
+  }
 }
 
 function renderFinancier() {
