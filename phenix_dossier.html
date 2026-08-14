@@ -2819,6 +2819,7 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
           <div><div class="page-title">Devis &amp; honoraires</div><div class="page-subtitle">Suivi financier de tous les contrats</div></div>
           <div style="display:flex;gap:8px">
             <button class="btn" onclick="openCalcModal()"><i class="ti ti-calculator"></i> Calculateur</button>
+            <button class="btn" onclick="openImportDevisSigneModal()" style="border-color:#27AE60;color:#27AE60"><i class="ti ti-file-import"></i> Importer devis signé → nouveau dossier</button>
             <button class="btn btn-primary" onclick="toggleAI_d();askAI('Génère un modèle de devis d\'honoraires d\'architecte pour une mission de maîtrise d\'œuvre complète, avec décomposition par phase.')">↗ Générer un devis IA</button>
           </div>
         </div>
@@ -3328,6 +3329,28 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
             <div id="charge-ia-status" style="display:none;margin-top:14px"></div>
             <div style="font-size:11.5px;color:var(--text3);margin-top:12px;line-height:1.6">
               L'IA détecte le montant, la date, l'entreprise et l'objet, puis pré-remplit le formulaire "Nouvelle charge" (catégorie Sous-traitance) — tu n'auras plus qu'à choisir le projet lié et confirmer.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-overlay" id="devisSigneIaModal" onmousedown="this._downOnSelf=(event.target===this)" onmouseup="if(this._downOnSelf&&event.target===this)closeDevisSigneIaModal();this._downOnSelf=false">
+        <div class="modal" style="max-width:480px">
+          <div class="modal-header">
+            <div class="modal-title">Importer un devis signé → créer le dossier</div>
+            <button class="btn btn-sm" onclick="closeDevisSigneIaModal()"><i class="ti ti-x"></i></button>
+          </div>
+          <div class="modal-body">
+            <div id="devis-signe-drop-zone" onclick="document.getElementById('devis-signe-file-input').click()"
+                 style="border:2px dashed var(--border);border-radius:var(--r-md);padding:28px 16px;text-align:center;cursor:pointer;background:var(--bg2)">
+              <div style="font-size:28px;color:var(--accent);margin-bottom:8px"><i class="ti ti-file-type-pdf"></i></div>
+              <div style="font-weight:600;color:var(--navy)">Déposer le devis signé (PDF)</div>
+              <div style="font-size:12px;color:var(--text2);margin-top:4px">ou cliquez pour parcourir</div>
+              <input type="file" id="devis-signe-file-input" accept=".pdf" style="display:none" onchange="handleDevisSignePdf(this.files[0])">
+            </div>
+            <div id="devis-signe-status" style="display:none;margin-top:14px"></div>
+            <div style="font-size:11.5px;color:var(--text3);margin-top:12px;line-height:1.6">
+              L'IA lit le client, l'adresse, l'objet et le montant, puis ouvre le formulaire "Nouveau projet" déjà rempli — tu vérifies, tu cliques "Créer le projet", et le devis est automatiquement ajouté à sa facturation, prêt à être converti en facture.
             </div>
           </div>
         </div>
@@ -5585,8 +5608,38 @@ async function createProject() {
   document.getElementById('budgetPreview').style.display='none';
   await saveProjet(p);
   renderDashboard_d();
-  toast_d('✅ Projet "'+nom+'" créé et synchronisé !');
-  setTimeout(()=>show_d('projets',document.querySelectorAll('.nav-item')[1]),800);
+
+  // Si ce projet vient d'un devis signé importé par IA, on crée le devis
+  // directement dans sa facturation — c'est tout l'intérêt de l'import en un clic.
+  let devisCree = null;
+  if (_devisSigneEnAttente) {
+    devisCree = {
+      id: 'fact-'+Date.now(),
+      type: 'devis',
+      numero: _devisSigneEnAttente.numero || autoNumero('devis'),
+      projetId: id,
+      phase: p.phase,
+      objet: _devisSigneEnAttente.objet || 'Devis initial',
+      dateEmission: _devisSigneEnAttente.date || new Date().toISOString().split('T')[0],
+      dateEcheance: '',
+      datePaiement: '',
+      montantHt: _devisSigneEnAttente.montantHt || parseFloat(p.honoraires)||0,
+      tva: _devisSigneEnAttente.tva || 20,
+      montantPaye: 0,
+      statut: 'accepte', // le devis est déjà signé au moment de l'import
+      notes: 'Créé automatiquement depuis l\'import du devis signé.',
+    };
+    stateDossier.factures.push(devisCree);
+    await saveFactureDb(devisCree);
+    _devisSigneEnAttente = null;
+  }
+
+  toast_d(devisCree ? '✅ Projet "'+nom+'" créé, avec son devis signé prêt à facturer.' : '✅ Projet "'+nom+'" créé et synchronisé !');
+  if (devisCree) {
+    setTimeout(()=>{ openProjectModal(id); switchModalTab('facturation-proj'); }, 800);
+  } else {
+    setTimeout(()=>show_d('projets',document.querySelectorAll('.nav-item')[1]),800);
+  }
 }
 function previewHonoraires() { previewCA(); }
 function previewCA() {
@@ -5876,6 +5929,7 @@ function renderProjectFacturation(projetId) {
     <div style="display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap">
       <button class="btn btn-sm btn-primary" onclick="openFactureModal('facture',${projetId})"><i class="ti ti-receipt"></i> Nouvelle facture</button>
       <button class="btn btn-sm" onclick="openFactureModal('devis',${projetId})"><i class="ti ti-file-plus"></i> Nouveau devis</button>
+      <button class="btn btn-sm" onclick="openChargeModal('sous_traitance', ${projetId})" style="border-color:#C0392B;color:#C0392B" title="Voir le détail dans l'onglet Marge"><i class="ti ti-tool"></i> Sous-traitance / charge</button>
     </div>
     ${caTotal>0?`<div style="background:var(--bg);border-radius:var(--r-md);padding:10px 14px;margin-bottom:1rem">
       <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-bottom:4px">
@@ -8281,12 +8335,116 @@ RÈGLES :
   }
 }
 
-function openChargeModal() {
+// ── Import d'un devis signé : crée le projet ET le devis lié en une opération ──
+let _devisSigneEnAttente = null; // { numero, date, montantHt, tva, objet } — consommé par createProject()
+
+function openImportDevisSigneModal() {
+  document.getElementById('devis-signe-file-input').value = '';
+  document.getElementById('devis-signe-status').style.display = 'none';
+  document.getElementById('devis-signe-drop-zone').innerHTML = `
+    <div style="font-size:28px;color:var(--accent);margin-bottom:8px"><i class="ti ti-file-type-pdf"></i></div>
+    <div style="font-weight:600;color:var(--navy)">Déposer le devis signé (PDF)</div>
+    <div style="font-size:12px;color:var(--text2);margin-top:4px">ou cliquez pour parcourir</div>
+    <input type="file" id="devis-signe-file-input" accept=".pdf" style="display:none" onchange="handleDevisSignePdf(this.files[0])">`;
+  document.getElementById('devisSigneIaModal').classList.add('open');
+}
+function closeDevisSigneIaModal() {
+  document.getElementById('devisSigneIaModal').classList.remove('open');
+}
+
+function handleDevisSignePdf(file) {
+  if (!file) return;
+  document.getElementById('devis-signe-drop-zone').innerHTML = `
+    <div style="font-size:28px;color:var(--red);margin-bottom:6px"><i class="ti ti-file-text"></i></div>
+    <div style="font-weight:600;color:var(--navy)">${file.name}</div>
+    <div style="font-size:12px;color:var(--text2)">${(file.size/1024).toFixed(0)} Ko</div>`;
+  const reader = new FileReader();
+  reader.onload = e => analyzeDevisSigneIA(e.target.result.split(',')[1]);
+  reader.readAsDataURL(file);
+}
+
+async function analyzeDevisSigneIA(base64) {
+  const status = document.getElementById('devis-signe-status');
+  status.style.display = 'block';
+  status.innerHTML = `<div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--accent2);background:var(--accent-bg);border:1.5px solid var(--accent);border-radius:var(--r-md);padding:12px 14px"><div class="ai-loading"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div></div> Lecture du devis en cours…</div>`;
+  try {
+    const res = await fetch('https://phenix-proxy.phenixarchitecte.workers.dev', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1200,
+        system: `Analyse ce devis destiné à un client (signé ou non) et retourne UNIQUEMENT ce JSON valide, sans markdown :
+{"client":{"nom":"","prenom":"","raisonSociale":"","email":"","telephone":""},"projet":{"adresse":"","typeProjet":"","description":"","surface":0},"devis":{"numero":"","date":"","montantHt":0,"tva":20,"objet":""}}
+
+RÈGLES STRICTES :
+- "client.nom"/"prenom" : nom et prénom du client SIGNATAIRE (personne physique). Si c'est une société/collectivité/copropriété, laisser nom/prenom vides et remplir "raisonSociale" à la place.
+- "projet.adresse" : adresse du bien/chantier concerné (PAS l'adresse de correspondance du client si elle diffère)
+- "projet.typeProjet" : choisis la valeur la plus proche parmi EXACTEMENT : "Logement individuel neuf", "Rénovation / Réhabilitation", "Extension / Surélévation", "Bureau / Local professionnel", "Logement collectif", "ERP", "Industriel / Agricole"
+- "projet.description" : résumé très court du projet (10 mots maximum), à usage de notes internes
+- "devis.montantHt" : montant total HT du devis (nombre décimal) — c'est ce que le client doit payer au total (honoraires + éventuelle sous-traitance si contractant général)
+- "devis.objet" : résumé très court de la mission (8 mots maximum)
+- "devis.date" : date du devis ou de signature si visible, format AAAA-MM-JJ
+- "devis.tva" : taux de TVA principal (nombre, ex 20, 10, 5.5)
+- Si une information n'est pas présente sur le document, laisse le champ vide ou à 0 plutôt que d'inventer.`,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
+            { type: 'text', text: 'Analyse ce devis et extrais les informations du client et du projet.' }
+          ]
+        }]
+      })
+    });
+    if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message||JSON.stringify(data.error));
+    const text = (data.content||[]).map(b=>b.text||'').join('');
+    const parsed = JSON.parse(text.replace(/```json|```/g,'').trim());
+
+    closeDevisSigneIaModal();
+
+    // Pré-remplissage du formulaire "Nouveau projet"
+    show_d('new', document.querySelectorAll('.nav-item')[6]);
+    const nomClient = parsed.client?.raisonSociale || [parsed.client?.prenom, parsed.client?.nom].filter(Boolean).join(' ');
+    document.getElementById('np-nom').value = (parsed.client?.nom || nomClient || 'Projet').trim();
+    document.getElementById('np-client').value = nomClient || '';
+    document.getElementById('np-email').value = parsed.client?.email || '';
+    document.getElementById('np-tel').value = parsed.client?.telephone || '';
+    document.getElementById('np-adresse').value = parsed.projet?.adresse || '';
+    document.getElementById('np-surface').value = parsed.projet?.surface || '';
+    document.getElementById('np-notes').value = parsed.projet?.description || '';
+    document.getElementById('np-honoraires').value = parsed.devis?.montantHt || '';
+    const typeSel = document.getElementById('np-type');
+    if (parsed.projet?.typeProjet && [...typeSel.options].some(o=>o.value===parsed.projet.typeProjet)) {
+      typeSel.value = parsed.projet.typeProjet;
+    }
+    if (parsed.devis?.date) {
+      const dateNorm = normaliserDateAAAAMMJJ(parsed.devis.date);
+      if (dateNorm) document.getElementById('np-date').value = dateNorm;
+    }
+    previewCA();
+
+    // Le devis lui-même sera créé automatiquement juste après la création du projet
+    _devisSigneEnAttente = {
+      numero: parsed.devis?.numero || '',
+      date: parsed.devis?.date ? (normaliserDateAAAAMMJJ(parsed.devis.date)||'') : '',
+      montantHt: parseFloat(parsed.devis?.montantHt)||0,
+      tva: parseFloat(parsed.devis?.tva)||20,
+      objet: parsed.devis?.objet || '',
+    };
+    toast_d('✅ Devis analysé — vérifiez les informations ci-dessous puis cliquez sur "Créer le projet".');
+  } catch(err) {
+    status.innerHTML = `<div style="background:var(--red-bg,#fdecea);border:1.5px solid var(--red);border-radius:var(--r-md);padding:12px 14px;font-size:13px;color:var(--red)">⚠️ ${err.message} — vous pouvez créer le projet manuellement à la place.</div>`;
+  }
+}
+
+function openChargeModal(categoriePreset, projetIdPreset) {
   _editChargeId = null;
   document.getElementById('charge-modal-title').textContent = 'Nouvelle charge';
   document.getElementById('btn-del-charge').style.display = 'none';
   document.getElementById('ch-libelle').value   = '';
-  document.getElementById('ch-categorie').value = '';
+  document.getElementById('ch-categorie').value = categoriePreset || '';
   document.getElementById('ch-type').value      = 'fixe';
   document.getElementById('ch-montant-ht').value= '';
   document.getElementById('ch-montant-ttc').value='';
@@ -8299,6 +8457,7 @@ function openChargeModal() {
   if (projSel) {
     projSel.innerHTML = '<option value="">— Aucun projet lié —</option>' +
       stateDossier.projets.map(p=>`<option value="${p.id}">${esc(p.nom)}</option>`).join('');
+    if (projetIdPreset) projSel.value = projetIdPreset;
   }
   document.getElementById('chargeModal').classList.add('open');
 }
