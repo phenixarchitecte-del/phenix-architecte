@@ -194,6 +194,11 @@ window.dispatchEvent(new Event('fbready'));
     <div id="csvHelp" class="infonote" style="display:none"><span>◆</span><div>Format attendu : un en-tête puis des lignes. Colonnes reconnues (peu importe l'ordre) : <b>Compte</b>, <b>Nom</b>, <b>Montant</b>, et éventuellement <b>Catégorie</b>. Séparateur «,» ou «;». Chaque ligne devient une position dans l'enveloppe correspondante.</div></div>
     <div id="accounts"></div>
     <div class="card" style="margin-top:16px">
+     <div class="ctitle" style="font-family:Fraunces,serif;font-size:1.15rem">Export des lignes de placement</div>
+     <p class="lead" style="margin:6px 0 12px">Génère un document (PDF) listant toutes les lignes de tes enveloppes financières (bourse, crypto, liquidités, retraite/AV), avec leur valorisation actuelle.</p>
+     <button class="btn go" id="pdfStocksBtn">📈 Exporter les lignes de placement</button>
+    </div>
+    <div class="card" style="margin-top:16px">
      <div class="ctitle" style="font-family:Fraunces,serif;font-size:1.15rem">Historique de la progression</div>
      <p class="lead" style="margin:6px 0 12px">Un point s'enregistre automatiquement chaque jour où tu modifies tes placements — de quoi suivre la trajectoire dans la durée.</p>
      <svg viewBox="0 0 680 170" width="100%" height="170" id="histChart" style="display:block"></svg>
@@ -549,7 +554,34 @@ function bankHTML(){const{by,assets,debt,net}=totals();const dateStr=new Date().
   <div class="bnote">Les valorisations immobilières, mobilières et des participations figurant dans ce document sont des estimations établies par le foyer, à titre indicatif ; elles n'engagent pas de tiers évaluateur agréé. Document généré le ${dateStr}.</div>
  </div>`;}
 function exportBankPDF(){$('#printExport').innerHTML=bankHTML();window.print();}
+function stocksHTML(){const dateStr=new Date().toLocaleDateString('fr-FR',{day:'2-digit',month:'long',year:'numeric'});
+ const order=Object.keys(CATS).filter(k=>state.accounts.some(a=>a.cat===k));
+ const envs=state.accounts.slice().sort((a,b)=>order.indexOf(a.cat)-order.indexOf(b.cat));
+ let total=0,nbLignes=0;let rows='';const byCat={};
+ envs.forEach(a=>{const perf=+a.rendement||0;const perfStr=(perf>0?'+':'')+(''+perf).replace('.',',')+' %';const catName=CATS[a.cat]?CATS[a.cat].name:(a.cat||'—');
+  const addRow=(nom,amt)=>{total+=amt;nbLignes++;byCat[a.cat]=(byCat[a.cat]||0)+amt;
+    rows+=`<tr><td>${esc(catName)}</td><td>${esc(a.plat||'Enveloppe')}<div class="sub">${esc(a.type||'')}</div></td><td>${esc(nom)}</td><td class="r">${perfStr}</td><td class="r">${fmt(amt)} €</td></tr>`;};
+  if(a.positions&&a.positions.length)a.positions.forEach(p=>addRow(p.name||'Ligne',+p.amount||0));
+  else addRow(a.type||'Montant global',+a.amount||0);});
+ const catRows=order.map(k=>`<tr><td>${esc(CATS[k].name)}</td><td class="r">${fmt(byCat[k]||0)} €</td><td class="r">${total?Math.round((byCat[k]||0)/total*100):0} %</td></tr>`).join('');
+ return `<div class="bexp">
+  <div class="bhead"><div class="bkicker">Portefeuille</div><div class="btitle">Lignes de placements financiers</div><div class="bsub">Détail de toutes les enveloppes — bourse, crypto, liquidités, retraite</div></div>
+  <table class="bmeta"><tr><td>Date d'établissement</td><td>${dateStr}</td></tr></table>
+  <div class="bsec">Synthèse</div>
+  <div class="bkpi-row">
+   <div class="bkpi"><div class="bkl">Enveloppes</div><div class="bkv">${envs.length}</div></div>
+   <div class="bkpi"><div class="bkl">Lignes</div><div class="bkv">${nbLignes}</div></div>
+   <div class="bkpi main"><div class="bkl">Valorisation totale</div><div class="bkv" style="color:#3F6B6B">${fmt(total)} €</div></div>
+  </div>
+  <div class="bsec">Répartition par catégorie</div>
+  <table class="btab zebra"><thead><tr><th>Catégorie</th><th class="r">Montant</th><th class="r">%</th></tr></thead><tbody>${catRows}</tbody></table>
+  <div class="bsec">Détail des lignes</div>
+  ${rows?`<table class="btab zebra"><thead><tr><th>Catégorie</th><th>Enveloppe</th><th>Ligne</th><th class="r">Performance</th><th class="r">Valorisation</th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="itype" style="color:var(--soft)">Aucune ligne de placement renseignée.</div>'}
+  <div class="bnote">Valorisations telles que saisies dans le portail à la date d'établissement ; elles ne remplacent pas un relevé de compte-titres officiel. Document généré le ${dateStr}.</div>
+ </div>`;}
+function exportStocksPDF(){$('#printExport').innerHTML=stocksHTML();window.print();}
 $('#pdfBankBtn').addEventListener('click',exportBankPDF);
+$('#pdfStocksBtn').addEventListener('click',exportStocksPDF);
 $('#bankHolder').addEventListener('change',e=>{state.bankHolder=e.target.value;save();});
 $('#copyBtn').addEventListener('click',async()=>{const txt=JSON.stringify(state);try{await navigator.clipboard.writeText(txt);alert('Données copiées. Sur l\'autre appareil, ouvre le fichier puis « Coller des données ».');}catch(e){prompt('Copie ce texte puis colle-le sur l\'autre appareil :',txt);}});
 $('#pasteBtn').addEventListener('click',()=>{const t=prompt('Colle ici les données copiées depuis l\'autre appareil :');if(!t)return;try{const d=JSON.parse(t);if(!d||!d.accounts)throw 0;state=d;normalize();save();renderOverview();renderAccounts();renderProps();renderCompanies();renderContacts();renderStamp();const bh=$('#bankHolder');if(bh)bh.value=state.bankHolder||'';alert('Données restaurées.');}catch(e){alert('Texte invalide.');}});
