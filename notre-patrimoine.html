@@ -221,7 +221,7 @@ window.dispatchEvent(new Event('fbready'));
      <div id="credits"></div><button class="btn" id="addCredit" style="margin-top:4px">+ Ajouter un crédit</button></div>
 
     <div class="card" style="margin-top:14px"><div class="ctitle" style="font-family:Fraunces,serif;font-size:1.15rem">Crédits & loyers immobiliers liés</div>
-     <p class="lead" style="margin:6px 0 10px">Biens détenus en direct (non logés dans une société) — repris automatiquement depuis l'onglet Immobilier.</p>
+     <p class="lead" style="margin:6px 0 10px">Repris automatiquement depuis l'onglet Immobilier. Tous les biens avec un crédit en cours comptent dans le taux d'endettement personnel — y compris ceux logés dans une société, dès lors que la banque s'appuie sur tes revenus personnels pour les accorder.</p>
      <div id="credLies"></div></div>
 
     <div class="card" style="margin-top:14px" id="ratioCard"></div>
@@ -409,17 +409,21 @@ function renderCredits(){const box=$('#credits');box.innerHTML=state.credits.map
  box.querySelectorAll('[data-cd]').forEach(i=>i.addEventListener('change',e=>{const c=state.credits.find(x=>x.id==e.target.dataset.cd);c.debt=num(e.target.value);save();}));
  box.querySelectorAll('[data-ce]').forEach(i=>i.addEventListener('change',e=>{const c=state.credits.find(x=>x.id==e.target.dataset.ce);c.ech=e.target.value;save();}));
  box.querySelectorAll('[data-crem]').forEach(b=>b.addEventListener('click',()=>{state.credits=state.credits.filter(x=>x.id!=b.dataset.crem);save();renderCredits();renderRatio();}));}
-function renderCredLies(){const box=$('#credLies');if(!box)return;const ps=linkedProps();
- if(!ps.length){box.innerHTML='<div class="itype" style="color:var(--soft)">Aucun bien détenu en direct pour l\'instant — vérifie que le champ « Logé dans » est sur « En direct » dans l\'onglet Immobilier.</div>';return;}
- box.innerHTML=ps.map(p=>{const cr=credit(p);const debt=+p.debt||0;
+function renderCredLies(){const box=$('#credLies');if(!box)return;
+ const ps=linkedProps();
+ const autres=state.props.filter(p=>p.holder!=null&&((+p.debt||0)>0));
+ if(!ps.length&&!autres.length){box.innerHTML='<div class="itype" style="color:var(--soft)">Aucun bien renseigné pour l\'instant.</div>';return;}
+ const line=(p,personnel)=>{const cr=credit(p);const debt=+p.debt||0;
    let credTxt;
    if(cr)credTxt=` · Mensualité <b>${fmt(cr.M)} €</b>`;
    else if(debt>0)credTxt=` · Emprunt restant <b>${fmt(debt)} €</b> <span style="color:var(--terra)">(taux/durée à préciser pour calculer la mensualité)</span>`;
    else credTxt=' · aucun crédit en cours';
-   return `<div class="itype" style="padding:8px 0;border-bottom:1px solid var(--line)"><b>${esc(p.name||'Bien')}</b> — Valeur ${fmt(p.value||0)} €${credTxt}${(+p.loyer||0)?` · Loyer perçu <b>${fmt(p.loyer)} €/mois</b>`:''}</div>`;}).join('')
+   const tag=personnel?'':` <span style="color:var(--soft)">(détenu via ${esc(holderName(p.holder))})</span>`;
+   return `<div class="itype" style="padding:8px 0;border-bottom:1px solid var(--line)"><b>${esc(p.name||'Bien')}</b> — Valeur ${fmt(p.value||0)} €${credTxt}${(+p.loyer||0)?` · Loyer perçu <b>${fmt(p.loyer)} €/mois</b>`:''}${tag}</div>`;};
+ box.innerHTML=ps.map(p=>line(p,true)).join('')+autres.map(p=>line(p,false)).join('')
   +'<button class="btn" id="goImmoBtn" style="margin-top:10px">→ Modifier dans l\'onglet Immobilier</button>';
  const gb=$('#goImmoBtn');if(gb)gb.addEventListener('click',()=>goTab('im'));}
-function persoTotals(){const ps=linkedProps();const revBase=state.revenus.reduce((s,r)=>s+(+r.amount||0),0);const loyerLie=ps.reduce((s,p)=>s+(+p.loyer||0),0);
+function persoTotals(){const ps=state.props;const revBase=state.revenus.reduce((s,r)=>s+(+r.amount||0),0);const loyerLie=ps.reduce((s,p)=>s+(+p.loyer||0),0);
  const revPondere=revBase+loyerLie*0.7;const chargesPerso=state.credits.reduce((s,c)=>s+(+c.amount||0),0);
  const chargesLiees=ps.reduce((s,p)=>{const cr=credit(p);return s+(cr?cr.M:0);},0);const chargesTotal=chargesPerso+chargesLiees;
  const taux=revPondere>0?(chargesTotal/revPondere*100):0;return{revBase,loyerLie,revPondere,chargesPerso,chargesLiees,chargesTotal,taux};}
@@ -524,9 +528,9 @@ function bankHTML(){const{by,assets,debt,net}=totals();const dateStr=new Date().
  let coRows='';state.companies.filter(c=>!c.soon).forEach(c=>{coRows+=`<tr><td>${esc(c.name)}<div class="sub">${esc(c.type||'')}${assocStr(c)?' · '+esc(assocStr(c)):''}</div></td><td class="r">${fmt(c.ca||0)} €</td><td class="r">${fmt(c.benefice||0)} €</td><td class="r">${fmt(c.valeur||0)} €</td></tr>`;});
  const t=persoTotals();
  let revRows='';state.revenus.forEach(r=>{if(!(+r.amount))return;revRows+=`<tr><td>${esc(r.name||'Revenu')}</td><td class="r">${fmt(r.amount)} €/mois</td></tr>`;});
- linkedProps().forEach(p=>{if(+p.loyer)revRows+=`<tr><td>Loyer — ${esc(p.name||'bien en direct')}</td><td class="r">${fmt(p.loyer)} €/mois</td></tr>`;});
+ state.props.forEach(p=>{if(+p.loyer)revRows+=`<tr><td>Loyer — ${esc(p.name||'bien')}</td><td class="r">${fmt(p.loyer)} €/mois</td></tr>`;});
  let credRows='';state.credits.forEach(c=>{if(!(+c.amount))return;credRows+=`<tr><td>${esc(c.name||'Crédit')}${c.ech?`<div class="sub">Échéance : ${esc(c.ech)}</div>`:''}</td><td class="r">${fmt(c.amount)} €/mois</td></tr>`;});
- linkedProps().forEach(p=>{const cr=credit(p),debt=+p.debt||0;if(cr)credRows+=`<tr><td>Crédit immobilier — ${esc(p.name||'bien en direct')}</td><td class="r">${fmt(cr.M)} €/mois</td></tr>`;else if(debt>0)credRows+=`<tr><td>Crédit immobilier — ${esc(p.name||'bien en direct')}<div class="sub">Emprunt restant ${fmt(debt)} € — taux/durée à préciser</div></td><td class="r">—</td></tr>`;});
+ state.props.forEach(p=>{const cr=credit(p),debt=+p.debt||0;if(cr)credRows+=`<tr><td>Crédit immobilier — ${esc(p.name||'bien')}</td><td class="r">${fmt(cr.M)} €/mois</td></tr>`;else if(debt>0)credRows+=`<tr><td>Crédit immobilier — ${esc(p.name||'bien')}<div class="sub">Emprunt restant ${fmt(debt)} € — taux/durée à préciser</div></td><td class="r">—</td></tr>`;});
  return `<div class="bexp">
   <div class="bhead"><div class="bkicker">Dossier patrimonial</div><div class="btitle">Situation patrimoniale</div><div class="bsub">Document de synthèse — usage bancaire</div></div>
   <table class="bmeta"><tr><td>Titulaire(s)</td><td>${esc(state.bankHolder||'—')}</td></tr><tr><td>Date d'établissement</td><td>${dateStr}</td></tr></table>
