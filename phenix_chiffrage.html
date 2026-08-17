@@ -540,8 +540,10 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
           <button class="btn btn-outline" onclick="exportToFinancement()" style="border-color:#2D7A4F;color:#2D7A4F"><i class="ti ti-coin" aria-hidden="true"></i>Envoyer vers Financement</button>
           <button class="btn btn-outline" onclick="exportToChantier()" style="border-color:#1B2D5B;color:#1B2D5B"><i class="ti ti-building-factory-2" aria-hidden="true"></i>Envoyer vers Chantier</button>
           <button class="btn btn-outline" onclick="exportToAppelsOffres()" style="border-color:#1E5FAA;color:#1E5FAA"><i class="ti ti-send" aria-hidden="true"></i>Envoyer vers Appels d'offres</button>
+          <button class="btn btn-outline" onclick="openChiffrageArchiveModal()" id="btn-chiffrage-archive" style="border-color:#6C3483;color:#6C3483;display:none"><i class="ti ti-archive" aria-hidden="true"></i>Chiffrages enregistrés</button>
       </div>
     </div>
+    <div id="chiffrage-actif-banner" style="display:none;padding:8px 28px;background:rgba(108,52,131,.06);border-bottom:1px solid rgba(108,52,131,.15);font-size:12px;color:#6C3483;font-weight:600"></div>
 
     <!-- Stats -->
     <div class="stats-row" id="stats-row">
@@ -1236,6 +1238,17 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
   </div>
 
   <!-- MODAL RÉSULTATS ANALYSE IA -->
+  <div class="modal-overlay" id="modal-chiffrage-archive">
+    <div class="modal" style="max-width:640px">
+      <div class="modal-title"><i class="ti ti-archive" style="color:#6C3483;margin-right:8px" aria-hidden="true"></i>Chiffrages enregistrés</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:14px">Ce chantier a plusieurs chiffrages complets enregistrés (générés avec des prompts différents). Activez-en un pour le rendre courant — l'actuel sera automatiquement archivé à sa place.</div>
+      <div id="chiffrage-archive-list"></div>
+      <div style="display:flex;justify-content:flex-end;margin-top:16px">
+        <button class="btn btn-outline" onclick="closeModal('modal-chiffrage-archive')">Fermer</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="modal-ia-resultats">
     <div class="modal modal-ia">
       <div class="modal-title"><i class="ti ti-robot" style="color:#6C3483;margin-right:8px" aria-hidden="true"></i>Analyse IA — Résultats</div>
@@ -1256,6 +1269,10 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
             <option value="existing">Ajouter dans un lot existant</option>
           </select>
         </div>
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="font-size:11px;color:var(--text2);font-weight:600;display:block;margin-bottom:3px">Nom de ce chiffrage <span style="font-weight:400;color:var(--text3)">(pour le retrouver si vous en enregistrez plusieurs pour ce chantier)</span></label>
+        <input type="text" id="ia-nom-chiffrage" placeholder="Ex. Isolation laine de bois, Option économique…" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:var(--font-sans);background:var(--bg)">
       </div>
 
       <!-- Formulaire création chantier inline -->
@@ -2307,15 +2324,29 @@ function onChantierSelect(){
 
 function renderChiffrage(){
   const idx=state.currentChantier;
+  const banner=document.getElementById('chiffrage-actif-banner');
+  const archBtn=document.getElementById('btn-chiffrage-archive');
   if(idx===null||!state.chantiers[idx]){
     document.getElementById('chiffrage-sub').textContent='Sélectionnez un chantier';
     document.getElementById('lots-tbody').innerHTML='<tr><td colspan="7" style="padding:24px;text-align:center;color:var(--text3)">Aucun chantier sélectionné</td></tr>';
-    updateStats([]);return;
+    updateStats([]);
+    banner.style.display='none'; archBtn.style.display='none';
+    return;
   }
   const c=state.chantiers[idx];
   document.getElementById('chiffrage-sub').textContent=c.nom+(c.client?' — '+c.client:'');
   document.getElementById('chantier-select').value=idx;
   if(typeof renderLotsTableOrCards === "function") renderLotsTableOrCards(); else renderLotsTable();
+
+  const nbArchives=(c.chiffrageArchive||[]).length;
+  archBtn.style.display=nbArchives?'':'none';
+  archBtn.innerHTML=`<i class="ti ti-archive" aria-hidden="true"></i>Chiffrages enregistrés (${nbArchives})`;
+  if(c._nomChiffrageActif){
+    banner.style.display='';
+    banner.innerHTML=`<i class="ti ti-git-branch" aria-hidden="true"></i> Chiffrage actif : <strong>${c._nomChiffrageActif}</strong>${nbArchives?` · ${nbArchives} autre${nbArchives>1?'s':''} chiffrage${nbArchives>1?'s':''} enregistré${nbArchives>1?'s':''}` : ''}`;
+  } else {
+    banner.style.display='none';
+  }
 }
 
 function renderLotsTable(){
@@ -4439,6 +4470,34 @@ function confirmerImportIA() {
   const chantier = state.chantiers[ci];
   if(!chantier.lots) chantier.lots = [];
 
+  const lotMode = document.getElementById('ia-dest-lot-mode')?.value || 'new';
+  const nomChiffrage = (document.getElementById('ia-nom-chiffrage')?.value || '').trim()
+    || ('Chiffrage du ' + new Date().toLocaleDateString('fr-FR'));
+
+  // Si ce chantier a déjà un chiffrage actif et qu'on crée de nouveaux lots
+  // (pas un simple ajout dans un lot existant), proposer d'archiver l'actuel
+  // plutôt que de mélanger les deux chiffrages ensemble.
+  if(lotMode === 'new' && chantier.lots.length > 0){
+    const nomActuel = chantier._nomChiffrageActif || 'Chiffrage actuel';
+    const veutRemplacer = confirm(
+      `Ce chantier a déjà un chiffrage actif : « ${nomActuel} » (${chantier.lots.length} lot(s)).\n\n` +
+      `OK → Enregistrer « ${nomChiffrage} » comme chiffrage actif et archiver « ${nomActuel} » (vous pourrez les comparer et rebasculer à tout moment).\n` +
+      `Annuler → Ajouter ces nouveaux lots à la suite du chiffrage actuel (fusion).`
+    );
+    if(veutRemplacer){
+      if(!chantier.chiffrageArchive) chantier.chiffrageArchive = [];
+      chantier.chiffrageArchive.push({
+        id: Date.now(),
+        nom: nomActuel,
+        date: chantier._dateChiffrageActif || new Date().toISOString().split('T')[0],
+        lots: chantier.lots
+      });
+      chantier.lots = [];
+    }
+  }
+  chantier._nomChiffrageActif = nomChiffrage;
+  chantier._dateChiffrageActif = new Date().toISOString().split('T')[0];
+
   let nbLots = 0, nbPostes = 0;
   lots.forEach((lot, li) => {
     const chk = document.getElementById('ia-lot-chk-'+li);
@@ -4480,6 +4539,90 @@ function confirmerImportIA() {
   if(sel) { sel.value = ci; }
   renderChiffrage();
 }
+
+// ── Chiffrages enregistrés (plusieurs chiffrages IA complets par chantier) ──
+function _totalChiffrage(lots){
+  // Même logique que computeChantierTotals, appliquée à un tableau de lots isolé
+  let ht=0;
+  (lots||[]).forEach(l=>{
+    let lotClient=0;
+    (l.postes||[]).forEach(p=>{
+      const q=parseFloat(p.q)||0;
+      lotClient+=q*(parseFloat(p.puClient)||parseFloat(p.pu)||0);
+    });
+    const aleas=lotClient*(numOr(l.aleas,5)/100);
+    const hon=lotClient*(numOr(l.honoraires,5)/100);
+    ht+=lotClient+aleas+hon;
+  });
+  return ht;
+}
+
+function openChiffrageArchiveModal(){
+  const c=state.chantiers[state.currentChantier];
+  if(!c) return;
+  const listEl=document.getElementById('chiffrage-archive-list');
+  const rows=[];
+  // Le chiffrage actif en tête, pour comparaison, sans bouton "Activer" (déjà actif)
+  rows.push(`
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1.5px solid #6C3483;border-radius:8px;margin-bottom:8px;background:rgba(108,52,131,.05)">
+      <div style="flex:1">
+        <div style="font-weight:700;font-size:13px;color:var(--nav)">${c._nomChiffrageActif||'Chiffrage actif'} <span style="font-weight:400;color:#6C3483;font-size:11px">· actif</span></div>
+        <div style="font-size:11px;color:var(--text3)">${(c.lots||[]).length} lot(s) · ${c._dateChiffrageActif||''}</div>
+      </div>
+      <div style="font-weight:700;color:var(--nav);font-size:14px">${fmt(_totalChiffrage(c.lots))} € HT</div>
+    </div>`);
+  (c.chiffrageArchive||[]).forEach(a=>{
+    rows.push(`
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px">
+      <div style="flex:1">
+        <div style="font-weight:700;font-size:13px;color:var(--nav)">${a.nom}</div>
+        <div style="font-size:11px;color:var(--text3)">${(a.lots||[]).length} lot(s) · ${a.date||''}</div>
+      </div>
+      <div style="font-weight:700;color:var(--nav);font-size:14px">${fmt(_totalChiffrage(a.lots))} € HT</div>
+      <button class="btn btn-sm btn-primary" onclick="activerChiffrageArchive(${a.id})" style="background:#6C3483;border-color:#6C3483">Activer</button>
+      <button class="btn btn-sm btn-danger" onclick="supprimerChiffrageArchive(${a.id})"><i class="ti ti-trash" aria-hidden="true" style="font-size:13px"></i></button>
+    </div>`);
+  });
+  listEl.innerHTML=rows.join('');
+  document.getElementById('modal-chiffrage-archive').classList.add('open');
+}
+window.openChiffrageArchiveModal=openChiffrageArchiveModal;
+
+function activerChiffrageArchive(id){
+  const c=state.chantiers[state.currentChantier];
+  if(!c || !c.chiffrageArchive) return;
+  const idx=c.chiffrageArchive.findIndex(a=>a.id===id);
+  if(idx<0) return;
+  const chosen=c.chiffrageArchive[idx];
+  // Le chiffrage actif actuel repart dans l'archive, sous son propre nom
+  c.chiffrageArchive[idx]={
+    id: Date.now(),
+    nom: c._nomChiffrageActif || 'Chiffrage précédent',
+    date: c._dateChiffrageActif || new Date().toISOString().split('T')[0],
+    lots: c.lots
+  };
+  c.lots=chosen.lots;
+  c._nomChiffrageActif=chosen.nom;
+  c._dateChiffrageActif=chosen.date;
+  saveState();
+  closeModal('modal-chiffrage-archive');
+  renderChiffrage();
+  renderChantierGrid();
+  showToast('✓ Chiffrage activé : '+chosen.nom);
+}
+window.activerChiffrageArchive=activerChiffrageArchive;
+
+function supprimerChiffrageArchive(id){
+  const c=state.chantiers[state.currentChantier];
+  if(!c || !c.chiffrageArchive) return;
+  if(!confirm('Supprimer définitivement ce chiffrage enregistré ? Cette action est irréversible.')) return;
+  c.chiffrageArchive=c.chiffrageArchive.filter(a=>a.id!==id);
+  saveState();
+  openChiffrageArchiveModal();
+  renderChiffrage();
+  showToast('✓ Chiffrage supprimé');
+}
+window.supprimerChiffrageArchive=supprimerChiffrageArchive;
 
 // confirmerImportIA déclarée plus haut (version avec création chantier)
 
@@ -4614,6 +4757,10 @@ function _ouvrirModalResultats(data) {
   const hasChantiers = state.chantiers.length > 0;
   document.getElementById('ia-new-chantier-form').style.display = hasChantiers ? 'none' : '';
   if(!hasChantiers) selC.value = '';
+
+  // Nom de chiffrage par défaut (l'utilisateur peut le modifier avant d'importer)
+  const nomChiffrageEl = document.getElementById('ia-nom-chiffrage');
+  if(nomChiffrageEl) nomChiffrageEl.value = 'Chiffrage du ' + new Date().toLocaleDateString('fr-FR');
 
   // Pré-remplir le formulaire depuis les données IA
   const nomAutoClient = (menus.portes_entree?.[0]?.designation||'').replace(/PE.*/,'').trim();
