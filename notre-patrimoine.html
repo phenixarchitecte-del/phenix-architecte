@@ -411,7 +411,12 @@ function renderCredits(){const box=$('#credits');box.innerHTML=state.credits.map
  box.querySelectorAll('[data-crem]').forEach(b=>b.addEventListener('click',()=>{state.credits=state.credits.filter(x=>x.id!=b.dataset.crem);save();renderCredits();renderRatio();}));}
 function renderCredLies(){const box=$('#credLies');if(!box)return;const ps=linkedProps();
  if(!ps.length){box.innerHTML='<div class="itype" style="color:var(--soft)">Aucun bien détenu en direct pour l\'instant — vérifie que le champ « Logé dans » est sur « En direct » dans l\'onglet Immobilier.</div>';return;}
- box.innerHTML=ps.map(p=>{const cr=credit(p);return `<div class="itype" style="padding:8px 0;border-bottom:1px solid var(--line)"><b>${esc(p.name||'Bien')}</b> — Valeur ${fmt(p.value||0)} €${cr?` · Mensualité <b>${fmt(cr.M)} €</b>`:' · aucun crédit en cours'}${(+p.loyer||0)?` · Loyer perçu <b>${fmt(p.loyer)} €/mois</b>`:''}</div>`;}).join('')
+ box.innerHTML=ps.map(p=>{const cr=credit(p);const debt=+p.debt||0;
+   let credTxt;
+   if(cr)credTxt=` · Mensualité <b>${fmt(cr.M)} €</b>`;
+   else if(debt>0)credTxt=` · Emprunt restant <b>${fmt(debt)} €</b> <span style="color:var(--terra)">(taux/durée à préciser pour calculer la mensualité)</span>`;
+   else credTxt=' · aucun crédit en cours';
+   return `<div class="itype" style="padding:8px 0;border-bottom:1px solid var(--line)"><b>${esc(p.name||'Bien')}</b> — Valeur ${fmt(p.value||0)} €${credTxt}${(+p.loyer||0)?` · Loyer perçu <b>${fmt(p.loyer)} €/mois</b>`:''}</div>`;}).join('')
   +'<button class="btn" id="goImmoBtn" style="margin-top:10px">→ Modifier dans l\'onglet Immobilier</button>';
  const gb=$('#goImmoBtn');if(gb)gb.addEventListener('click',()=>goTab('im'));}
 function persoTotals(){const ps=linkedProps();const revBase=state.revenus.reduce((s,r)=>s+(+r.amount||0),0);const loyerLie=ps.reduce((s,p)=>s+(+p.loyer||0),0);
@@ -521,7 +526,7 @@ function bankHTML(){const{by,assets,debt,net}=totals();const dateStr=new Date().
  let revRows='';state.revenus.forEach(r=>{if(!(+r.amount))return;revRows+=`<tr><td>${esc(r.name||'Revenu')}</td><td class="r">${fmt(r.amount)} €/mois</td></tr>`;});
  linkedProps().forEach(p=>{if(+p.loyer)revRows+=`<tr><td>Loyer — ${esc(p.name||'bien en direct')}</td><td class="r">${fmt(p.loyer)} €/mois</td></tr>`;});
  let credRows='';state.credits.forEach(c=>{if(!(+c.amount))return;credRows+=`<tr><td>${esc(c.name||'Crédit')}${c.ech?`<div class="sub">Échéance : ${esc(c.ech)}</div>`:''}</td><td class="r">${fmt(c.amount)} €/mois</td></tr>`;});
- linkedProps().forEach(p=>{const cr=credit(p);if(cr)credRows+=`<tr><td>Crédit immobilier — ${esc(p.name||'bien en direct')}</td><td class="r">${fmt(cr.M)} €/mois</td></tr>`;});
+ linkedProps().forEach(p=>{const cr=credit(p),debt=+p.debt||0;if(cr)credRows+=`<tr><td>Crédit immobilier — ${esc(p.name||'bien en direct')}</td><td class="r">${fmt(cr.M)} €/mois</td></tr>`;else if(debt>0)credRows+=`<tr><td>Crédit immobilier — ${esc(p.name||'bien en direct')}<div class="sub">Emprunt restant ${fmt(debt)} € — taux/durée à préciser</div></td><td class="r">—</td></tr>`;});
  return `<div class="bexp">
   <div class="bhead"><div class="bkicker">Dossier patrimonial</div><div class="btitle">Situation patrimoniale</div><div class="bsub">Document de synthèse — usage bancaire</div></div>
   <table class="bmeta"><tr><td>Titulaire(s)</td><td>${esc(state.bankHolder||'—')}</td></tr><tr><td>Date d'établissement</td><td>${dateStr}</td></tr></table>
