@@ -5508,8 +5508,10 @@ LOT 10 Peinture/Finitions · LOT 11 Escalier · LOT 12 Isolation · LOT 13 Netto
         system: systemPrompt, messages:[{role:'user', content}]
       })
     });
-    if(!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
-    const data = await res.json();
+    const data = await res.json().catch(() => null);
+    if (!res.ok){
+      throw new Error(data?.error?.message || `Proxy HTTP ${res.status}`);
+    }
     if(data.error) throw new Error(data.error.message||JSON.stringify(data.error));
 
     const raw = (data.content||[]).map(b=>b.text||'').join('');
@@ -5837,8 +5839,10 @@ Sois précis et exhaustif. Si une valeur n'est pas lisible, estime-la de façon 
         system: systemPrompt, messages:[{role:'user', content}]
       })
     });
-    if(!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
-    const data = await res.json();
+    const data = await res.json().catch(() => null);
+    if (!res.ok){
+      throw new Error(data?.error?.message || `Proxy HTTP ${res.status}`);
+    }
     if(data.error) throw new Error(data.error.message||JSON.stringify(data.error));
 
     const raw = (data.content||[]).map(b=>b.text||'').join('');
