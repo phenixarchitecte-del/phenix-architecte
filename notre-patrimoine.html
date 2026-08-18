@@ -95,6 +95,20 @@ window.dispatchEvent(new Event('fbready'));
   .cred-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
   .cred-grid label{font-size:.72rem;color:var(--soft);display:block;margin-bottom:3px}
   .cred-grid input{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--cream);font-family:Mulish;font-size:.85rem;box-sizing:border-box}
+  .prev-row{border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+  .prev-top{display:flex;gap:8px;align-items:center;margin-bottom:10px}
+  .prev-top input{flex:1;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--cream);font-family:Fraunces,serif;font-size:1rem}
+  .prev-top .prem{padding:6px 11px;line-height:1}
+  .prev-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:8px}
+  .prev-grid label{font-size:.72rem;color:var(--soft);display:block;margin-bottom:3px}
+  .prev-grid input,.prev-grid select{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--cream);font-family:Mulish;font-size:.85rem;box-sizing:border-box}
+  .prev-desc{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--cream);font-family:Mulish;font-size:.85rem;box-sizing:border-box;resize:vertical;min-height:44px}
+  .prev-badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:.72rem;font-weight:700;margin-top:8px}
+  .bucket-row{display:flex;gap:12px;margin-bottom:16px}
+  .bucket{flex:1;background:var(--cream);border-radius:12px;padding:14px 16px;border:1px solid var(--line)}
+  .bucket h4{font-family:Fraunces,serif;font-size:.95rem;margin-bottom:6px}
+  .bucket .bn{font-size:1.4rem;font-weight:700;font-family:Fraunces,serif}
+  .bucket .bs{font-size:.78rem;color:var(--soft);margin-top:2px}
   .hrow{display:flex;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);font-size:.88rem}
   .hrow .hd{width:80px;color:var(--soft)}
   .hrow .ht{flex:1;font-weight:600}
@@ -148,7 +162,7 @@ window.dispatchEvent(new Event('fbready'));
   #patri-login .lerr{color:var(--terra);font-size:.85rem;min-height:18px;margin:0 0 8px}
   #patri-login .lwide{width:100%;justify-content:center;margin-bottom:8px}
   #patri-login .loff{color:var(--soft);font-size:.82rem;background:none;border:none;cursor:pointer;text-decoration:underline;margin-top:8px}
-  @media(max-width:560px){.wrap{padding:18px 14px 70px}.gloss{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}.donut-box{width:200px;height:200px}.cred-grid{grid-template-columns:1fr}}
+  @media(max-width:560px){.wrap{padding:18px 14px 70px}.gloss{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}.donut-box{width:200px;height:200px}.cred-grid{grid-template-columns:1fr}.prev-grid{grid-template-columns:1fr 1fr}.bucket-row{flex-direction:column}}
 </style>
 </head>
 <body>
@@ -170,7 +184,7 @@ window.dispatchEvent(new Event('fbready'));
   </header>
   <nav class="tabs">
     <button class="tab active" data-t="ov">Vue d'ensemble</button><button class="tab" data-t="pl">Placements</button>
-    <button class="tab" data-t="im">Immobilier</button><button class="tab" data-t="pe">Perso</button><button class="tab" data-t="so">Nos sociétés</button><button class="tab" data-t="re">Repères</button>
+    <button class="tab" data-t="im">Immobilier</button><button class="tab" data-t="pe">Perso</button><button class="tab" data-t="so">Nos sociétés</button><button class="tab" data-t="pv">Prévision</button><button class="tab" data-t="re">Repères</button>
   </nav>
 
   <section class="panel active" id="ov"><div class="card"><div class="hero">
@@ -235,6 +249,13 @@ window.dispatchEvent(new Event('fbready'));
     <div class="toolbar"><span style="font-size:.82rem;color:var(--soft);align-self:center">Ajout rapide :</span><button class="btn" data-cpreset="Nouvelle SCI|Immobilier locatif|Mère-fille|1.25">+ SCI</button><button class="btn" data-cpreset="SAS Marchand de biens|Achat-revente|Mère-fille|1.25">+ Marchand de biens</button><button class="btn" data-cpreset="Nouvelle société|Activité|Mère-fille|1.25">+ Société d'activité</button></div>
     <div id="companies"></div><button class="addbtn" id="addCo">+ Ajouter une entité personnalisée</button></section>
 
+  <section class="panel" id="pv"><h2 class="sec">Prévision — nos projets à venir</h2>
+    <p class="lead">Ce qu'on prépare, avec une date estimée. Classé automatiquement en court, moyen ou long terme selon cette date. Ces montants sont des hypothèses — ils n'entrent jamais dans le patrimoine actuel, mais apparaissent dans l'export bancaire pour montrer la trajectoire.</p>
+    <div id="prevBuckets"></div>
+    <h2 class="sec" style="margin-top:24px">Détail des projets</h2>
+    <div id="previsions"></div><button class="addbtn" id="addPrev">+ Ajouter un projet</button>
+  </section>
+
   <section class="panel" id="re"><h2 class="sec">Comprendre les placements</h2><div class="gloss" id="gloss"></div>
     <h2 class="sec" style="margin-top:26px">Nos interlocuteurs</h2><div class="card"><p class="lead" style="margin:0 0 6px">Les bonnes personnes à contacter selon le sujet.</p><div id="contacts"></div>
     <div class="infonote"><span>◆</span><div>Des contrats de <b>prévoyance</b> sont en place. Les documents sont avec nos papiers importants ; le courtier ci-dessus en assure le suivi.</div></div></div></section>
@@ -262,6 +283,7 @@ const DEF={
  contacts:[{role:"Expert-comptable",ico:"📒",nm:"",tel:""},{role:"Conseiller en gestion de patrimoine",ico:"🧭",nm:"",tel:""},{role:"Courtier prévoyance",ico:"🛡️",nm:"",tel:""},{role:"Notaire",ico:"⚖️",nm:"",tel:""}],
  revenus:[{id:1,name:"Rémunération gérant — Phénix",amount:0},{id:2,name:"Revenus libéraux — Madame (véto)",amount:0}],
  credits:[{id:1,name:"Crédit automobile",amount:0,debt:0,ech:""}],
+ previsions:[{id:1,nom:"Découpage du terrain + construction de 4 lots locatifs",dateProv:"2029-06",lien:"Terrain à bâtir",description:"Division du terrain en 3 parcelles et construction de 4 biens, chacun destiné à la location.",investissement:0,valeurCreee:0,loyerMensuel:0,statut:"etude"}],
  history:[],
  updated:""};
 let state=null,nid=100;
@@ -275,7 +297,7 @@ const store={async get(k){try{if(window.localStorage){const v=localStorage.getIt
   try{if(window.storage){const r=await window.storage.get(k);return r&&r.value;}}catch(e){}return null;},
  async set(k,v){let ok=false;try{if(window.localStorage){localStorage.setItem(k,v);ok=true;}}catch(e){}
   try{if(window.storage){await window.storage.set(k,v);ok=true;}}catch(e){}return ok;}};
-function normalize(){['accounts','props','companies'].forEach(k=>(state[k]||[]).forEach(o=>{nid=Math.max(nid,o.id+1);if(k==='accounts'&&!o.positions)o.positions=[];if(k==='companies'&&!o.associes)o.associes=[];}));if(!state.history)state.history=[];if(!state.revenus)state.revenus=[];if(!state.credits)state.credits=[];}
+function normalize(){['accounts','props','companies'].forEach(k=>(state[k]||[]).forEach(o=>{nid=Math.max(nid,o.id+1);if(k==='accounts'&&!o.positions)o.positions=[];if(k==='companies'&&!o.associes)o.associes=[];}));if(!state.history)state.history=[];if(!state.revenus)state.revenus=[];if(!state.credits)state.credits=[];if(!state.previsions)state.previsions=[];(state.previsions||[]).forEach(o=>{nid=Math.max(nid,o.id+1);});}
 function renderAll(){renderOverview();renderStamp();renderAccounts();renderProps();renderCompanies();renderContacts();}
 async function load(){let raw=null;try{raw=await store.get(KEY);}catch(e){}if(raw){try{state=JSON.parse(raw);}catch(e){}}
  if(!state)state=JSON.parse(JSON.stringify(DEF));normalize();}
@@ -441,6 +463,43 @@ function renderRatio(){const el=$('#ratioCard');if(!el)return;const t=persoTotal
  <p class="lead" style="margin-top:6px">Seuil usuel retenu par les banques : 35 % (recommandation HCSF). Ce calcul est indicatif : chaque établissement applique ses propres règles (pondération des loyers, primes, reste à vivre…) — à affiner avec ton banquier ou courtier.</p>`;}
 function renderPerso(){renderRevenus();renderCredits();renderCredLies();renderRatio();}
 
+function monthsUntil(dateProv){if(!dateProv)return null;const[y,m]=dateProv.split('-').map(Number);if(!y)return null;const now=new Date();return (y-now.getFullYear())*12+((m||1)-(now.getMonth()+1));}
+function horizonOf(dateProv){const mo=monthsUntil(dateProv);if(mo==null)return{key:'indetermine',label:'Non daté'};if(mo<0)return{key:'passe',label:'Échéance dépassée'};if(mo<=24)return{key:'court',label:'Court terme (≤ 2 ans)'};if(mo<=60)return{key:'moyen',label:'Moyen terme (2 à 5 ans)'};return{key:'long',label:'Long terme (> 5 ans)'};}
+function fmtMonth(dateProv){if(!dateProv)return'—';const[y,m]=dateProv.split('-').map(Number);if(!y)return'—';const noms=['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];return (m?noms[m-1]+' ':'')+y;}
+function renderPrevBuckets(){const box=$('#prevBuckets');if(!box)return;
+ const buckets={court:{label:'Court terme',sub:'≤ 2 ans',items:[]},moyen:{label:'Moyen terme',sub:'2 à 5 ans',items:[]},long:{label:'Long terme',sub:'> 5 ans',items:[]}};
+ state.previsions.forEach(p=>{const h=horizonOf(p.dateProv);if(buckets[h.key])buckets[h.key].items.push(p);});
+ box.innerHTML=`<div class="bucket-row">${Object.values(buckets).map(b=>`<div class="bucket"><h4>${b.label}</h4><div class="bn">${b.items.length}</div><div class="bs">${b.sub}${b.items.length?' · '+fmt(b.items.reduce((s,p)=>s+(+p.valeurCreee||0),0))+' € de valeur visée':''}</div></div>`).join('')}</div>`;}
+function renderPrevisions(){renderPrevBuckets();const box=$('#previsions');if(!box)return;
+ box.innerHTML=state.previsions.map(p=>{const h=horizonOf(p.dateProv);const badgeCol=h.key==='court'?'var(--terra)':h.key==='moyen'?'#8A7A3F':h.key==='long'?'var(--green)':'var(--soft)';
+  return `<div class="prev-row">
+   <div class="prev-top"><input placeholder="Nom du projet" data-pvn="${p.id}" value="${esc(p.nom)}"><button class="btn danger prem" data-pvrem="${p.id}">×</button></div>
+   <div class="prev-grid">
+    <div><label>Date prévisionnelle</label><input type="month" data-pvd="${p.id}" value="${esc(p.dateProv||'')}"></div>
+    <div><label>Investissement (€)</label><input inputmode="numeric" data-pvi="${p.id}" value="${esc(p.investissement||0)}"></div>
+    <div><label>Valeur créée visée (€)</label><input inputmode="numeric" data-pvv="${p.id}" value="${esc(p.valeurCreee||0)}"></div>
+    <div><label>Loyer mensuel visé (€/mois)</label><input inputmode="numeric" data-pvl="${p.id}" value="${esc(p.loyerMensuel||0)}"></div>
+   </div>
+   <div class="prev-grid" style="grid-template-columns:1fr 1fr">
+    <div><label>Bien / société concerné(e)</label><input placeholder="ex. Terrain à bâtir" data-pvli="${p.id}" value="${esc(p.lien||'')}"></div>
+    <div><label>Statut</label><select data-pvs="${p.id}"><option value="etude" ${p.statut==='etude'?'selected':''}>À l'étude</option><option value="planifie" ${p.statut==='planifie'?'selected':''}>Planifié</option><option value="engage" ${p.statut==='engage'?'selected':''}>Engagé</option></select></div>
+   </div>
+   <label style="font-size:.72rem;color:var(--soft);display:block;margin-bottom:3px">Description</label>
+   <textarea class="prev-desc" placeholder="Détail du projet — ex. découpage en 3 parcelles, construction de 4 lots locatifs…" data-pvde="${p.id}">${esc(p.description||'')}</textarea>
+   <span class="prev-badge" style="background:${badgeCol}22;color:${badgeCol}">${h.label}${p.dateProv?' · '+fmtMonth(p.dateProv):''}</span>
+  </div>`;}).join('')||'<div class="itype" style="color:var(--soft)">Aucun projet renseigné pour l\'instant.</div>';
+ wirePrevisions();}
+function wirePrevisions(){const box=$('#previsions');
+ box.querySelectorAll('[data-pvn]').forEach(i=>i.addEventListener('change',e=>{const p=state.previsions.find(x=>x.id==e.target.dataset.pvn);p.nom=e.target.value;save();}));
+ box.querySelectorAll('[data-pvd]').forEach(i=>i.addEventListener('change',e=>{const p=state.previsions.find(x=>x.id==e.target.dataset.pvd);p.dateProv=e.target.value;save();renderPrevisions();}));
+ box.querySelectorAll('[data-pvi]').forEach(i=>i.addEventListener('change',e=>{const p=state.previsions.find(x=>x.id==e.target.dataset.pvi);p.investissement=num(e.target.value);save();}));
+ box.querySelectorAll('[data-pvv]').forEach(i=>i.addEventListener('change',e=>{const p=state.previsions.find(x=>x.id==e.target.dataset.pvv);p.valeurCreee=num(e.target.value);save();renderPrevBuckets();}));
+ box.querySelectorAll('[data-pvl]').forEach(i=>i.addEventListener('change',e=>{const p=state.previsions.find(x=>x.id==e.target.dataset.pvl);p.loyerMensuel=num(e.target.value);save();}));
+ box.querySelectorAll('[data-pvli]').forEach(i=>i.addEventListener('change',e=>{const p=state.previsions.find(x=>x.id==e.target.dataset.pvli);p.lien=e.target.value;save();}));
+ box.querySelectorAll('[data-pvs]').forEach(i=>i.addEventListener('change',e=>{const p=state.previsions.find(x=>x.id==e.target.dataset.pvs);p.statut=e.target.value;save();}));
+ box.querySelectorAll('[data-pvde]').forEach(i=>i.addEventListener('change',e=>{const p=state.previsions.find(x=>x.id==e.target.dataset.pvde);p.description=e.target.value;save();}));
+ box.querySelectorAll('[data-pvrem]').forEach(b=>b.addEventListener('click',()=>{state.previsions=state.previsions.filter(x=>x.id!=b.dataset.pvrem);save();renderPrevisions();}));}
+
 function isDesc(of,maybe){let c=state.companies.find(x=>x.id==maybe);let guard=0;while(c&&guard++<50){if(c.parent==of)return true;c=state.companies.find(x=>x.id==c.parent);}return false;}
 function parentSel(co){let o=`<option value="">Aucune (entité autonome)</option>`;state.companies.forEach(x=>{if(x.id!=co.id&&!isDesc(co.id,x.id))o+=`<option value="${x.id}" ${co.parent==x.id?'selected':''}>${esc(x.name)}</option>`;});return o;}
 function assocTotal(co){return (co.associes||[]).reduce((s,a)=>s+(+a.pct||0),0);}
@@ -531,6 +590,9 @@ function bankHTML(){const{by,assets,debt,net}=totals();const dateStr=new Date().
  state.props.forEach(p=>{if(+p.loyer)revRows+=`<tr><td>Loyer — ${esc(p.name||'bien')}</td><td class="r">${fmt(p.loyer)} €/mois</td></tr>`;});
  let credRows='';state.credits.forEach(c=>{if(!(+c.amount))return;credRows+=`<tr><td>${esc(c.name||'Crédit')}${c.ech?`<div class="sub">Échéance : ${esc(c.ech)}</div>`:''}</td><td class="r">${fmt(c.amount)} €/mois</td></tr>`;});
  state.props.forEach(p=>{const cr=credit(p),debt=+p.debt||0;if(cr)credRows+=`<tr><td>Crédit immobilier — ${esc(p.name||'bien')}</td><td class="r">${fmt(cr.M)} €/mois</td></tr>`;else if(debt>0)credRows+=`<tr><td>Crédit immobilier — ${esc(p.name||'bien')}<div class="sub">Emprunt restant ${fmt(debt)} € — taux/durée à préciser</div></td><td class="r">—</td></tr>`;});
+ const horizonOrder=[['court','Court terme (≤ 2 ans)'],['moyen','Moyen terme (2 à 5 ans)'],['long','Long terme (> 5 ans)'],['indetermine','Sans échéance précise']];
+ let prevRows='';horizonOrder.forEach(([key,label])=>{const items=state.previsions.filter(p=>horizonOf(p.dateProv).key===key);if(!items.length)return;
+  items.forEach(p=>{prevRows+=`<tr><td><span style="font-size:.72rem;color:#6B6358;text-transform:uppercase;letter-spacing:.03em">${esc(label)}</span><br><strong>${esc(p.nom||'Projet')}</strong>${p.lien?` <span style="color:#6B6358">— ${esc(p.lien)}</span>`:''}${p.description?`<div class="sub">${esc(p.description)}</div>`:''}</td><td class="r">${p.dateProv?fmtMonth(p.dateProv):'—'}</td><td class="r">${(+p.investissement)?fmt(p.investissement)+' €':'—'}</td><td class="r">${(+p.valeurCreee)?fmt(p.valeurCreee)+' €':'—'}</td><td class="r">${(+p.loyerMensuel)?fmt(p.loyerMensuel)+' €/mois':'—'}</td></tr>`;});});
  return `<div class="bexp">
   <div class="bhead"><div class="bkicker">Dossier patrimonial</div><div class="btitle">Situation patrimoniale</div><div class="bsub">Document de synthèse — usage bancaire</div></div>
   <table class="bmeta"><tr><td>Titulaire(s)</td><td>${esc(state.bankHolder||'—')}</td></tr><tr><td>Date d'établissement</td><td>${dateStr}</td></tr></table>
@@ -559,6 +621,8 @@ function bankHTML(){const{by,assets,debt,net}=totals();const dateStr=new Date().
    <div class="bkpi"><div class="bkl">Charges retenues</div><div class="bkv" style="font-size:1.3rem">${fmt(t.chargesTotal)} €/mois</div></div>
    <div class="bkpi main"><div class="bkl">Taux d'endettement</div><div class="bkv" style="color:${t.taux<=35?'#4E7A50':'#B15A3E'}">${t.taux.toFixed(1)} %</div></div>
   </div>
+
+  ${prevRows?`<div class="bsec">Projets en perspective — court, moyen, long terme</div><table class="btab zebra"><thead><tr><th>Projet</th><th class="r">Échéance visée</th><th class="r">Investissement</th><th class="r">Valeur créée visée</th><th class="r">Loyer visé</th></tr></thead><tbody>${prevRows}</tbody></table><div class="bnote" style="margin-top:0;border-top:none;padding-top:0">Projets à l'état de projection, non intégrés au patrimoine actuel ci-dessus — montants et échéances estimatifs, susceptibles d'évoluer.</div>`:''}
 
   <div class="bnote">Les valorisations immobilières, mobilières et des participations figurant dans ce document sont des estimations établies par le foyer, à titre indicatif ; elles n'engagent pas de tiers évaluateur agréé. Document généré le ${dateStr}.</div>
  </div>`;}
@@ -599,6 +663,7 @@ function openLast(sel){const ef=document.querySelector(sel+' .card:last-child .e
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>goTab(t.dataset.t)));
 $('#addRevenu').addEventListener('click',()=>{state.revenus.push({id:nid++,name:"Nouveau revenu",amount:0});save();renderRevenus();renderRatio();});
 $('#addCredit').addEventListener('click',()=>{state.credits.push({id:nid++,name:"Nouveau crédit",amount:0,debt:0,ech:""});save();renderCredits();renderRatio();});
+$('#addPrev').addEventListener('click',()=>{state.previsions.push({id:nid++,nom:"Nouveau projet",dateProv:"",lien:"",description:"",investissement:0,valeurCreee:0,loyerMensuel:0,statut:"etude"});save();renderPrevisions();});
 $('#expBtn').addEventListener('click',()=>{try{const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const u=URL.createObjectURL(blob);const a=document.createElement('a');a.href=u;a.download='notre-patrimoine-sauvegarde.json';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(u);}catch(e){alert('Export impossible.');}});
 $('#impBtn').addEventListener('click',()=>$('#impFile').click());
 $('#impFile').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{try{const d=JSON.parse(rd.result);if(!d||!d.accounts)throw 0;state=d;normalize();save();renderOverview();renderAccounts();renderProps();renderCompanies();renderContacts();renderStamp();const bh=$('#bankHolder');if(bh)bh.value=state.bankHolder||'';alert('Données restaurées.');}catch(err){alert('Fichier de sauvegarde invalide.');}e.target.value='';};rd.readAsText(f,'utf-8');});
@@ -610,7 +675,7 @@ function authMsg(x){const c=(x&&x.code)||'';return (c.includes('invalid-credenti
  const su=g('pl-signup');if(su)su.addEventListener('click',()=>{const e=g('pl-email').value.trim(),p=g('pl-pwd').value,er=g('pl-err');if(er)er.textContent='';if(!window._auth){if(er)er.textContent='Connexion à Firebase indisponible.';return;}window._auth.signup(e,p).catch(x=>{if(er)er.textContent=authMsg(x);});});
  const off=g('pl-offline');if(off)off.addEventListener('click',()=>{const ov=g('patri-login');if(ov)ov.style.display='none';});})();
 window.addEventListener('fbready',initSync);
-(async()=>{await load();renderOverview();renderStamp();renderAccounts();renderProps();renderCompanies();renderPerso();renderGloss();renderContacts();renderSync();const bh=$('#bankHolder');if(bh)bh.value=state.bankHolder||'';if(window._auth)initSync();})();
+(async()=>{await load();renderOverview();renderStamp();renderAccounts();renderProps();renderCompanies();renderPerso();renderPrevisions();renderGloss();renderContacts();renderSync();const bh=$('#bankHolder');if(bh)bh.value=state.bankHolder||'';if(window._auth)initSync();})();
 </script>
 </body>
 </html>
