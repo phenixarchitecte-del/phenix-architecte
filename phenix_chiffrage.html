@@ -1237,7 +1237,19 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
     </div>
   </div>
 
-  <!-- MODAL RÉSULTATS ANALYSE IA -->
+  <!-- MODAL EXPORT VERS APPELS D'OFFRES -->
+  <div class="modal-overlay" id="modal-export-ao">
+    <div class="modal" style="max-width:560px">
+      <div class="modal-title"><i class="ti ti-send" style="color:#1E5FAA;margin-right:8px" aria-hidden="true"></i>Envoyer vers Appels d'offres</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Choisissez les lots à transmettre aux artisans. Les lots de maîtrise d'œuvre / honoraires internes sont décochés par défaut — ils n'ont pas à apparaître sur la plateforme publique.</div>
+      <div id="export-ao-lots-list" style="max-height:360px;overflow-y:auto"></div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+        <button class="btn btn-outline" onclick="closeModal('modal-export-ao')">Annuler</button>
+        <button class="btn btn-primary" onclick="confirmerExportAppelsOffres()" style="background:#1E5FAA;border-color:#1E5FAA">Envoyer la sélection</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="modal-chiffrage-archive">
     <div class="modal" style="max-width:640px">
       <div class="modal-title"><i class="ti ti-archive" style="color:#6C3483;margin-right:8px" aria-hidden="true"></i>Chiffrages enregistrés</div>
@@ -2513,9 +2525,47 @@ async function exportToAppelsOffres(){
   const c=state.chantiers[idx];
   const lots=sortLotsInPlace(c.lots||[]);
   if(!lots.length){ showToast('Aucun lot à envoyer'); return; }
+  ouvrirModalExportAO(idx);
+}
+window.exportToAppelsOffres = exportToAppelsOffres;
 
-  // Transformer les lots Chiffrage {num, nom, postes:[{n,q,u}]} au format DPGF
-  // attendu par la plateforme Appels d'offres : {lot, postes:[{designation,unite,quantite}]}
+// Lots exclus par défaut de l'envoi vers la plateforme publique : maîtrise
+// d'œuvre / honoraires internes, qui n'ont rien à faire sous les yeux d'un
+// artisan. Détection par mot-clé dans le nom du lot, désactivable au cas
+// par cas dans la modale.
+const MOTS_CLES_LOT_INTERNE = ['phénix','phenix','maîtrise d\'œuvre','maitrise d\'oeuvre','honoraires','moe'];
+function estLotInterneParDefaut(nom){
+  const n=(nom||'').toLowerCase();
+  return MOTS_CLES_LOT_INTERNE.some(mot => n.includes(mot));
+}
+
+function ouvrirModalExportAO(idx){
+  const c=state.chantiers[idx];
+  const lots=sortLotsInPlace(c.lots||[]);
+  const listEl=document.getElementById('export-ao-lots-list');
+  listEl.innerHTML = lots.map((lot,li) => {
+    const interne = estLotInterneParDefaut(lot.nom);
+    return `
+    <label style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;${interne?'background:rgba(201,98,42,.05)':''}">
+      <input type="checkbox" class="export-ao-lot-chk" data-li="${li}" ${interne?'':'checked'} style="width:16px;height:16px">
+      <span style="flex:1;font-size:13px;color:var(--nav)">${(lot.num?lot.num+' — ':'')}${lot.nom||''}</span>
+      ${interne ? '<span style="font-size:10px;font-weight:700;color:#c9622a;background:#fdf0e6;padding:2px 8px;border-radius:10px">décoché par défaut — lot interne</span>' : ''}
+    </label>`;
+  }).join('');
+  document.getElementById('modal-export-ao').dataset.chantierIdx = idx;
+  document.getElementById('modal-export-ao').classList.add('open');
+}
+window.ouvrirModalExportAO = ouvrirModalExportAO;
+
+async function confirmerExportAppelsOffres(){
+  const idx = parseInt(document.getElementById('modal-export-ao').dataset.chantierIdx, 10);
+  const c = state.chantiers[idx];
+  if(!c) return;
+  const allLots = sortLotsInPlace(c.lots||[]);
+  const checked = [...document.querySelectorAll('.export-ao-lot-chk')].filter(chk => chk.checked).map(chk => parseInt(chk.dataset.li,10));
+  const lots = allLots.filter((_,li) => checked.includes(li));
+  if(!lots.length){ showToast('⚠️ Sélectionnez au moins un lot'); return; }
+
   const dpgf = lots.map(lot => ({
     lot: (lot.num ? lot.num + ' — ' : '') + (lot.nom || ''),
     postes: (lot.postes||[]).map(p => ({ designation: p.n||'', unite: p.u||'u', quantite: parseFloat(p.q)||0 }))
@@ -2535,20 +2585,19 @@ async function exportToAppelsOffres(){
     }
   };
 
-  // Relais localStorage : ouverture immédiate si l'onglet Appels d'offres est lancé ensuite
   try { localStorage.setItem('phenix-open-in-appels-offres', JSON.stringify(payload)); } catch(e){}
-  // Staging Firestore : permet aussi une récupération asynchrone côté Appels d'offres
   try {
     if(typeof window.pushDpgfToAppelsOffres === 'function'){
       await window.pushDpgfToAppelsOffres(payload.projetId, payload);
     }
-    showToast('✅ DPGF envoyé vers Appels d\'offres (' + dpgf.length + ' lot(s))');
+    showToast('✅ DPGF envoyé vers Appels d\'offres (' + dpgf.length + '/' + allLots.length + ' lot(s))');
   }catch(e){
     console.error('Export appels d\'offres error', e);
     showToast('⚠️ DPGF préparé localement (staging cloud indisponible)');
   }
+  closeModal('modal-export-ao');
 }
-window.exportToAppelsOffres = exportToAppelsOffres;
+window.confirmerExportAppelsOffres = confirmerExportAppelsOffres;
 
 function updateStats(lots){
   let totalArtisan=0,totalClient=0;
