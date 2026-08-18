@@ -293,6 +293,7 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
 .reno-ia-status{display:none;padding:12px 16px;border-radius:var(--r-md);font-size:13px;margin-bottom:12px}
 .reno-ia-status.running{background:rgba(108,52,131,.08);border:1.5px solid rgba(108,52,131,.25);color:#6C3483;display:flex;align-items:center;gap:10px}
 .reno-ia-status.error{background:var(--danger-bg);border:1.5px solid var(--danger);color:var(--danger);display:block}
+.reno-ia-status.warning{background:#fdf3ea;border:1.5px solid #f0d4b8;color:#8a5321;display:block}
 @media(max-width:700px){
   .reno-grid{grid-template-columns:1fr}
   .reno-plan-slots{grid-template-columns:1fr 1fr}
@@ -4412,15 +4413,20 @@ Sois précis et exhaustif. Si une valeur n'est pas lisible sur le plan, estime-l
     if(data.error) throw new Error(data.error.message || JSON.stringify(data.error));
 
     const rawText = (data.content||[]).map(b=>b.text||'').join('');
-    let parsed;
+    let parsed, wasRepaired = false;
     try {
       const clean = rawText.replace(/```json|```/g,'').trim();
       // Extraire le premier objet JSON trouvé
       const jsonStart = clean.indexOf('{');
       const jsonEnd = clean.lastIndexOf('}');
-      parsed = JSON.parse(clean.slice(jsonStart, jsonEnd+1));
+      const result = tryRepairTruncatedJSON(clean.slice(jsonStart, jsonEnd+1));
+      parsed = result.data;
+      wasRepaired = result.repaired;
     } catch(pe) {
       throw new Error('Réponse IA non parseable : ' + rawText.slice(0,300));
+    }
+    if (wasRepaired){
+      showToast('⚠️ Réponse IA coupée (dossier volumineux) — lots complets récupérés, vérifiez qu\'aucun ne manque.');
     }
 
     iaResultData = parsed;
@@ -5388,6 +5394,31 @@ function renoReset() {
 }
 
 // ── Analyse IA ────────────────────────────────────────────────────
+// Répare un JSON tronqué (réponse IA coupée en cours de génération, sur un
+// dossier volumineux) en le refermant proprement au dernier lot complet.
+// Les lots déjà entièrement générés sont conservés ; seul le dernier lot
+// resté incomplet (le cas échéant) est perdu — bien mieux qu'un plantage total.
+function tryRepairTruncatedJSON(text){
+  try { return { data: JSON.parse(text), repaired: false }; } catch(e){}
+  const lotsKeyIdx = text.indexOf('"lots"');
+  if (lotsKeyIdx === -1) throw new Error('Réponse IA incomplète et aucun lot n\'a pu être récupéré.');
+  const arrStart = text.indexOf('[', lotsKeyIdx);
+  if (arrStart === -1) throw new Error('Réponse IA incomplète et aucun lot n\'a pu être récupéré.');
+  let depth = 0, inStr = false, esc = false, lastGoodEnd = -1;
+  for (let i = arrStart + 1; i < text.length; i++){
+    const ch = text[i];
+    if (esc){ esc = false; continue; }
+    if (ch === '\\'){ esc = true; continue; }
+    if (ch === '"'){ inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (ch === '{'){ depth++; }
+    else if (ch === '}'){ depth--; if (depth === 0) lastGoodEnd = i; }
+  }
+  if (lastGoodEnd === -1) throw new Error('Réponse IA incomplète : aucun lot entier n\'a pu être récupéré. Réessayez, idéalement avec un dossier moins volumineux ou une description plus courte.');
+  const repaired = text.slice(0, lastGoodEnd + 1) + ']}';
+  return { data: JSON.parse(repaired), repaired: true };
+}
+
 async function renoLancerIA() {
   const PROXY = 'https://phenix-proxy.phenixarchitecte.workers.dev';
   if(!renoPages.length) { showToast('⚠️ Chargez d\'abord un dossier'); return; }
@@ -5451,7 +5482,7 @@ LOT 10 Peinture/Finitions · LOT 11 Escalier · LOT 12 Isolation · LOT 13 Netto
     const res = await fetch(PROXY, {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
-        model:'claude-sonnet-4-6', max_tokens:8000,
+        model:'claude-sonnet-4-6', max_tokens:16000,
         system: systemPrompt, messages:[{role:'user', content}]
       })
     });
@@ -5461,9 +5492,15 @@ LOT 10 Peinture/Finitions · LOT 11 Escalier · LOT 12 Isolation · LOT 13 Netto
 
     const raw = (data.content||[]).map(b=>b.text||'').join('');
     const clean = raw.replace(/```json|```/g,'').trim();
-    const parsed = JSON.parse(clean.slice(clean.indexOf('{'), clean.lastIndexOf('}')+1));
+    const jsonSlice = clean.slice(clean.indexOf('{'), clean.lastIndexOf('}')+1);
+    const { data: parsed, repaired } = tryRepairTruncatedJSON(jsonSlice);
 
     statusEl.style.display = 'none';
+    if (repaired){
+      statusEl.style.display = '';
+      statusEl.className = 'reno-ia-status warning';
+      statusEl.textContent = `⚠️ Le dossier était volumineux : la réponse de l'IA a été coupée. ${parsed.lots?.length||0} lot(s) complet(s) ont été récupérés — vérifiez qu'aucun ne manque, et relancez sur le reste si besoin.`;
+    }
 
     // Pré-remplir le formulaire chantier
     iaResultData = parsed;
@@ -5774,7 +5811,7 @@ Sois précis et exhaustif. Si une valeur n'est pas lisible, estime-la de façon 
     const res = await fetch(PROXY, {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
-        model:'claude-sonnet-4-6', max_tokens:8000,
+        model:'claude-sonnet-4-6', max_tokens:16000,
         system: systemPrompt, messages:[{role:'user', content}]
       })
     });
@@ -5784,10 +5821,17 @@ Sois précis et exhaustif. Si une valeur n'est pas lisible, estime-la de façon 
 
     const raw = (data.content||[]).map(b=>b.text||'').join('');
     const clean = raw.replace(/```json|```/g,'').trim();
-    const parsed = JSON.parse(clean.slice(clean.indexOf('{'), clean.lastIndexOf('}')+1));
+    const jsonSlice = clean.slice(clean.indexOf('{'), clean.lastIndexOf('}')+1);
+    const { data: parsed, repaired } = tryRepairTruncatedJSON(jsonSlice);
 
     statusEl.style.display = 'none';
+    if (repaired){
+      statusEl.style.display = '';
+      statusEl.className = 'reno-ia-status warning';
+      statusEl.textContent = `⚠️ Le dossier était volumineux : la réponse de l'IA a été coupée. ${parsed.lots?.length||0} lot(s) complet(s) ont été récupérés — vérifiez qu'aucun ne manque, et relancez sur le reste si besoin.`;
+    }
 
+    iaResultData = parsed;
     const nomInput = document.getElementById('ia-chantier-nom');
     if(nomInput && !nomInput.value) nomInput.value = parsed.projet?.description||'';
     const surfInput = document.getElementById('ia-chantier-surface');
