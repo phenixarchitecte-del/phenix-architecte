@@ -4394,7 +4394,7 @@ Sois précis et exhaustif. Si une valeur n'est pas lisible sur le plan, estime-l
       {type:'text', text:'Analyse ce plan architectural et génère le JSON de chiffrage complet selon le format demandé.'}
     ];
 
-    const res = await fetch(PROXY, {
+    const res = await fetchProxyAvecReessai(PROXY, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
@@ -5419,6 +5419,28 @@ function tryRepairTruncatedJSON(text){
   return { data: JSON.parse(repaired), repaired: true };
 }
 
+// Appelle le proxy IA avec une nouvelle tentative automatique en cas
+// d'échec réseau pur ("Failed to fetch" : connexion interrompue, Worker
+// trop lent à répondre sur un gros dossier...). Les erreurs HTTP normales
+// (4xx/5xx avec réponse du serveur) ne sont, elles, jamais réessayées.
+async function fetchProxyAvecReessai(url, options, maxTentatives = 2){
+  let derniereErreur;
+  for (let tentative = 1; tentative <= maxTentatives; tentative++){
+    try {
+      return await fetch(url, options);
+    } catch(err){
+      derniereErreur = err;
+      const estErreurReseau = err instanceof TypeError || /failed to fetch/i.test(err.message||'');
+      if (!estErreurReseau || tentative === maxTentatives) break;
+      await new Promise(r => setTimeout(r, 1500 * tentative));
+    }
+  }
+  const msg = /failed to fetch/i.test(derniereErreur?.message||'')
+    ? "Connexion au serveur d'analyse interrompue après plusieurs tentatives. Vérifiez votre connexion internet, ou consultez les journaux (Logs) de votre Worker Cloudflare (phenix-proxy) — il a peut-être mis trop de temps à répondre sur un dossier aussi volumineux."
+    : (derniereErreur?.message || 'Erreur réseau inconnue.');
+  throw new Error(msg);
+}
+
 async function renoLancerIA() {
   const PROXY = 'https://phenix-proxy.phenixarchitecte.workers.dev';
   if(!renoPages.length) { showToast('⚠️ Chargez d\'abord un dossier'); return; }
@@ -5479,7 +5501,7 @@ LOT 10 Peinture/Finitions · LOT 11 Escalier · LOT 12 Isolation · LOT 13 Netto
   });
 
   try {
-    const res = await fetch(PROXY, {
+    const res = await fetchProxyAvecReessai(PROXY, {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
         model:'claude-sonnet-4-6', max_tokens:16000,
@@ -5808,7 +5830,7 @@ Sois précis et exhaustif. Si une valeur n'est pas lisible, estime-la de façon 
   });
 
   try {
-    const res = await fetch(PROXY, {
+    const res = await fetchProxyAvecReessai(PROXY, {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
         model:'claude-sonnet-4-6', max_tokens:16000,
