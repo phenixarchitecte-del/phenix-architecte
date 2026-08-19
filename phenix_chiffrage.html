@@ -1574,7 +1574,7 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
     </div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal('modal-chantier')">Annuler</button>
-      <button class="btn btn-primary" onclick="saveNewChantier()">Créer le chantier</button>
+      <button class="btn btn-primary" id="btn-save-chantier" onclick="saveNewChantier()">Créer le chantier</button>
     </div>
   </div>
 </div>
@@ -2210,6 +2210,7 @@ function selectChantier(i){
 }
 
 function openNewChantierModal(){state.editingChantierIdx=null;clearChantierForm();document.getElementById('modal-chantier-title').textContent='Nouveau chantier';
+  const btn=document.getElementById('btn-save-chantier'); if(btn) btn.textContent='Créer le chantier';
   // Reset import
   const importSel = document.getElementById('f-import-projet');
   if (importSel) { delete importSel.dataset.linkedProjetId; delete importSel.dataset.linkedBudget; delete importSel.dataset.linkedHonoraires; }
@@ -2228,6 +2229,7 @@ function editChantier(i){
   document.getElementById('f-client').value=c.client||'';
   document.getElementById('f-phase').value=c.phase||'APS';
   document.getElementById('modal-chantier-title').textContent='Modifier le chantier';
+  const btn=document.getElementById('btn-save-chantier'); if(btn) btn.textContent='Enregistrer les modifications';
   document.getElementById('modal-chantier').classList.add('open');
 }
 function deleteChantier(i){
@@ -2306,14 +2308,23 @@ function saveNewChantier(){
   const linkedProjetId = importSel?.dataset?.linkedProjetId || null;
   const linkedBudget = importSel?.dataset?.linkedBudget || '';
   const linkedHonoraires = importSel?.dataset?.linkedHonoraires || '';
-  const data={nom,type:document.getElementById('f-type').value,surface:document.getElementById('f-surface').value,adresse:document.getElementById('f-adresse').value,client:document.getElementById('f-client').value,phase:document.getElementById('f-phase').value,lots:[],
+  const data={nom,type:document.getElementById('f-type').value,surface:document.getElementById('f-surface').value,adresse:document.getElementById('f-adresse').value,client:document.getElementById('f-client').value,phase:document.getElementById('f-phase').value,
     projetId: linkedProjetId,
     budgetTravaux: linkedBudget,
     honoraires: linkedHonoraires,
   };
-  if(state.editingChantierIdx!==null){Object.assign(state.chantiers[state.editingChantierIdx],data);data.lots=state.chantiers[state.editingChantierIdx].lots;}
-  else{state.chantiers.push(data);}
-  saveState();renderChantierGrid();renderChantierSelects();closeModal('modal-chantier');showToast(state.editingChantierIdx!==null?'Chantier mis à jour':'Chantier créé');
+  if(state.editingChantierIdx!==null){
+    // Ne jamais toucher aux lots existants ici : on ne modifie que les
+    // champs d'identité du chantier (nom, adresse, client...). Les lots
+    // ne sont donc même pas inclus dans "data", pour qu'un Object.assign
+    // ne risque jamais de les écraser, quel que soit l'ordre du code.
+    Object.assign(state.chantiers[state.editingChantierIdx],data);
+  }
+  else{
+    data.lots=[];
+    state.chantiers.push(data);
+  }
+  saveState();renderChantierGrid();renderChantierSelects();closeModal('modal-chantier');showToast(state.editingChantierIdx!==null?'Chantier mis à jour (lots conservés)':'Chantier créé');
 }
 
 function renderChantierSelects(){
