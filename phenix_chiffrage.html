@@ -550,7 +550,19 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
     <div class="stats-row" id="stats-row">
       <div class="stat-card"><div class="stat-label">Nombre de lots</div><div class="stat-value" id="stat-lots">0</div><div class="stat-sub">0 terminé(s)</div></div>
       <div class="stat-card"><div class="stat-label">Total HT</div><div class="stat-value accent" id="stat-ht">0 €</div></div>
-      <div class="stat-card"><div class="stat-label">Total TTC</div><div class="stat-value" id="stat-ttc">0 €</div><div class="stat-sub">TVA 20%</div></div>
+      <div class="stat-card"><div class="stat-label">Total TTC</div><div class="stat-value" id="stat-ttc">0 €</div><div class="stat-sub" id="stat-tva-sub">TVA 20%</div></div>
+    </div>
+
+    <!-- TVA générale du projet -->
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 28px;background:var(--surface2);border-bottom:1px solid var(--border)">
+      <label style="font-size:13px;font-weight:600;color:var(--nav);white-space:nowrap">TVA générale du projet</label>
+      <select id="tva-generale-select" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+        <option value="20">20% (travaux neufs)</option>
+        <option value="10">10% (rénovation courante)</option>
+        <option value="5.5">5.5% (rénovation énergétique)</option>
+      </select>
+      <button class="btn btn-outline" style="padding:6px 14px;font-size:13px" onclick="appliquerTvaGenerale()">Appliquer à tous les lots</button>
+      <span style="font-size:12px;color:var(--text3)">Change le taux de TVA de chaque lot existant en une fois — vous pouvez toujours ajuster un lot particulier ensuite dans son détail.</span>
     </div>
 
     <!-- Table lots -->
@@ -2363,6 +2375,13 @@ function renderChiffrage(){
   document.getElementById('chantier-select').value=idx;
   if(typeof renderLotsTableOrCards === "function") renderLotsTableOrCards(); else renderLotsTable();
 
+  const tvaSel=document.getElementById('tva-generale-select');
+  if(tvaSel){
+    const tauxDistincts=[...new Set((c.lots||[]).map(l=>numOr(l.tva,20)))];
+    const valeur = tauxDistincts.length===1 ? tauxDistincts[0] : (c.tvaGenerale ?? 20);
+    if([...tvaSel.options].some(o=>parseFloat(o.value)===valeur)) tvaSel.value=valeur;
+  }
+
   const nbArchives=(c.chiffrageArchive||[]).length;
   archBtn.style.display=nbArchives?'':'none';
   archBtn.innerHTML=`<i class="ti ti-archive" aria-hidden="true"></i>Chiffrages enregistrés (${nbArchives})`;
@@ -2613,7 +2632,8 @@ async function confirmerExportAppelsOffres(){
 window.confirmerExportAppelsOffres = confirmerExportAppelsOffres;
 
 function updateStats(lots){
-  let totalArtisan=0,totalClient=0;
+  let totalArtisan=0,totalClient=0,totalTTC=0;
+  const tauxVus=new Set();
   lots.forEach(lot=>{
     let lotArtisan=0, lotClient=0;
     (lot.postes||[]).forEach(p=>{
@@ -2627,13 +2647,40 @@ function updateStats(lots){
     lotClient+=aleas+hon;
     totalArtisan+=lotArtisan;
     totalClient+=lotClient;
+    const tauxLot=numOr(lot.tva,20);
+    tauxVus.add(tauxLot);
+    totalTTC+=lotClient*(1+tauxLot/100);
   });
   const valide=lots.filter(l=>l.statut==='Valide').length;
   document.getElementById('stat-lots').textContent=lots.length;
   document.getElementById('stat-lots').nextElementSibling.textContent=valide+' terminé(s)';
   document.getElementById('stat-ht').textContent=fmt(totalClient)+' €';
-  document.getElementById('stat-ttc').textContent=fmt(totalClient*1.2)+' €';
+  document.getElementById('stat-ttc').textContent=fmt(totalTTC)+' €';
+  const tvaSub=document.getElementById('stat-tva-sub');
+  if(tvaSub){
+    if(tauxVus.size===0) tvaSub.textContent='TVA 20%';
+    else if(tauxVus.size===1) tvaSub.textContent='TVA '+[...tauxVus][0]+'%';
+    else tvaSub.textContent='TVA mixte ('+[...tauxVus].sort((a,b)=>a-b).join('% / ')+'%)';
+  }
 }
+
+// Applique le taux de TVA choisi à tous les lots du chantier actif en une
+// fois. Chaque lot garde ensuite la possibilité d'être ajusté isolément
+// dans son détail (ex. un lot à taux réduit dans un chantier majoritairement
+// à 20%), cette action ne fait qu'harmoniser rapidement le point de départ.
+function appliquerTvaGenerale(){
+  const idx=state.currentChantier;
+  if(idx===null||!state.chantiers[idx]){ showToast('Sélectionnez un chantier d\'abord'); return; }
+  const lots=state.chantiers[idx].lots||[];
+  if(!lots.length){ showToast('Aucun lot dans ce chantier'); return; }
+  const taux=parseFloat(document.getElementById('tva-generale-select').value);
+  lots.forEach(lot=>{ lot.tva=taux; });
+  state.chantiers[idx].tvaGenerale=taux;
+  saveState();
+  renderChiffrage();
+  showToast('✓ TVA '+taux+'% appliquée à '+lots.length+' lot(s)');
+}
+window.appliquerTvaGenerale=appliquerTvaGenerale;
 
 function openNewLotModal(){
   if(state.currentChantier===null){alert('Sélectionnez d\'abord un chantier.');return;}
@@ -2677,7 +2724,6 @@ function openLotDetail(li){
   document.getElementById('detail-prestation').value=lot.prestation||'std';
   document.getElementById('detail-tva').value=lot.tva||20;
   document.getElementById('param-marge').value=numOr(lot.marge,20);
-  document.getElementById('stats-row').style.display='none';
   document.getElementById('lots-table-wrap').style.display='none';
   document.getElementById('lot-detail').style.display='flex';
   renderPostes();
@@ -2687,7 +2733,6 @@ function openLotDetail(li){
 function closeLotDetail(){
   state.currentLot=null;
   document.getElementById('lot-detail').style.display='none';
-  document.getElementById('stats-row').style.display='';
   document.getElementById('lots-table-wrap').style.display='';
 }
 
@@ -2735,6 +2780,7 @@ function renderPostes(){
   const lot=state.chantiers[state.currentChantier].lots[li];
   const tb=document.getElementById('postes-tbody');
   tb.innerHTML='';
+  const nbPostes=(lot.postes||[]).length;
   (lot.postes||[]).forEach((p,pi)=>{
     const artisan=parseFloat(p.puArtisan)||parseFloat(p.pu)||0;
     const client=parseFloat(p.puClient)||artisan;
@@ -2757,10 +2803,24 @@ function renderPostes(){
         <span class="marge-badge${margePct<0?' neg':''}">${margePct>=0?'+':''}${margePct}%</span>
       </td>
       <td class="poste-total">${fmt(totalClient)} €</td>
-      <td><button class="btn btn-sm btn-danger" onclick="deletePoste(${pi})" style="padding:3px 7px"><i class="ti ti-trash" aria-hidden="true" style="font-size:13px"></i></button></td>`;
+      <td style="white-space:nowrap">
+        <button class="btn btn-sm btn-icon" onclick="movePoste(${pi},-1)" ${pi===0?'disabled style="opacity:.3"':''} title="Monter"><i class="ti ti-arrow-up" aria-hidden="true" style="font-size:13px"></i></button>
+        <button class="btn btn-sm btn-icon" onclick="movePoste(${pi},1)" ${pi===nbPostes-1?'disabled style="opacity:.3"':''} title="Descendre"><i class="ti ti-arrow-down" aria-hidden="true" style="font-size:13px"></i></button>
+        <button class="btn btn-sm btn-danger" onclick="deletePoste(${pi})" style="padding:3px 7px"><i class="ti ti-trash" aria-hidden="true" style="font-size:13px"></i></button>
+      </td>`;
     tb.appendChild(tr);
   });
 }
+
+function movePoste(pi, dir){
+  const lot=state.chantiers[state.currentChantier].lots[state.currentLot];
+  const postes=lot.postes||[];
+  const target=pi+dir;
+  if(target<0||target>=postes.length) return;
+  [postes[pi], postes[target]] = [postes[target], postes[pi]];
+  renderPostes();saveLot();
+}
+window.movePoste = movePoste;
 
 function updatePoste(pi,field,val){
   const lot=state.chantiers[state.currentChantier].lots[state.currentLot];
@@ -2835,6 +2895,12 @@ function saveLotIdentity(){
     saveState();
     if(typeof renderLotsTableOrCards === "function") renderLotsTableOrCards(); else renderLotsTable();
     renderChantierGrid();
+    if(state.currentLot !== null){
+      const tableWrap = document.getElementById('lots-table-wrap');
+      const mobileCards = document.getElementById('lots-cards-mobile');
+      if(tableWrap) tableWrap.style.display = 'none';
+      if(mobileCards) mobileCards.style.display = 'none';
+    }
   }, 400);
 }
 
@@ -2845,6 +2911,16 @@ function saveLot(){
   lot.statut=document.getElementById('param-statut').value;
   lot.notes=document.getElementById('param-notes').value;
   saveState();if(typeof renderLotsTableOrCards === "function") renderLotsTableOrCards(); else renderLotsTable();renderChantierGrid();
+  // renderLotsTableOrCards() réaffiche la liste des lots (elle rafraîchit
+  // aussi les totaux/le tableau en arrière-plan, ce qui reste utile) — mais
+  // si on est en train de regarder le détail d'un lot, cette liste ne doit
+  // pas réapparaître par-dessus : on la re-masque juste après.
+  if(state.currentLot !== null){
+    const tableWrap = document.getElementById('lots-table-wrap');
+    const mobileCards = document.getElementById('lots-cards-mobile');
+    if(tableWrap) tableWrap.style.display = 'none';
+    if(mobileCards) mobileCards.style.display = 'none';
+  }
 }
 
 // === IMPORT DEVIS ARTISAN ===
