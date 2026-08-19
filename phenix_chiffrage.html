@@ -1962,6 +1962,7 @@ function showPage(page){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('page-'+page).classList.add('active');
   document.getElementById('nav-'+page).classList.add('active');
+  if(page==='chantiers'){renderChantierGrid();}
   if(page==='chiffrage'){renderChiffrage();}
   if(page==='export'){renderExportSelects();}
   if(page==='metrages' && metrageState && metrageState.canvas){ setTimeout(resizeMetrageCanvas, 50); }
@@ -4449,22 +4450,21 @@ function toggleIALot(li) {
 
 function recalcIAPoste(li, pi) {
   const q = parseFloat(document.getElementById('iap-q-'+li+'-'+pi)?.value)||0;
-  const pc = parseFloat(document.getElementById('iap-pc-'+li+'-'+pi)?.value)||0;
+  const pa = parseFloat(document.getElementById('iap-pa-'+li+'-'+pi)?.value)||0;
   const lots = iaResultData?.lots || [];
   if(lots[li] && lots[li].postes[pi]) {
     lots[li].postes[pi].q = q;
-    lots[li].postes[pi].pu_client = pc;
-    lots[li].postes[pi].pu_artisan = parseFloat(document.getElementById('iap-pa-'+li+'-'+pi)?.value)||0;
+    lots[li].postes[pi].pu_artisan = pa;
   }
-  // Recalculer total lot
+  // Recalculer total lot (prix d'achat, sans marge à ce stade)
   const postes = lots[li]?.postes || [];
   const total = postes.reduce((s,p,idx) => {
     const qv = parseFloat(document.getElementById('iap-q-'+li+'-'+idx)?.value)||0;
-    const pcv = parseFloat(document.getElementById('iap-pc-'+li+'-'+idx)?.value)||0;
-    return s + qv*pcv;
+    const pav = parseFloat(document.getElementById('iap-pa-'+li+'-'+idx)?.value)||0;
+    return s + qv*pav;
   }, 0);
   const totEl = document.getElementById('ia-lot-total-'+li);
-  if(totEl) totEl.textContent = 'Total HT client : ' + Math.round(total).toLocaleString('fr-FR') + ' €';
+  if(totEl) totEl.textContent = "Total HT (prix d'achat, sans marge) : " + Math.round(total).toLocaleString('fr-FR') + ' €';
 }
 
 function onIAChantierChange() {
@@ -4555,27 +4555,35 @@ function confirmerImportIA() {
     // Si la case est introuvable (ne devrait pas arriver, mais par sécurité), on
     // inclut le lot plutôt que de l'ignorer silencieusement.
     if(chk && !chk.checked) return;
-    const postes = (lot.postes||[]).map((p, pi) => ({
-      n: String(p.n||'').replace(/^[\s]*[-•*–—]+[\s]*/, '').trim(),
-      q: parseFloat(document.getElementById('iap-q-'+li+'-'+pi)?.value) || parseFloat(p.q) || 0,
-      u: p.u || 'u',
-      puArtisan: parseFloat(document.getElementById('iap-pa-'+li+'-'+pi)?.value) || parseFloat(p.pu_artisan) || 0,
-      puClient:  parseFloat(document.getElementById('iap-pc-'+li+'-'+pi)?.value) || parseFloat(p.pu_client)  || 0,
-      pu: parseFloat(p.pu_artisan) || 0
-    }));
+    const postes = (lot.postes||[]).map((p, pi) => {
+      const puArtisanFinal = parseFloat(document.getElementById('iap-pa-'+li+'-'+pi)?.value) || parseFloat(p.pu_artisan) || 0;
+      return {
+        n: String(p.n||'').replace(/^[\s]*[-•*–—]+[\s]*/, '').trim(),
+        q: parseFloat(document.getElementById('iap-q-'+li+'-'+pi)?.value) || parseFloat(p.q) || 0,
+        u: p.u || 'u',
+        // Pas de marge appliquée automatiquement à l'import IA : prix de
+        // vente = prix d'achat par défaut. La marge se règle manuellement
+        // ensuite (globale sur le lot ou poste par poste).
+        puArtisan: puArtisanFinal,
+        puClient: puArtisanFinal,
+        pu: puArtisanFinal
+      };
+    });
     const nbExistants = chantier.lots.length;
     chantier.lots.push({
       num: 'LOT '+(nbExistants+1).toString().padStart(2,'0'),
       nom: lot.nom, postes,
       aleas:5, honoraires:5, tva:20, statut:'Chiffrage', prestation:'std',
       notes: 'Généré par analyse IA — ' + (iaResultData?.projet?.description||''),
-      marge:20
+      marge:0
     });
     nbLots++; nbPostes += postes.length;
   });
 
   saveState();
   closeModal('modal-ia-resultats');
+  renderChantierGrid();
+  renderChantierSelects();
   // Réinitialiser le formulaire pour la prochaine fois
   document.getElementById('ia-chantier-nom').value = '';
   document.getElementById('ia-chantier-client').value = '';
@@ -4857,7 +4865,7 @@ function _ouvrirModalResultats(data) {
   lotsEl.innerHTML = '';
   lots.forEach((lot, li) => {
     const postes = lot.postes || [];
-    const totalLot = postes.reduce((s,p) => s + (parseFloat(p.q)||0)*(parseFloat(p.pu_client)||parseFloat(p.pu_artisan)||0), 0);
+    const totalLot = postes.reduce((s,p) => s + (parseFloat(p.q)||0)*(parseFloat(p.pu_artisan)||0), 0);
     const lotDiv = document.createElement('div');
     lotDiv.className = 'ia-result-lot';
     lotDiv.innerHTML = `
@@ -4869,19 +4877,18 @@ function _ouvrirModalResultats(data) {
         <i class="ti ti-chevron-down" id="ia-lot-chev-${li}" style="color:var(--text3);font-size:14px;transition:transform .2s"></i>
       </div>
       <div class="ia-result-lot-body" id="ia-lot-body-${li}">
-        <div style="display:grid;grid-template-columns:1fr 60px 40px 70px 70px;gap:4px;padding:5px 14px;font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;background:var(--surface2)">
-          <div>Désignation</div><div style="text-align:right">Qté</div><div style="text-align:center">Unité</div><div style="text-align:right">PU artisan</div><div style="text-align:right">PU client</div>
+        <div style="display:grid;grid-template-columns:1fr 60px 40px 90px;gap:4px;padding:5px 14px;font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;background:var(--surface2)">
+          <div>Désignation</div><div style="text-align:right">Qté</div><div style="text-align:center">Unité</div><div style="text-align:right">PU achat</div>
         </div>
         ${postes.map((p,pi) => `
-        <div class="ia-poste-row">
+        <div class="ia-poste-row" style="grid-template-columns:1fr 60px 40px 90px;">
           <div style="font-size:12px;color:var(--text)">${p.n}</div>
           <input type="number" value="${p.q}" min="0" step="0.1" id="iap-q-${li}-${pi}" oninput="recalcIAPoste(${li},${pi})">
           <div style="text-align:center;font-size:11px;color:var(--text3)">${p.u}</div>
           <input type="number" value="${p.pu_artisan||0}" min="0" step="1" id="iap-pa-${li}-${pi}" oninput="recalcIAPoste(${li},${pi})">
-          <input type="number" value="${p.pu_client||p.pu_artisan||0}" min="0" step="1" id="iap-pc-${li}-${pi}" style="background:#fff9e6" oninput="recalcIAPoste(${li},${pi})">
         </div>`).join('')}
         <div style="padding:6px 14px;text-align:right;font-size:12px;font-weight:700;color:var(--nav);background:var(--surface2)" id="ia-lot-total-${li}">
-          Total HT client : ${Math.round(totalLot).toLocaleString('fr-FR')} €
+          Total HT (prix d'achat, sans marge) : ${Math.round(totalLot).toLocaleString('fr-FR')} €
         </div>
       </div>`;
     lotsEl.appendChild(lotDiv);
