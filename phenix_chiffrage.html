@@ -541,6 +541,7 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
           <button class="btn btn-outline" onclick="exportToFinancement()" style="border-color:#2D7A4F;color:#2D7A4F"><i class="ti ti-coin" aria-hidden="true"></i>Envoyer vers Financement</button>
           <button class="btn btn-outline" onclick="exportToChantier()" style="border-color:#1B2D5B;color:#1B2D5B"><i class="ti ti-building-factory-2" aria-hidden="true"></i>Envoyer vers Chantier</button>
           <button class="btn btn-outline" onclick="exportToAppelsOffres()" style="border-color:#1E5FAA;color:#1E5FAA"><i class="ti ti-send" aria-hidden="true"></i>Envoyer vers Appels d'offres</button>
+          <button class="btn btn-outline" onclick="ouvrirModalOffresArtisans()" id="btn-offres-artisans" style="border-color:#2E7D4F;color:#2E7D4F;display:none"><i class="ti ti-inbox-down" aria-hidden="true"></i>Offres artisans reçues <span id="offres-artisans-badge"></span></button>
           <button class="btn btn-outline" onclick="openChiffrageArchiveModal()" id="btn-chiffrage-archive" style="border-color:#6C3483;color:#6C3483;display:none"><i class="ti ti-archive" aria-hidden="true"></i>Chiffrages enregistrés</button>
       </div>
     </div>
@@ -1259,6 +1260,18 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
         <button class="btn btn-outline" onclick="closeModal('modal-export-ao')">Annuler</button>
         <button class="btn btn-primary" onclick="confirmerExportAppelsOffres()" style="background:#1E5FAA;border-color:#1E5FAA">Envoyer la sélection</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL OFFRES ARTISANS EN ATTENTE -->
+  <div class="modal-overlay" id="modal-offres-artisans">
+    <div class="modal" style="max-width:640px">
+      <div class="modal-title"><i class="ti ti-inbox-down" style="color:#2E7D4F;margin-right:8px" aria-hidden="true"></i>Offres artisans reçues</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Choisissez le dossier de destination pour chaque offre, puis créez un lot à part portant le nom de l'entreprise — pratique pour comparer plusieurs artisans sur un même chantier.</div>
+      <div id="offres-artisans-list" style="max-height:420px;overflow-y:auto"></div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+        <button class="btn btn-outline" onclick="closeModal('modal-offres-artisans')">Fermer</button>
       </div>
     </div>
   </div>
@@ -1986,77 +1999,141 @@ function initUI(){
   if(typeof checkShowPushBtn==='function') checkShowPushBtn();
   // Détecter un projet passé depuis Phénix Dossier
   checkIncomingFromDossier();
-  // Détecter des offres artisans renvoyées depuis Appels d'offres
-  checkIncomingOffresArtisans();
+  // Charger le nombre d'offres artisans en attente (bouton + badge)
+  chargerOffresArtisansEnAttente();
 }
 
 // ── Réception des offres chiffrées par les artisans (depuis Appels d'offres) ──
-async function checkIncomingOffresArtisans(){
-  // 1) Relais localStorage (ouverture immédiate d'une offre poussée à la main)
-  try {
-    const raw = localStorage.getItem('phenix-open-in-chiffrage-offre');
-    if (raw){
-      const p = JSON.parse(raw);
-      localStorage.removeItem('phenix-open-in-chiffrage-offre');
-      if (p && p.payload && (!p.ttl || Date.now() < p.ttl)) appliquerOffreArtisan(p.payload);
-    }
-  } catch(e){ console.warn('offre relais error', e); }
+// Stockées en attente jusqu'à ce qu'on choisisse explicitement, pour chacune,
+// dans quel dossier créer un nouveau lot à son nom — jamais d'écrasement
+// automatique d'un lot existant, pour pouvoir comparer plusieurs artisans.
+let offresArtisansEnAttente = [];
 
-  // 2) Collection de staging Firestore : offres en attente d'intégration
+async function chargerOffresArtisansEnAttente(){
   try {
-    const { db, auth, doc, collection, getDocs, deleteDoc } = await _phenixFbRefs();
+    const { db, auth, collection, getDocs } = await _phenixFbRefs();
     if (!auth.currentUser) return;
     const snap = await getDocs(collection(db, 'phenix_chiffrage_import'));
-    const offres = [];
-    snap.forEach(d => offres.push({ _id: d.id, ...d.data() }));
-    if (!offres.length) return;
-    if (confirm(offres.length + ' offre(s) artisan reçue(s) depuis Appels d\'offres.\n\nLes intégrer maintenant dans le chiffrage (prix artisan) ?')){
-      for (const o of offres){
-        appliquerOffreArtisan(o);
-        try { await deleteDoc(doc(db, 'phenix_chiffrage_import', o._id)); } catch(e){}
-      }
-      saveState(); renderChantierGrid();
-      showToast('✅ ' + offres.length + ' offre(s) intégrée(s)');
-    }
-  } catch(e){ console.warn('checkIncomingOffresArtisans error', e); }
+    offresArtisansEnAttente = [];
+    snap.forEach(d => offresArtisansEnAttente.push({ _id: d.id, ...d.data() }));
+    const btn = document.getElementById('btn-offres-artisans');
+    const badge = document.getElementById('offres-artisans-badge');
+    if (btn) btn.style.display = offresArtisansEnAttente.length ? '' : 'none';
+    if (badge) badge.textContent = offresArtisansEnAttente.length ? '(' + offresArtisansEnAttente.length + ')' : '';
+  } catch(e){ console.warn('chargerOffresArtisansEnAttente error', e); }
+}
+window.chargerOffresArtisansEnAttente = chargerOffresArtisansEnAttente;
+
+function ouvrirModalOffresArtisans(){
+  renderOffresArtisansList();
+  document.getElementById('modal-offres-artisans').classList.add('open');
+}
+window.ouvrirModalOffresArtisans = ouvrirModalOffresArtisans;
+
+function renderOffresArtisansList(){
+  const list = document.getElementById('offres-artisans-list');
+  if (!offresArtisansEnAttente.length){
+    list.innerHTML = '<p style="color:var(--text3);font-size:13px">Aucune offre en attente pour le moment.</p>';
+    return;
+  }
+  const optionsChantiers = state.chantiers.map((c,ci) => `<option value="${ci}">${esc_dpgf(c.nom||'Sans nom')}</option>`).join('');
+  list.innerHTML = offresArtisansEnAttente.map((o,oi) => {
+    // Pré-sélection du dossier si un projetId correspond déjà à un chantier existant
+    const ciMatch = state.chantiers.findIndex(c => String(c.projetId||'') === String(o.projetId||'') && o.projetId);
+    const nbLignesChiffrees = (o.lignes||[]).filter(l => l.prixUnitaire != null).length;
+    return `
+    <div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap">
+        <div>
+          <strong style="color:var(--nav)">${esc_dpgf(o.artisan?.nom||'Artisan')}</strong>
+          <span style="color:var(--text3);font-size:12px"> — ${esc_dpgf(o.lot||'')} · pour "${esc_dpgf(o.chantierTitre||'')}"</span>
+        </div>
+        <div style="font-weight:700;color:#2E7D4F">${fmt(o.totalHT||0)} € HT</div>
+      </div>
+      <div style="font-size:12px;color:var(--text2);margin:4px 0">${nbLignesChiffrees} ligne(s) chiffrée(s)${o.artisan?.tel?' · 📞 '+esc_dpgf(o.artisan.tel):''}${o.disponibilite?' · 📅 dispo. '+esc_dpgf(o.disponibilite):''}</div>
+      ${o.commentaireGeneral ? `<div style="font-size:12px;color:var(--text2);font-style:italic;margin-bottom:6px">"${esc_dpgf(o.commentaireGeneral)}"</div>` : ''}
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
+        <select id="offre-dest-${oi}" style="flex:1;min-width:180px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+          <option value="">— Choisir le dossier —</option>
+          ${optionsChantiers}
+        </select>
+        <button class="btn btn-primary btn-sm" style="background:#2E7D4F;border-color:#2E7D4F" onclick="creerLotDepuisOffreArtisan(${oi})">+ Créer un lot</button>
+        <button class="btn btn-outline btn-sm" onclick="ignorerOffreArtisan(${oi})" title="Supprimer cette offre sans créer de lot">Ignorer</button>
+      </div>
+    </div>`;
+  }).join('');
+  if (state.chantiers.some((c,ci) => offresArtisansEnAttente.some(o => String(o.projetId||'')===String(c.projetId||'') && o.projetId))){
+    offresArtisansEnAttente.forEach((o,oi) => {
+      const ciMatch = state.chantiers.findIndex(c => String(c.projetId||'') === String(o.projetId||'') && o.projetId);
+      if (ciMatch >= 0){ const sel=document.getElementById('offre-dest-'+oi); if(sel) sel.value=ciMatch; }
+    });
+  }
 }
 
-// Injecte les prix artisans d'une offre dans le lot correspondant du chantier lié
-function appliquerOffreArtisan(payload){
-  if (!payload || !Array.isArray(payload.lignes)) return;
-  // Retrouver le chantier par projetId/chantierId, sinon le chantier courant
-  let ci = state.chantiers.findIndex(c => String(c.projetId) === String(payload.projetId) || String(c.projetId) === String(payload.chantierId));
-  if (ci < 0) ci = (state.currentChantier!==null ? state.currentChantier : -1);
-  if (ci < 0){ showToast('⚠️ Aucun chantier lié à cette offre'); return; }
+async function creerLotDepuisOffreArtisan(oi){
+  const o = offresArtisansEnAttente[oi];
+  if (!o) return;
+  const sel = document.getElementById('offre-dest-'+oi);
+  const ci = sel ? parseInt(sel.value, 10) : NaN;
+  if (isNaN(ci) || !state.chantiers[ci]){ showToast('⚠️ Choisissez un dossier de destination'); return; }
   const chantier = state.chantiers[ci];
-  // Retrouver le lot par nom (le libellé AO est "num — nom" ou "nom")
-  const lotLabel = (payload.lot||'').toLowerCase();
-  let lot = (chantier.lots||[]).find(l => {
-    const label = ((l.num?l.num+' — ':'') + (l.nom||'')).toLowerCase();
-    return label === lotLabel || (l.nom||'').toLowerCase() === lotLabel;
+
+  const postes = (o.lignes||[])
+    .filter(l => l.prixUnitaire != null)
+    .map(l => ({
+      n: l.designation || '', q: parseFloat(l.quantite)||0, u: l.unite || 'u',
+      puArtisan: parseFloat(l.prixUnitaire)||0,
+      puClient: parseFloat(l.prixUnitaire)||0, // pas de marge auto — à régler manuellement, comme pour l'import IA
+      pu: parseFloat(l.prixUnitaire)||0
+    }));
+  if (!postes.length){ showToast('⚠️ Aucune ligne chiffrée dans cette offre'); return; }
+
+  const notes = [];
+  if (o.disponibilite) notes.push('Disponible à partir du ' + o.disponibilite + '.');
+  if (o.commentaireGeneral) notes.push(o.commentaireGeneral);
+
+  const nbExistants = (chantier.lots||[]).length;
+  chantier.lots = chantier.lots || [];
+  chantier.lots.push({
+    num: 'LOT '+(nbExistants+1).toString().padStart(2,'0'),
+    nom: (o.artisan?.nom || 'Artisan') + ' — ' + (o.lot || ''),
+    postes, aleas:5, honoraires:5, tva:20, statut:'Chiffrage', prestation:'std', marge:0,
+    notes: notes.length ? ('--- Offre reçue via Appels d\'offres (' + (o.artisan?.nom||'artisan') + ', ' + new Date().toLocaleDateString('fr-FR') + ') ---\n' + notes.join('\n')) : ''
   });
-  if (!lot){ showToast('⚠️ Lot « ' + payload.lot + ' » introuvable dans ' + (chantier.nom||'ce chantier')); return; }
-  // Injecter puArtisan par correspondance de désignation
-  let n = 0;
-  payload.lignes.forEach(l => {
-    const poste = (lot.postes||[]).find(p => (p.n||'').trim().toLowerCase() === (l.designation||'').trim().toLowerCase());
-    if (poste && l.prixUnitaire != null){
-      poste.puArtisan = parseFloat(l.prixUnitaire) || 0;
-      n++;
-    }
-  });
-  let hasComment = false;
-  const notesAjout = [];
-  if (payload.disponibilite) notesAjout.push('Disponible à partir du ' + payload.disponibilite + '.');
-  if (payload.commentaireGeneral) notesAjout.push(payload.commentaireGeneral);
-  if (notesAjout.length){
-    hasComment = true;
-    const entete = '--- Commentaire artisan (' + (payload.artisan?.nom||'artisan') + ', ' + new Date().toLocaleDateString('fr-FR') + ') ---';
-    lot.notes = (lot.notes ? lot.notes + '\n\n' : '') + entete + '\n' + notesAjout.join('\n');
-  }
-  showToast('✓ ' + n + ' prix artisan injecté(s) — lot ' + (lot.nom||'') + ' (' + (payload.artisan?.nom||'artisan') + ')' + (hasComment ? ' + info(s) complémentaire(s)' : ''));
+
+  try {
+    const { db, doc, deleteDoc } = await _phenixFbRefs();
+    await deleteDoc(doc(db, 'phenix_chiffrage_import', o._id));
+  } catch(e){ console.warn('suppression offre traitée:', e); }
+
+  offresArtisansEnAttente.splice(oi, 1);
+  saveState(); renderChantierGrid(); renderChantierSelects();
+  renderOffresArtisansList();
+  const badge = document.getElementById('offres-artisans-badge');
+  const btn = document.getElementById('btn-offres-artisans');
+  if (badge) badge.textContent = offresArtisansEnAttente.length ? '(' + offresArtisansEnAttente.length + ')' : '';
+  if (btn) btn.style.display = offresArtisansEnAttente.length ? '' : 'none';
+  if (state.currentChantier === ci) renderChiffrage();
+  showToast('✓ Nouveau lot « ' + (o.artisan?.nom||'Artisan') + ' — ' + (o.lot||'') + ' » créé dans ' + (chantier.nom||''));
 }
-window.appliquerOffreArtisan = appliquerOffreArtisan;
+window.creerLotDepuisOffreArtisan = creerLotDepuisOffreArtisan;
+
+async function ignorerOffreArtisan(oi){
+  const o = offresArtisansEnAttente[oi];
+  if (!o) return;
+  if (!confirm('Ignorer l\'offre de ' + (o.artisan?.nom||'cet artisan') + ' sans créer de lot ? Cette action est définitive.')) return;
+  try {
+    const { db, doc, deleteDoc } = await _phenixFbRefs();
+    await deleteDoc(doc(db, 'phenix_chiffrage_import', o._id));
+  } catch(e){ console.warn('suppression offre ignorée:', e); }
+  offresArtisansEnAttente.splice(oi, 1);
+  renderOffresArtisansList();
+  const badge = document.getElementById('offres-artisans-badge');
+  const btn = document.getElementById('btn-offres-artisans');
+  if (badge) badge.textContent = offresArtisansEnAttente.length ? '(' + offresArtisansEnAttente.length + ')' : '';
+  if (btn) btn.style.display = offresArtisansEnAttente.length ? '' : 'none';
+}
+window.ignorerOffreArtisan = ignorerOffreArtisan;
 
 function checkIncomingFromDossier() {
   try {
