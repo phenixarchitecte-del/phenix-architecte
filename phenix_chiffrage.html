@@ -2958,10 +2958,8 @@ RÈGLES STRICTES :
         }]
       })
     });
-    if(!res.ok){const err=await res.text().catch(()=>'');throw new Error(`Proxy HTTP ${res.status}: ${err.slice(0,200)}`);}
-    const data=await res.json();
-    if(data.error)throw new Error(data.error.message||JSON.stringify(data.error));
-    const text=(data.content||[]).map(b=>b.text||'').join('');
+    if(!res.ok){const errData=await res.json().catch(()=>null);throw new Error(errData?.error?.message || `Proxy HTTP ${res.status}`);}
+    const text = await lireFluxAnthropic(res);
     let parsed;
     try{parsed=JSON.parse(text.replace(/```json|```/g,'').trim());}
     catch(pe){throw new Error('Réponse IA non parseable : '+text.slice(0,200));}
@@ -4406,13 +4404,10 @@ Sois précis et exhaustif. Si une valeur n'est pas lisible sur le plan, estime-l
     });
 
     if(!res.ok) {
-      const errTxt = await res.text().catch(()=>'');
-      throw new Error(`Proxy HTTP ${res.status}: ${errTxt.slice(0,200)}`);
+      const errData = await res.json().catch(() => null);
+      throw new Error(errData?.error?.message || `Proxy HTTP ${res.status}`);
     }
-    const data = await res.json();
-    if(data.error) throw new Error(data.error.message || JSON.stringify(data.error));
-
-    const rawText = (data.content||[]).map(b=>b.text||'').join('');
+    const rawText = await lireFluxAnthropic(res);
     let parsed, wasRepaired = false;
     try {
       const clean = rawText.replace(/```json|```/g,'').trim();
@@ -5441,6 +5436,48 @@ async function fetchProxyAvecReessai(url, options, maxTentatives = 2){
   throw new Error(msg);
 }
 
+// Lit la réponse en flux continu (SSE) renvoyée par le Worker et reconstitue
+// le texte complet, exactement comme le faisait auparavant data.content[0].text
+// sur une réponse groupée. Le streaming évite les coupures Cloudflare (erreur
+// 524) sur les générations longues — tant que des données circulent, la
+// connexion n'est jamais considérée comme inactive.
+async function lireFluxAnthropic(response, onProgress){
+  if (!response.body || !response.body.getReader){
+    // Repli : environnement sans support du streaming, on lit tout d'un bloc
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+    return (data.content||[]).map(b=>b.text||'').join('');
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let fullText = '';
+  let streamError = null;
+  while (true){
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop(); // ligne potentiellement incomplète, conservée pour la suite
+    for (const line of lines){
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('data:')) continue;
+      const jsonStr = trimmed.slice(5).trim();
+      if (!jsonStr || jsonStr === '[DONE]') continue;
+      let evt;
+      try { evt = JSON.parse(jsonStr); } catch(e){ continue; }
+      if (evt.type === 'content_block_delta' && evt.delta && evt.delta.type === 'text_delta'){
+        fullText += evt.delta.text;
+        if (onProgress) onProgress(fullText.length);
+      } else if (evt.type === 'error'){
+        streamError = evt.error?.message || 'Erreur de streaming Anthropic';
+      }
+    }
+  }
+  if (streamError) throw new Error(streamError);
+  return fullText;
+}
+
 async function renoLancerIA() {
   const PROXY = 'https://phenix-proxy.phenixarchitecte.workers.dev';
   if(!renoPages.length) { showToast('⚠️ Chargez d\'abord un dossier'); return; }
@@ -5508,13 +5545,13 @@ LOT 10 Peinture/Finitions · LOT 11 Escalier · LOT 12 Isolation · LOT 13 Netto
         system: systemPrompt, messages:[{role:'user', content}]
       })
     });
-    const data = await res.json().catch(() => null);
     if (!res.ok){
-      throw new Error(data?.error?.message || `Proxy HTTP ${res.status}`);
+      const errData = await res.json().catch(() => null);
+      throw new Error(errData?.error?.message || `Proxy HTTP ${res.status}`);
     }
-    if(data.error) throw new Error(data.error.message||JSON.stringify(data.error));
-
-    const raw = (data.content||[]).map(b=>b.text||'').join('');
+    const raw = await lireFluxAnthropic(res, (n) => {
+      if (statusEl) statusEl.textContent = `Analyse en cours... (${Math.round(n/4)} mots générés)`;
+    });
     const clean = raw.replace(/```json|```/g,'').trim();
     const jsonSlice = clean.slice(clean.indexOf('{'), clean.lastIndexOf('}')+1);
     const { data: parsed, repaired } = tryRepairTruncatedJSON(jsonSlice);
@@ -5839,13 +5876,13 @@ Sois précis et exhaustif. Si une valeur n'est pas lisible, estime-la de façon 
         system: systemPrompt, messages:[{role:'user', content}]
       })
     });
-    const data = await res.json().catch(() => null);
     if (!res.ok){
-      throw new Error(data?.error?.message || `Proxy HTTP ${res.status}`);
+      const errData = await res.json().catch(() => null);
+      throw new Error(errData?.error?.message || `Proxy HTTP ${res.status}`);
     }
-    if(data.error) throw new Error(data.error.message||JSON.stringify(data.error));
-
-    const raw = (data.content||[]).map(b=>b.text||'').join('');
+    const raw = await lireFluxAnthropic(res, (n) => {
+      if (statusEl) statusEl.textContent = `Analyse en cours... (${Math.round(n/4)} mots générés)`;
+    });
     const clean = raw.replace(/```json|```/g,'').trim();
     const jsonSlice = clean.slice(clean.indexOf('{'), clean.lastIndexOf('}')+1);
     const { data: parsed, repaired } = tryRepairTruncatedJSON(jsonSlice);
