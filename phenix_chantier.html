@@ -1798,7 +1798,10 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
     <input id="pl-pwd" type="password" autocomplete="current-password" placeholder="Mot de passe" onkeydown="if(event.key===&quot;Enter&quot;)phenixDoLogin()" style="width:100%;padding:12px 14px;margin-bottom:14px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.95);font-size:14px;outline:none">
     <button id="pl-btn" onclick="phenixDoLogin()" style="width:100%;padding:12px;border:none;border-radius:9px;background:linear-gradient(135deg,#4A9CC7,#2A5298);color:#fff;font-size:15px;font-weight:600;cursor:pointer">Se connecter</button>
     <div id="pl-err" style="color:#FFB4A8;font-size:12.5px;margin-top:12px;min-height:16px"></div>
-    <div id="pl-enroll-wrap" style="display:none;margin-top:16px;padding:14px;background:rgba(77,184,232,.1);border:1.5px solid rgba(77,184,232,.3);border-radius:9px;text-align:left">
+    <button onclick="chantierBioReset()" style="margin-top:12px;background:none;border:none;color:rgba(255,255,255,.22);font-size:11px;cursor:pointer;font-family:inherit;padding:6px;width:100%">🔄 Réinitialiser l&apos;empreinte</button>
+  </div>
+</div>
+    <div id="pl-enroll-wrap" style="display:none;position:fixed;right:16px;bottom:16px;z-index:100000;max-width:320px;box-shadow:0 8px 28px rgba(0,0,0,.35);margin-top:16px;padding:14px;background:rgba(77,184,232,.1);border:1.5px solid rgba(77,184,232,.3);border-radius:9px;text-align:left">
       <div style="font-size:13px;color:#7DC6E8;font-weight:600;margin-bottom:6px">☝️ Activer la connexion par empreinte ?</div>
       <div style="font-size:11px;color:rgba(255,255,255,.55);margin-bottom:12px">Votre empreinte restera stockée uniquement sur cet appareil.</div>
       <div style="display:flex;gap:8px">
@@ -1806,9 +1809,6 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
         <button onclick="document.getElementById(&quot;pl-enroll-wrap&quot;).style.display=&quot;none&quot;" style="flex:1;padding:9px;border:1.5px solid rgba(255,255,255,.2);border-radius:7px;background:transparent;color:rgba(255,255,255,.6);font-size:13px;cursor:pointer">Plus tard</button>
       </div>
     </div>
-    <button onclick="chantierBioReset()" style="margin-top:12px;background:none;border:none;color:rgba(255,255,255,.22);font-size:11px;cursor:pointer;font-family:inherit;padding:6px;width:100%">🔄 Réinitialiser l&apos;empreinte</button>
-  </div>
-</div>
 <div id="app-chantier">
 
 
@@ -6085,9 +6085,17 @@ function handleImport(e) {
   e.target.value = '';
 }
 
-// Fermer modals en cliquant le fond
+// Fermer modals en cliquant le fond — vérifie que le clic COMMENCE et SE TERMINE
+// sur le fond lui-même (pas juste où il se termine), pour ne pas fermer la fenêtre
+// quand on sélectionne du texte dans un champ et que le relâchement de la souris
+// déborde légèrement sur le fond.
 document.querySelectorAll('.modal-overlay').forEach(o => {
-  o.addEventListener('click', e => { if (e.target === o) o.classList.remove('open'); });
+  let downOnSelf = false;
+  o.addEventListener('mousedown', e => { downOnSelf = (e.target === o); });
+  o.addEventListener('mouseup', e => {
+    if (downOnSelf && e.target === o) o.classList.remove('open');
+    downOnSelf = false;
+  });
 });
 
 // Aperçu couleur intervenant + swatches

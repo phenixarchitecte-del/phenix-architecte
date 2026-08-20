@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+<title>Phénix-Architecture · Rentabilité</title>
+<script type="module">
+import { initializeApp }       from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getFirestore,
+         collection, doc,
+         onSnapshot,
+         setDoc, deleteDoc }   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { getAuth, signInWithEmailAndPassword, signOut,
+         onAuthStateChanged }  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+
+const firebaseConfig = {
+  apiKey:            "AIzaSyCjNKNvS6p3nqE6-_Gw9I397ZtXm2FG1ew",
+  authDomain:        "phenix-architecte-9151b.firebaseapp.com",
+  projectId:         "phenix-architecte-9151b",
+  storageBucket:     "phenix-architecte-9151b.firebasestorage.app",
+  messagingSenderId: "811231684720",
+  appId:             "1:811231684720:web:413fa324ae43c07607acb5"
+};
+
+const app = initializeApp(firebaseConfig);
+const db   = getFirestore(app);
+const auth = getAuth(app);
+
+// ── Collections Firestore ──────────────────────────────────
+const PROJETS_COL      = collection(db, 'phenix_projets');
+const FACTURES_COL     = collection(db, 'phenix_factures');
+const POINTAGES_COL    = collection(db, 'phenix_pointages');
+const INTERVENANTS_COL = collection(db, 'phenix_intervenants');
+
+window._fbRenta = {
+  login:  (e, p) => signInWithEmailAndPassword(auth, e, p),
+  logout: () => signOut(auth),
+
+  watchProjets: (cb) => onSnapshot(PROJETS_COL, snap => {
+    cb(snap.docs.map(d => d.data()));
+  }),
+  watchFactures: (cb) => onSnapshot(FACTURES_COL, snap => {
+    cb(snap.docs.map(d => d.data()));
+  }),
+  watchPointages: (cb) => onSnapshot(POINTAGES_COL, snap => {
+    cb(snap.docs.map(d => d.data()));
+  }),
+  watchIntervenants: (cb) => onSnapshot(INTERVENANTS_COL, snap => {
+    cb(snap.docs.map(d => d.data()));
+  }),
+
+  savePointage:      (pt) => setDoc(doc(db, 'phenix_pointages', String(pt.id)), pt),
+  deletePointage:    (id) => deleteDoc(doc(db, 'phenix_pointages', String(id))),
+  saveIntervenant:   (iv) => setDoc(doc(db, 'phenix_intervenants', String(iv.email)), iv),
+  deleteIntervenant: (email) => deleteDoc(doc(db, 'phenix_intervenants', String(email))),
+};
+
+onAuthStateChanged(auth, user => {
+  window._rentaUser = user ? user.email : null;
+  if (typeof window.onAuthReady === 'function') window.onAuthReady(user ? user.email : null);
+});
+</script>
+<style>
+:root {
+  --bg:#F0F4F8; --bg2:#E4ECF3; --bg3:#D4E2EC;
+  --card:#FFFFFF;
+  --text:#0F1E3D; --text2:#4A6080; --text3:#8BA5C0;
+  --border:#C8D8E8;
+  --accent:#4A9CC7; --accent2:#2A5298; --accent-bg:#E8F4FB;
+  --navy:#1B2D5B; --navy2:#2A3F6F;
+  --green:#2D7A4F; --green-bg:#E3F5EC;
+  --amber:#8A6020; --amber-bg:#FDF3DC;
+  --red:#C0392B; --red-bg:#FDECEB;
+  --font-serif:'DM Serif Display',Georgia,serif;
+  --font-sans:'DM Sans',sans-serif;
+  --r-sm:5px; --r-md:9px; --r-lg:13px;
+  --shadow:0 1px 4px rgba(15,30,61,.07),0 1px 2px rgba(15,30,61,.04);
+  --shadow-md:0 4px 16px rgba(15,30,61,.1),0 2px 6px rgba(15,30,61,.06);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans);background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.app{display:none;height:100vh;overflow:hidden;flex-direction:column}
+.app.ready{display:flex}
+
+/* topbar */
+.topbar{height:60px;flex-shrink:0;background:var(--card);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 1.5rem;gap:1rem}
+.topbar-logo{display:flex;align-items:center;gap:10px}
+.logo-icon{width:34px;height:34px;border-radius:8px;background:linear-gradient(135deg,#4A9CC7,#1B2D5B);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:17px;color:#fff}
+.topbar-title{font-family:var(--font-serif);font-size:19px;color:var(--navy)}
+.topbar-sub{font-size:10px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-top:1px}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:14px}
+.topbar-user{font-size:12px;color:var(--text2)}
+.btn{border:1px solid var(--border);background:var(--card);color:var(--text2);padding:7px 13px;border-radius:var(--r-sm);font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-family:var(--font-sans);transition:.15s}
+.btn:hover{background:var(--bg);border-color:#4A9CC7;color:var(--navy)}
+.btn-primary{background:var(--navy);border-color:var(--navy);color:#fff}
+.btn-primary:hover{background:var(--navy2);color:#fff}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn-danger{color:var(--red)}
+.btn-danger:hover{background:var(--red-bg);border-color:var(--red)}
+
+/* tabs */
+.tabbar{display:flex;gap:0;padding:0 1.5rem;background:var(--card);border-bottom:1px solid var(--border);flex-shrink:0}
+.tab{padding:12px 16px;font-size:13px;font-weight:600;color:var(--text3);border-bottom:2px solid transparent;cursor:pointer;display:flex;align-items:center;gap:6px}
+.tab:hover{color:var(--navy)}
+.tab.active{color:var(--accent2);border-bottom-color:var(--accent)}
+
+.content{flex:1;overflow-y:auto;padding:1.75rem}
+.page-title{font-family:var(--font-serif);font-size:24px;color:var(--navy);margin-bottom:1.25rem}
+
+/* metric cards */
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:1.5rem}
+.metric-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r-md);padding:1.1rem;box-shadow:var(--shadow)}
+.metric-icon{width:30px;height:30px;border-radius:var(--r-sm);background:var(--accent-bg);display:flex;align-items:center;justify-content:center;margin-bottom:.6rem;color:var(--accent);font-size:15px}
+.metric-label{font-size:10.5px;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;font-weight:600}
+.metric-value{font-family:var(--font-serif);font-size:23px;color:var(--navy);line-height:1.2;margin-top:2px}
+.metric-value.green{color:var(--green)}
+.metric-value.red{color:var(--red)}
+
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--shadow);padding:1.25rem;margin-bottom:1.25rem}
+.card-title{font-size:14px;font-weight:700;color:var(--navy);margin-bottom:.9rem;display:flex;align-items:center;justify-content:space-between}
+
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:10px;font-weight:700;color:var(--navy);padding:0 8px 10px 0;border-bottom:2px solid var(--accent);letter-spacing:.06em;text-transform:uppercase}
+td{padding:9px 8px;border-bottom:1px solid var(--border);font-size:13px}
+tr:last-child td{border-bottom:none} tr:hover td{background:var(--accent-bg)}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+
+.badge{display:inline-block;padding:2px 9px;border-radius:99px;font-size:11px;font-weight:600}
+.badge-green{background:var(--green-bg);color:var(--green)}
+.badge-amber{background:var(--amber-bg);color:var(--amber)}
+.badge-red{background:var(--red-bg);color:var(--red)}
+
+/* form */
+.form-row{display:flex;gap:12px;flex-wrap:wrap;align-items:end}
+.form-group{display:flex;flex-direction:column;gap:4px}
+.form-group label{font-size:11px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.05em}
+input,select{font-family:var(--font-sans);font-size:13.5px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--text);min-width:140px}
+input:focus,select:focus{outline:none;border-color:var(--accent)}
+input[type=number]{min-width:90px}
+
+.empty{text-align:center;padding:2.5rem 1rem;color:var(--text3);font-size:13px}
+.empty i{font-size:28px;display:block;margin-bottom:8px;color:var(--border)}
+
+/* login */
+.login-screen{height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#0F1E3D,#1B2D5B 60%,#1a3060)}
+.login-box{background:#fff;border-radius:var(--r-lg);padding:2.4rem 2.2rem;width:340px;box-shadow:var(--shadow-md)}
+.login-logo{display:flex;align-items:center;gap:10px;margin-bottom:1.6rem}
+.login-title{font-family:var(--font-serif);font-size:20px;color:var(--navy)}
+.login-sub{font-size:11px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase}
+.login-box input{width:100%;margin-bottom:10px}
+.login-box .btn-primary{width:100%;justify-content:center;padding:10px}
+.login-err{color:var(--red);font-size:12.5px;margin-bottom:8px;min-height:16px}
+
+@media (max-width:900px){
+  .metrics{grid-template-columns:repeat(2,1fr)}
+  .form-row{flex-direction:column;align-items:stretch}
+}
+</style>
+</head>
+<body>
+
+<div id="loginScreen" class="login-screen">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="logo-icon"><i class="ti ti-chart-arrows"></i></div>
+      <div><div class="login-title">Rentabilité</div><div class="login-sub">Phénix-Architecture</div></div>
+    </div>
+    <div id="loginErr" class="login-err"></div>
+    <input type="email" id="loginEmail" placeholder="Adresse email" autocomplete="username">
+    <input type="password" id="loginPwd" placeholder="Mot de passe" autocomplete="current-password">
+    <button class="btn btn-primary" onclick="doLogin()"><i class="ti ti-login-2"></i> Se connecter</button>
+  </div>
+</div>
+
+<div id="mainApp" class="app">
+  <div class="topbar">
+    <div class="topbar-logo">
+      <div class="logo-icon"><i class="ti ti-chart-arrows"></i></div>
+      <div><div class="topbar-title">Rentabilité</div><div class="topbar-sub">Phénix-Architecture</div></div>
+    </div>
+    <div class="topbar-right">
+      <div class="form-group" style="min-width:0">
+        <select id="anneeFilter" onchange="renderAll()" style="min-width:90px"></select>
+      </div>
+      <span class="topbar-user" id="topbarUser"></span>
+      <button class="btn btn-sm" onclick="doLogout()"><i class="ti ti-logout"></i> Déconnexion</button>
+    </div>
+  </div>
+
+  <div class="tabbar">
+    <div class="tab active" data-tab="synthese" onclick="switchTab('synthese')"><i class="ti ti-chart-pie"></i> Synthèse</div>
+    <div class="tab" data-tab="pointage" onclick="switchTab('pointage')"><i class="ti ti-clock-plus"></i> Pointage</div>
+    <div class="tab" data-tab="chantiers" onclick="switchTab('chantiers')"><i class="ti ti-building"></i> Chantiers</div>
+    <div class="tab" data-tab="parametres" onclick="switchTab('parametres')"><i class="ti ti-settings"></i> Paramètres</div>
+  </div>
+
+  <div class="content">
+    <div id="page-synthese"></div>
+    <div id="page-pointage" style="display:none"></div>
+    <div id="page-chantiers" style="display:none"></div>
+    <div id="page-parametres" style="display:none"></div>
+  </div>
+</div>
+
+<script>
+// ── état local ──────────────────────────────────────────────
+const state = {
+  projets: [], factures: [], pointages: [], intervenants: [],
+  chantierSelected: null,
+};
+
+function esc(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function fmtEur(n) {
+  return (parseFloat(n)||0).toLocaleString('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0});
+}
+function nomProjet(id) {
+  const p = state.projets.find(x=>String(x.id)===String(id));
+  return p ? (p.nom||p.ref||('#'+id)) : '(chantier supprimé)';
+}
+function nomIntervenant(email) {
+  const iv = state.intervenants.find(x=>x.email===email);
+  return iv ? iv.nom : email;
+}
+function tauxHoraire(email) {
+  const iv = state.intervenants.find(x=>x.email===email);
+  return iv ? (parseFloat(iv.tauxHoraire)||0) : 0;
+}
+
+// ── auth ────────────────────────────────────────────────────
+window.onAuthReady = function(email) {
+  if (email) {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('mainApp').classList.add('ready');
+    document.getElementById('topbarUser').textContent = email;
+    startWatchers();
+  } else {
+    document.getElementById('loginScreen').style.display = 'flex';
+    document.getElementById('mainApp').classList.remove('ready');
+  }
+};
+function doLogin() {
+  const e = document.getElementById('loginEmail').value.trim();
+  const p = document.getElementById('loginPwd').value;
+  document.getElementById('loginErr').textContent = '';
+  window._fbRenta.login(e, p).catch(err => {
+    document.getElementById('loginErr').textContent = 'Email ou mot de passe incorrect.';
+  });
+}
+function doLogout() { window._fbRenta.logout(); }
+
+// ── watchers ────────────────────────────────────────────────
+let _watchersStarted = false;
+function startWatchers() {
+  if (_watchersStarted) return;
+  _watchersStarted = true;
+  window._fbRenta.watchProjets(d => { state.projets = d; renderAll(); });
+  window._fbRenta.watchFactures(d => { state.factures = d; renderAll(); });
+  window._fbRenta.watchPointages(d => { state.pointages = d; renderAll(); });
+  window._fbRenta.watchIntervenants(d => {
+    // pré-remplissage la 1ère fois si la collection est vide
+    if (d.length === 0 && !state._seeded) {
+      state._seeded = true;
+      window._fbRenta.saveIntervenant({email:'contact@phenixarchitecte.fr', nom:'Maxime', tauxHoraire: 25});
+      window._fbRenta.saveIntervenant({email:'c.gironde@phenixarchitecte.fr', nom:'C. Gironde', tauxHoraire: 10.5});
+    }
+    state.intervenants = d;
+    renderAll();
+  });
+}
+
+// ── tabs ────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===name));
+  ['synthese','pointage','chantiers','parametres'].forEach(p=>{
+    document.getElementById('page-'+p).style.display = (p===name?'':'none');
+  });
+  renderAll();
+}
+
+// ── filtre année ────────────────────────────────────────────
+function anneesDisponibles() {
+  const now = new Date().getFullYear();
+  const yrs = new Set([now, now-1, now-2]);
+  state.pointages.forEach(p=>{ if (p.date) yrs.add(new Date(p.date).getFullYear()); });
+  state.factures.forEach(f=>{ if (f.dateEmission) yrs.add(new Date(f.dateEmission).getFullYear()); });
+  return Array.from(yrs).sort((a,b)=>b-a);
+}
+function anneeActive() {
+  const sel = document.getElementById('anneeFilter');
+  return sel.value ? parseInt(sel.value) : new Date().getFullYear();
+}
+
+// ── calculs cœur ────────────────────────────────────────────
+function caProjet(projetId, annee) {
+  return state.factures
+    .filter(f => String(f.projetId)===String(projetId) && f.type!=='devis' && (!annee || (f.dateEmission && new Date(f.dateEmission).getFullYear()===annee)))
+    .reduce((s,f)=>s+(parseFloat(f.montantHt)||0), 0);
+}
+function pointagesProjet(projetId, annee) {
+  return state.pointages.filter(p => String(p.projetId)===String(projetId) && (!annee || (p.date && new Date(p.date).getFullYear()===annee)));
+}
+function coutMOProjet(projetId, annee) {
+  return pointagesProjet(projetId, annee).reduce((s,p)=>s+(parseFloat(p.heures)||0)*tauxHoraire(p.intervenant), 0);
+}
+function heuresProjet(projetId, annee) {
+  return pointagesProjet(projetId, annee).reduce((s,p)=>s+(parseFloat(p.heures)||0), 0);
+}
+function rentabiliteParChantier(annee) {
+  const ids = new Set([
+    ...state.projets.map(p=>String(p.id)),
+  ]);
+  return Array.from(ids).map(id => {
+    const ca = caProjet(id, annee);
+    const heures = heuresProjet(id, annee);
+    const coutMO = coutMOProjet(id, annee);
+    const marge = ca - coutMO;
+    const margePct = ca>0 ? (marge/ca*100) : null;
+    return { id, nom: nomProjet(id), ca, heures, coutMO, marge, margePct };
+  }).filter(r => r.ca>0 || r.heures>0)
+    .sort((a,b) => (a.margePct===null?-999:a.margePct) - (b.margePct===null?-999:b.margePct));
+}
+
+// ── render dispatch ─────────────────────────────────────────
+function renderAll() {
+  const selYr = document.getElementById('anneeFilter');
+  if (selYr && selYr.options.length===0) {
+    selYr.innerHTML = anneesDisponibles().map(y=>`<option value="${y}">${y}</option>`).join('');
+  }
+  const active = document.querySelector('.tab.active');
+  const tab = active ? active.dataset.tab : 'synthese';
+  if (tab==='synthese')   renderSynthese();
+  if (tab==='pointage')   renderPointage();
+  if (tab==='chantiers')  renderChantiers();
+  if (tab==='parametres') renderParametres();
+}
+
+// ── Synthèse ────────────────────────────────────────────────
+function renderSynthese() {
+  const annee = anneeActive();
+  const rows = rentabiliteParChantier(annee);
+  const ca = rows.reduce((s,r)=>s+r.ca,0);
+  const coutMO = rows.reduce((s,r)=>s+r.coutMO,0);
+  const heures = rows.reduce((s,r)=>s+r.heures,0);
+  const marge = ca - coutMO;
+
+  document.getElementById('page-synthese').innerHTML = `
+    <div class="page-title">Synthèse ${annee}</div>
+    <div class="metrics">
+      <div class="metric-card">
+        <div class="metric-icon"><i class="ti ti-receipt-2"></i></div>
+        <div class="metric-label">CA facturé</div>
+        <div class="metric-value">${fmtEur(ca)}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-icon"><i class="ti ti-clock-hour-4"></i></div>
+        <div class="metric-label">Heures pointées</div>
+        <div class="metric-value">${heures.toLocaleString('fr-FR')} h</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-icon"><i class="ti ti-cash"></i></div>
+        <div class="metric-label">Coût main d'œuvre</div>
+        <div class="metric-value">${fmtEur(coutMO)}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-icon"><i class="ti ti-trending-up"></i></div>
+        <div class="metric-label">Marge MO</div>
+        <div class="metric-value ${marge>=0?'green':'red'}">${fmtEur(marge)}</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Rentabilité par chantier <span style="font-weight:400;color:var(--text3);font-size:11.5px">— les moins rentables en premier</span></div>
+      ${rows.length===0 ? `<div class="empty"><i class="ti ti-mood-empty"></i>Aucun chantier avec du CA ou des heures pointées sur ${annee}.</div>` : `
+      <table>
+        <thead><tr><th>Chantier</th><th class="num">CA</th><th class="num">Heures</th><th class="num">Coût MO</th><th class="num">Marge</th><th class="num">Marge %</th></tr></thead>
+        <tbody>
+          ${rows.map(r => `
+            <tr style="cursor:pointer" onclick="openChantierDetail('${r.id}')">
+              <td><strong>${esc(r.nom)}</strong></td>
+              <td class="num">${fmtEur(r.ca)}</td>
+              <td class="num">${r.heures.toLocaleString('fr-FR')} h</td>
+              <td class="num">${fmtEur(r.coutMO)}</td>
+              <td class="num" style="color:${r.marge>=0?'var(--green)':'var(--red)'};font-weight:600">${fmtEur(r.marge)}</td>
+              <td class="num">${r.margePct===null?'—':`<span class="badge ${r.margePct>=30?'badge-green':r.margePct>=10?'badge-amber':'badge-red'}">${r.margePct.toFixed(0)}%</span>`}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`}
+    </div>`;
+}
+
+// ── Pointage ────────────────────────────────────────────────
+let _pointageEditId = null;
+
+function renderPointage() {
+  const projOptions = state.projets.map(p=>`<option value="${p.id}">${esc(p.nom)}</option>`).join('');
+  const ivOptions = state.intervenants.map(iv=>`<option value="${iv.email}">${esc(iv.nom)}</option>`).join('');
+  const recents = [...state.pointages].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,80);
+
+  document.getElementById('page-pointage').innerHTML = `
+    <div class="page-title">Pointage des heures</div>
+    <div class="card">
+      <div class="card-title">Nouveau pointage</div>
+      <div class="form-row">
+        <div class="form-group"><label>Chantier</label><select id="pt-projet">${projOptions||'<option value="">Aucun chantier</option>'}</select></div>
+        <div class="form-group"><label>Intervenant</label><select id="pt-intervenant">${ivOptions||'<option value="">Aucun intervenant</option>'}</select></div>
+        <div class="form-group"><label>Date</label><input type="date" id="pt-date" value="${new Date().toISOString().slice(0,10)}"></div>
+        <div class="form-group"><label>Heures</label><input type="number" id="pt-heures" step="0.5" min="0" placeholder="ex: 3.5"></div>
+        <div class="form-group" style="flex:1"><label>Note</label><input type="text" id="pt-note" placeholder="optionnel"></div>
+        <button class="btn btn-primary" onclick="savePointage()"><i class="ti ti-plus"></i> Enregistrer</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Historique récent</div>
+      ${recents.length===0 ? `<div class="empty"><i class="ti ti-calendar-off"></i>Aucun pointage enregistré pour l'instant.</div>` : `
+      <table>
+        <thead><tr><th>Date</th><th>Chantier</th><th>Intervenant</th><th class="num">Heures</th><th>Note</th><th></th></tr></thead>
+        <tbody>
+          ${recents.map(p => `
+            <tr>
+              <td>${p.date ? new Date(p.date).toLocaleDateString('fr-FR') : '—'}</td>
+              <td>${esc(nomProjet(p.projetId))}</td>
+              <td>${esc(nomIntervenant(p.intervenant))}</td>
+              <td class="num">${p.heures} h</td>
+              <td style="color:var(--text2)">${esc(p.note||'')}</td>
+              <td style="text-align:right"><button class="btn btn-sm btn-danger" onclick="deletePointage('${p.id}')"><i class="ti ti-trash"></i></button></td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`}
+    </div>`;
+}
+
+function savePointage() {
+  const projetId = document.getElementById('pt-projet').value;
+  const intervenant = document.getElementById('pt-intervenant').value;
+  const date = document.getElementById('pt-date').value;
+  const heures = parseFloat(document.getElementById('pt-heures').value);
+  const note = document.getElementById('pt-note').value.trim();
+  if (!projetId || !intervenant || !date || !heures) {
+    alert('Merci de renseigner le chantier, l\'intervenant, la date et le nombre d\'heures.');
+    return;
+  }
+  const pt = { id: 'pt-'+Date.now(), projetId, intervenant, date, heures, note, createdAt: new Date().toISOString() };
+  window._fbRenta.savePointage(pt);
+  document.getElementById('pt-heures').value = '';
+  document.getElementById('pt-note').value = '';
+}
+function deletePointage(id) {
+  if (confirm('Supprimer ce pointage ?')) window._fbRenta.deletePointage(id);
+}
+
+// ── Chantiers (détail) ──────────────────────────────────────
+function openChantierDetail(id) {
+  state.chantierSelected = id;
+  switchTab('chantiers');
+}
+function renderChantiers() {
+  const annee = anneeActive();
+  const list = state.projets;
+  const selectedId = state.chantierSelected || (list[0] && list[0].id);
+
+  const listHtml = list.map(p => `
+    <div onclick="state.chantierSelected='${p.id}';renderChantiers()"
+         style="padding:9px 10px;border-radius:var(--r-sm);cursor:pointer;margin-bottom:3px;font-size:13px;
+                background:${String(p.id)===String(selectedId)?'var(--accent-bg)':'transparent'};
+                color:${String(p.id)===String(selectedId)?'var(--navy)':'var(--text2)'};font-weight:${String(p.id)===String(selectedId)?600:400}">
+      ${esc(p.nom||p.ref||('#'+p.id))}
+    </div>`).join('');
+
+  let detailHtml = `<div class="empty"><i class="ti ti-building-off"></i>Aucun chantier sélectionné.</div>`;
+  if (selectedId) {
+    const ca = caProjet(selectedId, annee);
+    const coutMO = coutMOProjet(selectedId, annee);
+    const heures = heuresProjet(selectedId, annee);
+    const marge = ca - coutMO;
+    const pts = pointagesProjet(selectedId, annee).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+
+    // sous-total par intervenant
+    const parInt = {};
+    pts.forEach(p=>{
+      parInt[p.intervenant] = parInt[p.intervenant] || {heures:0, cout:0};
+      parInt[p.intervenant].heures += parseFloat(p.heures)||0;
+      parInt[p.intervenant].cout += (parseFloat(p.heures)||0)*tauxHoraire(p.intervenant);
+    });
+
+    detailHtml = `
+      <div class="metrics" style="grid-template-columns:repeat(4,1fr)">
+        <div class="metric-card"><div class="metric-label">CA facturé ${annee}</div><div class="metric-value">${fmtEur(ca)}</div></div>
+        <div class="metric-card"><div class="metric-label">Heures pointées</div><div class="metric-value">${heures} h</div></div>
+        <div class="metric-card"><div class="metric-label">Coût main d'œuvre</div><div class="metric-value">${fmtEur(coutMO)}</div></div>
+        <div class="metric-card"><div class="metric-label">Marge</div><div class="metric-value ${marge>=0?'green':'red'}">${fmtEur(marge)}</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Répartition par intervenant</div>
+        ${Object.keys(parInt).length===0 ? `<div class="empty">Aucune heure pointée sur ce chantier.</div>` : `
+        <table><thead><tr><th>Intervenant</th><th class="num">Heures</th><th class="num">Coût</th></tr></thead>
+        <tbody>${Object.entries(parInt).map(([email,v])=>`
+          <tr><td>${esc(nomIntervenant(email))}</td><td class="num">${v.heures} h</td><td class="num">${fmtEur(v.cout)}</td></tr>
+        `).join('')}</tbody></table>`}
+      </div>
+      <div class="card">
+        <div class="card-title">Détail des pointages</div>
+        ${pts.length===0 ? `<div class="empty">Aucun pointage.</div>` : `
+        <table><thead><tr><th>Date</th><th>Intervenant</th><th class="num">Heures</th><th>Note</th></tr></thead>
+        <tbody>${pts.map(p=>`
+          <tr><td>${new Date(p.date).toLocaleDateString('fr-FR')}</td><td>${esc(nomIntervenant(p.intervenant))}</td><td class="num">${p.heures} h</td><td style="color:var(--text2)">${esc(p.note||'')}</td></tr>
+        `).join('')}</tbody></table>`}
+      </div>`;
+  }
+
+  document.getElementById('page-chantiers').innerHTML = `
+    <div class="page-title">Chantiers</div>
+    <div style="display:flex;gap:1.25rem">
+      <div class="card" style="width:230px;flex-shrink:0;max-height:70vh;overflow-y:auto">${listHtml || '<div class="empty">Aucun chantier.</div>'}</div>
+      <div style="flex:1;min-width:0">${detailHtml}</div>
+    </div>`;
+}
+
+// ── Paramètres ──────────────────────────────────────────────
+function renderParametres() {
+  document.getElementById('page-parametres').innerHTML = `
+    <div class="page-title">Paramètres — Intervenants</div>
+    <div class="card">
+      <div class="card-title">Taux horaire (coût pour l'entreprise)</div>
+      <table>
+        <thead><tr><th>Nom</th><th>Email</th><th class="num">Taux horaire</th><th></th></tr></thead>
+        <tbody>
+          ${state.intervenants.map(iv => `
+            <tr>
+              <td><input type="text" value="${esc(iv.nom)}" onchange="updateIntervenant('${iv.email}','nom',this.value)"></td>
+              <td style="color:var(--text2)">${esc(iv.email)}</td>
+              <td class="num"><input type="number" step="0.1" min="0" style="width:100px;text-align:right" value="${iv.tauxHoraire}" onchange="updateIntervenant('${iv.email}','tauxHoraire',this.value)"> €/h</td>
+              <td style="text-align:right"><button class="btn btn-sm btn-danger" onclick="removeIntervenant('${iv.email}')"><i class="ti ti-trash"></i></button></td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div class="card-title">Ajouter un intervenant</div>
+      <div class="form-row">
+        <div class="form-group"><label>Nom</label><input type="text" id="iv-nom" placeholder="ex: Jean Dupont"></div>
+        <div class="form-group"><label>Email (compte Firebase)</label><input type="email" id="iv-email" placeholder="ex: j.dupont@phenixarchitecte.fr"></div>
+        <div class="form-group"><label>Taux horaire</label><input type="number" step="0.1" min="0" id="iv-taux" placeholder="€/h"></div>
+        <button class="btn btn-primary" onclick="addIntervenant()"><i class="ti ti-plus"></i> Ajouter</button>
+      </div>
+    </div>`;
+}
+function updateIntervenant(email, field, value) {
+  const iv = state.intervenants.find(x=>x.email===email);
+  if (!iv) return;
+  const updated = {...iv, [field]: field==='tauxHoraire' ? (parseFloat(value)||0) : value};
+  window._fbRenta.saveIntervenant(updated);
+}
+function removeIntervenant(email) {
+  if (confirm('Retirer cet intervenant ? (ses pointages passés seront conservés)')) {
+    window._fbRenta.deleteIntervenant(email);
+  }
+}
+function addIntervenant() {
+  const nom = document.getElementById('iv-nom').value.trim();
+  const email = document.getElementById('iv-email').value.trim();
+  const taux = parseFloat(document.getElementById('iv-taux').value)||0;
+  if (!nom || !email) { alert('Nom et email sont requis.'); return; }
+  window._fbRenta.saveIntervenant({ email, nom, tauxHoraire: taux });
+}
+
+window.savePointage = savePointage;
+window.deletePointage = deletePointage;
+window.openChantierDetail = openChantierDetail;
+window.updateIntervenant = updateIntervenant;
+window.removeIntervenant = removeIntervenant;
+window.addIntervenant = addIntervenant;
+window.switchTab = switchTab;
+window.renderAll = renderAll;
+window.doLogin = doLogin;
+window.doLogout = doLogout;
+window.state = state;
+</script>
+</body>
+</html>

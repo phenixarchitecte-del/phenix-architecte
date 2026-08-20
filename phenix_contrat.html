@@ -212,7 +212,9 @@ body{font-family:var(--font-sans);background:var(--bg);color:var(--text);font-si
     <div style="margin-top:14px;text-align:center">
       <button onclick="phenixBioReset()" style="background:none;border:none;color:rgba(0,0,0,.3);font-size:11px;cursor:pointer;font-family:inherit;padding:6px">🔄 Réinitialiser l'empreinte enregistrée</button>
     </div>
-    <div id="pl-enroll-wrap" style="display:none;margin-top:16px;padding:14px;background:rgba(74,156,199,.1);border:1.5px solid rgba(74,156,199,.3);border-radius:9px">
+  </div>
+</div>
+    <div id="pl-enroll-wrap" style="display:none;position:fixed;right:16px;bottom:16px;z-index:100000;max-width:320px;box-shadow:0 8px 28px rgba(0,0,0,.35);margin-top:16px;padding:14px;background:rgba(74,156,199,.1);border:1.5px solid rgba(74,156,199,.3);border-radius:9px">
       <div style="font-size:13px;color:#2A5298;font-weight:600;margin-bottom:6px">☝️ Activer la connexion par empreinte ?</div>
       <div style="font-size:11px;color:rgba(0,0,0,.55);margin-bottom:12px">Votre empreinte restera stockée uniquement sur cet appareil.</div>
       <div style="display:flex;gap:8px">
@@ -220,8 +222,6 @@ body{font-family:var(--font-sans);background:var(--bg);color:var(--text);font-si
         <button onclick="document.getElementById('pl-enroll-wrap').style.display='none'" style="flex:1;padding:9px;border:1.5px solid rgba(0,0,0,.15);border-radius:7px;background:transparent;color:rgba(0,0,0,.5);font-size:13px;cursor:pointer">Plus tard</button>
       </div>
     </div>
-  </div>
-</div>
 
 <div id="app" style="display:none">
   <div class="topbar">

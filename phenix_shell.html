@@ -185,14 +185,20 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
     <div style="margin-top:14px;text-align:center">
       <button onclick="phenixBioReset()" style="background:none;border:none;color:rgba(255,255,255,.25);font-size:11px;cursor:pointer;font-family:inherit;padding:6px">🔄 Réinitialiser l'empreinte enregistrée</button>
     </div>
-    <div id="pl-enroll-wrap" style="display:none;margin-top:16px;padding:14px;background:rgba(77,184,232,.1);border:1.5px solid rgba(77,184,232,.3);border-radius:9px">
-      <div style="font-size:13px;color:#7DC6E8;font-weight:600;margin-bottom:6px">☝️ Activer la connexion par empreinte ?</div>
-      <div style="font-size:11px;color:rgba(255,255,255,.55);margin-bottom:12px">Votre empreinte restera stockée uniquement sur cet appareil.</div>
-      <div style="display:flex;gap:8px">
-        <button id="pl-enroll-btn" style="flex:1;padding:9px;border:none;border-radius:7px;background:linear-gradient(135deg,#4A9CC7,#2A5298);color:#fff;font-size:13px;font-weight:600;cursor:pointer">Activer</button>
-        <button onclick="document.getElementById('pl-enroll-wrap').style.display='none'" style="flex:1;padding:9px;border:1.5px solid rgba(255,255,255,.2);border-radius:7px;background:transparent;color:rgba(255,255,255,.6);font-size:13px;cursor:pointer">Plus tard</button>
-      </div>
-    </div>
+  </div>
+</div>
+
+<!-- Proposition d'activation de l'empreinte — volontairement HORS de l'écran de
+     connexion : celui-ci se ferme dès que Firebase valide la connexion, souvent
+     avant que la vérification "cet appareil gère-t-il l'empreinte ?" ait fini de
+     répondre. En carte flottante indépendante, elle reste visible par-dessus le
+     tableau de bord le temps nécessaire. -->
+<div id="pl-enroll-wrap" style="display:none;position:fixed;right:16px;bottom:16px;z-index:100000;max-width:320px;padding:16px;background:#12233F;box-shadow:0 8px 28px rgba(0,0,0,.35);margin-top:0;border-radius:12px;border:1.5px solid rgba(77,184,232,.4)">
+  <div style="font-size:13px;color:#7DC6E8;font-weight:600;margin-bottom:6px">☝️ Activer la connexion par empreinte ?</div>
+  <div style="font-size:11px;color:rgba(255,255,255,.65);margin-bottom:12px">Votre empreinte restera stockée uniquement sur cet appareil.</div>
+  <div style="display:flex;gap:8px">
+    <button id="pl-enroll-btn" style="flex:1;padding:9px;border:none;border-radius:7px;background:linear-gradient(135deg,#4A9CC7,#2A5298);color:#fff;font-size:13px;font-weight:600;cursor:pointer">Activer</button>
+    <button onclick="document.getElementById('pl-enroll-wrap').style.display='none'" style="flex:1;padding:9px;border:1.5px solid rgba(255,255,255,.2);border-radius:7px;background:transparent;color:rgba(255,255,255,.6);font-size:13px;cursor:pointer">Plus tard</button>
   </div>
 </div>
 

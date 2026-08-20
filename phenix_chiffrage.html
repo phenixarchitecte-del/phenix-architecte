@@ -92,7 +92,7 @@ th{padding:10px 16px;text-align:left;font-size:10px;font-weight:700;text-transfo
 td{padding:11px 16px;border-bottom:1px solid var(--surface2);vertical-align:middle}
 tr:last-child td{border-bottom:none}
 tr:hover td{background:var(--accent-bg)}
-.lot-num{font-weight:700;color:var(--accent);font-size:12px;width:60px}
+.lot-num{font-weight:700;color:var(--accent);font-size:12px;width:60px;white-space:nowrap}
 .lot-name{font-weight:500}
 .lot-cat{font-size:11px;color:var(--text3)}
 .ht-val{font-weight:600;font-family:var(--font-serif);font-size:15px;color:var(--nav)}
@@ -108,12 +108,6 @@ tr:hover td{background:var(--accent-bg)}
 .back-btn{cursor:pointer;color:var(--text2);font-size:13px;display:flex;align-items:center;gap:5px;padding:6px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);background:transparent;font-family:var(--font-sans)}
 .back-btn:hover{background:var(--accent-bg);border-color:var(--accent);color:var(--nav)}
 .lot-title-detail{font-family:var(--font-serif);font-size:22px;font-weight:400;color:var(--nav)}
-.lot-title-edit-row{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
-.lot-title-input{font-family:var(--font-serif);font-weight:400;color:var(--nav);border:1px solid transparent;border-radius:6px;background:transparent;padding:2px 6px;transition:border-color .12s,background .12s}
-.lot-title-input:hover{border-color:var(--border)}
-.lot-title-input:focus{outline:none;border-color:var(--accent);background:var(--surface2)}
-.lot-title-input-num{font-size:22px;width:150px;min-width:90px;flex-shrink:0}
-.lot-title-input-nom{font-size:22px;flex:1;min-width:180px}
 .detail-body{padding:20px 28px;flex:1}
 .detail-grid{display:grid;grid-template-columns:1fr 340px;gap:20px}
 .detail-section-title{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--text2);font-weight:700;margin-bottom:12px}
@@ -293,7 +287,6 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
 .reno-ia-status{display:none;padding:12px 16px;border-radius:var(--r-md);font-size:13px;margin-bottom:12px}
 .reno-ia-status.running{background:rgba(108,52,131,.08);border:1.5px solid rgba(108,52,131,.25);color:#6C3483;display:flex;align-items:center;gap:10px}
 .reno-ia-status.error{background:var(--danger-bg);border:1.5px solid var(--danger);color:var(--danger);display:block}
-.reno-ia-status.warning{background:#fdf3ea;border:1.5px solid #f0d4b8;color:#8a5321;display:block}
 @media(max-width:700px){
   .reno-grid{grid-template-columns:1fr}
   .reno-plan-slots{grid-template-columns:1fr 1fr}
@@ -457,7 +450,9 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
     <div style="margin-top:14px;text-align:center">
       <button onclick="phenixBioReset()" style="background:none;border:none;color:rgba(255,255,255,.25);font-size:11px;cursor:pointer;font-family:inherit;padding:6px">🔄 Réinitialiser l'empreinte enregistrée</button>
     </div>
-    <div id="pl-enroll-wrap" style="display:none;margin-top:16px;padding:14px;background:rgba(77,184,232,.1);border:1.5px solid rgba(77,184,232,.3);border-radius:9px">
+  </div>
+</div>
+    <div id="pl-enroll-wrap" style="display:none;position:fixed;right:16px;bottom:16px;z-index:100000;max-width:320px;box-shadow:0 8px 28px rgba(0,0,0,.35);margin-top:16px;padding:14px;background:rgba(77,184,232,.1);border:1.5px solid rgba(77,184,232,.3);border-radius:9px">
       <div style="font-size:13px;color:#7DC6E8;font-weight:600;margin-bottom:6px">☝️ Activer la connexion par empreinte ?</div>
       <div style="font-size:11px;color:rgba(255,255,255,.55);margin-bottom:12px">Votre empreinte restera stockée uniquement sur cet appareil.</div>
       <div style="display:flex;gap:8px">
@@ -465,8 +460,6 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
         <button onclick="document.getElementById('pl-enroll-wrap').style.display='none'" style="flex:1;padding:9px;border:1.5px solid rgba(255,255,255,.2);border-radius:7px;background:transparent;color:rgba(255,255,255,.6);font-size:13px;cursor:pointer">Plus tard</button>
       </div>
     </div>
-  </div>
-</div>
 
 <div class="topbar">
   <div class="topbar-sep"></div>
@@ -540,30 +533,14 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
           <button class="btn btn-outline" onclick="openImportArtisanModalGlobal()" style="border-color:#e74c3c;color:#e74c3c"><i class="ti ti-file-import" aria-hidden="true"></i>Importer devis artisan (IA)</button>
           <button class="btn btn-outline" onclick="exportToFinancement()" style="border-color:#2D7A4F;color:#2D7A4F"><i class="ti ti-coin" aria-hidden="true"></i>Envoyer vers Financement</button>
           <button class="btn btn-outline" onclick="exportToChantier()" style="border-color:#1B2D5B;color:#1B2D5B"><i class="ti ti-building-factory-2" aria-hidden="true"></i>Envoyer vers Chantier</button>
-          <button class="btn btn-outline" onclick="exportToAppelsOffres()" style="border-color:#1E5FAA;color:#1E5FAA"><i class="ti ti-send" aria-hidden="true"></i>Envoyer vers Appels d'offres</button>
-          <button class="btn btn-outline" onclick="ouvrirModalOffresArtisans()" id="btn-offres-artisans" style="border-color:#2E7D4F;color:#2E7D4F;display:none"><i class="ti ti-inbox-down" aria-hidden="true"></i>Offres artisans reçues <span id="offres-artisans-badge"></span></button>
-          <button class="btn btn-outline" onclick="openChiffrageArchiveModal()" id="btn-chiffrage-archive" style="border-color:#6C3483;color:#6C3483;display:none"><i class="ti ti-archive" aria-hidden="true"></i>Chiffrages enregistrés</button>
       </div>
     </div>
-    <div id="chiffrage-actif-banner" style="display:none;padding:8px 28px;background:rgba(108,52,131,.06);border-bottom:1px solid rgba(108,52,131,.15);font-size:12px;color:#6C3483;font-weight:600"></div>
 
     <!-- Stats -->
     <div class="stats-row" id="stats-row">
-      <div class="stat-card"><div class="stat-label">Nombre de lots</div><div class="stat-value" id="stat-lots">0</div><div class="stat-sub">0 terminé(s)</div></div>
+      <div class="stat-card"><div class="stat-label">Marge totale</div><div class="stat-value" id="stat-marge">0 €<span id="stat-marge-pct" style="font-size:13px;font-weight:600;color:var(--text3);margin-left:6px"></span></div><div class="stat-sub" id="stat-marge-sub">sur achat artisan</div></div>
       <div class="stat-card"><div class="stat-label">Total HT</div><div class="stat-value accent" id="stat-ht">0 €</div></div>
-      <div class="stat-card"><div class="stat-label">Total TTC</div><div class="stat-value" id="stat-ttc">0 €</div><div class="stat-sub" id="stat-tva-sub">TVA 20%</div></div>
-    </div>
-
-    <!-- TVA générale du projet -->
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 28px;background:var(--surface2);border-bottom:1px solid var(--border)">
-      <label style="font-size:13px;font-weight:600;color:var(--nav);white-space:nowrap">TVA générale du projet</label>
-      <select id="tva-generale-select" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px">
-        <option value="20">20% (travaux neufs)</option>
-        <option value="10">10% (rénovation courante)</option>
-        <option value="5.5">5.5% (rénovation énergétique)</option>
-      </select>
-      <button class="btn btn-outline" style="padding:6px 14px;font-size:13px" onclick="appliquerTvaGenerale()">Appliquer à tous les lots</button>
-      <span style="font-size:12px;color:var(--text3)">Change le taux de TVA de chaque lot existant en une fois — vous pouvez toujours ajuster un lot particulier ensuite dans son détail.</span>
+      <div class="stat-card"><div class="stat-label">Total TTC</div><div class="stat-value" id="stat-ttc">0 €</div><div class="stat-sub">TVA 20%</div></div>
     </div>
 
     <!-- Table lots -->
@@ -594,11 +571,8 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
     <div id="lot-detail" style="display:none;flex-direction:column;flex:1">
       <div class="lot-detail-header">
         <button class="back-btn" onclick="closeLotDetail()"><i class="ti ti-arrow-left" aria-hidden="true"></i>Retour</button>
-        <div style="flex:1">
-          <div class="lot-title-edit-row">
-            <input type="text" id="detail-num" class="lot-title-input lot-title-input-num" placeholder="N° lot" oninput="saveLotIdentity()">
-            <input type="text" id="detail-nom" class="lot-title-input lot-title-input-nom" placeholder="Désignation du lot" oninput="saveLotIdentity()">
-          </div>
+        <div>
+          <div class="lot-title-detail" id="detail-title">LOT 01 — VRD / Terrassement</div>
           <div style="font-size:12px;color:var(--text3)" id="detail-chantier-name"></div>
         </div>
         <div style="margin-left:auto;display:flex;gap:8px">
@@ -630,6 +604,7 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
               <div class="poste-table-wrap"><table class="poste-table">
                 <thead>
                   <tr>
+                    <th style="width:70px"></th>
                     <th style="width:30%">Désignation</th>
                     <th style="width:50px">Qté</th>
                     <th style="width:38px">Unité</th>
@@ -644,7 +619,7 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
                 <tfoot>
                   <tr class="add-poste-row">
                     <td colspan="6">
-                      <button class="btn btn-sm btn-outline" onclick="addPoste()"><i class="ti ti-plus" aria-hidden="true"></i>Ajouter un poste</button>
+                      <button class="btn btn-sm btn-outline" onclick="openLignesPicker()"><i class="ti ti-plus" aria-hidden="true"></i>Ajouter une ligne</button>
                     </td>
                   </tr>
                 </tfoot>
@@ -1251,42 +1226,7 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
     </div>
   </div>
 
-  <!-- MODAL EXPORT VERS APPELS D'OFFRES -->
-  <div class="modal-overlay" id="modal-export-ao">
-    <div class="modal" style="max-width:560px">
-      <div class="modal-title"><i class="ti ti-send" style="color:#1E5FAA;margin-right:8px" aria-hidden="true"></i>Envoyer vers Appels d'offres</div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Choisissez les lots à transmettre aux artisans. Les lots de maîtrise d'œuvre / honoraires internes sont décochés par défaut — ils n'ont pas à apparaître sur la plateforme publique.</div>
-      <div id="export-ao-lots-list" style="max-height:360px;overflow-y:auto"></div>
-      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
-        <button class="btn btn-outline" onclick="closeModal('modal-export-ao')">Annuler</button>
-        <button class="btn btn-primary" onclick="confirmerExportAppelsOffres()" style="background:#1E5FAA;border-color:#1E5FAA">Envoyer la sélection</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL OFFRES ARTISANS EN ATTENTE -->
-  <div class="modal-overlay" id="modal-offres-artisans">
-    <div class="modal" style="max-width:640px">
-      <div class="modal-title"><i class="ti ti-inbox-down" style="color:#2E7D4F;margin-right:8px" aria-hidden="true"></i>Offres artisans reçues</div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Choisissez le dossier de destination pour chaque offre, puis créez un lot à part portant le nom de l'entreprise — pratique pour comparer plusieurs artisans sur un même chantier.</div>
-      <div id="offres-artisans-list" style="max-height:420px;overflow-y:auto"></div>
-      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
-        <button class="btn btn-outline" onclick="closeModal('modal-offres-artisans')">Fermer</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal-overlay" id="modal-chiffrage-archive">
-    <div class="modal" style="max-width:640px">
-      <div class="modal-title"><i class="ti ti-archive" style="color:#6C3483;margin-right:8px" aria-hidden="true"></i>Chiffrages enregistrés</div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:14px">Ce chantier a plusieurs chiffrages complets enregistrés (générés avec des prompts différents). Activez-en un pour le rendre courant — l'actuel sera automatiquement archivé à sa place.</div>
-      <div id="chiffrage-archive-list"></div>
-      <div style="display:flex;justify-content:flex-end;margin-top:16px">
-        <button class="btn btn-outline" onclick="closeModal('modal-chiffrage-archive')">Fermer</button>
-      </div>
-    </div>
-  </div>
-
+  <!-- MODAL RÉSULTATS ANALYSE IA -->
   <div class="modal-overlay" id="modal-ia-resultats">
     <div class="modal modal-ia">
       <div class="modal-title"><i class="ti ti-robot" style="color:#6C3483;margin-right:8px" aria-hidden="true"></i>Analyse IA — Résultats</div>
@@ -1307,10 +1247,6 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
             <option value="existing">Ajouter dans un lot existant</option>
           </select>
         </div>
-      </div>
-      <div style="margin-bottom:12px">
-        <label style="font-size:11px;color:var(--text2);font-weight:600;display:block;margin-bottom:3px">Nom de ce chiffrage <span style="font-weight:400;color:var(--text3)">(pour le retrouver si vous en enregistrez plusieurs pour ce chantier)</span></label>
-        <input type="text" id="ia-nom-chiffrage" placeholder="Ex. Isolation laine de bois, Option économique…" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:var(--font-sans);background:var(--bg)">
       </div>
 
       <!-- Formulaire création chantier inline -->
@@ -1599,7 +1535,7 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
     </div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal('modal-chantier')">Annuler</button>
-      <button class="btn btn-primary" id="btn-save-chantier" onclick="saveNewChantier()">Créer le chantier</button>
+      <button class="btn btn-primary" onclick="saveNewChantier()">Créer le chantier</button>
     </div>
   </div>
 </div>
@@ -1632,6 +1568,27 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal('modal-lot')">Annuler</button>
       <button class="btn btn-primary" onclick="saveNewLot()">Créer le lot</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL SÉLECTEUR DE LIGNES (catalogue de prestations type) -->
+<div class="modal-overlay" id="modal-lignes-picker">
+  <div class="modal" style="max-width:560px;max-height:80vh;display:flex;flex-direction:column">
+    <div class="modal-title">Ajouter une ligne</div>
+    <div class="form-row">
+      <div class="form-group" style="flex:1">
+        <label>Corps de métier</label>
+        <select id="lp-categorie" onchange="renderLignesPickerList()"></select>
+      </div>
+    </div>
+    <div class="form-group">
+      <input type="text" id="lp-recherche" placeholder="Rechercher une prestation… (cherche dans tous les corps de métier)" oninput="renderLignesPickerList()" style="width:100%">
+    </div>
+    <div id="lp-liste" style="overflow-y:auto;flex:1;border:1px solid var(--border);border-radius:var(--r-md);margin:8px 0"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="ajouterLigneLibre()"><i class="ti ti-pencil" aria-hidden="true"></i> Ligne libre (sans modèle)</button>
+      <button class="btn" onclick="closeModal('modal-lignes-picker')">Fermer</button>
     </div>
   </div>
 </div>
@@ -1874,6 +1831,334 @@ var questReponses = {
   terrasse:'aucune', portail:'porte_garage_auto', cloture:'aucune',
 };
 
+// ═══════════════════════════════════════════════════════════════
+//  CATALOGUE DE LIGNES — bibliothèque de prestations type par corps
+//  de métier. Utilisé par "Ajouter une ligne" pour proposer des
+//  désignations pré-remplies avec leur unité — il ne reste plus qu'à
+//  saisir la quantité et le prix.
+// ═══════════════════════════════════════════════════════════════
+const LIGNES_CATALOGUE = {
+  'Maçonnerie / Gros œuvre': [
+    {n:'Installation de chantier / base vie',u:'ff'},
+    {n:'Clôture de chantier provisoire',u:'ml'},
+    {n:'Terrassement en pleine masse',u:'m³'},
+    {n:'Terrassement en tranchée',u:'ml'},
+    {n:'Évacuation des déblais',u:'m³'},
+    {n:'Fouilles en rigole pour fondations',u:'ml'},
+    {n:'Béton de propreté',u:'m³'},
+    {n:'Fondations semelles filantes',u:'ml'},
+    {n:'Fondations semelles isolées / plots',u:'u'},
+    {n:'Longrines béton armé',u:'ml'},
+    {n:'Radier béton armé',u:'m²'},
+    {n:'Vide sanitaire (parpaings + dalle)',u:'m²'},
+    {n:'Dalle béton armé sur terre-plein',u:'m²'},
+    {n:'Plancher poutrelles hourdis',u:'m²'},
+    {n:'Plancher béton prédalle',u:'m²'},
+    {n:'Mur en parpaings 15/20cm',u:'m²'},
+    {n:'Mur en parpaings 25cm',u:'m²'},
+    {n:'Mur en briques',u:'m²'},
+    {n:'Mur en pierre (maçonnerie traditionnelle)',u:'m²'},
+    {n:'Chaînage horizontal béton armé',u:'ml'},
+    {n:'Chaînage vertical (poteau) béton armé',u:'u'},
+    {n:'Linteau béton armé',u:'u'},
+    {n:'Voile béton banché',u:'m²'},
+    {n:'Poteau béton armé',u:'u'},
+    {n:'Poutre béton armé',u:'ml'},
+    {n:'Escalier béton coulé en place',u:'u'},
+    {n:'Enduit de façade taloché',u:'m²'},
+    {n:'Enduit de façade gratté',u:'m²'},
+    {n:'Rejointoiement pierre',u:'m²'},
+    {n:'Ouverture / élargissement dans mur porteur',u:'u'},
+    {n:'Reprise en sous-œuvre',u:'ml'},
+    {n:'Trémie escalier',u:'u'},
+    {n:'Souche de cheminée',u:'u'},
+    {n:'Conduit de fumée / boisseaux',u:'ml'},
+    {n:'Regard EU/EP',u:'u'},
+    {n:'Drainage périphérique',u:'ml'},
+    {n:'Cuvelage étanche',u:'m²'},
+    {n:'Fosse septique / assainissement individuel',u:'ff'},
+    {n:'Piscine — bassin béton',u:'m²'},
+    {n:'Muret / mur de clôture maçonné',u:'ml'},
+    {n:'Dallage extérieur / terrasse béton',u:'m²'},
+    {n:'Rampe d\'accès béton',u:'m²'},
+    {n:'Évacuation gravats / bennes',u:'u'},
+  ],
+  'Charpente / Couverture': [
+    {n:'Charpente traditionnelle bois',u:'m²'},
+    {n:'Charpente fermettes industrielles',u:'m²'},
+    {n:'Charpente métallique',u:'m²'},
+    {n:'Ossature bois (mur/plancher)',u:'m²'},
+    {n:'Pannes / chevrons complémentaires',u:'ml'},
+    {n:'Voligeage / liteaunage',u:'m²'},
+    {n:'Écran de sous-toiture HPV',u:'m²'},
+    {n:'Pare-vapeur sous toiture',u:'m²'},
+    {n:'Couverture tuile terre-cuite',u:'m²'},
+    {n:'Couverture tuile béton',u:'m²'},
+    {n:'Couverture ardoise naturelle',u:'m²'},
+    {n:'Couverture ardoise fibrociment',u:'m²'},
+    {n:'Couverture bac acier',u:'m²'},
+    {n:'Couverture zinc à joint debout',u:'m²'},
+    {n:'Étanchéité toiture terrasse (EPDM/bitume)',u:'m²'},
+    {n:'Faîtage / arêtiers',u:'ml'},
+    {n:'Rives de toiture',u:'ml'},
+    {n:'Noues',u:'ml'},
+    {n:'Gouttière zinc/alu/PVC',u:'ml'},
+    {n:'Descente eaux pluviales',u:'ml'},
+    {n:'Fenêtre de toit (Velux ou équivalent)',u:'u'},
+    {n:'Habillage de rive / sous-face débord de toit',u:'ml'},
+    {n:'Zinguerie divers (bandeaux, closoirs)',u:'ml'},
+    {n:'Solin d\'étanchéité en jonction toiture',u:'ml'},
+    {n:'Charpente préau / carport',u:'m²'},
+    {n:'Isolation sous toiture (sarking)',u:'m²'},
+    {n:'Écran pare-pluie mur ossature bois',u:'m²'},
+    {n:'Bardage bois (structure support)',u:'m²'},
+    {n:'Reprise / renfort de charpente existante',u:'ff'},
+    {n:'Traitement charpente (curatif/préventif)',u:'m²'},
+  ],
+  'Menuiseries extérieures': [
+    {n:'Fenêtre PVC double vitrage',u:'u'},
+    {n:'Fenêtre alu double vitrage',u:'u'},
+    {n:'Fenêtre bois double vitrage',u:'u'},
+    {n:'Fenêtre mixte bois/alu',u:'u'},
+    {n:'Porte-fenêtre 1 vantail',u:'u'},
+    {n:'Porte-fenêtre 2 vantaux',u:'u'},
+    {n:'Baie coulissante alu',u:'u'},
+    {n:'Baie vitrée fixe',u:'u'},
+    {n:'Porte d\'entrée aluminium',u:'u'},
+    {n:'Porte d\'entrée PVC',u:'u'},
+    {n:'Porte d\'entrée bois',u:'u'},
+    {n:'Porte de garage sectionnelle',u:'u'},
+    {n:'Porte de garage basculante',u:'u'},
+    {n:'Portail battant',u:'u'},
+    {n:'Portail coulissant',u:'u'},
+    {n:'Volet roulant électrique',u:'u'},
+    {n:'Volet roulant manuel',u:'u'},
+    {n:'Volet battant bois/alu',u:'u'},
+    {n:'Store banne',u:'u'},
+    {n:'Brise-soleil orientable',u:'m²'},
+    {n:'Grille de défense / barreaudage',u:'u'},
+    {n:'Moustiquaire sur mesure',u:'u'},
+    {n:'Seuil / appui de fenêtre',u:'u'},
+  ],
+  'Isolation / Plâtrerie': [
+    {n:'Isolation combles perdus (soufflée)',u:'m²'},
+    {n:'Isolation rampants (entre/sous chevrons)',u:'m²'},
+    {n:'Isolation par l\'extérieur (ITE)',u:'m²'},
+    {n:'Isolation par l\'intérieur (ITI) — doublage',u:'m²'},
+    {n:'Isolation plancher bas / vide sanitaire',u:'m²'},
+    {n:'Isolation phonique cloisons',u:'m²'},
+    {n:'Doublage placo sur ossature métallique',u:'m²'},
+    {n:'Doublage placo collé',u:'m²'},
+    {n:'Cloison placo 72/48 simple peau',u:'m²'},
+    {n:'Cloison placo 98/48 double peau',u:'m²'},
+    {n:'Cloison hydrofuge (pièce humide)',u:'m²'},
+    {n:'Cloison coupe-feu',u:'m²'},
+    {n:'Faux plafond placo sur ossature',u:'m²'},
+    {n:'Faux plafond suspendu (dalles)',u:'m²'},
+    {n:'Bandes à joint + finition',u:'m²'},
+    {n:'Trappe de visite',u:'u'},
+    {n:'Réservation technique / gaine',u:'ml'},
+    {n:'Habillage placo pied de pente',u:'ml'},
+    {n:'Coffre de volet roulant intégré',u:'u'},
+    {n:'Enduit projeté (staff/plâtre traditionnel)',u:'m²'},
+    {n:'Isolation acoustique renforcée (bande résiliente)',u:'ml'},
+    {n:'Pare-vapeur intérieur',u:'m²'},
+  ],
+  'Électricité': [
+    {n:'Tableau électrique complet (avec disjoncteurs)',u:'u'},
+    {n:'Mise aux normes tableau existant',u:'ff'},
+    {n:'Prise de courant 2P+T 16A',u:'u'},
+    {n:'Prise de courant spécialisée (four, plaque)',u:'u'},
+    {n:'Point lumineux simple allumage',u:'u'},
+    {n:'Point lumineux va-et-vient',u:'u'},
+    {n:'Point lumineux télérupteur',u:'u'},
+    {n:'Spot encastré LED',u:'u'},
+    {n:'Prise RJ45 / réseau informatique',u:'u'},
+    {n:'Prise télévision',u:'u'},
+    {n:'Alimentation volet roulant électrique',u:'u'},
+    {n:'Alimentation portail motorisé',u:'ff'},
+    {n:'Interrupteur / va-et-vient',u:'u'},
+    {n:'Détecteur de mouvement',u:'u'},
+    {n:'Détecteur de fumée',u:'u'},
+    {n:'Interphone / visiophone',u:'u'},
+    {n:'Ventilation forcée (branchement électrique)',u:'ff'},
+    {n:'Mise à la terre / piquet de terre',u:'ff'},
+    {n:'Parafoudre',u:'u'},
+    {n:'Tableau divisionnaire',u:'u'},
+    {n:'Câblage général (rénovation complète)',u:'ff'},
+    {n:'Attestation Consuel',u:'ff'},
+    {n:'Borne de recharge véhicule électrique',u:'u'},
+    {n:'Installation photovoltaïque (raccordement)',u:'ff'},
+    {n:'Éclairage extérieur / applique',u:'u'},
+    {n:'Système domotique (base)',u:'ff'},
+  ],
+  'Plomberie / Sanitaire': [
+    {n:'Alimentation eau froide/chaude (par point)',u:'u'},
+    {n:'Colonne montante alimentation générale',u:'ml'},
+    {n:'Évacuation EU/EP par point',u:'u'},
+    {n:'WC suspendu avec bâti-support',u:'u'},
+    {n:'WC au sol',u:'u'},
+    {n:'Lavabo / vasque avec robinetterie',u:'u'},
+    {n:'Meuble vasque double',u:'u'},
+    {n:'Douche à l\'italienne (receveur + parois)',u:'u'},
+    {n:'Receveur de douche extra-plat',u:'u'},
+    {n:'Baignoire avec robinetterie',u:'u'},
+    {n:'Robinetterie mitigeur thermostatique',u:'u'},
+    {n:'Évier de cuisine avec robinetterie',u:'u'},
+    {n:'Chauffe-eau électrique',u:'u'},
+    {n:'Chauffe-eau thermodynamique',u:'u'},
+    {n:'Adoucisseur d\'eau',u:'u'},
+    {n:'Groupe de sécurité / disconnecteur',u:'u'},
+    {n:'Compteur d\'eau divisionnaire',u:'u'},
+    {n:'Ballon tampon',u:'u'},
+    {n:'Réseau assainissement collectif (raccordement)',u:'ml'},
+    {n:'Fosse toutes eaux / micro-station',u:'ff'},
+    {n:'Sèche-serviettes',u:'u'},
+    {n:'Purge / vidange installation existante',u:'ff'},
+    {n:'Recherche de fuite',u:'ff'},
+    {n:'Réseau arrosage extérieur',u:'ff'},
+    {n:'Robinet de puisage extérieur',u:'u'},
+    {n:'Siphon de sol',u:'u'},
+    {n:'Traversée de dalle / percement technique',u:'u'},
+  ],
+  'Chauffage / VMC': [
+    {n:'Chaudière gaz à condensation',u:'u'},
+    {n:'Chaudière fioul',u:'u'},
+    {n:'Chaudière bois / granulés',u:'u'},
+    {n:'Pompe à chaleur air/eau',u:'u'},
+    {n:'Pompe à chaleur air/air (climatisation réversible)',u:'u'},
+    {n:'Radiateur eau chaude acier',u:'u'},
+    {n:'Radiateur eau chaude fonte',u:'u'},
+    {n:'Radiateur électrique',u:'u'},
+    {n:'Plancher chauffant hydraulique',u:'m²'},
+    {n:'Plancher chauffant électrique',u:'m²'},
+    {n:'Poêle à bois',u:'u'},
+    {n:'Poêle à granulés',u:'u'},
+    {n:'Insert cheminée',u:'u'},
+    {n:'Réseau hydraulique chauffage (tuyauterie)',u:'ml'},
+    {n:'Collecteur / nourrice chauffage',u:'u'},
+    {n:'Vanne thermostatique',u:'u'},
+    {n:'Thermostat d\'ambiance connecté',u:'u'},
+    {n:'VMC simple flux autoréglable',u:'ff'},
+    {n:'VMC simple flux hygroréglable',u:'ff'},
+    {n:'VMC double flux',u:'ff'},
+    {n:'Bouche d\'extraction / d\'insufflation',u:'u'},
+    {n:'Conduit de VMC / gaine',u:'ml'},
+    {n:'Climatisation split (unité murale)',u:'u'},
+    {n:'Entretien / mise en service chaudière',u:'ff'},
+  ],
+  'Menuiseries intérieures': [
+    {n:'Porte intérieure prépeinte',u:'u'},
+    {n:'Porte intérieure bois massif',u:'u'},
+    {n:'Porte coulissante galandage',u:'u'},
+    {n:'Porte coulissante en applique',u:'u'},
+    {n:'Bloc-porte coupe-feu',u:'u'},
+    {n:'Escalier bois (droit ou quart tournant)',u:'u'},
+    {n:'Escalier métallique',u:'u'},
+    {n:'Garde-corps escalier',u:'ml'},
+    {n:'Rampe / main courante',u:'ml'},
+    {n:'Placard / dressing sur mesure',u:'m²'},
+    {n:'Plinthes',u:'ml'},
+    {n:'Habillage de poutre',u:'ml'},
+    {n:'Verrière intérieure décorative',u:'u'},
+    {n:'Étagères / rangements sur mesure',u:'ml'},
+  ],
+  'Revêtements sols / murs': [
+    {n:'Carrelage sol grand format',u:'m²'},
+    {n:'Carrelage mural (salle de bain/cuisine)',u:'m²'},
+    {n:'Faïence murale',u:'m²'},
+    {n:'Parquet contrecollé posé flottant',u:'m²'},
+    {n:'Parquet massif cloué/collé',u:'m²'},
+    {n:'Sol stratifié',u:'m²'},
+    {n:'Sol PVC / lino',u:'m²'},
+    {n:'Sol souple type LVT',u:'m²'},
+    {n:'Chape de ragréage',u:'m²'},
+    {n:'Chape liquide (fluide)',u:'m²'},
+    {n:'Plinthes carrelage / bois assorties',u:'ml'},
+    {n:'Résine de sol décorative',u:'m²'},
+    {n:'Terrasse bois (lames sur lambourdes)',u:'m²'},
+    {n:'Terrasse composite',u:'m²'},
+    {n:'Dallage extérieur (pierre/béton)',u:'m²'},
+    {n:'Tapisserie / revêtement mural décoratif',u:'m²'},
+    {n:'Moquette',u:'m²'},
+  ],
+  'Peinture': [
+    {n:'Peinture murs et plafonds (2 couches)',u:'m²'},
+    {n:'Préparation support (rebouchage, ponçage)',u:'m²'},
+    {n:'Primaire d\'accroche',u:'m²'},
+    {n:'Peinture boiseries (portes, plinthes)',u:'u'},
+    {n:'Peinture radiateurs',u:'u'},
+    {n:'Enduit décoratif (taloché, béton ciré)',u:'m²'},
+    {n:'Papier peint intissé',u:'m²'},
+    {n:'Lasure / vernis bois',u:'m²'},
+    {n:'Peinture extérieure façade (hors ravalement)',u:'m²'},
+    {n:'Peinture sol garage/atelier',u:'m²'},
+    {n:'Finition décorative (patine, effet)',u:'m²'},
+  ],
+  'Façades / Ravalement': [
+    {n:'Nettoyage / gommage de façade',u:'m²'},
+    {n:'Piquetage ancien enduit',u:'m²'},
+    {n:'Enduit monocouche taloché',u:'m²'},
+    {n:'Enduit monocouche gratté',u:'m²'},
+    {n:'Enduit à la chaux traditionnel',u:'m²'},
+    {n:'Isolation thermique par l\'extérieur (ITE) + enduit',u:'m²'},
+    {n:'Bardage bois',u:'m²'},
+    {n:'Bardage composite',u:'m²'},
+    {n:'Bardage métallique',u:'m²'},
+    {n:'Peinture de façade',u:'m²'},
+    {n:'Traitement hydrofuge façade',u:'m²'},
+    {n:'Réfection appuis de fenêtre',u:'ml'},
+    {n:'Corniche / modénature décorative',u:'ml'},
+    {n:'Ravalement pierre de taille',u:'m²'},
+    {n:'Échafaudage (location + montage)',u:'m²'},
+  ],
+  'VRD / Terrassement': [
+    {n:'Terrassement général (plateforme)',u:'m³'},
+    {n:'Décapage terre végétale',u:'m²'},
+    {n:'Nivellement terrain',u:'m²'},
+    {n:'Tranchée réseaux (eau, élec, tel)',u:'ml'},
+    {n:'Raccordement réseau eau potable',u:'ff'},
+    {n:'Raccordement réseau électrique (ENEDIS)',u:'ff'},
+    {n:'Raccordement assainissement collectif',u:'ml'},
+    {n:'Raccordement télécom / fibre',u:'ff'},
+    {n:'Voirie / allée carrossable',u:'m²'},
+    {n:'Bordures béton / pavés',u:'ml'},
+    {n:'Enrobé bicouche',u:'m²'},
+    {n:'Stabilisé / gravier décoratif',u:'m²'},
+    {n:'Clôture grillagée',u:'ml'},
+    {n:'Clôture pleine (bois/composite)',u:'ml'},
+    {n:'Portillon',u:'u'},
+    {n:'Espaces verts / engazonnement',u:'m²'},
+    {n:'Plantation arbustes/haies',u:'ml'},
+    {n:'Éclairage extérieur enterré',u:'ff'},
+    {n:'Bassin de rétention des eaux pluviales',u:'ff'},
+    {n:'Rampe d\'accès PMR extérieure',u:'ml'},
+  ],
+};
+
+// Devine le corps de métier le plus probable à partir du nom du lot
+// (ex. "LOT 03 — Elec" → "Électricité"), pour présélectionner la bonne
+// catégorie dans le sélecteur de lignes.
+function deviverCategorieDepuisNomLot(nomLot) {
+  const n = (nomLot||'').toLowerCase();
+  const regles = [
+    [/ma[cç]on|gros.?œuvre|gros.?oeuvre/, 'Maçonnerie / Gros œuvre'],
+    [/charpente|couverture|toiture/, 'Charpente / Couverture'],
+    [/menuiserie.*ext|fenêtre|volet/, 'Menuiseries extérieures'],
+    [/isolation|plâtrerie|platrerie|cloison/, 'Isolation / Plâtrerie'],
+    [/elec|électri/, 'Électricité'],
+    [/plomb|sanitaire/, 'Plomberie / Sanitaire'],
+    [/chauffage|vmc|pac\b/, 'Chauffage / VMC'],
+    [/menuiserie.*int|escalier/, 'Menuiseries intérieures'],
+    [/carrelage|sol|parquet|rev[eê]tement/, 'Revêtements sols / murs'],
+    [/peinture/, 'Peinture'],
+    [/fa[cç]ade|ravalement|enduit/, 'Façades / Ravalement'],
+    [/vrd|terrassement/, 'VRD / Terrassement'],
+  ];
+  for (const [re, cat] of regles) if (re.test(n)) return cat;
+  return Object.keys(LIGNES_CATALOGUE)[0];
+}
+
 const LOT_TEMPLATES={
   vrd:[{n:'Débroussaillage / nettoyage',q:1,u:'ff',pu:{eco:800,std:1200,haut:1800}},{n:'Terrassement général (excav.)',q:50,u:'m³',pu:{eco:35,std:50,haut:70}},{n:'Remblai et compactage',q:30,u:'m³',pu:{eco:20,std:30,haut:45}},{n:'Réseau EP (tranchées + fourreaux)',q:1,u:'ff',pu:{eco:1500,std:2500,haut:4000}}],
   go:[{n:'Fondations (semelles filantes)',q:20,u:'ml',pu:{eco:180,std:260,haut:380}},{n:'Murs en parpaing 20cm',q:80,u:'m²',pu:{eco:85,std:120,haut:165}},{n:'Dalle béton armé ep. 20cm',q:60,u:'m²',pu:{eco:90,std:130,haut:180}},{n:'Chaînages + linteaux',q:1,u:'ff',pu:{eco:2000,std:3200,haut:5000}}],
@@ -1987,7 +2272,6 @@ function showPage(page){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('page-'+page).classList.add('active');
   document.getElementById('nav-'+page).classList.add('active');
-  if(page==='chantiers'){renderChantierGrid();}
   if(page==='chiffrage'){renderChiffrage();}
   if(page==='export'){renderExportSelects();}
   if(page==='metrages' && metrageState && metrageState.canvas){ setTimeout(resizeMetrageCanvas, 50); }
@@ -1999,141 +2283,7 @@ function initUI(){
   if(typeof checkShowPushBtn==='function') checkShowPushBtn();
   // Détecter un projet passé depuis Phénix Dossier
   checkIncomingFromDossier();
-  // Charger le nombre d'offres artisans en attente (bouton + badge)
-  chargerOffresArtisansEnAttente();
 }
-
-// ── Réception des offres chiffrées par les artisans (depuis Appels d'offres) ──
-// Stockées en attente jusqu'à ce qu'on choisisse explicitement, pour chacune,
-// dans quel dossier créer un nouveau lot à son nom — jamais d'écrasement
-// automatique d'un lot existant, pour pouvoir comparer plusieurs artisans.
-let offresArtisansEnAttente = [];
-
-async function chargerOffresArtisansEnAttente(){
-  try {
-    const { db, auth, collection, getDocs } = await _phenixFbRefs();
-    if (!auth.currentUser) return;
-    const snap = await getDocs(collection(db, 'phenix_chiffrage_import'));
-    offresArtisansEnAttente = [];
-    snap.forEach(d => offresArtisansEnAttente.push({ _id: d.id, ...d.data() }));
-    const btn = document.getElementById('btn-offres-artisans');
-    const badge = document.getElementById('offres-artisans-badge');
-    if (btn) btn.style.display = offresArtisansEnAttente.length ? '' : 'none';
-    if (badge) badge.textContent = offresArtisansEnAttente.length ? '(' + offresArtisansEnAttente.length + ')' : '';
-  } catch(e){ console.warn('chargerOffresArtisansEnAttente error', e); }
-}
-window.chargerOffresArtisansEnAttente = chargerOffresArtisansEnAttente;
-
-function ouvrirModalOffresArtisans(){
-  renderOffresArtisansList();
-  document.getElementById('modal-offres-artisans').classList.add('open');
-}
-window.ouvrirModalOffresArtisans = ouvrirModalOffresArtisans;
-
-function renderOffresArtisansList(){
-  const list = document.getElementById('offres-artisans-list');
-  if (!offresArtisansEnAttente.length){
-    list.innerHTML = '<p style="color:var(--text3);font-size:13px">Aucune offre en attente pour le moment.</p>';
-    return;
-  }
-  const optionsChantiers = state.chantiers.map((c,ci) => `<option value="${ci}">${esc_dpgf(c.nom||'Sans nom')}</option>`).join('');
-  list.innerHTML = offresArtisansEnAttente.map((o,oi) => {
-    // Pré-sélection du dossier si un projetId correspond déjà à un chantier existant
-    const ciMatch = state.chantiers.findIndex(c => String(c.projetId||'') === String(o.projetId||'') && o.projetId);
-    const nbLignesChiffrees = (o.lignes||[]).filter(l => l.prixUnitaire != null).length;
-    return `
-    <div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap">
-        <div>
-          <strong style="color:var(--nav)">${esc_dpgf(o.artisan?.nom||'Artisan')}</strong>
-          <span style="color:var(--text3);font-size:12px"> — ${esc_dpgf(o.lot||'')} · pour "${esc_dpgf(o.chantierTitre||'')}"</span>
-        </div>
-        <div style="font-weight:700;color:#2E7D4F">${fmt(o.totalHT||0)} € HT</div>
-      </div>
-      <div style="font-size:12px;color:var(--text2);margin:4px 0">${nbLignesChiffrees} ligne(s) chiffrée(s)${o.artisan?.tel?' · 📞 '+esc_dpgf(o.artisan.tel):''}${o.disponibilite?' · 📅 dispo. '+esc_dpgf(o.disponibilite):''}</div>
-      ${o.commentaireGeneral ? `<div style="font-size:12px;color:var(--text2);font-style:italic;margin-bottom:6px">"${esc_dpgf(o.commentaireGeneral)}"</div>` : ''}
-      <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
-        <select id="offre-dest-${oi}" style="flex:1;min-width:180px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
-          <option value="">— Choisir le dossier —</option>
-          ${optionsChantiers}
-        </select>
-        <button class="btn btn-primary btn-sm" style="background:#2E7D4F;border-color:#2E7D4F" onclick="creerLotDepuisOffreArtisan(${oi})">+ Créer un lot</button>
-        <button class="btn btn-outline btn-sm" onclick="ignorerOffreArtisan(${oi})" title="Supprimer cette offre sans créer de lot">Ignorer</button>
-      </div>
-    </div>`;
-  }).join('');
-  if (state.chantiers.some((c,ci) => offresArtisansEnAttente.some(o => String(o.projetId||'')===String(c.projetId||'') && o.projetId))){
-    offresArtisansEnAttente.forEach((o,oi) => {
-      const ciMatch = state.chantiers.findIndex(c => String(c.projetId||'') === String(o.projetId||'') && o.projetId);
-      if (ciMatch >= 0){ const sel=document.getElementById('offre-dest-'+oi); if(sel) sel.value=ciMatch; }
-    });
-  }
-}
-
-async function creerLotDepuisOffreArtisan(oi){
-  const o = offresArtisansEnAttente[oi];
-  if (!o) return;
-  const sel = document.getElementById('offre-dest-'+oi);
-  const ci = sel ? parseInt(sel.value, 10) : NaN;
-  if (isNaN(ci) || !state.chantiers[ci]){ showToast('⚠️ Choisissez un dossier de destination'); return; }
-  const chantier = state.chantiers[ci];
-
-  const postes = (o.lignes||[])
-    .filter(l => l.prixUnitaire != null)
-    .map(l => ({
-      n: l.designation || '', q: parseFloat(l.quantite)||0, u: l.unite || 'u',
-      puArtisan: parseFloat(l.prixUnitaire)||0,
-      puClient: parseFloat(l.prixUnitaire)||0, // pas de marge auto — à régler manuellement, comme pour l'import IA
-      pu: parseFloat(l.prixUnitaire)||0
-    }));
-  if (!postes.length){ showToast('⚠️ Aucune ligne chiffrée dans cette offre'); return; }
-
-  const notes = [];
-  if (o.disponibilite) notes.push('Disponible à partir du ' + o.disponibilite + '.');
-  if (o.commentaireGeneral) notes.push(o.commentaireGeneral);
-
-  const nbExistants = (chantier.lots||[]).length;
-  chantier.lots = chantier.lots || [];
-  chantier.lots.push({
-    num: 'LOT '+(nbExistants+1).toString().padStart(2,'0'),
-    nom: (o.artisan?.nom || 'Artisan') + ' — ' + (o.lot || ''),
-    postes, aleas:5, honoraires:5, tva:20, statut:'Chiffrage', prestation:'std', marge:0,
-    notes: notes.length ? ('--- Offre reçue via Appels d\'offres (' + (o.artisan?.nom||'artisan') + ', ' + new Date().toLocaleDateString('fr-FR') + ') ---\n' + notes.join('\n')) : ''
-  });
-
-  try {
-    const { db, doc, deleteDoc } = await _phenixFbRefs();
-    await deleteDoc(doc(db, 'phenix_chiffrage_import', o._id));
-  } catch(e){ console.warn('suppression offre traitée:', e); }
-
-  offresArtisansEnAttente.splice(oi, 1);
-  saveState(); renderChantierGrid(); renderChantierSelects();
-  renderOffresArtisansList();
-  const badge = document.getElementById('offres-artisans-badge');
-  const btn = document.getElementById('btn-offres-artisans');
-  if (badge) badge.textContent = offresArtisansEnAttente.length ? '(' + offresArtisansEnAttente.length + ')' : '';
-  if (btn) btn.style.display = offresArtisansEnAttente.length ? '' : 'none';
-  if (state.currentChantier === ci) renderChiffrage();
-  showToast('✓ Nouveau lot « ' + (o.artisan?.nom||'Artisan') + ' — ' + (o.lot||'') + ' » créé dans ' + (chantier.nom||''));
-}
-window.creerLotDepuisOffreArtisan = creerLotDepuisOffreArtisan;
-
-async function ignorerOffreArtisan(oi){
-  const o = offresArtisansEnAttente[oi];
-  if (!o) return;
-  if (!confirm('Ignorer l\'offre de ' + (o.artisan?.nom||'cet artisan') + ' sans créer de lot ? Cette action est définitive.')) return;
-  try {
-    const { db, doc, deleteDoc } = await _phenixFbRefs();
-    await deleteDoc(doc(db, 'phenix_chiffrage_import', o._id));
-  } catch(e){ console.warn('suppression offre ignorée:', e); }
-  offresArtisansEnAttente.splice(oi, 1);
-  renderOffresArtisansList();
-  const badge = document.getElementById('offres-artisans-badge');
-  const btn = document.getElementById('btn-offres-artisans');
-  if (badge) badge.textContent = offresArtisansEnAttente.length ? '(' + offresArtisansEnAttente.length + ')' : '';
-  if (btn) btn.style.display = offresArtisansEnAttente.length ? '' : 'none';
-}
-window.ignorerOffreArtisan = ignorerOffreArtisan;
 
 function checkIncomingFromDossier() {
   try {
@@ -2271,19 +2421,15 @@ function getProgress(c){
 function computeChantierTotals(c){
   let htArtisan=0,htClient=0;
   (c.lots||[]).forEach(l=>{
-    let lotArtisan=0, lotClient=0;
     (l.postes||[]).forEach(p=>{
       const q=parseFloat(p.q)||0;
-      lotArtisan+=q*(parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
-      lotClient+=q*(parseFloat(p.puClient)||parseFloat(p.pu)||0);
+      htArtisan+=q*(parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
+      htClient+=q*(parseFloat(p.puClient)||parseFloat(p.pu)||0);
     });
-    // Aléas/honoraires calculés sur le sous-total de CE lot uniquement,
-    // pas sur le cumulé de tous les lots déjà traités.
-    const aleas=lotClient*(numOr(l.aleas,5)/100);
-    const hon=lotClient*(numOr(l.honoraires,5)/100);
-    lotClient+=aleas+hon;
-    htArtisan+=lotArtisan;
-    htClient+=lotClient;
+    const base=htClient;
+    const aleas=base*(numOr(l.aleas,5)/100);
+    const hon=base*(numOr(l.honoraires,5)/100);
+    htClient+=aleas+hon;
   });
   return {htArtisan,htClient};
 }
@@ -2299,7 +2445,6 @@ function selectChantier(i){
 }
 
 function openNewChantierModal(){state.editingChantierIdx=null;clearChantierForm();document.getElementById('modal-chantier-title').textContent='Nouveau chantier';
-  const btn=document.getElementById('btn-save-chantier'); if(btn) btn.textContent='Créer le chantier';
   // Reset import
   const importSel = document.getElementById('f-import-projet');
   if (importSel) { delete importSel.dataset.linkedProjetId; delete importSel.dataset.linkedBudget; delete importSel.dataset.linkedHonoraires; }
@@ -2318,7 +2463,6 @@ function editChantier(i){
   document.getElementById('f-client').value=c.client||'';
   document.getElementById('f-phase').value=c.phase||'APS';
   document.getElementById('modal-chantier-title').textContent='Modifier le chantier';
-  const btn=document.getElementById('btn-save-chantier'); if(btn) btn.textContent='Enregistrer les modifications';
   document.getElementById('modal-chantier').classList.add('open');
 }
 function deleteChantier(i){
@@ -2337,10 +2481,6 @@ async function loadProjetsFromDossier() {
   sel.innerHTML = '<option value="">— Chargement… —</option>';
   try {
     // Même projet Firebase que Phénix Dossier : collection phenix_projets
-    // (résolveur autonome — voir _phenixFbRefs — car les imports du haut
-    // de fichier ne sont pas toujours visibles ici selon le mode de
-    // chargement de la page ; cf. bug déjà rencontré sur le pont Appels d'offres)
-    const { db, collection, getDocs } = await _phenixFbRefs();
     const snap = await getDocs(collection(db, 'phenix_projets'));
     const projets = [];
     snap.forEach(d => projets.push(d.data()));
@@ -2397,23 +2537,14 @@ function saveNewChantier(){
   const linkedProjetId = importSel?.dataset?.linkedProjetId || null;
   const linkedBudget = importSel?.dataset?.linkedBudget || '';
   const linkedHonoraires = importSel?.dataset?.linkedHonoraires || '';
-  const data={nom,type:document.getElementById('f-type').value,surface:document.getElementById('f-surface').value,adresse:document.getElementById('f-adresse').value,client:document.getElementById('f-client').value,phase:document.getElementById('f-phase').value,
+  const data={nom,type:document.getElementById('f-type').value,surface:document.getElementById('f-surface').value,adresse:document.getElementById('f-adresse').value,client:document.getElementById('f-client').value,phase:document.getElementById('f-phase').value,lots:[],
     projetId: linkedProjetId,
     budgetTravaux: linkedBudget,
     honoraires: linkedHonoraires,
   };
-  if(state.editingChantierIdx!==null){
-    // Ne jamais toucher aux lots existants ici : on ne modifie que les
-    // champs d'identité du chantier (nom, adresse, client...). Les lots
-    // ne sont donc même pas inclus dans "data", pour qu'un Object.assign
-    // ne risque jamais de les écraser, quel que soit l'ordre du code.
-    Object.assign(state.chantiers[state.editingChantierIdx],data);
-  }
-  else{
-    data.lots=[];
-    state.chantiers.push(data);
-  }
-  saveState();renderChantierGrid();renderChantierSelects();closeModal('modal-chantier');showToast(state.editingChantierIdx!==null?'Chantier mis à jour (lots conservés)':'Chantier créé');
+  if(state.editingChantierIdx!==null){Object.assign(state.chantiers[state.editingChantierIdx],data);data.lots=state.chantiers[state.editingChantierIdx].lots;}
+  else{state.chantiers.push(data);}
+  saveState();renderChantierGrid();renderChantierSelects();closeModal('modal-chantier');showToast(state.editingChantierIdx!==null?'Chantier mis à jour':'Chantier créé');
 }
 
 function renderChantierSelects(){
@@ -2436,38 +2567,29 @@ function onChantierSelect(){
   renderChiffrage();
 }
 
+// Numéro de lot suivant, basé sur le plus grand numéro déjà utilisé (pas sur le
+// nombre de lots) — évite une collision si un lot a été supprimé entre-temps,
+// ce qui ferait retomber un calcul "longueur + 1" sur un numéro déjà pris.
+function nextLotNumber(lots) {
+  let max = 0;
+  (lots||[]).forEach(l => {
+    const m = String(l.num||'').match(/(\d+)/);
+    if (m) { const n = parseInt(m[1], 10); if (n > max) max = n; }
+  });
+  return 'LOT ' + String(max + 1).padStart(2, '0');
+}
+
 function renderChiffrage(){
   const idx=state.currentChantier;
-  const banner=document.getElementById('chiffrage-actif-banner');
-  const archBtn=document.getElementById('btn-chiffrage-archive');
   if(idx===null||!state.chantiers[idx]){
     document.getElementById('chiffrage-sub').textContent='Sélectionnez un chantier';
     document.getElementById('lots-tbody').innerHTML='<tr><td colspan="7" style="padding:24px;text-align:center;color:var(--text3)">Aucun chantier sélectionné</td></tr>';
-    updateStats([]);
-    banner.style.display='none'; archBtn.style.display='none';
-    return;
+    updateStats([]);return;
   }
   const c=state.chantiers[idx];
   document.getElementById('chiffrage-sub').textContent=c.nom+(c.client?' — '+c.client:'');
   document.getElementById('chantier-select').value=idx;
   if(typeof renderLotsTableOrCards === "function") renderLotsTableOrCards(); else renderLotsTable();
-
-  const tvaSel=document.getElementById('tva-generale-select');
-  if(tvaSel){
-    const tauxDistincts=[...new Set((c.lots||[]).map(l=>numOr(l.tva,20)))];
-    const valeur = tauxDistincts.length===1 ? tauxDistincts[0] : (c.tvaGenerale ?? 20);
-    if([...tvaSel.options].some(o=>parseFloat(o.value)===valeur)) tvaSel.value=valeur;
-  }
-
-  const nbArchives=(c.chiffrageArchive||[]).length;
-  archBtn.style.display=nbArchives?'':'none';
-  archBtn.innerHTML=`<i class="ti ti-archive" aria-hidden="true"></i>Chiffrages enregistrés (${nbArchives})`;
-  if(c._nomChiffrageActif){
-    banner.style.display='';
-    banner.innerHTML=`<i class="ti ti-git-branch" aria-hidden="true"></i> Chiffrage actif : <strong>${c._nomChiffrageActif}</strong>${nbArchives?` · ${nbArchives} autre${nbArchives>1?'s':''} chiffrage${nbArchives>1?'s':''} enregistré${nbArchives>1?'s':''}` : ''}`;
-  } else {
-    banner.style.display='none';
-  }
 }
 
 function renderLotsTable(){
@@ -2595,174 +2717,35 @@ async function exportToChantier(){
 }
 window.exportToChantier = exportToChantier;
 
-// ── Passerelle vers Phénix Appels d'offres (pousser un DPGF pour chiffrage artisans) ──
-// ── Résolveur Firebase autonome ────────────────────────────────
-// N'utilise JAMAIS les identifiants importés en haut de fichier
-// (db, auth, setDoc, doc...) : dans certains contextes de chargement
-// (shell / injection dynamique de script), ces bindings peuvent ne
-// pas être visibles ici. On récupère donc tout frais, à chaque appel.
-async function _phenixFbRefs(){
-  const { getApps, getApp, initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
-  const fs = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-  const { getAuth } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
-  const cfg = {
-    apiKey:            "AIzaSyCjNKNvS6p3nqE6-_Gw9I397ZtXm2FG1ew",
-    authDomain:        "phenix-architecte-9151b.firebaseapp.com",
-    projectId:         "phenix-architecte-9151b",
-    storageBucket:     "phenix-architecte-9151b.firebasestorage.app",
-    messagingSenderId: "811231684720",
-    appId:             "1:811231684720:web:413fa324ae43c07607acb5"
-  };
-  const app = getApps().length ? getApp() : initializeApp(cfg);
-  return {
-    db: fs.getFirestore(app),
-    auth: getAuth(app),
-    doc: fs.doc, setDoc: fs.setDoc, collection: fs.collection,
-    getDocs: fs.getDocs, deleteDoc: fs.deleteDoc
-  };
-}
-
-async function pushDpgfToAppelsOffres(projetId, payload){
-  const { db, doc, setDoc } = await _phenixFbRefs();
-  await setDoc(doc(db, 'phenix_ao_import', String(projetId)), payload);
-}
-window.pushDpgfToAppelsOffres = pushDpgfToAppelsOffres;
-
-async function exportToAppelsOffres(){
-  const idx=state.currentChantier;
-  if(idx===null||!state.chantiers[idx]){ showToast('Sélectionnez un chantier d\'abord'); return; }
-  const c=state.chantiers[idx];
-  const lots=sortLotsInPlace(c.lots||[]);
-  if(!lots.length){ showToast('Aucun lot à envoyer'); return; }
-  ouvrirModalExportAO(idx);
-}
-window.exportToAppelsOffres = exportToAppelsOffres;
-
-// Lots exclus par défaut de l'envoi vers la plateforme publique : maîtrise
-// d'œuvre / honoraires internes, qui n'ont rien à faire sous les yeux d'un
-// artisan. Détection par mot-clé dans le nom du lot, désactivable au cas
-// par cas dans la modale.
-const MOTS_CLES_LOT_INTERNE = ['phénix','phenix','maîtrise d\'œuvre','maitrise d\'oeuvre','honoraires','moe'];
-function estLotInterneParDefaut(nom){
-  const n=(nom||'').toLowerCase();
-  return MOTS_CLES_LOT_INTERNE.some(mot => n.includes(mot));
-}
-
-function ouvrirModalExportAO(idx){
-  const c=state.chantiers[idx];
-  const lots=sortLotsInPlace(c.lots||[]);
-  const listEl=document.getElementById('export-ao-lots-list');
-  listEl.innerHTML = lots.map((lot,li) => {
-    const interne = estLotInterneParDefaut(lot.nom);
-    return `
-    <label style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;${interne?'background:rgba(201,98,42,.05)':''}">
-      <input type="checkbox" class="export-ao-lot-chk" data-li="${li}" ${interne?'':'checked'} style="width:16px;height:16px">
-      <span style="flex:1;font-size:13px;color:var(--nav)">${(lot.num?lot.num+' — ':'')}${lot.nom||''}</span>
-      ${interne ? '<span style="font-size:10px;font-weight:700;color:#c9622a;background:#fdf0e6;padding:2px 8px;border-radius:10px">décoché par défaut — lot interne</span>' : ''}
-    </label>`;
-  }).join('');
-  document.getElementById('modal-export-ao').dataset.chantierIdx = idx;
-  document.getElementById('modal-export-ao').classList.add('open');
-}
-window.ouvrirModalExportAO = ouvrirModalExportAO;
-
-async function confirmerExportAppelsOffres(){
-  const idx = parseInt(document.getElementById('modal-export-ao').dataset.chantierIdx, 10);
-  const c = state.chantiers[idx];
-  if(!c) return;
-  const allLots = sortLotsInPlace(c.lots||[]);
-  const checked = [...document.querySelectorAll('.export-ao-lot-chk')].filter(chk => chk.checked).map(chk => parseInt(chk.dataset.li,10));
-  const lots = allLots.filter((_,li) => checked.includes(li));
-  if(!lots.length){ showToast('⚠️ Sélectionnez au moins un lot'); return; }
-
-  const dpgf = lots.map(lot => ({
-    lot: (lot.num ? lot.num + ' — ' : '') + (lot.nom || ''),
-    postes: (lot.postes||[]).map(p => ({ designation: p.n||'', unite: p.u||'u', quantite: parseFloat(p.q)||0 }))
-  })).filter(d => d.postes.length);
-
-  const payload = {
-    _ts: Date.now(),
-    ttl: Date.now() + 30*60*1000,
-    projetId: c.projetId || ('chiffrage-' + idx),
-    source: 'phenix_chiffrage',
-    payload: {
-      titre: c.nom || 'Chantier',
-      zone: c.adresse || '',
-      lots: dpgf.map(d => d.lot),
-      description: c.type ? ('Nature : ' + c.type + (c.surface ? ' — ' + c.surface + ' m²' : '')) : '',
-      dpgf
-    }
-  };
-
-  try { localStorage.setItem('phenix-open-in-appels-offres', JSON.stringify(payload)); } catch(e){}
-  try {
-    if(typeof window.pushDpgfToAppelsOffres === 'function'){
-      await window.pushDpgfToAppelsOffres(payload.projetId, payload);
-    }
-    showToast('✅ DPGF envoyé vers Appels d\'offres (' + dpgf.length + '/' + allLots.length + ' lot(s))');
-  }catch(e){
-    console.error('Export appels d\'offres error', e);
-    showToast('⚠️ DPGF préparé localement (staging cloud indisponible)');
-  }
-  closeModal('modal-export-ao');
-}
-window.confirmerExportAppelsOffres = confirmerExportAppelsOffres;
-
 function updateStats(lots){
-  let totalArtisan=0,totalClient=0,totalTTC=0;
-  const tauxVus=new Set();
+  let totalArtisan=0,totalClient=0;
   lots.forEach(lot=>{
-    let lotArtisan=0, lotClient=0;
+    // Aléas et honoraires se calculent sur le montant client DE CE LOT uniquement,
+    // pas sur le cumul de tous les lots précédents (bug corrigé).
+    let travArtisanLot=0, travClientLot=0;
     (lot.postes||[]).forEach(p=>{
       const q=parseFloat(p.q)||0;
-      lotArtisan+=q*(parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
-      lotClient+=q*(parseFloat(p.puClient)||parseFloat(p.pu)||0);
+      travArtisanLot+=q*(parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
+      travClientLot+=q*(parseFloat(p.puClient)||parseFloat(p.pu)||0);
     });
-    // Aléas/honoraires calculés sur le sous-total de CE lot uniquement.
-    const aleas=lotClient*(numOr(lot.aleas,5)/100);
-    const hon=lotClient*(numOr(lot.honoraires,5)/100);
-    lotClient+=aleas+hon;
-    totalArtisan+=lotArtisan;
-    totalClient+=lotClient;
-    const tauxLot=numOr(lot.tva,20);
-    tauxVus.add(tauxLot);
-    totalTTC+=lotClient*(1+tauxLot/100);
+    const aleas=travClientLot*(numOr(lot.aleas,5)/100);
+    const hon=travClientLot*(numOr(lot.honoraires,5)/100);
+    totalArtisan+=travArtisanLot;
+    totalClient+=travClientLot+aleas+hon;
   });
-  const valide=lots.filter(l=>l.statut==='Valide').length;
-  document.getElementById('stat-lots').textContent=lots.length;
-  document.getElementById('stat-lots').nextElementSibling.textContent=valide+' terminé(s)';
+  const marge=totalClient-totalArtisan;
+  const margePct=totalArtisan>0?Math.round((marge/totalArtisan)*100):0;
+  document.getElementById('stat-marge').firstChild.textContent=fmt(marge)+' € ';
+  document.getElementById('stat-marge-pct').textContent=(margePct>=0?'+':'')+margePct+'%';
+  document.getElementById('stat-marge-sub').textContent='sur achat artisan : '+fmt(totalArtisan)+' € HT';
   document.getElementById('stat-ht').textContent=fmt(totalClient)+' €';
-  document.getElementById('stat-ttc').textContent=fmt(totalTTC)+' €';
-  const tvaSub=document.getElementById('stat-tva-sub');
-  if(tvaSub){
-    if(tauxVus.size===0) tvaSub.textContent='TVA 20%';
-    else if(tauxVus.size===1) tvaSub.textContent='TVA '+[...tauxVus][0]+'%';
-    else tvaSub.textContent='TVA mixte ('+[...tauxVus].sort((a,b)=>a-b).join('% / ')+'%)';
-  }
+  document.getElementById('stat-ttc').textContent=fmt(totalClient*1.2)+' €';
 }
-
-// Applique le taux de TVA choisi à tous les lots du chantier actif en une
-// fois. Chaque lot garde ensuite la possibilité d'être ajusté isolément
-// dans son détail (ex. un lot à taux réduit dans un chantier majoritairement
-// à 20%), cette action ne fait qu'harmoniser rapidement le point de départ.
-function appliquerTvaGenerale(){
-  const idx=state.currentChantier;
-  if(idx===null||!state.chantiers[idx]){ showToast('Sélectionnez un chantier d\'abord'); return; }
-  const lots=state.chantiers[idx].lots||[];
-  if(!lots.length){ showToast('Aucun lot dans ce chantier'); return; }
-  const taux=parseFloat(document.getElementById('tva-generale-select').value);
-  lots.forEach(lot=>{ lot.tva=taux; });
-  state.chantiers[idx].tvaGenerale=taux;
-  saveState();
-  renderChiffrage();
-  showToast('✓ TVA '+taux+'% appliquée à '+lots.length+' lot(s)');
-}
-window.appliquerTvaGenerale=appliquerTvaGenerale;
 
 function openNewLotModal(){
   if(state.currentChantier===null){alert('Sélectionnez d\'abord un chantier.');return;}
   const lots=state.chantiers[state.currentChantier].lots||[];
-  document.getElementById('fl-num').value='LOT '+(lots.length+1).toString().padStart(2,'0');
+  document.getElementById('fl-num').value=nextLotNumber(lots);
   document.getElementById('fl-nom').value='';
   document.getElementById('fl-modele').value='';
   document.getElementById('modal-lot').classList.add('open');
@@ -2791,8 +2774,7 @@ function openLotDetail(li){
   state.currentLot=li;
   const lot=state.chantiers[state.currentChantier].lots[li];
   const c=state.chantiers[state.currentChantier];
-  document.getElementById('detail-num').value=lot.num||'';
-  document.getElementById('detail-nom').value=lot.nom||'';
+  document.getElementById('detail-title').textContent=(lot.num?lot.num+' — ':'')+lot.nom;
   document.getElementById('detail-chantier-name').textContent=c.nom+(c.client?' — '+c.client:'');
   document.getElementById('param-aleas').value=numOr(lot.aleas,5);
   document.getElementById('param-honoraires').value=numOr(lot.honoraires,5);
@@ -2801,6 +2783,7 @@ function openLotDetail(li){
   document.getElementById('detail-prestation').value=lot.prestation||'std';
   document.getElementById('detail-tva').value=lot.tva||20;
   document.getElementById('param-marge').value=numOr(lot.marge,20);
+  document.getElementById('stats-row').style.display='none';
   document.getElementById('lots-table-wrap').style.display='none';
   document.getElementById('lot-detail').style.display='flex';
   renderPostes();
@@ -2810,6 +2793,7 @@ function openLotDetail(li){
 function closeLotDetail(){
   state.currentLot=null;
   document.getElementById('lot-detail').style.display='none';
+  document.getElementById('stats-row').style.display='';
   document.getElementById('lots-table-wrap').style.display='';
 }
 
@@ -2857,7 +2841,6 @@ function renderPostes(){
   const lot=state.chantiers[state.currentChantier].lots[li];
   const tb=document.getElementById('postes-tbody');
   tb.innerHTML='';
-  const nbPostes=(lot.postes||[]).length;
   (lot.postes||[]).forEach((p,pi)=>{
     const artisan=parseFloat(p.puArtisan)||parseFloat(p.pu)||0;
     const client=parseFloat(p.puClient)||artisan;
@@ -2865,8 +2848,13 @@ function renderPostes(){
     const totalClient=q*client;
     const margeEur=q*(client-artisan);
     const margePct=artisan>0?Math.round(((client-artisan)/artisan)*100):0;
+    const nbPostes=(lot.postes||[]).length;
     const tr=document.createElement('tr');
     tr.innerHTML=`
+      <td style="white-space:nowrap;padding-right:2px">
+        <button class="btn btn-sm btn-icon" onclick="movePoste(${pi},-1)" ${pi===0?'disabled style="opacity:.3"':''} title="Monter"><i class="ti ti-arrow-up" aria-hidden="true"></i></button>
+        <button class="btn btn-sm btn-icon" onclick="movePoste(${pi},1)" ${pi===nbPostes-1?'disabled style="opacity:.3"':''} title="Descendre"><i class="ti ti-arrow-down" aria-hidden="true"></i></button>
+      </td>
       <td><input type="text" value="${p.n||''}" onchange="updatePoste(${pi},'n',this.value)" style="width:100%"></td>
       <td><input type="number" value="${q}" min="0" step="0.1" style="width:60px" onchange="updatePoste(${pi},'q',this.value)"></td>
       <td><input type="text" value="${p.u||'u'}" style="width:36px" onchange="updatePoste(${pi},'u',this.value)"></td>
@@ -2880,24 +2868,10 @@ function renderPostes(){
         <span class="marge-badge${margePct<0?' neg':''}">${margePct>=0?'+':''}${margePct}%</span>
       </td>
       <td class="poste-total">${fmt(totalClient)} €</td>
-      <td style="white-space:nowrap">
-        <button class="btn btn-sm btn-icon" onclick="movePoste(${pi},-1)" ${pi===0?'disabled style="opacity:.3"':''} title="Monter"><i class="ti ti-arrow-up" aria-hidden="true" style="font-size:13px"></i></button>
-        <button class="btn btn-sm btn-icon" onclick="movePoste(${pi},1)" ${pi===nbPostes-1?'disabled style="opacity:.3"':''} title="Descendre"><i class="ti ti-arrow-down" aria-hidden="true" style="font-size:13px"></i></button>
-        <button class="btn btn-sm btn-danger" onclick="deletePoste(${pi})" style="padding:3px 7px"><i class="ti ti-trash" aria-hidden="true" style="font-size:13px"></i></button>
-      </td>`;
+      <td><button class="btn btn-sm btn-danger" onclick="deletePoste(${pi})" style="padding:3px 7px"><i class="ti ti-trash" aria-hidden="true" style="font-size:13px"></i></button></td>`;
     tb.appendChild(tr);
   });
 }
-
-function movePoste(pi, dir){
-  const lot=state.chantiers[state.currentChantier].lots[state.currentLot];
-  const postes=lot.postes||[];
-  const target=pi+dir;
-  if(target<0||target>=postes.length) return;
-  [postes[pi], postes[target]] = [postes[target], postes[pi]];
-  renderPostes();saveLot();
-}
-window.movePoste = movePoste;
 
 function updatePoste(pi,field,val){
   const lot=state.chantiers[state.currentChantier].lots[state.currentLot];
@@ -2919,6 +2893,72 @@ function deletePoste(pi){
   const lot=state.chantiers[state.currentChantier].lots[state.currentLot];
   lot.postes.splice(pi,1);
   renderPostes();computeLotTotal();saveLot();
+}
+
+// ── Sélecteur de lignes (catalogue de prestations type) ──
+function openLignesPicker(){
+  if(state.currentLot===null){alert('Ouvrez d\'abord un lot.');return;}
+  const lot=state.chantiers[state.currentChantier].lots[state.currentLot];
+  const catDevinee=deviverCategorieDepuisNomLot(lot.nom);
+  const sel=document.getElementById('lp-categorie');
+  sel.innerHTML=Object.keys(LIGNES_CATALOGUE).map(cat=>`<option value="${cat}"${cat===catDevinee?' selected':''}>${cat}</option>`).join('');
+  document.getElementById('lp-recherche').value='';
+  renderLignesPickerList();
+  document.getElementById('modal-lignes-picker').classList.add('open');
+}
+
+function renderLignesPickerList(){
+  const recherche=document.getElementById('lp-recherche').value.trim().toLowerCase();
+  const catSel=document.getElementById('lp-categorie').value;
+  const liste=document.getElementById('lp-liste');
+  let lignes=[];
+  if(recherche){
+    // Recherche transversale dans tous les corps de métier
+    Object.entries(LIGNES_CATALOGUE).forEach(([cat,arr])=>{
+      arr.forEach(l=>{ if(l.n.toLowerCase().includes(recherche)) lignes.push({...l,cat}); });
+    });
+  } else {
+    lignes=(LIGNES_CATALOGUE[catSel]||[]).map(l=>({...l,cat:catSel}));
+  }
+  if(!lignes.length){
+    liste.innerHTML='<div style="padding:16px;text-align:center;color:var(--text3);font-size:13px">Aucune prestation trouvée.</div>';
+    return;
+  }
+  liste.innerHTML=lignes.map(l=>`
+    <div onclick="choisirLigneCatalogue('${l.n.replace(/'/g,"\\'")}','${l.u}')"
+         style="padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"
+         onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
+      <span style="font-size:13px">${l.n}${recherche?` <span style="font-size:10.5px;color:var(--text3)">(${l.cat})</span>`:''}</span>
+      <span style="font-size:11px;color:var(--accent);font-weight:600;background:var(--bg2);padding:2px 8px;border-radius:99px">${l.u}</span>
+    </div>`).join('');
+}
+
+function choisirLigneCatalogue(nom,unite){
+  const lot=state.chantiers[state.currentChantier].lots[state.currentLot];
+  if(!lot.postes)lot.postes=[];
+  lot.postes.push({n:nom,q:1,u:unite,puArtisan:0,puClient:0,pu:0});
+  renderPostes();computeLotTotal();saveLot();
+  showToast('✅ "'+nom+'" ajoutée — renseignez la quantité et le prix.');
+}
+
+function ajouterLigneLibre(){
+  const lot=state.chantiers[state.currentChantier].lots[state.currentLot];
+  if(!lot.postes)lot.postes=[];
+  lot.postes.push({n:'Nouvelle ligne',q:1,u:'u',puArtisan:0,puClient:0,pu:0});
+  renderPostes();computeLotTotal();saveLot();
+  closeModal('modal-lignes-picker');
+}
+
+// ── Réordonnancement des lignes d'un lot (identique au principe des lots) ──
+function movePoste(pi,dir){
+  const lot=state.chantiers[state.currentChantier].lots[state.currentLot];
+  const postes=lot.postes||[];
+  const target=pi+dir;
+  if(target<0||target>=postes.length)return;
+  const tmp=postes[pi];
+  postes[pi]=postes[target];
+  postes[target]=tmp;
+  renderPostes();saveLot();
 }
 
 function addPoste(){
@@ -2958,29 +2998,6 @@ function computeLotTotal(){
   saveLot();
 }
 
-// Sauvegarde le numéro et la désignation du lot, édités en direct
-// dans l'en-tête du détail (débounce léger pour ne pas spammer saveState).
-let _saveLotIdentityTimer = null;
-function saveLotIdentity(){
-  const li=state.currentLot;
-  if(li===null)return;
-  const lot=state.chantiers[state.currentChantier].lots[li];
-  lot.num=document.getElementById('detail-num').value.trim();
-  lot.nom=document.getElementById('detail-nom').value.trim();
-  clearTimeout(_saveLotIdentityTimer);
-  _saveLotIdentityTimer=setTimeout(()=>{
-    saveState();
-    if(typeof renderLotsTableOrCards === "function") renderLotsTableOrCards(); else renderLotsTable();
-    renderChantierGrid();
-    if(state.currentLot !== null){
-      const tableWrap = document.getElementById('lots-table-wrap');
-      const mobileCards = document.getElementById('lots-cards-mobile');
-      if(tableWrap) tableWrap.style.display = 'none';
-      if(mobileCards) mobileCards.style.display = 'none';
-    }
-  }, 400);
-}
-
 function saveLot(){
   const li=state.currentLot;
   if(li===null)return;
@@ -2988,16 +3005,6 @@ function saveLot(){
   lot.statut=document.getElementById('param-statut').value;
   lot.notes=document.getElementById('param-notes').value;
   saveState();if(typeof renderLotsTableOrCards === "function") renderLotsTableOrCards(); else renderLotsTable();renderChantierGrid();
-  // renderLotsTableOrCards() réaffiche la liste des lots (elle rafraîchit
-  // aussi les totaux/le tableau en arrière-plan, ce qui reste utile) — mais
-  // si on est en train de regarder le détail d'un lot, cette liste ne doit
-  // pas réapparaître par-dessus : on la re-masque juste après.
-  if(state.currentLot !== null){
-    const tableWrap = document.getElementById('lots-table-wrap');
-    const mobileCards = document.getElementById('lots-cards-mobile');
-    if(tableWrap) tableWrap.style.display = 'none';
-    if(mobileCards) mobileCards.style.display = 'none';
-  }
 }
 
 // === IMPORT DEVIS ARTISAN ===
@@ -3123,8 +3130,10 @@ RÈGLES STRICTES :
         }]
       })
     });
-    if(!res.ok){const errData=await res.json().catch(()=>null);throw new Error(errData?.error?.message || `Proxy HTTP ${res.status}`);}
-    const text = await lireFluxAnthropic(res);
+    if(!res.ok){const err=await res.text().catch(()=>'');throw new Error(`Proxy HTTP ${res.status}: ${err.slice(0,200)}`);}
+    const data=await res.json();
+    if(data.error)throw new Error(data.error.message||JSON.stringify(data.error));
+    const text=(data.content||[]).map(b=>b.text||'').join('');
     let parsed;
     try{parsed=JSON.parse(text.replace(/```json|```/g,'').trim());}
     catch(pe){throw new Error('Réponse IA non parseable : '+text.slice(0,200));}
@@ -3305,7 +3314,7 @@ function confirmImportArtisan(){
       if(newLotCache[nom]!==undefined){
         lotIdx = newLotCache[nom];
       } else {
-        const num='LOT '+(chantier.lots.length+1).toString().padStart(2,'0');
+        const num=nextLotNumber(chantier.lots);
         chantier.lots.push({num,nom,postes:[],aleas:5,honoraires:5,tva:20,statut:'Chiffrage',prestation:'std',notes:'Créé automatiquement depuis import devis artisan (IA)',marge:marge});
         lotIdx = chantier.lots.length-1;
         newLotCache[nom]=lotIdx;
@@ -4299,9 +4308,8 @@ function confirmExportMesures(){
   if(!lotSel){showToast('⚠️ Sélectionnez un lot');return;}
   let li;
   if(lotSel==='__new__'){
-    const nb=(state.chantiers[ci].lots||[]).length;
     if(!state.chantiers[ci].lots) state.chantiers[ci].lots=[];
-    state.chantiers[ci].lots.push({num:'LOT '+(nb+1).toString().padStart(2,'0'),nom:'Métrés sur plan',postes:[],aleas:5,honoraires:5,tva:20,statut:'Chiffrage',prestation:'std',notes:'Issu des métrés sur plan',marge:20});
+    state.chantiers[ci].lots.push({num:nextLotNumber(state.chantiers[ci].lots),nom:'Métrés sur plan',postes:[],aleas:5,honoraires:5,tva:20,statut:'Chiffrage',prestation:'std',notes:'Issu des métrés sur plan',marge:20});
     li=state.chantiers[ci].lots.length-1;
   } else { li=parseInt(lotSel); }
   const lot=state.chantiers[ci].lots[li];
@@ -4557,7 +4565,7 @@ Sois précis et exhaustif. Si une valeur n'est pas lisible sur le plan, estime-l
       {type:'text', text:'Analyse ce plan architectural et génère le JSON de chiffrage complet selon le format demandé.'}
     ];
 
-    const res = await fetchProxyAvecReessai(PROXY, {
+    const res = await fetch(PROXY, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
@@ -4569,24 +4577,22 @@ Sois précis et exhaustif. Si une valeur n'est pas lisible sur le plan, estime-l
     });
 
     if(!res.ok) {
-      const errData = await res.json().catch(() => null);
-      throw new Error(errData?.error?.message || `Proxy HTTP ${res.status}`);
+      const errTxt = await res.text().catch(()=>'');
+      throw new Error(`Proxy HTTP ${res.status}: ${errTxt.slice(0,200)}`);
     }
-    const rawText = await lireFluxAnthropic(res);
-    let parsed, wasRepaired = false;
+    const data = await res.json();
+    if(data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+
+    const rawText = (data.content||[]).map(b=>b.text||'').join('');
+    let parsed;
     try {
       const clean = rawText.replace(/```json|```/g,'').trim();
       // Extraire le premier objet JSON trouvé
       const jsonStart = clean.indexOf('{');
       const jsonEnd = clean.lastIndexOf('}');
-      const result = tryRepairTruncatedJSON(clean.slice(jsonStart, jsonEnd+1));
-      parsed = result.data;
-      wasRepaired = result.repaired;
+      parsed = JSON.parse(clean.slice(jsonStart, jsonEnd+1));
     } catch(pe) {
       throw new Error('Réponse IA non parseable : ' + rawText.slice(0,300));
-    }
-    if (wasRepaired){
-      showToast('⚠️ Réponse IA coupée (dossier volumineux) — lots complets récupérés, vérifiez qu\'aucun ne manque.');
     }
 
     iaResultData = parsed;
@@ -4614,21 +4620,22 @@ function toggleIALot(li) {
 
 function recalcIAPoste(li, pi) {
   const q = parseFloat(document.getElementById('iap-q-'+li+'-'+pi)?.value)||0;
-  const pa = parseFloat(document.getElementById('iap-pa-'+li+'-'+pi)?.value)||0;
+  const pc = parseFloat(document.getElementById('iap-pc-'+li+'-'+pi)?.value)||0;
   const lots = iaResultData?.lots || [];
   if(lots[li] && lots[li].postes[pi]) {
     lots[li].postes[pi].q = q;
-    lots[li].postes[pi].pu_artisan = pa;
+    lots[li].postes[pi].pu_client = pc;
+    lots[li].postes[pi].pu_artisan = parseFloat(document.getElementById('iap-pa-'+li+'-'+pi)?.value)||0;
   }
-  // Recalculer total lot (prix d'achat, sans marge à ce stade)
+  // Recalculer total lot
   const postes = lots[li]?.postes || [];
   const total = postes.reduce((s,p,idx) => {
     const qv = parseFloat(document.getElementById('iap-q-'+li+'-'+idx)?.value)||0;
-    const pav = parseFloat(document.getElementById('iap-pa-'+li+'-'+idx)?.value)||0;
-    return s + qv*pav;
+    const pcv = parseFloat(document.getElementById('iap-pc-'+li+'-'+idx)?.value)||0;
+    return s + qv*pcv;
   }, 0);
   const totEl = document.getElementById('ia-lot-total-'+li);
-  if(totEl) totEl.textContent = "Total HT (prix d'achat, sans marge) : " + Math.round(total).toLocaleString('fr-FR') + ' €';
+  if(totEl) totEl.textContent = 'Total HT client : ' + Math.round(total).toLocaleString('fr-FR') + ' €';
 }
 
 function onIAChantierChange() {
@@ -4684,34 +4691,6 @@ function confirmerImportIA() {
   const chantier = state.chantiers[ci];
   if(!chantier.lots) chantier.lots = [];
 
-  const lotMode = document.getElementById('ia-dest-lot-mode')?.value || 'new';
-  const nomChiffrage = (document.getElementById('ia-nom-chiffrage')?.value || '').trim()
-    || ('Chiffrage du ' + new Date().toLocaleDateString('fr-FR'));
-
-  // Si ce chantier a déjà un chiffrage actif et qu'on crée de nouveaux lots
-  // (pas un simple ajout dans un lot existant), proposer d'archiver l'actuel
-  // plutôt que de mélanger les deux chiffrages ensemble.
-  if(lotMode === 'new' && chantier.lots.length > 0){
-    const nomActuel = chantier._nomChiffrageActif || 'Chiffrage actuel';
-    const veutRemplacer = confirm(
-      `Ce chantier a déjà un chiffrage actif : « ${nomActuel} » (${chantier.lots.length} lot(s)).\n\n` +
-      `OK → Enregistrer « ${nomChiffrage} » comme chiffrage actif et archiver « ${nomActuel} » (vous pourrez les comparer et rebasculer à tout moment).\n` +
-      `Annuler → Ajouter ces nouveaux lots à la suite du chiffrage actuel (fusion).`
-    );
-    if(veutRemplacer){
-      if(!chantier.chiffrageArchive) chantier.chiffrageArchive = [];
-      chantier.chiffrageArchive.push({
-        id: Date.now(),
-        nom: nomActuel,
-        date: chantier._dateChiffrageActif || new Date().toISOString().split('T')[0],
-        lots: chantier.lots
-      });
-      chantier.lots = [];
-    }
-  }
-  chantier._nomChiffrageActif = nomChiffrage;
-  chantier._dateChiffrageActif = new Date().toISOString().split('T')[0];
-
   let nbLots = 0, nbPostes = 0;
   lots.forEach((lot, li) => {
     const chk = document.getElementById('ia-lot-chk-'+li);
@@ -4719,35 +4698,26 @@ function confirmerImportIA() {
     // Si la case est introuvable (ne devrait pas arriver, mais par sécurité), on
     // inclut le lot plutôt que de l'ignorer silencieusement.
     if(chk && !chk.checked) return;
-    const postes = (lot.postes||[]).map((p, pi) => {
-      const puArtisanFinal = parseFloat(document.getElementById('iap-pa-'+li+'-'+pi)?.value) || parseFloat(p.pu_artisan) || 0;
-      return {
-        n: String(p.n||'').replace(/^[\s]*[-•*–—]+[\s]*/, '').trim(),
-        q: parseFloat(document.getElementById('iap-q-'+li+'-'+pi)?.value) || parseFloat(p.q) || 0,
-        u: p.u || 'u',
-        // Pas de marge appliquée automatiquement à l'import IA : prix de
-        // vente = prix d'achat par défaut. La marge se règle manuellement
-        // ensuite (globale sur le lot ou poste par poste).
-        puArtisan: puArtisanFinal,
-        puClient: puArtisanFinal,
-        pu: puArtisanFinal
-      };
-    });
-    const nbExistants = chantier.lots.length;
+    const postes = (lot.postes||[]).map((p, pi) => ({
+      n: String(p.n||'').replace(/^[\s]*[-•*–—]+[\s]*/, '').trim(),
+      q: parseFloat(document.getElementById('iap-q-'+li+'-'+pi)?.value) || parseFloat(p.q) || 0,
+      u: p.u || 'u',
+      puArtisan: parseFloat(document.getElementById('iap-pa-'+li+'-'+pi)?.value) || parseFloat(p.pu_artisan) || 0,
+      puClient:  parseFloat(document.getElementById('iap-pc-'+li+'-'+pi)?.value) || parseFloat(p.pu_client)  || 0,
+      pu: parseFloat(p.pu_artisan) || 0
+    }));
     chantier.lots.push({
-      num: 'LOT '+(nbExistants+1).toString().padStart(2,'0'),
+      num: nextLotNumber(chantier.lots),
       nom: lot.nom, postes,
       aleas:5, honoraires:5, tva:20, statut:'Chiffrage', prestation:'std',
       notes: 'Généré par analyse IA — ' + (iaResultData?.projet?.description||''),
-      marge:0
+      marge:20
     });
     nbLots++; nbPostes += postes.length;
   });
 
   saveState();
   closeModal('modal-ia-resultats');
-  renderChantierGrid();
-  renderChantierSelects();
   // Réinitialiser le formulaire pour la prochaine fois
   document.getElementById('ia-chantier-nom').value = '';
   document.getElementById('ia-chantier-client').value = '';
@@ -4761,90 +4731,6 @@ function confirmerImportIA() {
   if(sel) { sel.value = ci; }
   renderChiffrage();
 }
-
-// ── Chiffrages enregistrés (plusieurs chiffrages IA complets par chantier) ──
-function _totalChiffrage(lots){
-  // Même logique que computeChantierTotals, appliquée à un tableau de lots isolé
-  let ht=0;
-  (lots||[]).forEach(l=>{
-    let lotClient=0;
-    (l.postes||[]).forEach(p=>{
-      const q=parseFloat(p.q)||0;
-      lotClient+=q*(parseFloat(p.puClient)||parseFloat(p.pu)||0);
-    });
-    const aleas=lotClient*(numOr(l.aleas,5)/100);
-    const hon=lotClient*(numOr(l.honoraires,5)/100);
-    ht+=lotClient+aleas+hon;
-  });
-  return ht;
-}
-
-function openChiffrageArchiveModal(){
-  const c=state.chantiers[state.currentChantier];
-  if(!c) return;
-  const listEl=document.getElementById('chiffrage-archive-list');
-  const rows=[];
-  // Le chiffrage actif en tête, pour comparaison, sans bouton "Activer" (déjà actif)
-  rows.push(`
-    <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1.5px solid #6C3483;border-radius:8px;margin-bottom:8px;background:rgba(108,52,131,.05)">
-      <div style="flex:1">
-        <div style="font-weight:700;font-size:13px;color:var(--nav)">${c._nomChiffrageActif||'Chiffrage actif'} <span style="font-weight:400;color:#6C3483;font-size:11px">· actif</span></div>
-        <div style="font-size:11px;color:var(--text3)">${(c.lots||[]).length} lot(s) · ${c._dateChiffrageActif||''}</div>
-      </div>
-      <div style="font-weight:700;color:var(--nav);font-size:14px">${fmt(_totalChiffrage(c.lots))} € HT</div>
-    </div>`);
-  (c.chiffrageArchive||[]).forEach(a=>{
-    rows.push(`
-    <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px">
-      <div style="flex:1">
-        <div style="font-weight:700;font-size:13px;color:var(--nav)">${a.nom}</div>
-        <div style="font-size:11px;color:var(--text3)">${(a.lots||[]).length} lot(s) · ${a.date||''}</div>
-      </div>
-      <div style="font-weight:700;color:var(--nav);font-size:14px">${fmt(_totalChiffrage(a.lots))} € HT</div>
-      <button class="btn btn-sm btn-primary" onclick="activerChiffrageArchive(${a.id})" style="background:#6C3483;border-color:#6C3483">Activer</button>
-      <button class="btn btn-sm btn-danger" onclick="supprimerChiffrageArchive(${a.id})"><i class="ti ti-trash" aria-hidden="true" style="font-size:13px"></i></button>
-    </div>`);
-  });
-  listEl.innerHTML=rows.join('');
-  document.getElementById('modal-chiffrage-archive').classList.add('open');
-}
-window.openChiffrageArchiveModal=openChiffrageArchiveModal;
-
-function activerChiffrageArchive(id){
-  const c=state.chantiers[state.currentChantier];
-  if(!c || !c.chiffrageArchive) return;
-  const idx=c.chiffrageArchive.findIndex(a=>a.id===id);
-  if(idx<0) return;
-  const chosen=c.chiffrageArchive[idx];
-  // Le chiffrage actif actuel repart dans l'archive, sous son propre nom
-  c.chiffrageArchive[idx]={
-    id: Date.now(),
-    nom: c._nomChiffrageActif || 'Chiffrage précédent',
-    date: c._dateChiffrageActif || new Date().toISOString().split('T')[0],
-    lots: c.lots
-  };
-  c.lots=chosen.lots;
-  c._nomChiffrageActif=chosen.nom;
-  c._dateChiffrageActif=chosen.date;
-  saveState();
-  closeModal('modal-chiffrage-archive');
-  renderChiffrage();
-  renderChantierGrid();
-  showToast('✓ Chiffrage activé : '+chosen.nom);
-}
-window.activerChiffrageArchive=activerChiffrageArchive;
-
-function supprimerChiffrageArchive(id){
-  const c=state.chantiers[state.currentChantier];
-  if(!c || !c.chiffrageArchive) return;
-  if(!confirm('Supprimer définitivement ce chiffrage enregistré ? Cette action est irréversible.')) return;
-  c.chiffrageArchive=c.chiffrageArchive.filter(a=>a.id!==id);
-  saveState();
-  openChiffrageArchiveModal();
-  renderChiffrage();
-  showToast('✓ Chiffrage supprimé');
-}
-window.supprimerChiffrageArchive=supprimerChiffrageArchive;
 
 // confirmerImportIA déclarée plus haut (version avec création chantier)
 
@@ -4980,10 +4866,6 @@ function _ouvrirModalResultats(data) {
   document.getElementById('ia-new-chantier-form').style.display = hasChantiers ? 'none' : '';
   if(!hasChantiers) selC.value = '';
 
-  // Nom de chiffrage par défaut (l'utilisateur peut le modifier avant d'importer)
-  const nomChiffrageEl = document.getElementById('ia-nom-chiffrage');
-  if(nomChiffrageEl) nomChiffrageEl.value = 'Chiffrage du ' + new Date().toLocaleDateString('fr-FR');
-
   // Pré-remplir le formulaire depuis les données IA
   const nomAutoClient = (menus.portes_entree?.[0]?.designation||'').replace(/PE.*/,'').trim();
   const nomSuggere = data.projet?.description
@@ -5029,7 +4911,7 @@ function _ouvrirModalResultats(data) {
   lotsEl.innerHTML = '';
   lots.forEach((lot, li) => {
     const postes = lot.postes || [];
-    const totalLot = postes.reduce((s,p) => s + (parseFloat(p.q)||0)*(parseFloat(p.pu_artisan)||0), 0);
+    const totalLot = postes.reduce((s,p) => s + (parseFloat(p.q)||0)*(parseFloat(p.pu_client)||parseFloat(p.pu_artisan)||0), 0);
     const lotDiv = document.createElement('div');
     lotDiv.className = 'ia-result-lot';
     lotDiv.innerHTML = `
@@ -5041,18 +4923,19 @@ function _ouvrirModalResultats(data) {
         <i class="ti ti-chevron-down" id="ia-lot-chev-${li}" style="color:var(--text3);font-size:14px;transition:transform .2s"></i>
       </div>
       <div class="ia-result-lot-body" id="ia-lot-body-${li}">
-        <div style="display:grid;grid-template-columns:1fr 60px 40px 90px;gap:4px;padding:5px 14px;font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;background:var(--surface2)">
-          <div>Désignation</div><div style="text-align:right">Qté</div><div style="text-align:center">Unité</div><div style="text-align:right">PU achat</div>
+        <div style="display:grid;grid-template-columns:1fr 60px 40px 70px 70px;gap:4px;padding:5px 14px;font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;background:var(--surface2)">
+          <div>Désignation</div><div style="text-align:right">Qté</div><div style="text-align:center">Unité</div><div style="text-align:right">PU artisan</div><div style="text-align:right">PU client</div>
         </div>
         ${postes.map((p,pi) => `
-        <div class="ia-poste-row" style="grid-template-columns:1fr 60px 40px 90px;">
+        <div class="ia-poste-row">
           <div style="font-size:12px;color:var(--text)">${p.n}</div>
           <input type="number" value="${p.q}" min="0" step="0.1" id="iap-q-${li}-${pi}" oninput="recalcIAPoste(${li},${pi})">
           <div style="text-align:center;font-size:11px;color:var(--text3)">${p.u}</div>
           <input type="number" value="${p.pu_artisan||0}" min="0" step="1" id="iap-pa-${li}-${pi}" oninput="recalcIAPoste(${li},${pi})">
+          <input type="number" value="${p.pu_client||p.pu_artisan||0}" min="0" step="1" id="iap-pc-${li}-${pi}" style="background:#fff9e6" oninput="recalcIAPoste(${li},${pi})">
         </div>`).join('')}
         <div style="padding:6px 14px;text-align:right;font-size:12px;font-weight:700;color:var(--nav);background:var(--surface2)" id="ia-lot-total-${li}">
-          Total HT (prix d'achat, sans marge) : ${Math.round(totalLot).toLocaleString('fr-FR')} €
+          Total HT client : ${Math.round(totalLot).toLocaleString('fr-FR')} €
         </div>
       </div>`;
     lotsEl.appendChild(lotDiv);
@@ -5560,95 +5443,6 @@ function renoReset() {
 }
 
 // ── Analyse IA ────────────────────────────────────────────────────
-// Répare un JSON tronqué (réponse IA coupée en cours de génération, sur un
-// dossier volumineux) en le refermant proprement au dernier lot complet.
-// Les lots déjà entièrement générés sont conservés ; seul le dernier lot
-// resté incomplet (le cas échéant) est perdu — bien mieux qu'un plantage total.
-function tryRepairTruncatedJSON(text){
-  try { return { data: JSON.parse(text), repaired: false }; } catch(e){}
-  const lotsKeyIdx = text.indexOf('"lots"');
-  if (lotsKeyIdx === -1) throw new Error('Réponse IA incomplète et aucun lot n\'a pu être récupéré.');
-  const arrStart = text.indexOf('[', lotsKeyIdx);
-  if (arrStart === -1) throw new Error('Réponse IA incomplète et aucun lot n\'a pu être récupéré.');
-  let depth = 0, inStr = false, esc = false, lastGoodEnd = -1;
-  for (let i = arrStart + 1; i < text.length; i++){
-    const ch = text[i];
-    if (esc){ esc = false; continue; }
-    if (ch === '\\'){ esc = true; continue; }
-    if (ch === '"'){ inStr = !inStr; continue; }
-    if (inStr) continue;
-    if (ch === '{'){ depth++; }
-    else if (ch === '}'){ depth--; if (depth === 0) lastGoodEnd = i; }
-  }
-  if (lastGoodEnd === -1) throw new Error('Réponse IA incomplète : aucun lot entier n\'a pu être récupéré. Réessayez, idéalement avec un dossier moins volumineux ou une description plus courte.');
-  const repaired = text.slice(0, lastGoodEnd + 1) + ']}';
-  return { data: JSON.parse(repaired), repaired: true };
-}
-
-// Appelle le proxy IA avec une nouvelle tentative automatique en cas
-// d'échec réseau pur ("Failed to fetch" : connexion interrompue, Worker
-// trop lent à répondre sur un gros dossier...). Les erreurs HTTP normales
-// (4xx/5xx avec réponse du serveur) ne sont, elles, jamais réessayées.
-async function fetchProxyAvecReessai(url, options, maxTentatives = 2){
-  let derniereErreur;
-  for (let tentative = 1; tentative <= maxTentatives; tentative++){
-    try {
-      return await fetch(url, options);
-    } catch(err){
-      derniereErreur = err;
-      const estErreurReseau = err instanceof TypeError || /failed to fetch/i.test(err.message||'');
-      if (!estErreurReseau || tentative === maxTentatives) break;
-      await new Promise(r => setTimeout(r, 1500 * tentative));
-    }
-  }
-  const msg = /failed to fetch/i.test(derniereErreur?.message||'')
-    ? "Connexion au serveur d'analyse interrompue après plusieurs tentatives. Vérifiez votre connexion internet, ou consultez les journaux (Logs) de votre Worker Cloudflare (phenix-proxy) — il a peut-être mis trop de temps à répondre sur un dossier aussi volumineux."
-    : (derniereErreur?.message || 'Erreur réseau inconnue.');
-  throw new Error(msg);
-}
-
-// Lit la réponse en flux continu (SSE) renvoyée par le Worker et reconstitue
-// le texte complet, exactement comme le faisait auparavant data.content[0].text
-// sur une réponse groupée. Le streaming évite les coupures Cloudflare (erreur
-// 524) sur les générations longues — tant que des données circulent, la
-// connexion n'est jamais considérée comme inactive.
-async function lireFluxAnthropic(response, onProgress){
-  if (!response.body || !response.body.getReader){
-    // Repli : environnement sans support du streaming, on lit tout d'un bloc
-    const data = await response.json();
-    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
-    return (data.content||[]).map(b=>b.text||'').join('');
-  }
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let fullText = '';
-  let streamError = null;
-  while (true){
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop(); // ligne potentiellement incomplète, conservée pour la suite
-    for (const line of lines){
-      const trimmed = line.trim();
-      if (!trimmed.startsWith('data:')) continue;
-      const jsonStr = trimmed.slice(5).trim();
-      if (!jsonStr || jsonStr === '[DONE]') continue;
-      let evt;
-      try { evt = JSON.parse(jsonStr); } catch(e){ continue; }
-      if (evt.type === 'content_block_delta' && evt.delta && evt.delta.type === 'text_delta'){
-        fullText += evt.delta.text;
-        if (onProgress) onProgress(fullText.length);
-      } else if (evt.type === 'error'){
-        streamError = evt.error?.message || 'Erreur de streaming Anthropic';
-      }
-    }
-  }
-  if (streamError) throw new Error(streamError);
-  return fullText;
-}
-
 async function renoLancerIA() {
   const PROXY = 'https://phenix-proxy.phenixarchitecte.workers.dev';
   if(!renoPages.length) { showToast('⚠️ Chargez d\'abord un dossier'); return; }
@@ -5709,30 +5503,22 @@ LOT 10 Peinture/Finitions · LOT 11 Escalier · LOT 12 Isolation · LOT 13 Netto
   });
 
   try {
-    const res = await fetchProxyAvecReessai(PROXY, {
+    const res = await fetch(PROXY, {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
-        model:'claude-sonnet-4-6', max_tokens:16000,
+        model:'claude-sonnet-4-6', max_tokens:8000,
         system: systemPrompt, messages:[{role:'user', content}]
       })
     });
-    if (!res.ok){
-      const errData = await res.json().catch(() => null);
-      throw new Error(errData?.error?.message || `Proxy HTTP ${res.status}`);
-    }
-    const raw = await lireFluxAnthropic(res, (n) => {
-      if (statusEl) statusEl.textContent = `Analyse en cours... (${Math.round(n/4)} mots générés)`;
-    });
+    if(!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
+    const data = await res.json();
+    if(data.error) throw new Error(data.error.message||JSON.stringify(data.error));
+
+    const raw = (data.content||[]).map(b=>b.text||'').join('');
     const clean = raw.replace(/```json|```/g,'').trim();
-    const jsonSlice = clean.slice(clean.indexOf('{'), clean.lastIndexOf('}')+1);
-    const { data: parsed, repaired } = tryRepairTruncatedJSON(jsonSlice);
+    const parsed = JSON.parse(clean.slice(clean.indexOf('{'), clean.lastIndexOf('}')+1));
 
     statusEl.style.display = 'none';
-    if (repaired){
-      statusEl.style.display = '';
-      statusEl.className = 'reno-ia-status warning';
-      statusEl.textContent = `⚠️ Le dossier était volumineux : la réponse de l'IA a été coupée. ${parsed.lots?.length||0} lot(s) complet(s) ont été récupérés — vérifiez qu'aucun ne manque, et relancez sur le reste si besoin.`;
-    }
 
     // Pré-remplir le formulaire chantier
     iaResultData = parsed;
@@ -6040,32 +5826,23 @@ Sois précis et exhaustif. Si une valeur n'est pas lisible, estime-la de façon 
   });
 
   try {
-    const res = await fetchProxyAvecReessai(PROXY, {
+    const res = await fetch(PROXY, {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
-        model:'claude-sonnet-4-6', max_tokens:16000,
+        model:'claude-sonnet-4-6', max_tokens:8000,
         system: systemPrompt, messages:[{role:'user', content}]
       })
     });
-    if (!res.ok){
-      const errData = await res.json().catch(() => null);
-      throw new Error(errData?.error?.message || `Proxy HTTP ${res.status}`);
-    }
-    const raw = await lireFluxAnthropic(res, (n) => {
-      if (statusEl) statusEl.textContent = `Analyse en cours... (${Math.round(n/4)} mots générés)`;
-    });
+    if(!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
+    const data = await res.json();
+    if(data.error) throw new Error(data.error.message||JSON.stringify(data.error));
+
+    const raw = (data.content||[]).map(b=>b.text||'').join('');
     const clean = raw.replace(/```json|```/g,'').trim();
-    const jsonSlice = clean.slice(clean.indexOf('{'), clean.lastIndexOf('}')+1);
-    const { data: parsed, repaired } = tryRepairTruncatedJSON(jsonSlice);
+    const parsed = JSON.parse(clean.slice(clean.indexOf('{'), clean.lastIndexOf('}')+1));
 
     statusEl.style.display = 'none';
-    if (repaired){
-      statusEl.style.display = '';
-      statusEl.className = 'reno-ia-status warning';
-      statusEl.textContent = `⚠️ Le dossier était volumineux : la réponse de l'IA a été coupée. ${parsed.lots?.length||0} lot(s) complet(s) ont été récupérés — vérifiez qu'aucun ne manque, et relancez sur le reste si besoin.`;
-    }
 
-    iaResultData = parsed;
     const nomInput = document.getElementById('ia-chantier-nom');
     if(nomInput && !nomInput.value) nomInput.value = parsed.projet?.description||'';
     const surfInput = document.getElementById('ia-chantier-surface');
