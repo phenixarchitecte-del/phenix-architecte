@@ -2819,6 +2819,7 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
           <div><div class="page-title">Devis &amp; honoraires</div><div class="page-subtitle">Suivi financier de tous les contrats</div></div>
           <div style="display:flex;gap:8px">
             <button class="btn" onclick="openCalcModal()"><i class="ti ti-calculator"></i> Calculateur</button>
+            <button class="btn" onclick="exportDevisHonorairesPDF()" style="border-color:#1E3A5F;color:#1E3A5F"><i class="ti ti-file-type-pdf"></i> Exporter PDF</button>
             <button class="btn" onclick="openImportDevisSigneModal()" style="border-color:#27AE60;color:#27AE60"><i class="ti ti-file-import"></i> Importer devis signé → nouveau dossier</button>
             <button class="btn btn-primary" onclick="toggleAI_d();askAI('Génère un modèle de devis d\'honoraires d\'architecte pour une mission de maîtrise d\'œuvre complète, avec décomposition par phase.')">↗ Générer un devis IA</button>
           </div>
@@ -8982,6 +8983,123 @@ async function handleRestoreFile(file) {
     setTimeout(()=>location.reload(), 1500);
   };
   r.readAsText(file);
+}
+
+function exportDevisHonorairesCSV() {
+  const projets = stateDossier.projets || [];
+  let csv = "Projet;Client;Type;Phase;Statut;Avancement;Honoraires HT;Commissions HT;CA total\n";
+  projets.forEach(p=>{
+    const hon = parseFloat(p.honoraires)||0;
+    const com = parseFloat(p.commissions)||0;
+    csv+=`"${p.nom||''}";"${p.client||''}";"${p.type||''}";"${p.phase||''}";"${p.statut||''}";"${p.avancement||0}%";"${hon.toFixed(2)}";"${com.toFixed(2)}";"${(hon+com).toFixed(2)}"\n`;
+  });
+  const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download='phenix_devis_honoraires_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();URL.revokeObjectURL(url);
+  toast_d('💾 Export CSV téléchargé');
+}
+
+function exportDevisHonorairesPDF() {
+  const projets = (stateDossier.projets||[]).filter(p=>p.statut==='actif' || (parseFloat(p.honoraires)||0)>0);
+  const lignes = projets.map(p=>{
+    const honorairesHT = parseFloat(p.honoraires)||0;
+    const factures = stateDossier.factures.filter(f=>f.projetId==p.id && f.type!=='devis');
+    const factureHT = factures.reduce((s,f)=>s+(parseFloat(f.montantHt)||0),0);
+    const chargesHT = (stateDossier.charges||[]).filter(c=>String(c.projetId||'')===String(p.id)).reduce((s,c)=>s+(parseFloat(c.montantHt)||0),0);
+    const margeChantierHT = factureHT - chargesHT;
+    const caTotal = honorairesHT + (margeChantierHT>0?margeChantierHT:0);
+    return { p, honorairesHT, margeChantierHT, caTotal };
+  }).sort((a,b)=>b.caTotal-a.caTotal);
+
+  const caTotalGlobal = lignes.reduce((s,l)=>s+l.caTotal,0);
+  const honTotalGlobal = lignes.reduce((s,l)=>s+l.honorairesHT,0);
+  const margeTotalGlobal = lignes.reduce((s,l)=>s+(l.margeChantierHT>0?l.margeChantierHT:0),0);
+  const nbActifs = (stateDossier.projets||[]).filter(p=>p.statut==='actif').length;
+  const dateStr = new Date().toLocaleDateString('fr-FR', {day:'numeric', month:'long', year:'numeric'});
+
+  const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Synthèse Devis &amp; Honoraires</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
+body{font-family:'Segoe UI',Arial,sans-serif;color:#1E293B;background:#fff;font-size:12.5px}
+.doc-page{max-width:920px;margin:0 auto;padding:26px 30px}
+.header-box{background:#1E3A5F;border-radius:10px;padding:22px 26px;margin-bottom:22px}
+.header-eyebrow{font-size:10.5px;color:#93C5FD;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px}
+.header-title{font-size:25px;font-weight:800;color:#fff;font-family:Georgia,'Times New Roman',serif;margin-bottom:4px}
+.header-sub{font-size:12px;color:#B9CBE0;margin-bottom:18px}
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;border-top:1px solid rgba(255,255,255,.15);padding-top:16px}
+.kpi-label{font-size:9.5px;color:#93C5FD;letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px}
+.kpi-value{font-size:19px;font-weight:800;color:#fff;white-space:nowrap}
+.section-title{font-size:14px;font-weight:700;color:#1E3A5F;margin-bottom:10px}
+table{width:100%;border-collapse:collapse}
+thead th{padding:8px 10px;font-size:9.5px;color:#64748B;letter-spacing:.06em;text-transform:uppercase;text-align:left;border-bottom:2px solid #1E3A5F;white-space:nowrap}
+thead th.num{text-align:right}
+tbody td{padding:9px 10px;font-size:12px;border-bottom:1px solid #E2E8F0;vertical-align:middle}
+tbody tr:nth-child(even) td{background:#F8FAFC}
+td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.projet{font-weight:700;color:#1E3A5F;white-space:nowrap}
+td.marge{color:#B8860B;font-weight:600}
+td.ca{color:#1E3A5F;font-weight:700}
+.badge-statut{display:inline-block;padding:2px 10px;border-radius:99px;font-size:10.5px;font-weight:600;background:#DCFCE7;color:#166534;white-space:nowrap}
+.footer{text-align:center;font-size:10px;color:#94A3B8;margin-top:20px;padding-top:12px;border-top:1px solid #E2E8F0;line-height:1.7}
+.no-print{margin:16px 0;text-align:center}
+.no-print button{background:#1E3A5F;color:white;border:none;padding:8px 18px;border-radius:6px;font-size:12px;cursor:pointer}
+@media print{.no-print{display:none}}
+@page{margin:14mm}
+</style></head><body>
+<div class="doc-page">
+
+  <div class="header-box">
+    <div class="header-eyebrow">🏛 Phénix-Architecture · Maître d'œuvre</div>
+    <div class="header-title">Synthèse Devis &amp; Honoraires</div>
+    <div class="header-sub">Chiffre d'affaires par dossier · ${dateStr}</div>
+    <div class="kpi-row">
+      <div><div class="kpi-label">CA total</div><div class="kpi-value">${fmtEur_d(caTotalGlobal)}</div></div>
+      <div><div class="kpi-label">Honoraires HT</div><div class="kpi-value">${fmtEur_d(honTotalGlobal)}</div></div>
+      <div><div class="kpi-label">Marge chantier HT</div><div class="kpi-value">${fmtEur_d(margeTotalGlobal)}</div></div>
+      <div><div class="kpi-label">Dossiers actifs</div><div class="kpi-value">${nbActifs}</div></div>
+    </div>
+  </div>
+
+  <div class="section-title">📁 Dossiers — honoraires &amp; marge chantier</div>
+  <table>
+    <thead><tr>
+      <th>Projet</th><th>Client</th>
+      <th class="num">Honoraires HT</th><th class="num">Marge chantier HT</th><th class="num">CA total</th>
+      <th>Phase</th><th class="num">Avanc.</th><th>Statut</th>
+    </tr></thead>
+    <tbody>
+      ${lignes.map(l=>`<tr>
+        <td class="projet">${esc(l.p.nom)}</td>
+        <td>${esc(l.p.client)||'—'}</td>
+        <td class="num">${l.honorairesHT>0?fmtEur_d(l.honorairesHT):'—'}</td>
+        <td class="num marge">${l.margeChantierHT>0?fmtEur_d(l.margeChantierHT):'—'}</td>
+        <td class="num ca">${fmtEur_d(l.caTotal)}</td>
+        <td>${esc(l.p.phase)||'—'}</td>
+        <td class="num">${l.p.avancement||0}%</td>
+        <td><span class="badge-statut">${esc(l.p.statut)||'—'}</span></td>
+      </tr>`).join('')}
+    </tbody>
+  </table>
+
+  <div class="footer">
+    Phénix-Architecture · Maître d'Œuvre<br>
+    Synthèse Devis &amp; Honoraires · ${dateStr}<br>
+    Document indicatif — CA hors TVA, à titre de synthèse interne.
+  </div>
+
+  <div class="no-print"><button onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF</button></div>
+</div>
+</body></html>`;
+
+  const blob = new Blob([html], {type:'text/html;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.target = '_blank'; a.rel = 'noopener';
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+  toast_d('📄 Synthèse ouverte — Imprimer pour enregistrer en PDF');
 }
 
 function exportComptaCSV() {
