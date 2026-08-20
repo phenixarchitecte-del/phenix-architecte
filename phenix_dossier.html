@@ -9002,20 +9002,21 @@ function exportDevisHonorairesCSV() {
 }
 
 function exportDevisHonorairesPDF() {
+  // Document volontairement autonome : il ne s'appuie QUE sur les champs
+  // honoraires/commissions saisis sur la fiche projet, jamais sur les
+  // factures/charges réelles de la Comptabilité — ce sont des chiffres
+  // extrapolés à l'avancement, pas un résultat comptable reconstitué.
   const projets = (stateDossier.projets||[]).filter(p=>p.statut==='actif' || (parseFloat(p.honoraires)||0)>0);
   const lignes = projets.map(p=>{
     const honorairesHT = parseFloat(p.honoraires)||0;
-    const factures = stateDossier.factures.filter(f=>f.projetId==p.id && f.type!=='devis');
-    const factureHT = factures.reduce((s,f)=>s+(parseFloat(f.montantHt)||0),0);
-    const chargesHT = (stateDossier.charges||[]).filter(c=>String(c.projetId||'')===String(p.id)).reduce((s,c)=>s+(parseFloat(c.montantHt)||0),0);
-    const margeChantierHT = factureHT - chargesHT;
-    const caTotal = honorairesHT + (margeChantierHT>0?margeChantierHT:0);
+    const margeChantierHT = parseFloat(p.commissions)||0;
+    const caTotal = honorairesHT + margeChantierHT;
     return { p, honorairesHT, margeChantierHT, caTotal };
   }).sort((a,b)=>b.caTotal-a.caTotal);
 
   const caTotalGlobal = lignes.reduce((s,l)=>s+l.caTotal,0);
   const honTotalGlobal = lignes.reduce((s,l)=>s+l.honorairesHT,0);
-  const margeTotalGlobal = lignes.reduce((s,l)=>s+(l.margeChantierHT>0?l.margeChantierHT:0),0);
+  const margeTotalGlobal = lignes.reduce((s,l)=>s+l.margeChantierHT,0);
   const nbActifs = (stateDossier.projets||[]).filter(p=>p.statut==='actif').length;
   const dateStr = new Date().toLocaleDateString('fr-FR', {day:'numeric', month:'long', year:'numeric'});
 
@@ -9042,6 +9043,7 @@ td.projet{font-weight:700;color:#1E3A5F;white-space:nowrap}
 td.marge{color:#B8860B;font-weight:600}
 td.ca{color:#1E3A5F;font-weight:700}
 .badge-statut{display:inline-block;padding:2px 10px;border-radius:99px;font-size:10.5px;font-weight:600;background:#DCFCE7;color:#166534;white-space:nowrap}
+.warning-box{background:#FEF9E7;border:1px solid #F5D97A;border-radius:8px;padding:12px 16px;margin-top:16px;font-size:11px;color:#7A5C00;line-height:1.6}
 .footer{text-align:center;font-size:10px;color:#94A3B8;margin-top:20px;padding-top:12px;border-top:1px solid #E2E8F0;line-height:1.7}
 .no-print{margin:16px 0;text-align:center}
 .no-print button{background:#1E3A5F;color:white;border:none;padding:8px 18px;border-radius:6px;font-size:12px;cursor:pointer}
@@ -9083,10 +9085,12 @@ td.ca{color:#1E3A5F;font-weight:700}
     </tbody>
   </table>
 
+  <div class="warning-box">⚠️ La <strong>marge chantier</strong> indiquée ici est une estimation optimiste, extrapolée à la signature du projet — elle ne reflète pas un résultat comptable réel. Pour une estimation plus réaliste, retenez plutôt <strong>50% de ce montant</strong>.</div>
+
   <div class="footer">
     Phénix-Architecture · Maître d'Œuvre<br>
     Synthèse Devis &amp; Honoraires · ${dateStr}<br>
-    Document indicatif — CA hors TVA, à titre de synthèse interne.
+    Document indicatif — CA hors TVA, à titre de synthèse interne. Chiffres extrapolés, non reliés à la comptabilité réelle.
   </div>
 
   <div class="no-print"><button onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF</button></div>
