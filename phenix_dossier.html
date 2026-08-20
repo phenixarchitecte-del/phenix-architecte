@@ -9012,7 +9012,11 @@ function exportDevisHonorairesPDF() {
     const margeChantierHT = parseFloat(p.commissions)||0;
     const caTotal = honorairesHT + margeChantierHT;
     return { p, honorairesHT, margeChantierHT, caTotal };
-  }).sort((a,b)=>b.caTotal-a.caTotal);
+  }).sort((a,b)=>{
+    const da=a.p.date?new Date(a.p.date).getTime():Infinity;
+    const db=b.p.date?new Date(b.p.date).getTime():Infinity;
+    return da-db;
+  });
 
   const caTotalGlobal = lignes.reduce((s,l)=>s+l.caTotal,0);
   const honTotalGlobal = lignes.reduce((s,l)=>s+l.honorairesHT,0);
@@ -9067,7 +9071,7 @@ td.ca{color:#1E3A5F;font-weight:700}
   <div class="section-title">📁 Dossiers — honoraires &amp; marge chantier</div>
   <table>
     <thead><tr>
-      <th>Projet</th><th>Client</th>
+      <th>Projet</th><th>Client</th><th>Date d'entrée</th>
       <th class="num">Honoraires HT</th><th class="num">Marge chantier HT</th><th class="num">CA total</th>
       <th>Phase</th><th class="num">Avanc.</th><th>Statut</th>
     </tr></thead>
@@ -9075,6 +9079,7 @@ td.ca{color:#1E3A5F;font-weight:700}
       ${lignes.map(l=>`<tr>
         <td class="projet">${esc(l.p.nom)}</td>
         <td>${esc(l.p.client)||'—'}</td>
+        <td style="white-space:nowrap">${l.p.date?new Date(l.p.date).toLocaleDateString('fr-FR'):'—'}</td>
         <td class="num">${l.honorairesHT>0?fmtEur_d(l.honorairesHT):'—'}</td>
         <td class="num marge">${l.margeChantierHT>0?fmtEur_d(l.margeChantierHT):'—'}</td>
         <td class="num ca">${fmtEur_d(l.caTotal)}</td>
