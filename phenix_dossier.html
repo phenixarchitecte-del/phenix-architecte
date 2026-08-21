@@ -2535,6 +2535,51 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
   </div>
 </div>
 
+<div class="modal-overlay" id="modalTacheVocal">
+  <div class="modal" style="max-width:520px;padding:0;overflow:hidden;max-height:90vh;display:flex;flex-direction:column">
+    <div style="background:linear-gradient(135deg,#1B2D5B,#4A9CC7);padding:16px 22px;color:#fff;display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+      <div>
+        <div style="font-size:11px;opacity:.65;text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px">Phenix-Architecture &middot; Mode Mains Libres</div>
+        <div style="font-size:17px;font-weight:600">&#127908; Nouvelle t&acirc;che vocale</div>
+      </div>
+      <button class="btn btn-sm" onclick="stopTacheVocal(true)" style="background:rgba(255,255,255,.15);color:#fff;border-color:transparent">&#10005;</button>
+    </div>
+    <div style="background:rgba(74,156,199,.12);padding:10px 22px;display:flex;align-items:center;gap:10px;flex-shrink:0">
+      <div id="tvocal-step-dots" style="display:flex;gap:6px;flex:1"></div>
+      <div id="tvocal-step-label" style="font-size:11px;font-weight:700;color:#2A5298;text-transform:uppercase;letter-spacing:.07em;white-space:nowrap"></div>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:20px 22px;display:flex;flex-direction:column;gap:14px">
+      <div id="tvocal-question-block" style="background:linear-gradient(135deg,#4A9CC711,#4A9CC705);border:1.5px solid #4A9CC744;border-radius:12px;padding:16px 18px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#2A5298;margin-bottom:8px" id="tvocal-step-name"></div>
+        <div style="font-size:17px;font-weight:600;color:var(--navy);line-height:1.4" id="tvocal-question"></div>
+        <div style="font-size:11px;color:var(--text3);margin-top:6px" id="tvocal-hint"></div>
+      </div>
+      <div id="tvocal-transcript-wrap" style="display:none">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:5px">J'entends&hellip;</div>
+        <div id="tvocal-transcript" style="background:var(--bg);border:1.5px solid var(--border);border-radius:var(--r-md);padding:10px 12px;font-size:14px;color:var(--text);font-style:italic;min-height:42px"></div>
+      </div>
+      <div id="tvocal-answer-wrap" style="display:none">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--green);margin-bottom:5px">&#10003; Enregistr&eacute;</div>
+        <div id="tvocal-answer" style="background:#E3F5EC;border:1.5px solid #2D7A4F44;border-radius:var(--r-md);padding:10px 12px;font-size:13px;color:#1a4731"></div>
+      </div>
+      <div id="tvocal-recap" style="display:none;flex-direction:column;gap:8px"></div>
+      <div id="tvocal-status" style="text-align:center;font-size:13px;color:var(--text2);padding:6px 0"></div>
+    </div>
+    <div style="padding:14px 22px;border-top:2px solid var(--border);background:var(--card);display:flex;flex-direction:column;gap:8px;flex-shrink:0">
+      <button id="tvocal-mic-btn" onclick="toggleTacheVocalListening()"
+        style="width:100%;padding:14px;border-radius:12px;background:linear-gradient(135deg,#2A5298,#4A9CC7);color:#fff;border:none;font-size:16px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px">
+        <i class="ti ti-microphone" style="font-size:22px" id="tvocal-mic-icon"></i>
+        <span id="tvocal-mic-label">Appuyer pour parler</span>
+      </button>
+      <div style="display:flex;gap:8px">
+        <button onclick="tvocalSkipStep()" class="btn" style="flex:1;font-size:12px"><i class="ti ti-arrow-right"></i> Passer</button>
+        <button onclick="tvocalPrevStep()" class="btn" style="flex:1;font-size:12px"><i class="ti ti-arrow-left"></i> Retour</button>
+        <button id="tvocal-confirm-btn" onclick="tvocalConfirmSave()" class="btn btn-primary" style="flex:2;font-size:13px;display:none"><i class="ti ti-check"></i> Confirmer &amp; Cr&eacute;er</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 
 
 <!-- ══ APPLICATION ════════════════════════════════════════ -->
@@ -2713,6 +2758,9 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
         <div class="page-header">
           <div><div class="page-title">Tâches</div><div class="page-subtitle" id="taches-subtitle">—</div></div>
           <div style="display:flex;gap:8px">
+            <button class="btn" onclick="startTacheVocal()" style="background:linear-gradient(135deg,#2A5298,#4A9CC7);color:#fff;border-color:#2A5298">
+              <i class="ti ti-microphone"></i> Tâche vocale
+            </button>
             <button class="btn btn-primary" onclick="openTacheModal()"><i class="ti ti-plus"></i> Nouvelle tâche</button>
           </div>
         </div>
@@ -4424,6 +4472,285 @@ function _rvocalSpeak(text) {
   window.speechSynthesis.speak(utt);
 }
 function _rvocalSetStatus(msg) { const el=document.getElementById('rvocal-status'); if(el) el.textContent=msg; }
+
+// ════════════════════════════════════════════════════════════
+//  TÂCHE VOCALE — création d'une tâche en mode mains libres
+//  (même mécanisme que le CR Réunion vocal)
+// ════════════════════════════════════════════════════════════
+const TVOCAL_STEPS = [
+  { id:'titre',    name:'Titre',     question:'Quelle est la tâche à faire ?',        hint:'Décrivez la tâche en quelques mots. Ex : "Relancer le maçon pour le devis"', type:'text',     skippable:false },
+  { id:'projet',   name:'Projet',    question:'Pour quel projet ?',                   hint:'Dites le nom du projet, ou "aucun" si la tâche n\'est liée à aucun dossier', type:'projet',   skippable:true },
+  { id:'date',     name:'Échéance',  question:'Pour quand ?',                         hint:'Dites "aujourd\'hui", "demain", "lundi", ou une date précise',              type:'date',     skippable:true },
+  { id:'priorite', name:'Priorité',  question:'Quelle priorité ?',                    hint:'Dites "urgent", "haute" ou "normale"',                                      type:'priorite', skippable:true },
+  { id:'desc',     name:'Détails',   question:'Voulez-vous ajouter des détails ?',    hint:'Précisions utiles. Dites "aucun" s\'il n\'y en a pas',                       type:'textarea', skippable:true },
+];
+
+let _tvocal = { step:0, data:{}, reco:null, listening:false, active:false };
+
+function startTacheVocal() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { toast_d('⚠️ Reconnaissance vocale non supportée par ce navigateur.'); return; }
+  _tvocal = { step:0, data:{}, reco:null, listening:false, active:true };
+  document.getElementById('modalTacheVocal').classList.add('open');
+  _tvocalRenderStep();
+  setTimeout(()=>_tvocalSpeak(TVOCAL_STEPS[0].question), 500);
+}
+
+function stopTacheVocal(confirmClose) {
+  if (confirmClose && Object.keys(_tvocal.data).length && !confirm('Abandonner cette tâche vocale ?')) return;
+  _tvocalStopListening();
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
+  _tvocal.active = false;
+  document.getElementById('modalTacheVocal').classList.remove('open');
+}
+
+function _tvocalRenderStep() {
+  const step = _tvocal.step;
+  const isRecap = step >= TVOCAL_STEPS.length;
+  const dots = document.getElementById('tvocal-step-dots');
+  dots.innerHTML = TVOCAL_STEPS.map((s,i)=>
+    `<div style="flex:1;height:4px;border-radius:2px;background:${i<step?'#2A5298':i===step?'#4A9CC7':'var(--border)'}"></div>`).join('');
+  document.getElementById('tvocal-step-label').textContent = isRecap ? 'Récapitulatif' : `Étape ${step+1}/${TVOCAL_STEPS.length}`;
+
+  document.getElementById('tvocal-transcript-wrap').style.display = 'none';
+  document.getElementById('tvocal-answer-wrap').style.display     = 'none';
+  document.getElementById('tvocal-recap').style.display           = 'none';
+  document.getElementById('tvocal-confirm-btn').style.display     = 'none';
+
+  if (isRecap) { _tvocalRenderRecap(); return; }
+
+  const s = TVOCAL_STEPS[step];
+  document.getElementById('tvocal-step-name').textContent = s.name;
+  document.getElementById('tvocal-question').textContent  = s.question;
+  document.getElementById('tvocal-hint').textContent      = s.hint;
+  if (_tvocal.data[s.id]) _tvocalShowAnswer(s.id, _tvocal.data[s.id]);
+  _tvocalSetStatus('Prêt — appuyez sur le micro');
+}
+
+function _tvocalRenderRecap() {
+  const recap = document.getElementById('tvocal-recap');
+  const proj = _tvocal.data.projet ? stateDossier.projets.find(p=>String(p.id)===String(_tvocal.data.projet)) : null;
+  const prioLabel = {urgent:'🔴 Urgent', haute:'🟡 Haute', normale:'🔵 Normale'}[_tvocal.data.priorite||'normale'];
+  const rows = [
+    { label:'📌 Tâche',    val: _tvocal.data.titre || '—' },
+    { label:'🏗 Projet',   val: proj ? (proj.nom||proj.ref) : 'Aucun' },
+    { label:'📅 Échéance', val: _tvocal.data.date ? new Date(_tvocal.data.date+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}) : '—' },
+    { label:'⚡ Priorité', val: prioLabel },
+    { label:'📝 Détails',  val: _tvocal.data.desc || '—' },
+  ];
+  recap.innerHTML = rows.map(r => `
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:8px 12px;display:flex;gap:10px;align-items:flex-start">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);width:100px;flex-shrink:0;margin-top:2px">${r.label}</div>
+      <div style="font-size:13px;color:var(--text);flex:1;white-space:pre-wrap">${r.val==='—'||r.val==='Aucun'?`<span style="color:var(--text3);font-style:italic">${r.val}</span>`:esc(r.val)}</div>
+    </div>`).join('');
+  recap.style.display = 'flex';
+  document.getElementById('tvocal-step-name').textContent = 'Récapitulatif';
+  document.getElementById('tvocal-question').textContent  = 'Vérifiez et confirmez votre tâche.';
+  document.getElementById('tvocal-hint').textContent      = 'Dites "confirmer" pour créer la tâche.';
+  document.getElementById('tvocal-confirm-btn').style.display = '';
+  _tvocalSpeak('Récapitulatif prêt. Tâche : '+(_tvocal.data.titre||'non définie')+'. Dites confirmer pour créer.');
+}
+
+function toggleTacheVocalListening() {
+  if (_tvocal.listening) _tvocalStopListening();
+  else _tvocalStartListening();
+}
+
+function _tvocalStartListening() {
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return;
+  _tvocal.reco = new SR();
+  _tvocal.reco.lang = 'fr-FR';
+  _tvocal.reco.continuous = false;
+  _tvocal.reco.interimResults = true;
+  _tvocal.reco.onstart = () => {
+    _tvocal.listening = true; _tvocalSetMic(true);
+    document.getElementById('tvocal-transcript-wrap').style.display = '';
+    document.getElementById('tvocal-transcript').textContent = '…';
+    _tvocalSetStatus('🎙️ J\'écoute…');
+  };
+  _tvocal.reco.onresult = e => {
+    let txt = '';
+    for (let i=e.resultIndex; i<e.results.length; i++) txt += e.results[i][0].transcript;
+    document.getElementById('tvocal-transcript').textContent = txt;
+    if (e.results[e.results.length-1].isFinal) _tvocalProcess(txt.trim());
+  };
+  _tvocal.reco.onerror = ev => {
+    _tvocalSetStatus(ev.error==='no-speech' ? 'Rien entendu — réessayez' : 'Erreur micro : '+ev.error);
+    _tvocalStopListening();
+  };
+  _tvocal.reco.onend = () => { _tvocal.listening = false; _tvocalSetMic(false); };
+  try { _tvocal.reco.start(); } catch(e) { _tvocalSetStatus('Micro déjà actif'); }
+}
+
+function _tvocalStopListening() {
+  if (_tvocal.reco) { try { _tvocal.reco.stop(); } catch(e){} }
+  _tvocal.listening = false; _tvocalSetMic(false);
+}
+
+function _tvocalSetMic(on) {
+  const btn = document.getElementById('tvocal-mic-btn');
+  const lbl = document.getElementById('tvocal-mic-label');
+  if (!btn) return;
+  if (on) {
+    btn.style.background = 'linear-gradient(135deg,#C0392B,#E74C3C)';
+    lbl.textContent = 'J\'écoute — appuyer pour arrêter';
+  } else {
+    btn.style.background = 'linear-gradient(135deg,#2A5298,#4A9CC7)';
+    lbl.textContent = 'Appuyer pour parler';
+  }
+}
+
+function _tvocalProcess(text) {
+  if (!text) return;
+  const low = text.toLowerCase().trim();
+  const isRecap = _tvocal.step >= TVOCAL_STEPS.length;
+
+  if (isRecap) {
+    if (/confirm|valide|enregistr|sauvegard|cr[ée]er?/.test(low)) { tvocalConfirmSave(); return; }
+    _tvocalSetStatus('Dites "confirmer" pour créer la tâche.');
+    return;
+  }
+
+  const s = TVOCAL_STEPS[_tvocal.step];
+  if (/^(passer|suivant|aucun|aucune|rien|non)$/.test(low) && s.skippable) {
+    _tvocal.data[s.id] = ''; _tvocalNext(); return;
+  }
+
+  let val = text.trim();
+  if (s.type === 'projet') {
+    val = _tvocalParseProjet(low);
+    if (!val) { _tvocalSetStatus('Projet non reconnu — répétez ou dites "aucun"'); return; }
+  } else if (s.type === 'date') {
+    val = _tvocalParseDate(low);
+    if (!val) { _tvocalSetStatus('Date non comprise — ex : "demain", "lundi", "15 juin"'); return; }
+  } else if (s.type === 'priorite') {
+    val = /urgent/.test(low) ? 'urgent' : /haute|élev|eleve|important/.test(low) ? 'haute' : 'normale';
+  }
+
+  _tvocal.data[s.id] = val;
+  _tvocalShowAnswer(s.id, val);
+  setTimeout(_tvocalNext, 900);
+}
+
+function _tvocalParseProjet(t) {
+  if (/^(aucun|aucune|rien|pas de projet)$/.test(t)) return '';
+  let best = null, bestScore = 0;
+  stateDossier.projets.forEach(p => {
+    const cible = ((p.nom||'')+' '+(p.client||'')+' '+(p.ref||'')).toLowerCase();
+    const mots = t.split(/\s+/).filter(m=>m.length>2);
+    let score = 0;
+    mots.forEach(m => { if (cible.includes(m)) score++; });
+    if (score > bestScore) { bestScore = score; best = p; }
+  });
+  return best ? String(best.id) : null;
+}
+
+function _tvocalParseDate(t) {
+  const d = new Date(); d.setHours(12,0,0,0);
+  if (/aujourd|ce jour|maintenant/.test(t)) return d.toISOString().split('T')[0];
+  if (/demain/.test(t)) { d.setDate(d.getDate()+1); return d.toISOString().split('T')[0]; }
+  if (/après.demain|apres.demain/.test(t)) { d.setDate(d.getDate()+2); return d.toISOString().split('T')[0]; }
+  const jours = {dimanche:0, lundi:1, mardi:2, mercredi:3, jeudi:4, vendredi:5, samedi:6};
+  for (const [nom, idx] of Object.entries(jours)) {
+    if (t.includes(nom)) {
+      let diff = (idx - d.getDay() + 7) % 7;
+      if (diff === 0) diff = 7;
+      d.setDate(d.getDate()+diff);
+      return d.toISOString().split('T')[0];
+    }
+  }
+  const semaine = t.match(/dans\s+(\w+)\s+semaine/);
+  if (semaine) {
+    const n = {une:1, deux:2, trois:3, quatre:4}[semaine[1]] || parseInt(semaine[1]) || 1;
+    d.setDate(d.getDate()+n*7); return d.toISOString().split('T')[0];
+  }
+  const jour = t.match(/dans\s+(\w+)\s+jour/);
+  if (jour) {
+    const n = {un:1, deux:2, trois:3, quatre:4, cinq:5, six:6, sept:7}[jour[1]] || parseInt(jour[1]) || 1;
+    d.setDate(d.getDate()+n); return d.toISOString().split('T')[0];
+  }
+  const mois = {janvier:0,février:1,fevrier:1,mars:2,avril:3,mai:4,juin:5,juillet:6,août:7,aout:7,septembre:8,octobre:9,novembre:10,décembre:11,decembre:11};
+  const m = t.match(/(\d{1,2})\s+(janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre|decembre)/);
+  if (m) {
+    const dd = new Date(d.getFullYear(), mois[m[2]], parseInt(m[1]), 12);
+    if (dd < d) dd.setFullYear(dd.getFullYear()+1);
+    return dd.toISOString().split('T')[0];
+  }
+  return null;
+}
+
+function _tvocalShowAnswer(stepId, val) {
+  const wrap = document.getElementById('tvocal-answer-wrap');
+  const el = document.getElementById('tvocal-answer');
+  let aff = val;
+  const s = TVOCAL_STEPS.find(x=>x.id===stepId);
+  if (s && s.type==='projet') {
+    const p = stateDossier.projets.find(x=>String(x.id)===String(val));
+    aff = p ? (p.nom||p.ref) : 'Aucun projet';
+  } else if (s && s.type==='date') {
+    aff = new Date(val+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
+  } else if (s && s.type==='priorite') {
+    aff = {urgent:'🔴 Urgent', haute:'🟡 Haute', normale:'🔵 Normale'}[val] || val;
+  }
+  el.textContent = aff || '(passé)';
+  wrap.style.display = '';
+}
+
+function _tvocalNext() {
+  _tvocalStopListening();
+  _tvocal.step++;
+  _tvocalRenderStep();
+  if (_tvocal.step < TVOCAL_STEPS.length) {
+    setTimeout(()=>_tvocalSpeak(TVOCAL_STEPS[_tvocal.step].question), 400);
+  }
+}
+
+function tvocalPrevStep() { _tvocalStopListening(); if(_tvocal.step>0)_tvocal.step--; _tvocalRenderStep(); if(_tvocal.step<TVOCAL_STEPS.length) setTimeout(()=>_tvocalSpeak(TVOCAL_STEPS[_tvocal.step].question),400); }
+function tvocalSkipStep() { _tvocalStopListening(); const s=TVOCAL_STEPS[_tvocal.step]; _tvocal.data[s.id]=''; _tvocalNext(); }
+
+async function tvocalConfirmSave() {
+  if (!_tvocal.data.titre) { toast_d('⚠️ Le titre de la tâche est obligatoire.'); _tvocal.step=0; _tvocalRenderStep(); return; }
+  _tvocalStopListening();
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
+
+  const t = {
+    id: 't-'+Date.now(),
+    titre: _tvocal.data.titre,
+    desc: _tvocal.data.desc || '',
+    date: _tvocal.data.date || '',
+    heure: '',
+    duree: 60,
+    statut: 'todo',
+    priorite: _tvocal.data.priorite || 'normale',
+    projetId: _tvocal.data.projet || '',
+    phase: '',
+    assigneA: '',
+    dateLivraison: _tvocal.data.date || '',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  stateDossier.taches.push(t);
+  await saveTacheDb(t);
+  _tvocal.active = false;
+  document.getElementById('modalTacheVocal').classList.remove('open');
+  renderTaches();
+  toast_d('✅ Tâche créée : ' + t.titre);
+}
+
+function _tvocalSpeak(text) {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.lang='fr-FR'; utt.rate=1.0;
+  const voices = window.speechSynthesis.getVoices();
+  const fr = voices.find(v=>v.lang.startsWith('fr'));
+  if (fr) utt.voice = fr;
+  window.speechSynthesis.speak(utt);
+}
+function _tvocalSetStatus(msg) { const el=document.getElementById('tvocal-status'); if(el) el.textContent=msg; }
+
 
 function refreshAllViews() {
   const _dRoot = document.getElementById('app-dossier');
