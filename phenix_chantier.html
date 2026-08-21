@@ -3299,7 +3299,7 @@ function stopCRVocal(confirm) {
   if (confirm && _crv.active && _crv.step > 0) {
     if (!window.confirm('Abandonner le compte rendu en cours ?')) return;
   }
-  _crvStopListening();
+  _crvStopListening(true);
   _crvStopSpeech();
   _crv.active = false;
   closeModal('modalCRVocal');
@@ -3395,6 +3395,7 @@ function toggleCRVocalListening() {
   } else {
     _crv.userStopped = false;
     _crv.finalTranscript = '';
+    _crv.lastFinalSegment = '';
     _crvStartListening();
   }
 }
@@ -3423,7 +3424,16 @@ function _crvStartListening() {
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const r = e.results[i];
       if (r.isFinal) {
-        _crv.finalTranscript = (_crv.finalTranscript + ' ' + r[0].transcript).trim();
+        // Filtre anti-répétition : sur Android, un redémarrage automatique en
+        // pleine parole peut réentendre la fin d'un mot déjà capté et le
+        // renvoyer comme un nouveau résultat "final" — d'où des mots répétés
+        // en boucle. On ignore un segment identique (ou quasi) au précédent.
+        const segment = r[0].transcript.trim();
+        const dernier = (_crv.lastFinalSegment || '').trim().toLowerCase();
+        if (segment && segment.toLowerCase() !== dernier) {
+          _crv.finalTranscript = (_crv.finalTranscript + ' ' + segment).trim();
+          _crv.lastFinalSegment = segment;
+        }
       } else {
         interim += r[0].transcript;
       }
@@ -3449,9 +3459,10 @@ function _crvStartListening() {
       _crvSetMicState(false);
       _crv.reco = null;
       const finalText = (_crv.finalTranscript || '').trim();
-      if (finalText) {
+      if (finalText && !_crv.discardNextResult) {
         _crvProcessAnswer(finalText);
       }
+      _crv.discardNextResult = false;
     } else {
       // Coupure automatique du navigateur pendant une pause : on relance sans rien perdre
       try { _crv.reco.start(); } catch (err) { _crvSetMicState(false); }
@@ -3461,8 +3472,9 @@ function _crvStartListening() {
   _crv.reco.start();
 }
 
-function _crvStopListening() {
+function _crvStopListening(discard) {
   _crv.userStopped = true;
+  if (discard) _crv.discardNextResult = true;
   if (_crv.reco) {
     try { _crv.reco.stop(); } catch (e) {}
   } else {
@@ -3560,7 +3572,7 @@ function _crvShowAnswer(stepId, value) {
 
 // ── Navigation ───────────────────────────────────────────────
 function _crvNextStep() {
-  _crvStopListening();
+  _crvStopListening(true);
   _crv.step++;
   _crvRenderStep();
   const total = CRV_STEPS.length;
@@ -3571,7 +3583,7 @@ function _crvNextStep() {
 }
 
 function crvPrevStep() {
-  _crvStopListening();
+  _crvStopListening(true);
   if (_crv.step > 0) _crv.step--;
   _crvRenderStep();
   if (_crv.step < CRV_STEPS.length) {
@@ -3580,7 +3592,7 @@ function crvPrevStep() {
 }
 
 function crvSkipStep() {
-  _crvStopListening();
+  _crvStopListening(true);
   const s = CRV_STEPS[_crv.step];
   _crv.data[s.id] = '';
   _crvNextStep();

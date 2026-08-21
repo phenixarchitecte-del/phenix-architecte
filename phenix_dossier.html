@@ -4257,7 +4257,7 @@ function startReunionVocal() {
     toast_d('⚠️ Reconnaissance vocale non disponible. Utilisez Chrome.');
     return;
   }
-  _rvocal = { step:0, data:{}, reco:null, listening:false, active:true };
+  _rvocal = { step:0, data:{}, reco:null, listening:false, active:true, finalTranscript:'', lastFinalSegment:'', userStopped:false, discardNextResult:false };
   document.getElementById('modalReunionVocal').classList.add('open');
   _rvocalRenderStep();
   setTimeout(() => _rvocalSpeak(RVOCAL_STEPS[0].question + ' ' + RVOCAL_STEPS[0].hint), 600);
@@ -4325,45 +4325,83 @@ function _rvocalRenderRecap() {
 }
 
 function toggleReunionVocalListening() {
-  if (_rvocal.listening) _rvocalStopListening();
-  else _rvocalStartListening();
+  if (_rvocal.listening) {
+    _rvocal.userStopped = true;
+    _rvocalStopListening();
+  } else {
+    _rvocal.userStopped = false;
+    _rvocal.finalTranscript = '';
+    _rvocal.lastFinalSegment = '';
+    _rvocalStartListening();
+  }
 }
 
 function _rvocalStartListening() {
   if (window.speechSynthesis) window.speechSynthesis.cancel();
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) return;
+  if (typeof _rvocal.finalTranscript !== 'string') _rvocal.finalTranscript = '';
   _rvocal.reco = new SR();
   _rvocal.reco.lang = 'fr-FR';
-  _rvocal.reco.continuous = false;
+  _rvocal.reco.continuous = true;      // ne coupe plus sur une simple pause
   _rvocal.reco.interimResults = true;
+  _rvocal.reco.maxAlternatives = 1;
   _rvocal.reco.onstart = () => {
     _rvocal.listening = true; _rvocalSetMic(true);
     document.getElementById('rvocal-transcript-wrap').style.display = '';
-    document.getElementById('rvocal-transcript').textContent = '…';
-    _rvocalSetStatus('🔴 Écoute en cours…');
+    document.getElementById('rvocal-transcript').textContent = _rvocal.finalTranscript || '…';
+    _rvocalSetStatus('🔴 Écoute en cours — parlez, faites une pause si besoin, réappuyez sur le micro pour valider');
   };
   _rvocal.reco.onresult = e => {
-    const t = Array.from(e.results).map(r=>r[0].transcript).join('');
-    document.getElementById('rvocal-transcript').textContent = t;
-    if (e.results[0].isFinal) _rvocalProcess(t);
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const r = e.results[i];
+      if (r.isFinal) {
+        // Filtre anti-répétition : sur Android, un redémarrage automatique en
+        // pleine parole peut réentendre la fin d'un mot déjà capté et le
+        // renvoyer comme un nouveau résultat "final" — d'où des mots répétés
+        // en boucle. On ignore un segment identique (ou quasi) au précédent.
+        const segment = r[0].transcript.trim();
+        const dernier = (_rvocal.lastFinalSegment || '').trim().toLowerCase();
+        if (segment && segment.toLowerCase() !== dernier) {
+          _rvocal.finalTranscript = (_rvocal.finalTranscript + ' ' + segment).trim();
+          _rvocal.lastFinalSegment = segment;
+        }
+      } else {
+        interim += r[0].transcript;
+      }
+    }
+    document.getElementById('rvocal-transcript').textContent = (_rvocal.finalTranscript + ' ' + interim).trim();
   };
   _rvocal.reco.onerror = e => {
+    if (e.error === 'no-speech' || e.error === 'aborted') return; // pause : onend relance discrètement
+    _rvocal.userStopped = true;
     _rvocal.listening=false; _rvocalSetMic(false);
     _rvocalSetStatus(e.error==='not-allowed'?'⚠️ Accès micro refusé':'Erreur: '+e.error);
   };
-  _rvocal.reco.onend = () => { _rvocal.listening=false; _rvocalSetMic(false); };
+  _rvocal.reco.onend = () => {
+    _rvocal.listening = false;
+    if (_rvocal.userStopped) {
+      _rvocalSetMic(false);
+      _rvocal.reco = null;
+      const finalText = (_rvocal.finalTranscript || '').trim();
+      if (finalText && !_rvocal.discardNextResult) _rvocalProcess(finalText);
+      _rvocal.discardNextResult = false;
+    } else {
+      try { _rvocal.reco.start(); } catch (err) { _rvocalSetMic(false); }
+    }
+  };
   _rvocal.reco.start();
 }
 
-function _rvocalStopListening() {
+function _rvocalStopListening(discard) {
+  _rvocal.userStopped = true;
+  if (discard) _rvocal.discardNextResult = true;
   if (_rvocal.reco) {
-    try { _rvocal.reco.abort(); } catch(e){}
-    try { _rvocal.reco.stop();  } catch(e){}
-    _rvocal.reco.onstart=_rvocal.reco.onresult=_rvocal.reco.onerror=_rvocal.reco.onend=null;
-    _rvocal.reco = null;
+    try { _rvocal.reco.stop(); } catch(e){}
+  } else {
+    _rvocal.listening=false; _rvocalSetMic(false);
   }
-  _rvocal.listening=false; _rvocalSetMic(false);
 }
 
 function _rvocalSetMic(on) {
@@ -4374,7 +4412,7 @@ function _rvocalSetMic(on) {
   btn.style.background = on ? 'linear-gradient(135deg,#7B0000,#C0392B)' : 'linear-gradient(135deg,#C0392B,#E74C3C)';
   btn.style.animation  = on ? 'vocal-pulse 1s infinite' : '';
   icon.className = on ? 'ti ti-microphone-off' : 'ti ti-microphone';
-  lbl.textContent = on ? 'Écoute… (appuyer pour arrêter)' : 'Appuyer pour parler';
+  lbl.textContent = on ? 'J\'écoute — réappuyer pour valider' : 'Appuyer pour parler';
 }
 
 function _rvocalProcess(text) {
@@ -4431,14 +4469,26 @@ function _rvocalNext() {
   if (_rvocal.step < RVOCAL_STEPS.length)
     setTimeout(() => _rvocalSpeak(RVOCAL_STEPS[_rvocal.step].question), 400);
 }
-function rvocalPrevStep() { _rvocalStopListening(); if(_rvocal.step>0)_rvocal.step--; _rvocalRenderStep(); if(_rvocal.step<RVOCAL_STEPS.length) setTimeout(()=>_rvocalSpeak(RVOCAL_STEPS[_rvocal.step].question),400); }
-function rvocalSkipStep() { _rvocalStopListening(); const s=RVOCAL_STEPS[_rvocal.step]; _rvocal.data[s.id]=''; _rvocalNext(); }
+function rvocalPrevStep() { _rvocalStopListening(true); if(_rvocal.step>0)_rvocal.step--; _rvocalRenderStep(); if(_rvocal.step<RVOCAL_STEPS.length) setTimeout(()=>_rvocalSpeak(RVOCAL_STEPS[_rvocal.step].question),400); }
+function rvocalSkipStep() {
+  const s = RVOCAL_STEPS[_rvocal.step];
+  if (!s.skippable) { _rvocalSetStatus('⚠️ Cette information est obligatoire — répondez ou dites "aujourd\'hui".'); return; }
+  _rvocalStopListening(true); _rvocal.data[s.id]=''; _rvocalNext();
+}
 
 function rvocalConfirmSave() {
-  _rvocalStopListening();
+  _rvocalStopListening(true);
   if (window.speechSynthesis) window.speechSynthesis.cancel();
   const d = _rvocal.data;
-  if (!d.date) { _rvocalSetStatus('⚠️ La date est requise.'); return; }
+  if (!d.date) {
+    // Ne plus jamais échouer en silence : on ramène l'utilisateur droit sur
+    // l'étape Date, avec un message qu'il ne peut pas manquer.
+    _rvocal.step = RVOCAL_STEPS.findIndex(s=>s.id==='date');
+    _rvocalRenderStep();
+    _rvocalSetStatus('⚠️ La date est obligatoire pour enregistrer ce compte rendu — répondez ci-dessus.');
+    toast_d('⚠️ Date manquante — impossible d\'enregistrer le CR sans elle.');
+    return;
+  }
   const num = 'CR-'+String((stateDossier.reunions||[]).length+1).padStart(3,'0');
   const reunion = {
     id: 'reun-'+Date.now(), projetId: d.projet||null, num,
