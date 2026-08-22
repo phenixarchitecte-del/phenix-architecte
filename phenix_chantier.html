@@ -2203,6 +2203,9 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
         <i class="ti ti-microphone" style="font-size:22px" id="crv-mic-icon"></i>
         <span id="crv-mic-label">Appuyer pour parler</span>
       </button>
+      <button id="crv-validate-btn" onclick="crvValidateAnswer()" style="width:100%;padding:11px;border-radius:10px;background:linear-gradient(135deg,#2D7A4F,#3FA968);color:#fff;border:none;font-size:14px;font-weight:700;cursor:pointer;display:none;align-items:center;justify-content:center;gap:8px">
+        <i class="ti ti-check"></i> Valider cette réponse
+      </button>
 
       <!-- Boutons secondaires -->
       <div style="display:flex;gap:8px">
@@ -3328,6 +3331,7 @@ function _crvRenderStep() {
   document.getElementById('crv-answer-wrap').style.display     = 'none';
   document.getElementById('crv-recap').style.display           = 'none';
   document.getElementById('crv-confirm-btn').style.display     = 'none';
+  document.getElementById('crv-validate-btn').style.display    = 'none';
   document.getElementById('crv-skip-btn').style.display        = '';
   document.getElementById('crv-back-btn').style.display        = step > 0 ? '' : 'none';
   document.getElementById('crv-mic-btn').style.display         = '';
@@ -3396,8 +3400,43 @@ function toggleCRVocalListening() {
     _crv.userStopped = false;
     _crv.finalTranscript = '';
     _crv.lastFinalSegment = '';
+    _crv.segments = [];
     _crvStartListening();
   }
+}
+
+// Fusionne un nouveau segment "final" dans la liste des segments déjà capturés.
+// Gère 3 défauts observés d'Android en situation réelle :
+//  - répétition exacte du même segment (ex: "toucher" plusieurs fois de suite)
+//  - relance qui retranscrit TOUT depuis le début, de plus en plus long
+//    (ex: "il" → "il faut" → "il faut statuer" → "il faut statuer sur"...) —
+//    dans ce cas le dernier segment reçu est le plus complet, donc il
+//    REMPLACE le précédent plutôt que de s'y ajouter.
+//  - bégaiement sur un mot isolé qui alterne avec un autre (ex: "toucher",
+//    "ostéopathe", "toucher", "ostéopathe"...) — capté seulement pour les
+//    segments très courts (1-2 mots), pour ne jamais supprimer une vraie
+//    répétition intentionnelle dans une phrase complète plus longue.
+function _crvMergeSegment(segments, nouveauSegment) {
+  const seg = (nouveauSegment || '').trim();
+  if (!seg) return segments;
+  if (!segments.length) { segments.push(seg); return segments; }
+  const dernier = segments[segments.length - 1];
+  const segLower = seg.toLowerCase();
+  const dernierLower = dernier.toLowerCase();
+  const nbMots = seg.split(/\s+/).length;
+  if (segLower === dernierLower) {
+    // doublon exact : ignoré
+  } else if (segLower.startsWith(dernierLower)) {
+    // continuation grandissante du même segment : on remplace par la version complète
+    segments[segments.length - 1] = seg;
+  } else if (dernierLower.startsWith(segLower)) {
+    // re-déclenchement plus court du même segment : ignoré (on garde le plus long)
+  } else if (nbMots <= 2 && segments.slice(-3).some(s => s.toLowerCase() === segLower)) {
+    // bégaiement sur mot(s) court(s) déjà vu récemment : ignoré
+  } else {
+    segments.push(seg);
+  }
+  return segments;
 }
 
 function _crvStartListening() {
@@ -3429,19 +3468,23 @@ function _crvStartListening() {
 
   _crv.reco.onresult = (e) => {
     let interim = '';
-    // Chaque session (continuous:false) ne contient qu'UNE seule phrase : pas
-    // besoin de resultIndex ni de filtre anti-répétition, la source du bug a
-    // disparu avec le mode continu.
+    if (!Array.isArray(_crv.segments)) _crv.segments = _crv.finalTranscript ? [_crv.finalTranscript] : [];
     for (let i = 0; i < e.results.length; i++) {
       const r = e.results[i];
       if (r.isFinal) {
         const segment = r[0].transcript.trim();
-        if (segment) _crv.finalTranscript = (_crv.finalTranscript + ' ' + segment).trim();
+        if (segment) {
+          _crv.segments = _crvMergeSegment(_crv.segments, segment);
+          _crv.finalTranscript = _crv.segments.join(' ');
+        }
       } else {
         interim += r[0].transcript;
       }
     }
     document.getElementById('crv-transcript').textContent = (_crv.finalTranscript + ' ' + interim).trim();
+    const contenu = (_crv.finalTranscript + ' ' + interim).trim();
+    const vbtn = document.getElementById('crv-validate-btn');
+    if (vbtn) vbtn.style.display = contenu ? 'flex' : 'none';
   };
 
   _crv.reco.onerror = (e) => {
@@ -3585,6 +3628,17 @@ function _crvNextStep() {
   }
 }
 
+// Valide directement ce qui est affiché à l'écran (final + en cours de
+// reconnaissance), sans dépendre de la détection de fin de parole du
+// navigateur — c'est ce qui coinçait parfois en toute fin de phrase.
+function crvValidateAnswer() {
+  const texte = (document.getElementById('crv-transcript').textContent || '').trim();
+  if (!texte) return;
+  _crvStopListening(true); // discard : le futur onend ne doit pas re-traiter ce texte
+  document.getElementById('crv-validate-btn').style.display = 'none';
+  _crvProcessAnswer(texte);
+}
+
 function crvPrevStep() {
   _crvStopListening(true);
   if (_crv.step > 0) _crv.step--;
@@ -3597,7 +3651,10 @@ function crvPrevStep() {
 function crvSkipStep() {
   _crvStopListening(true);
   const s = CRV_STEPS[_crv.step];
-  _crv.data[s.id] = '';
+  // "Passer" veut dire "rien de nouveau à ajouter ici" — pas "effacer ce qui y
+  // était déjà" (ex. en revenant en arrière modifier une autre étape, puis en
+  // rappuyant sur Passer sur une étape déjà remplie plus tôt).
+  if (_crv.data[s.id] === undefined) _crv.data[s.id] = '';
   _crvNextStep();
 }
 
@@ -3622,7 +3679,7 @@ function _crvParseDate(t) {
   const today = new Date();
   const fmt = d => d.toISOString().split('T')[0];
 
-  if (/aujourd'hui|aujd/.test(t)) return fmt(today);
+  if (/aujourd|ce jour|maintenant|aujd/.test(t)) return fmt(today);
   if (/hier/.test(t)) { const d=new Date(today); d.setDate(d.getDate()-1); return fmt(d); }
   if (/demain/.test(t) && !/après/.test(t)) { const d=new Date(today); d.setDate(d.getDate()+1); return fmt(d); }
   if (/après.demain/.test(t)) { const d=new Date(today); d.setDate(d.getDate()+2); return fmt(d); }
@@ -3631,13 +3688,15 @@ function _crvParseDate(t) {
   if (/mercredi/.test(t)) return _nextWeekdayCRV(3);
   if (/jeudi/.test(t)) return _nextWeekdayCRV(4);
   if (/vendredi/.test(t)) return _nextWeekdayCRV(5);
+  if (/samedi/.test(t)) return _nextWeekdayCRV(6);
+  if (/dimanche/.test(t)) return _nextWeekdayCRV(0);
   if (/dans\s+(\d+)\s+semaines?/.test(t)) {
     const n = parseInt(t.match(/dans\s+(\d+)\s+semaines?/)[1]);
     const d=new Date(today); d.setDate(d.getDate()+7*n); return fmt(d);
   }
   if (/la\s+semaine\s+prochaine/.test(t)) { const d=new Date(today); d.setDate(d.getDate()+7); return fmt(d); }
   // "le X mois" ou "X mois"
-  const moisMap = {janvier:1,février:2,mars:3,avril:4,mai:5,juin:6,juillet:7,août:8,septembre:9,octobre:10,novembre:11,décembre:12};
+  const moisMap = {janvier:1,fevrier:2,février:2,mars:3,avril:4,mai:5,juin:6,juillet:7,aout:8,août:8,septembre:9,octobre:10,novembre:11,decembre:12,décembre:12};
   for (const [nom, num] of Object.entries(moisMap)) {
     const re = new RegExp('(\\d{1,2})\\s+' + nom);
     const m = t.match(re);
