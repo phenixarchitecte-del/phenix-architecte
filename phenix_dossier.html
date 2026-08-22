@@ -366,9 +366,27 @@ onAuthStateChanged(auth, user => {
   const ov = document.getElementById('phenix-login');
   if (user) {
     if (ov) ov.style.display = 'none';
+    // Désarme tout déclencheur d'empreinte resté armé depuis un état "non
+    // connecté" transitoire (Firebase répond parfois brièvement ainsi avant de
+    // confirmer une session déjà valide partagée par le shell) — sinon un tap
+    // sur le menu, alors que l'écran de connexion n'a pas encore fini de se
+    // cacher, pouvait déclencher l'empreinte par erreur.
+    if (window._bioAutoTriggerActif) {
+      const { scope, fn } = window._bioAutoTriggerActif;
+      scope.removeEventListener('pointerdown', fn);
+      scope.removeEventListener('touchstart', fn);
+      window._bioAutoTriggerActif = null;
+    }
     if (!_phenixDispatched) { _phenixDispatched = true; window.dispatchEvent(new Event('firebase-ready')); }
   } else {
     if (ov) ov.style.display = 'flex';
+    // Biométrie déclenchée UNIQUEMENT ici, quand l'écran de connexion va
+    // réellement rester affiché — jamais au chargement de la page en aveugle
+    // (avant que Firebase ait pu dire si une session partagée du shell est
+    // déjà valide). C'est ce qui causait un déclenchement accidentel en
+    // cliquant ailleurs dans l'appli (ex. le bouton menu) juste après une
+    // connexion déjà établie via le shell.
+    if (typeof phenixBioInit === 'function') phenixBioInit();
   }
 });
 
@@ -407,13 +425,23 @@ async function phenixBioInit(){
     // On déclenche donc dès le tout premier tap/clic de l'utilisateur n'importe où sur
     // l'écran de connexion — ça reste un vrai geste, donc autorisé, tout en étant quasi
     // automatique (pas besoin de viser le bouton précisément).
+    // Rattaché à l'écran de connexion lui-même (pas au document entier) :
+    // un clic ailleurs dans l'application, une fois connecté, ne doit plus
+    // jamais pouvoir déclencher cette demande d'empreinte par erreur.
+    const _bioScope = document.getElementById('phenix-login') || document;
     const _bioAutoTrigger = () => {
-      document.removeEventListener('pointerdown', _bioAutoTrigger);
-      document.removeEventListener('touchstart', _bioAutoTrigger);
+      _bioScope.removeEventListener('pointerdown', _bioAutoTrigger);
+      _bioScope.removeEventListener('touchstart', _bioAutoTrigger);
+      window._bioAutoTriggerActif = null;
       try { phenixBioLogin(); } catch(e) {}
     };
-    document.addEventListener('pointerdown', _bioAutoTrigger, { once: true, passive: true });
-    document.addEventListener('touchstart', _bioAutoTrigger, { once: true, passive: true });
+    _bioScope.addEventListener('pointerdown', _bioAutoTrigger, { once: true, passive: true });
+    _bioScope.addEventListener('touchstart', _bioAutoTrigger, { once: true, passive: true });
+    // Référence gardée pour pouvoir désarmer ce déclencheur si Firebase confirme
+    // ensuite une vraie session déjà valide (voir onAuthStateChanged plus haut) —
+    // sans ça, un tap sur le menu resté par-dessus l'écran de connexion encore
+    // visible une fraction de seconde pouvait déclencher l'empreinte par erreur.
+    window._bioAutoTriggerActif = { scope: _bioScope, fn: _bioAutoTrigger };
   }
 }
 
@@ -573,7 +601,8 @@ window.phenixDoLogin = function(){
 };
 
 // Lancer l'init biométrie au chargement
-document.addEventListener('DOMContentLoaded', phenixBioInit);
+// phenixBioInit() est désormais appelée depuis onAuthStateChanged (branche
+// "pas connecté") plutôt qu'ici — voir plus haut pour l'explication.
 
 // Exposition globale — <script type="module"> isole le scope, les onclick HTML ne voient pas les fonctions sans ça
 window.phenixBioLogin  = phenixBioLogin;
@@ -4343,7 +4372,13 @@ function _rvocalStartListening() {
   if (typeof _rvocal.finalTranscript !== 'string') _rvocal.finalTranscript = '';
   _rvocal.reco = new SR();
   _rvocal.reco.lang = 'fr-FR';
-  _rvocal.reco.continuous = true;      // ne coupe plus sur une simple pause
+  // continuous:true relance parfois TOUTE la reconnaissance depuis le début sur
+  // Android au lieu de simplement reprendre — la phrase entière est alors
+  // retranscrite en boucle, de plus en plus longue. continuous:false est
+  // nettement plus fiable sur mobile : chaque écoute ne capte qu'UNE phrase
+  // complète et propre, et on enchaîne automatiquement une nouvelle écoute dès
+  // que la précédente se termine naturellement — même confort, sans le bug.
+  _rvocal.reco.continuous = false;
   _rvocal.reco.interimResults = true;
   _rvocal.reco.maxAlternatives = 1;
   _rvocal.reco.onstart = () => {
@@ -4354,19 +4389,12 @@ function _rvocalStartListening() {
   };
   _rvocal.reco.onresult = e => {
     let interim = '';
-    for (let i = e.resultIndex; i < e.results.length; i++) {
+    // Chaque session (continuous:false) ne contient qu'UNE seule phrase.
+    for (let i = 0; i < e.results.length; i++) {
       const r = e.results[i];
       if (r.isFinal) {
-        // Filtre anti-répétition : sur Android, un redémarrage automatique en
-        // pleine parole peut réentendre la fin d'un mot déjà capté et le
-        // renvoyer comme un nouveau résultat "final" — d'où des mots répétés
-        // en boucle. On ignore un segment identique (ou quasi) au précédent.
         const segment = r[0].transcript.trim();
-        const dernier = (_rvocal.lastFinalSegment || '').trim().toLowerCase();
-        if (segment && segment.toLowerCase() !== dernier) {
-          _rvocal.finalTranscript = (_rvocal.finalTranscript + ' ' + segment).trim();
-          _rvocal.lastFinalSegment = segment;
-        }
+        if (segment) _rvocal.finalTranscript = (_rvocal.finalTranscript + ' ' + segment).trim();
       } else {
         interim += r[0].transcript;
       }

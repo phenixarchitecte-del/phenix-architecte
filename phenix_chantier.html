@@ -3407,7 +3407,15 @@ function _crvStartListening() {
   if (typeof _crv.finalTranscript !== 'string') _crv.finalTranscript = '';
   _crv.reco = new SR();
   _crv.reco.lang = 'fr-FR';
-  _crv.reco.continuous = true;      // ne coupe plus sur une simple pause
+  // continuous:true relance parfois TOUTE la reconnaissance depuis le début sur
+  // Android au lieu de simplement reprendre — la phrase entière est alors
+  // retranscrite en boucle, de plus en plus longue ("il" → "il faut" → "il faut
+  // statuer"...). continuous:false est nettement plus fiable sur mobile : chaque
+  // écoute ne capte qu'UNE phrase complète et propre, et on enchaîne
+  // automatiquement une nouvelle écoute dès que la précédente se termine
+  // naturellement — ce qui donne le même confort ("ne coupe pas sur une pause")
+  // sans le bug de répétition du mode continu.
+  _crv.reco.continuous = false;
   _crv.reco.interimResults = true;
   _crv.reco.maxAlternatives = 1;
 
@@ -3421,19 +3429,14 @@ function _crvStartListening() {
 
   _crv.reco.onresult = (e) => {
     let interim = '';
-    for (let i = e.resultIndex; i < e.results.length; i++) {
+    // Chaque session (continuous:false) ne contient qu'UNE seule phrase : pas
+    // besoin de resultIndex ni de filtre anti-répétition, la source du bug a
+    // disparu avec le mode continu.
+    for (let i = 0; i < e.results.length; i++) {
       const r = e.results[i];
       if (r.isFinal) {
-        // Filtre anti-répétition : sur Android, un redémarrage automatique en
-        // pleine parole peut réentendre la fin d'un mot déjà capté et le
-        // renvoyer comme un nouveau résultat "final" — d'où des mots répétés
-        // en boucle. On ignore un segment identique (ou quasi) au précédent.
         const segment = r[0].transcript.trim();
-        const dernier = (_crv.lastFinalSegment || '').trim().toLowerCase();
-        if (segment && segment.toLowerCase() !== dernier) {
-          _crv.finalTranscript = (_crv.finalTranscript + ' ' + segment).trim();
-          _crv.lastFinalSegment = segment;
-        }
+        if (segment) _crv.finalTranscript = (_crv.finalTranscript + ' ' + segment).trim();
       } else {
         interim += r[0].transcript;
       }
@@ -6181,13 +6184,17 @@ async function chantierBioInit(){
   } else {
     // WebAuthn exige un vrai geste utilisateur, surtout sur mobile — un setTimeout seul
     // échoue silencieusement. On déclenche donc au premier tap réel de l'utilisateur.
+    // Rattaché à l'écran de connexion lui-même (pas au document entier) : un clic
+    // ailleurs dans l'application, une fois connecté, ne doit plus jamais déclencher
+    // cette demande d'empreinte par erreur (ex. bouton menu).
+    var _cBioScope = document.getElementById('phenix-login') || document;
     var _cBioAutoTrigger = function(){
-      document.removeEventListener('pointerdown', _cBioAutoTrigger);
-      document.removeEventListener('touchstart', _cBioAutoTrigger);
+      _cBioScope.removeEventListener('pointerdown', _cBioAutoTrigger);
+      _cBioScope.removeEventListener('touchstart', _cBioAutoTrigger);
       try{ chantierBioLogin(); }catch(e){}
     };
-    document.addEventListener('pointerdown', _cBioAutoTrigger, { once:true, passive:true });
-    document.addEventListener('touchstart', _cBioAutoTrigger, { once:true, passive:true });
+    _cBioScope.addEventListener('pointerdown', _cBioAutoTrigger, { once:true, passive:true });
+    _cBioScope.addEventListener('touchstart', _cBioAutoTrigger, { once:true, passive:true });
   }
 }
 async function chantierBioLogin(){
