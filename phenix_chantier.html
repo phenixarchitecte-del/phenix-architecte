@@ -2236,7 +2236,7 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
         <div class="form-group"><label>Chantier *</label><select id="cr-chantier"></select></div>
         <div class="form-group"><label>Date de réunion *</label><input id="cr-date" type="date"></div>
         <div class="form-group"><label>Rédigé par</label><input id="cr-auteur" value="Phénix-Architecture" placeholder="Rédacteur"></div>
-        <div class="form-group"><label>N° CR</label><input id="cr-num" placeholder="CR-001" readonly style="background:var(--bg3)"></div>
+        <div class="form-group"><label>N° CR</label><input id="cr-num" placeholder="CR-001"></div>
         <div class="form-group" style="grid-column:1/-1">
           <label>Participants présents</label>
           <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap" id="cr-presents-chips"></div>
@@ -3680,9 +3680,37 @@ function _crvParseDate(t) {
   const fmt = d => d.toISOString().split('T')[0];
 
   if (/aujourd|ce jour|maintenant|aujd/.test(t)) return fmt(today);
+  // "avant-hier" contient le mot "hier" — il faut le tester AVANT "hier" seul,
+  // sinon "hier" le capture en premier et donne la mauvaise date (-1 jour au
+  // lieu de -2).
+  if (/avant.hier/.test(t)) { const d=new Date(today); d.setDate(d.getDate()-2); return fmt(d); }
   if (/hier/.test(t)) { const d=new Date(today); d.setDate(d.getDate()-1); return fmt(d); }
-  if (/demain/.test(t) && !/après/.test(t)) { const d=new Date(today); d.setDate(d.getDate()+1); return fmt(d); }
+  if (/après.après.demain|surlendemain/.test(t)) { const d=new Date(today); d.setDate(d.getDate()+3); return fmt(d); }
   if (/après.demain/.test(t)) { const d=new Date(today); d.setDate(d.getDate()+2); return fmt(d); }
+  if (/demain/.test(t)) { const d=new Date(today); d.setDate(d.getDate()+1); return fmt(d); }
+
+  // Date précise "jour + mois" — testée AVANT le simple nom de jour de semaine :
+  // "vendredi 21 août" doit utiliser le 21 août, pas "le prochain vendredi"
+  // (avant cette correction, /vendredi/ se déclenchait en premier et le 21 août
+  // n'était jamais examiné).
+  const moisMap = {janvier:1,fevrier:2,février:2,mars:3,avril:4,mai:5,juin:6,juillet:7,aout:8,août:8,septembre:9,octobre:10,novembre:11,decembre:12,décembre:12};
+  for (const [nom, num] of Object.entries(moisMap)) {
+    const re = new RegExp('(\\d{1,2})\\s+' + nom);
+    const m = t.match(re);
+    if (m) {
+      // Choisit l'année (précédente, courante ou suivante) qui rapproche le
+      // plus la date d'aujourd'hui, plutôt que de toujours pousser vers l'an
+      // prochain dès que la date calculée tombe dans le passé — une date
+      // récente ("il y a 2 jours") est le cas le plus courant pour un CR, pas
+      // une date dans un an.
+      const candidats = [-1, 0, 1].map(decalage =>
+        new Date(today.getFullYear()+decalage, num-1, parseInt(m[1]))
+      );
+      candidats.sort((a,b) => Math.abs(a-today) - Math.abs(b-today));
+      return fmt(candidats[0]);
+    }
+  }
+
   if (/lundi/.test(t)) return _nextWeekdayCRV(1);
   if (/mardi/.test(t)) return _nextWeekdayCRV(2);
   if (/mercredi/.test(t)) return _nextWeekdayCRV(3);
@@ -3695,17 +3723,6 @@ function _crvParseDate(t) {
     const d=new Date(today); d.setDate(d.getDate()+7*n); return fmt(d);
   }
   if (/la\s+semaine\s+prochaine/.test(t)) { const d=new Date(today); d.setDate(d.getDate()+7); return fmt(d); }
-  // "le X mois" ou "X mois"
-  const moisMap = {janvier:1,fevrier:2,février:2,mars:3,avril:4,mai:5,juin:6,juillet:7,aout:8,août:8,septembre:9,octobre:10,novembre:11,decembre:12,décembre:12};
-  for (const [nom, num] of Object.entries(moisMap)) {
-    const re = new RegExp('(\\d{1,2})\\s+' + nom);
-    const m = t.match(re);
-    if (m) {
-      const d = new Date(today.getFullYear(), num-1, parseInt(m[1]));
-      if (d < today) d.setFullYear(d.getFullYear()+1);
-      return fmt(d);
-    }
-  }
   return null;
 }
 
@@ -3753,7 +3770,7 @@ function crvConfirmSave() {
   const ch = state.chantiers.find(c => c.id == d.chantier);
 
   // Générer le numéro de CR
-  const nextNum = 'CR-' + String(state.comptes_rendus.length + 1).padStart(3, '0');
+  const nextNum = nextCRNumber();
 
   const cr = {
     id:           uid(),
@@ -5362,7 +5379,7 @@ function openModalCR(id) {
     renderCRPhotos(); renderCRPlans();
   } else {
     document.getElementById('mCRTitle').textContent = 'Nouveau compte rendu de chantier';
-    const nextNum = 'CR-' + String(state.comptes_rendus.length + 1).padStart(3, '0');
+    const nextNum = nextCRNumber();
     document.getElementById('cr-num').value = nextNum;
     document.getElementById('cr-date').value = new Date().toISOString().split('T')[0];
     document.getElementById('cr-auteur').value = 'Phénix-Architecture';
@@ -5377,14 +5394,32 @@ function openModalCR(id) {
   openModal('modalCR');
 }
 
+// Numéro de CR suivant, basé sur le plus grand numéro existant plutôt que sur le
+// nombre de CR — évite une collision si un CR a été supprimé ou créé hors ordre
+// (même logique que nextLotNumber dans Chiffrage).
+function nextCRNumber() {
+  let max = 0;
+  (state.comptes_rendus || []).forEach(cr => {
+    const m = String(cr.num || '').match(/(\d+)/);
+    if (m) { const n = parseInt(m[1], 10); if (n > max) max = n; }
+  });
+  return 'CR-' + String(max + 1).padStart(3, '0');
+}
+
 function saveCR() {
   const chantierId = parseInt(document.getElementById('cr-chantier').value);
   const date = document.getElementById('cr-date').value;
   if (!chantierId || !date) { toast('⚠️ Chantier et date requis.'); return; }
   const editId = document.getElementById('cr-edit-id').value;
+  const numSaisi = (document.getElementById('cr-num').value || '').trim();
+  if (!numSaisi) { toast('⚠️ Le numéro de CR est requis.'); return; }
+  const doublon = state.comptes_rendus.find(x => x.num === numSaisi && String(x.id) !== String(editId));
+  if (doublon) {
+    if (!confirm('Le numéro "' + numSaisi + '" est déjà utilisé par un autre compte rendu.\nContinuer quand même ?')) return;
+  }
   const cr = {
     id: editId ? parseInt(editId) : uid(),
-    num: document.getElementById('cr-num').value,
+    num: numSaisi,
     chantierId, date,
     auteur: document.getElementById('cr-auteur').value,
     presents: document.getElementById('cr-presents').value,
