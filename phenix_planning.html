@@ -1,0 +1,1264 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>Phénix Planning — Gantt de chantier</title>
+<script type="module">
+import { initializeApp }       from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getFirestore, doc, setDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js';
+
+// Même backend Firebase que le reste de la suite Phénix.
+const firebaseConfig = {
+  apiKey:            "AIzaSyCjNKNvS6p3nqE6-_Gw9I397ZtXm2FG1ew",
+  authDomain:        "phenix-architecte-9151b.firebaseapp.com",
+  projectId:         "phenix-architecte-9151b",
+  storageBucket:     "phenix-architecte-9151b.firebasestorage.app",
+  messagingSenderId: "811231684720",
+  appId:             "1:811231684720:web:413fa324ae43c07607acb5"
+};
+const app = initializeApp(firebaseConfig);
+try {
+  initializeAppCheck(app, { provider: new ReCaptchaV3Provider('6LeObWktAAAAAL9eyppDRtLp5yZTyBaF4ZNKXNIO'), isTokenAutoRefreshEnabled: true });
+} catch (e) { console.warn('App Check non initialisé :', e); }
+
+const db = getFirestore(app);
+
+// Le planning est stocké dans un unique document Firestore (comme phenix_chantier_state),
+// partagé par tous les collaborateurs connectés — plus de source de vérité locale.
+window._fbPlanning = {
+  async saveState(stateObj){
+    try{
+      await setDoc(doc(db, 'phenix_planning_state', 'main'), {
+        data: JSON.stringify(stateObj),
+        updatedAt: new Date().toISOString()
+      });
+    }catch(e){ console.error('Firebase planning save error:', e.message || e); }
+  },
+  listenState(callback){
+    return onSnapshot(
+      doc(db, 'phenix_planning_state', 'main'),
+      snap => {
+        if(snap.exists()){
+          try{ callback(JSON.parse(snap.data().data || '{}')); }
+          catch(e){ console.error('Firebase planning parse error:', e); callback(null); }
+        } else callback(null);
+      },
+      err => { console.error('Firebase planning listener error:', err.message || err); callback(null); }
+    );
+  }
+};
+
+const auth = getAuth(app);
+window._auth = {
+  login:  (e, p) => signInWithEmailAndPassword(auth, e, p),
+  logout: () => signOut(auth),
+  current: () => auth.currentUser
+};
+window.phenixDoLogin = function(){
+  const email = (document.getElementById('pl-email').value || '').trim();
+  const pwd   = document.getElementById('pl-pwd').value || '';
+  const err   = document.getElementById('pl-err'); if(err){ err.style.color='#FFB4A8'; err.textContent=''; }
+  const btn   = document.getElementById('pl-btn'); if(btn) btn.disabled = true;
+  window._auth.login(email, pwd).catch(e => {
+    const c = (e && e.code) || '';
+    if(err) err.textContent =
+      (c.indexOf('invalid-credential')>=0||c.indexOf('wrong-password')>=0||c.indexOf('user-not-found')>=0) ? 'E-mail ou mot de passe incorrect.' :
+      c.indexOf('invalid-email')>=0 ? 'E-mail invalide.' :
+      c.indexOf('too-many-requests')>=0 ? 'Trop de tentatives, réessayez plus tard.' :
+      c.indexOf('network')>=0 ? 'Pas de connexion internet.' :
+      ('Erreur : ' + (c || (e && e.message) || ''));
+  }).finally(()=>{ if(btn) btn.disabled = false; });
+};
+window.phenixDoLogout = function(){ window._auth.logout(); };
+let _plDispatched = false;
+onAuthStateChanged(auth, user => {
+  const ov = document.getElementById('phenix-login');
+  const chip = document.getElementById('userChip');
+  if(user){
+    if(ov) ov.style.display = 'none';
+    if(chip) chip.textContent = user.email || '';
+    if(!_plDispatched){ _plDispatched = true; window.dispatchEvent(new Event('firebase-ready')); }
+  } else {
+    if(ov) ov.style.display = 'flex';
+  }
+});
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#0d1b3e;
+    --navy-soft:#16295c;
+    --blue:#1e5faa;
+    --blue-pale:#c8dff5;
+    --blue-pale-2:#eaf2fb;
+    --ink:#22262f;
+    --ink-soft:#5b6270;
+    --line:#dde4ee;
+    --paper:#ffffff;
+    --canvas:#f5f7fb;
+    --alerte:#a6291e;
+    --alerte-fond:#fbeae8;
+    --ok:#2f8f5b;
+    --row-h:46px;
+    --sidebar-w:248px;
+    --radius:10px;
+    --shadow:0 2px 10px rgba(13,27,62,.08);
+    --shadow-lg:0 12px 32px rgba(13,27,62,.18);
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    font-family:'DM Sans', system-ui, sans-serif;
+    background:var(--canvas);
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3,.font-display{ font-family:'Cormorant Garamond', serif; }
+  ::selection{ background:var(--blue-pale); }
+
+  /* ---------- Topbar ---------- */
+  .topbar{
+    background:var(--navy);
+    color:#fff;
+    padding:14px 22px;
+    display:flex;
+    align-items:center;
+    gap:18px;
+    flex-wrap:wrap;
+    position:sticky; top:0; z-index:50;
+    box-shadow:var(--shadow);
+  }
+  .brand{
+    display:flex; align-items:baseline; gap:10px;
+  }
+  .brand .mark{
+    font-family:'Cormorant Garamond', serif;
+    font-weight:700; font-size:22px; letter-spacing:.3px;
+  }
+  .brand .tag{
+    font-size:11px; text-transform:uppercase; letter-spacing:1.6px;
+    color:var(--blue-pale); font-weight:500;
+  }
+  .chantier-select{
+    display:flex; align-items:center; gap:8px;
+    background:rgba(255,255,255,.08);
+    border:1px solid rgba(255,255,255,.18);
+    border-radius:8px; padding:6px 10px;
+  }
+  .chantier-select select{
+    background:transparent; color:#fff; border:none; font-family:'DM Sans',sans-serif;
+    font-size:14px; font-weight:500; outline:none; max-width:220px;
+  }
+  .chantier-select select option{ color:#111; }
+  .topbar-spacer{ flex:1; }
+  .topbar-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+
+  button{
+    font-family:'DM Sans', sans-serif;
+    cursor:pointer;
+    border:none;
+    border-radius:8px;
+    font-size:13.5px;
+    font-weight:500;
+    padding:9px 14px;
+    transition:transform .08s ease, box-shadow .08s ease, background .15s ease;
+    display:inline-flex; align-items:center; gap:6px;
+  }
+  button:active{ transform:translateY(1px); }
+  .btn-ghost-dark{
+    background:rgba(255,255,255,.08);
+    color:#fff;
+    border:1px solid rgba(255,255,255,.22);
+  }
+  .btn-ghost-dark:hover{ background:rgba(255,255,255,.16); }
+  .btn-accent{
+    background:var(--blue);
+    color:#fff;
+  }
+  .btn-accent:hover{ background:#1a5397; box-shadow:0 4px 14px rgba(30,95,170,.35); }
+  .btn-outline{
+    background:#fff;
+    color:var(--navy);
+    border:1px solid var(--line);
+  }
+  .btn-outline:hover{ border-color:var(--blue); color:var(--blue); }
+  .btn-danger{
+    background:var(--alerte-fond);
+    color:var(--alerte);
+    border:1px solid #f0c9c4;
+  }
+  .btn-danger:hover{ background:#f6d9d5; }
+  .btn-sm{ padding:6px 10px; font-size:12.5px; border-radius:7px; }
+  .icon{ width:15px; height:15px; flex:none; }
+
+  /* ---------- Toolbar (sous topbar) ---------- */
+  .toolbar{
+    background:var(--paper);
+    border-bottom:1px solid var(--line);
+    padding:12px 22px;
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  }
+  .zoom-toggle{
+    display:flex; background:var(--blue-pale-2); border-radius:8px; padding:3px; gap:2px;
+  }
+  .zoom-toggle button{
+    background:transparent; color:var(--navy); padding:6px 12px; border-radius:6px; font-size:13px;
+  }
+  .zoom-toggle button.active{ background:var(--navy); color:#fff; }
+  .legend{
+    display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+    font-size:12px; color:var(--ink-soft);
+  }
+  .legend .chip{
+    display:flex; align-items:center; gap:5px;
+    padding:4px 9px; border-radius:20px; background:var(--blue-pale-2);
+  }
+  .legend .dot{ width:9px; height:9px; border-radius:50%; flex:none; }
+  .toolbar-right{ margin-left:auto; display:flex; gap:8px; flex-wrap:wrap; }
+
+  /* ---------- Empty state ---------- */
+  .empty-state{
+    margin:60px auto; max-width:460px; text-align:center; color:var(--ink-soft);
+    padding:40px 30px; background:#fff; border-radius:var(--radius); box-shadow:var(--shadow);
+  }
+  .empty-state h2{ color:var(--navy); font-size:26px; margin:0 0 10px; }
+  .empty-state p{ font-size:14px; line-height:1.6; margin:0 0 22px; }
+
+  /* ---------- Gantt ---------- */
+  .gantt-wrap{ padding:18px 22px 60px; }
+  .gantt-card{
+    background:var(--paper);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    overflow:hidden;
+    border:1px solid var(--line);
+  }
+  .gantt-scroll{
+    overflow:auto;
+    max-height:72vh;
+  }
+  .gantt-flow{
+    display:flex; flex-direction:column; width:max-content; min-width:100%;
+  }
+  .gantt-header-row{
+    display:flex;
+    position:sticky; top:0; z-index:30;
+    background:var(--paper);
+    border-bottom:1px solid var(--line);
+  }
+  .gantt-corner{
+    position:sticky; left:0; z-index:31;
+    width:var(--sidebar-w); flex:none;
+    background:var(--paper);
+    border-right:1px solid var(--line);
+    display:flex; align-items:flex-end;
+    padding:8px 14px 10px;
+    font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--ink-soft); font-weight:700;
+  }
+  .gantt-timehead{ position:relative; }
+  .gantt-months{ position:relative; height:22px; }
+  .gantt-month{
+    position:absolute; top:0; height:22px; display:flex; align-items:center;
+    font-size:12px; font-weight:700; color:var(--navy);
+    border-left:1px solid var(--line); padding-left:8px;
+  }
+  .gantt-days{ position:relative; height:34px; border-top:1px solid var(--line); }
+  .gantt-tick{
+    position:absolute; top:0; bottom:0; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; font-size:10.5px; color:var(--ink-soft); border-left:1px solid #eef1f6;
+  }
+  .gantt-tick.week-start{ border-left:1px solid var(--line); }
+  .gantt-tick .num{ font-weight:600; color:var(--ink); font-size:11.5px; }
+  .gantt-tick .dow{ font-size:8.5px; text-transform:uppercase; letter-spacing:.5px; }
+  .gantt-tick.weekend{ background:#f7f4ec; }
+
+  .gantt-body-row{ display:flex; position:relative; }
+  .gantt-sidebar{
+    position:sticky; left:0; z-index:20;
+    width:var(--sidebar-w); flex:none;
+    background:var(--paper);
+    border-right:1px solid var(--line);
+  }
+  .gantt-side-item{
+    height:var(--row-h);
+    display:flex; align-items:center; gap:10px;
+    padding:0 12px 0 14px;
+    border-bottom:1px solid #eef1f6;
+    border-left:4px solid transparent;
+  }
+  .gantt-side-item:hover{ background:var(--blue-pale-2); }
+  .side-texts{ min-width:0; flex:1; }
+  .side-artisan{ font-size:13px; font-weight:700; color:var(--navy); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .side-lot{ font-size:11px; color:var(--ink-soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .side-actions{ display:flex; gap:4px; opacity:0; transition:opacity .12s; }
+  .gantt-side-item:hover .side-actions{ opacity:1; }
+  .icon-btn{
+    width:24px; height:24px; border-radius:6px; border:none; background:transparent;
+    display:flex; align-items:center; justify-content:center; color:var(--ink-soft); cursor:pointer; padding:0;
+  }
+  .icon-btn:hover{ background:#fff; color:var(--blue); box-shadow:0 1px 4px rgba(0,0,0,.12); }
+
+  .gantt-plot{ position:relative; }
+  .gantt-plot-bg{ position:absolute; inset:0; }
+  .gantt-weekend-band{ position:absolute; top:0; bottom:0; background:#f7f4ec; }
+  .gantt-row-line{ position:absolute; left:0; right:0; height:1px; background:#eef1f6; }
+  .gantt-today{
+    position:absolute; top:0; bottom:0; width:2px; background:var(--alerte); z-index:15;
+  }
+  .gantt-today .flag{
+    position:sticky; top:26px;
+    transform:translateX(-50%);
+    background:var(--alerte); color:#fff; font-size:10px; font-weight:700;
+    padding:2px 7px; border-radius:5px; white-space:nowrap;
+  }
+
+  .gantt-bar{
+    position:absolute;
+    height:calc(var(--row-h) - 14px);
+    border-radius:8px;
+    display:flex; align-items:center;
+    padding:0 10px;
+    color:#fff;
+    font-size:12px; font-weight:600;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    box-shadow:0 2px 6px rgba(13,27,62,.18);
+    cursor:grab;
+    user-select:none;
+    z-index:10;
+    border:1px solid rgba(255,255,255,.35);
+  }
+  .gantt-bar:active{ cursor:grabbing; }
+  .gantt-bar.dragging{ opacity:.88; box-shadow:0 8px 20px rgba(13,27,62,.3); z-index:25; }
+  .gantt-bar .handle{
+    position:absolute; top:0; bottom:0; width:9px; cursor:ew-resize;
+  }
+  .gantt-bar .handle.left{ left:0; border-radius:8px 0 0 8px; }
+  .gantt-bar .handle.right{ right:0; border-radius:0 8px 8px 0; }
+  .gantt-bar .handle:hover{ background:rgba(255,255,255,.28); }
+
+  /* ---------- Modales ---------- */
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(13,27,62,.45);
+    display:none; align-items:center; justify-content:center; z-index:100; padding:20px;
+    backdrop-filter:blur(1px);
+  }
+  .modal-overlay.show{ display:flex; }
+  .modal{
+    background:#fff; border-radius:14px; width:100%; max-width:480px;
+    box-shadow:var(--shadow-lg); max-height:88vh; overflow:auto;
+  }
+  .modal-wide{ max-width:720px; }
+  .modal-head{
+    padding:20px 24px 14px; border-bottom:1px solid var(--line);
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .modal-head h3{ margin:0; font-size:22px; color:var(--navy); }
+  .modal-close{
+    background:none; border:none; color:var(--ink-soft); font-size:20px; cursor:pointer; padding:4px 8px; border-radius:6px;
+  }
+  .modal-close:hover{ background:var(--blue-pale-2); }
+  .modal-body{ padding:20px 24px; }
+  .modal-foot{
+    padding:16px 24px 22px; display:flex; gap:10px; justify-content:space-between; align-items:center;
+    border-top:1px solid var(--line);
+  }
+  .field{ margin-bottom:16px; }
+  .field label{
+    display:block; font-size:12px; font-weight:700; color:var(--navy);
+    text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px;
+  }
+  .field input[type=text], .field input[type=date], .field select, .field textarea{
+    width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px;
+    font-family:'DM Sans',sans-serif; font-size:14px; color:var(--ink); background:#fbfcfe;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus{
+    outline:none; border-color:var(--blue); background:#fff;
+  }
+  .field-row{ display:flex; gap:12px; }
+  .field-row .field{ flex:1; }
+  .hint{ font-size:11.5px; color:var(--ink-soft); margin-top:5px; }
+  textarea{ resize:vertical; min-height:60px; }
+
+  .swatchbar{ display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+  .swatch{
+    width:22px; height:22px; border-radius:6px; cursor:pointer; border:2px solid transparent;
+  }
+  .swatch.active{ border-color:var(--navy); }
+
+  /* ---------- Import IA ---------- */
+  .drop-zone{
+    border:2px dashed var(--blue-pale); border-radius:10px; padding:26px; text-align:center;
+    color:var(--ink-soft); font-size:13.5px; cursor:pointer; background:var(--blue-pale-2);
+  }
+  .drop-zone:hover{ border-color:var(--blue); }
+  .drop-zone strong{ color:var(--navy); }
+  .file-pill{
+    display:inline-flex; align-items:center; gap:6px; background:var(--blue-pale-2);
+    padding:5px 10px; border-radius:20px; font-size:12px; margin:4px 4px 0 0; color:var(--navy);
+  }
+  .ia-status{ margin-top:14px; font-size:13px; color:var(--ink-soft); display:none; }
+  .ia-status.show{ display:flex; align-items:center; gap:8px; }
+  .spinner{
+    width:15px; height:15px; border-radius:50%; border:2px solid var(--blue-pale);
+    border-top-color:var(--blue); animation:spin .7s linear infinite; flex:none;
+  }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  .review-row{
+    display:grid; grid-template-columns:26px 1.2fr 1fr .85fr .85fr; gap:8px; align-items:center;
+    padding:9px 6px; border-bottom:1px solid #eef1f6; font-size:12.5px;
+  }
+  .review-row input[type=checkbox]{ width:16px; height:16px; }
+  .review-row input, .review-row select{
+    padding:6px 7px; border:1px solid var(--line); border-radius:6px; font-size:12px; width:100%;
+    font-family:'DM Sans',sans-serif;
+  }
+  .review-head{
+    display:grid; grid-template-columns:26px 1.2fr 1fr .85fr .85fr; gap:8px;
+    padding:0 6px 6px; font-size:10.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--ink-soft); font-weight:700;
+  }
+
+  .alert-banner{
+    background:var(--alerte-fond); border:1px solid #f0c9c4; color:var(--alerte);
+    border-radius:8px; padding:10px 12px; font-size:12.5px; margin-bottom:14px; display:none;
+  }
+  .alert-banner.show{ display:block; }
+
+  .toast{
+    position:fixed; bottom:22px; left:50%; transform:translateX(-50%) translateY(20px);
+    background:var(--navy); color:#fff; padding:12px 20px; border-radius:9px; font-size:13.5px;
+    box-shadow:var(--shadow-lg); z-index:200; opacity:0; transition:opacity .2s, transform .2s; pointer-events:none;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+  /* ---------- Print ---------- */
+  @media print{
+    .topbar, .toolbar, .modal-overlay, .toast{ display:none !important; }
+    body{ background:#fff; }
+    .gantt-wrap{ padding:0; }
+    .gantt-card{ box-shadow:none; border:none; }
+    .gantt-scroll{ max-height:none; overflow:visible; }
+    @page{ size: landscape; margin:10mm; }
+  }
+
+  @media (max-width:720px){
+    .topbar{ padding:10px 14px; }
+    .toolbar{ padding:10px 14px; }
+    .gantt-wrap{ padding:12px; }
+    :root{ --sidebar-w:180px; }
+  }
+
+  /* ---------- Écran de connexion ---------- */
+  #phenix-login{
+    display:flex; position:fixed; inset:0; z-index:99999;
+    background:linear-gradient(135deg,#0F1E3D,#1B2D5B,#2A5298);
+    align-items:center; justify-content:center; padding:20px;
+    font-family:'DM Sans', system-ui, sans-serif;
+  }
+  .login-box{
+    background:rgba(255,255,255,.07); border:1.5px solid rgba(255,255,255,.18);
+    border-radius:16px; padding:34px 28px; max-width:360px; width:100%; text-align:center;
+  }
+  .login-title{ font-family:'Cormorant Garamond', serif; font-size:30px; color:#fff; margin-bottom:4px; }
+  .login-title span{ color:#7DC6E8; }
+  .login-sub{ font-size:11px; color:rgba(255,255,255,.5); letter-spacing:.12em; text-transform:uppercase; margin-bottom:26px; }
+  .login-box input{
+    width:100%; padding:12px 14px; margin-bottom:10px; border-radius:9px;
+    border:1.5px solid rgba(255,255,255,.2); background:rgba(255,255,255,.95);
+    font-size:14px; outline:none; font-family:'DM Sans',sans-serif;
+  }
+  .login-box button.login-submit{
+    width:100%; padding:12px; border:none; border-radius:9px;
+    background:linear-gradient(135deg,#4A9CC7,#2A5298); color:#fff;
+    font-size:15px; font-weight:600; cursor:pointer; font-family:'DM Sans',sans-serif;
+  }
+  #pl-err{ color:#FFB4A8; font-size:12.5px; margin-top:12px; min-height:16px; }
+  .user-chip{
+    background:rgba(255,255,255,.12); border-radius:99px; padding:4px 12px;
+    font-size:12px; color:#fff; font-weight:500;
+  }
+</style>
+</head>
+<body>
+
+  <div id="phenix-login">
+    <div class="login-box">
+      <div class="login-title">Phénix<span>-Architecture</span></div>
+      <div class="login-sub">Connexion sécurisée — Planning</div>
+      <input id="pl-email" type="email" autocomplete="username" placeholder="E-mail">
+      <input id="pl-pwd" type="password" autocomplete="current-password" placeholder="Mot de passe" onkeydown="if(event.key==='Enter')phenixDoLogin()">
+      <button id="pl-btn" class="login-submit" onclick="phenixDoLogin()">Se connecter</button>
+      <div id="pl-err"></div>
+    </div>
+  </div>
+
+
+  <div class="topbar">
+    <div class="brand">
+      <span class="mark">Phénix Planning</span>
+      <span class="tag">Gantt de chantier</span>
+    </div>
+    <div class="chantier-select">
+      <select id="selChantier"></select>
+    </div>
+    <div class="topbar-spacer"></div>
+    <div class="topbar-actions">
+      <span class="user-chip" id="userChip"></span>
+      <button class="btn-ghost-dark" onclick="phenixDoLogout()">Déconnexion</button>
+      <button class="btn-ghost-dark" id="btnNouveauChantier">+ Nouveau chantier</button>
+      <button class="btn-ghost-dark" id="btnRenommer">Renommer</button>
+      <button class="btn-ghost-dark" id="btnSupprimerChantier">Supprimer</button>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <div class="zoom-toggle">
+      <button id="zoomJour" class="active">Jour</button>
+      <button id="zoomSemaine">Semaine</button>
+    </div>
+    <div class="legend" id="legendLots"></div>
+    <div class="toolbar-right">
+      <button class="btn-outline btn-sm" id="btnExportJson">⇩ Sauvegarde .json</button>
+      <button class="btn-outline btn-sm" id="btnImportJson">⇧ Restaurer .json</button>
+      <input type="file" id="fileImportJson" accept="application/json" style="display:none;">
+      <button class="btn-outline btn-sm" id="btnImprimer">🖨 Imprimer / PDF</button>
+      <button class="btn-outline" id="btnImportIA">📄 Importer un contrat (IA)</button>
+      <button class="btn-accent" id="btnAjout">+ Intervention</button>
+    </div>
+  </div>
+
+  <div class="gantt-wrap" id="ganttWrap"></div>
+
+  <!-- MODALE : Ajout / édition intervention -->
+  <div class="modal-overlay" id="modalItv">
+    <div class="modal">
+      <div class="modal-head">
+        <h3 id="modalItvTitle">Nouvelle intervention</h3>
+        <button class="modal-close" data-close="modalItv">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="itvId">
+        <div class="field">
+          <label>Lot</label>
+          <select id="itvLot"></select>
+        </div>
+        <div class="field">
+          <label>Artisan / entreprise</label>
+          <input type="text" id="itvArtisan" placeholder="Ex. SARL Gaulmin">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Date de début</label>
+            <input type="date" id="itvDebut">
+          </div>
+          <div class="field">
+            <label>Date de fin</label>
+            <input type="date" id="itvFin">
+          </div>
+        </div>
+        <div class="field">
+          <label>Durée (jours)</label>
+          <input type="text" id="itvDuree" placeholder="calculée automatiquement" readonly style="background:#f1f3f7;">
+        </div>
+        <div class="field">
+          <label>Notes (créneau, référence contrat…)</label>
+          <textarea id="itvNotes" placeholder="Ex. contrat d'engagement signé le 12/09 — créneau semaine 42"></textarea>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn-danger" id="btnSupprimerItv" style="display:none;">Supprimer</button>
+        <div style="margin-left:auto; display:flex; gap:10px;">
+          <button class="btn-outline" data-close="modalItv">Annuler</button>
+          <button class="btn-accent" id="btnEnregistrerItv">Enregistrer</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODALE : Import IA -->
+  <div class="modal-overlay" id="modalIA">
+    <div class="modal modal-wide">
+      <div class="modal-head">
+        <h3>Importer un contrat d'engagement</h3>
+        <button class="modal-close" data-close="modalIA">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="iaStep1">
+          <p class="hint" style="margin-bottom:14px;">Déposez un ou plusieurs contrats d'engagement (PDF). L'IA extrait le lot, l'artisan et les dates pour chacun. Vous pourrez vérifier et corriger chaque ligne avant de l'ajouter au planning.</p>
+          <div class="drop-zone" id="dropZone">
+            <strong>Cliquer pour choisir des PDF</strong><br>ou glisser-déposer ici
+          </div>
+          <input type="file" id="fileIA" accept="application/pdf" multiple style="display:none;">
+          <div id="filePills" style="margin-top:10px;"></div>
+          <div class="ia-status" id="iaStatus"><div class="spinner"></div><span id="iaStatusText">Analyse en cours…</span></div>
+          <div class="alert-banner" id="iaError"></div>
+        </div>
+        <div id="iaStep2" style="display:none;">
+          <p class="hint" style="margin-bottom:10px;">Vérifiez chaque ligne avant import — l'IA peut se tromper, surtout sur les dates.</p>
+          <div class="review-head">
+            <span></span><span>Artisan</span><span>Lot</span><span>Début</span><span>Fin</span>
+          </div>
+          <div id="reviewList"></div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn-outline" id="btnLancerIA" style="display:none;">Analyser avec l'IA</button>
+        <div style="margin-left:auto; display:flex; gap:10px;">
+          <button class="btn-outline" data-close="modalIA">Annuler</button>
+          <button class="btn-accent" id="btnValiderIA" style="display:none;">Ajouter la sélection</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ============== Config ==============
+  // Proxy Cloudflare déjà utilisé par le reste de la suite Phénix pour les appels IA
+  // (même pattern que Phénix Dossier / Phénix Chiffrage).
+  const PROXY_URL = "https://phenix-proxy.phenixarchitecte.workers.dev";
+  const AI_MODEL = "claude-haiku-4-5-20251001";
+
+  const LOTS = [
+    { n:"Maçonnerie",               c:"#8a5a3c" },
+    { n:"Charpente / Couverture",   c:"#c1652f" },
+    { n:"Menuiseries extérieures",  c:"#2f6f8f" },
+    { n:"Menuiseries intérieures",  c:"#4a5fc1" },
+    { n:"Isolation / Plâtrerie",    c:"#6b8f4e" },
+    { n:"Électricité",              c:"#c98a2c" },
+    { n:"Plomberie",                c:"#2f8f82" },
+    { n:"Chauffage / VMC",          c:"#7a5296" },
+    { n:"Revêtements",              c:"#b1567a" },
+    { n:"Peinture",                 c:"#55708c" },
+    { n:"Façades",                  c:"#9c6b30" },
+    { n:"VRD",                      c:"#3c7a4e" },
+    { n:"Autre",                    c:"#5b6270" },
+  ];
+  const lotColor = (nom) => (LOTS.find(l => l.n === nom) || LOTS[LOTS.length-1]).c;
+
+  const STORAGE_KEY = "phenix_planning_v1"; // clé de secours locale (sauvegarde/restauration .json uniquement)
+  const DOW = ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"];
+  const MONTHS = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+  const DAY_MS = 86400000;
+
+  // ============== État ==============
+  let state = null; // chargé depuis Firestore après connexion — source de vérité unique
+  let zoom = "jour"; // "jour" | "semaine"
+  let dragCtx = null;
+
+  function defaultState(){
+    const id = uid();
+    return { currentChantierId: id, chantiers: { [id]: { nom:"Nouveau chantier", interventions: [] } } };
+  }
+  function saveState(){
+    if(!state) return;
+    window._fbPlanning && window._fbPlanning.saveState(state);
+  }
+  function currentChantier(){ return state.chantiers[state.currentChantierId]; }
+  function uid(){ return Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4); }
+
+  function toast(msg){
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(toast._t);
+    toast._t = setTimeout(()=> t.classList.remove("show"), 2600);
+  }
+
+  // ============== Dates ==============
+  function toDate(s){ const d = new Date(s + "T00:00:00"); return d; }
+  function toISO(d){
+    const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,"0"), day=String(d.getDate()).padStart(2,"0");
+    return `${y}-${m}-${day}`;
+  }
+  function addDays(d, n){ const nd = new Date(d); nd.setDate(nd.getDate()+n); return nd; }
+  function diffDays(a,b){ return Math.round((b-a)/DAY_MS); }
+  function startOfWeekMonday(d){ const nd=new Date(d); const dow=(nd.getDay()+6)%7; nd.setDate(nd.getDate()-dow); return nd; }
+
+  // ============== Sélecteur de chantier ==============
+  function renderChantierSelect(){
+    const sel = document.getElementById("selChantier");
+    sel.innerHTML = "";
+    Object.entries(state.chantiers).forEach(([id, c]) => {
+      const opt = document.createElement("option");
+      opt.value = id; opt.textContent = c.nom;
+      if(id === state.currentChantierId) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  }
+  document.getElementById("selChantier").addEventListener("change", (e)=>{
+    state.currentChantierId = e.target.value;
+    saveState();
+    renderAll();
+  });
+  document.getElementById("btnNouveauChantier").addEventListener("click", ()=>{
+    const nom = prompt("Nom du nouveau chantier :", "");
+    if(!nom) return;
+    const id = uid();
+    state.chantiers[id] = { nom: nom.trim(), interventions: [] };
+    state.currentChantierId = id;
+    saveState(); renderAll();
+    toast("Chantier créé");
+  });
+  document.getElementById("btnRenommer").addEventListener("click", ()=>{
+    const c = currentChantier();
+    const nom = prompt("Renommer le chantier :", c.nom);
+    if(!nom) return;
+    c.nom = nom.trim();
+    saveState(); renderChantierSelect();
+    toast("Chantier renommé");
+  });
+  document.getElementById("btnSupprimerChantier").addEventListener("click", ()=>{
+    const ids = Object.keys(state.chantiers);
+    if(ids.length <= 1){ toast("Impossible de supprimer le seul chantier"); return; }
+    if(!confirm(`Supprimer « ${currentChantier().nom} » et toutes ses interventions ?`)) return;
+    delete state.chantiers[state.currentChantierId];
+    state.currentChantierId = Object.keys(state.chantiers)[0];
+    saveState(); renderAll();
+    toast("Chantier supprimé");
+  });
+
+  // ============== Zoom ==============
+  document.getElementById("zoomJour").addEventListener("click", ()=>{ zoom="jour"; setZoomBtns(); renderGantt(); });
+  document.getElementById("zoomSemaine").addEventListener("click", ()=>{ zoom="semaine"; setZoomBtns(); renderGantt(); });
+  function setZoomBtns(){
+    document.getElementById("zoomJour").classList.toggle("active", zoom==="jour");
+    document.getElementById("zoomSemaine").classList.toggle("active", zoom==="semaine");
+  }
+  function dayWidth(){ return zoom === "jour" ? 36 : 13; }
+
+  // ============== Légende ==============
+  function renderLegende(){
+    const box = document.getElementById("legendLots");
+    box.innerHTML = "";
+    const used = new Set(currentChantier().interventions.map(i=>i.lot));
+    LOTS.filter(l => used.has(l.n)).forEach(l=>{
+      const chip = document.createElement("span");
+      chip.className = "chip";
+      chip.innerHTML = `<span class="dot" style="background:${l.c}"></span>${l.n}`;
+      box.appendChild(chip);
+    });
+  }
+
+  // ============== Rendu Gantt ==============
+  function renderGantt(){
+    const wrap = document.getElementById("ganttWrap");
+    const itv = currentChantier().interventions.slice().sort((a,b)=> a.dateDebut.localeCompare(b.dateDebut));
+
+    if(itv.length === 0){
+      wrap.innerHTML = `
+        <div class="empty-state">
+          <h2>Planning vide</h2>
+          <p>Ajoutez une intervention manuellement, ou importez directement les contrats d'engagement signés : l'IA en extrait les dates pour construire le planning.</p>
+          <button class="btn-accent" onclick="document.getElementById('btnAjout').click()">+ Ajouter une intervention</button>
+        </div>`;
+      return;
+    }
+
+    const dw = dayWidth();
+    let minD = toDate(itv[0].dateDebut);
+    let maxD = toDate(itv[0].dateFin);
+    itv.forEach(i=>{
+      const d0 = toDate(i.dateDebut), d1 = toDate(i.dateFin);
+      if(d0 < minD) minD = d0;
+      if(d1 > maxD) maxD = d1;
+    });
+    minD = addDays(minD, -3);
+    maxD = addDays(maxD, 4);
+    if(zoom === "semaine"){ minD = startOfWeekMonday(minD); }
+    const totalDays = Math.max(diffDays(minD, maxD), 14);
+    const timelineW = totalDays * dw;
+    const rowH = 46;
+
+    const offsetOf = (iso) => diffDays(minD, toDate(iso)) * dw;
+
+    // ---- Mois ----
+    let monthsHtml = "";
+    { let cursor = new Date(minD.getFullYear(), minD.getMonth(), 1);
+      while(cursor < maxD){
+        const next = new Date(cursor.getFullYear(), cursor.getMonth()+1, 1);
+        const segStart = cursor < minD ? minD : cursor;
+        const segEnd = next > maxD ? maxD : next;
+        const left = diffDays(minD, segStart) * dw;
+        const width = diffDays(segStart, segEnd) * dw;
+        monthsHtml += `<div class="gantt-month" style="left:${left}px; width:${width}px;">${MONTHS[cursor.getMonth()]} ${cursor.getFullYear()}</div>`;
+        cursor = next;
+      }
+    }
+
+    // ---- Jours / semaines ----
+    let ticksHtml = "";
+    let bgHtml = "";
+    for(let i=0;i<totalDays;i++){
+      const d = addDays(minD, i);
+      const dow = d.getDay();
+      const isWeekend = dow===0 || dow===6;
+      if(zoom === "jour"){
+        ticksHtml += `<div class="gantt-tick ${isWeekend?'weekend':''} ${dow===1?'week-start':''}" style="left:${i*dw}px; width:${dw}px;">
+            <span class="dow">${DOW[dow]}</span><span class="num">${d.getDate()}</span>
+          </div>`;
+        if(isWeekend) bgHtml += `<div class="gantt-weekend-band" style="left:${i*dw}px; width:${dw}px;"></div>`;
+      } else {
+        if(dow === 1 || i===0){
+          const wnum = weekNumber(d);
+          ticksHtml += `<div class="gantt-tick week-start" style="left:${i*dw}px; width:${dw*7}px;">
+              <span class="num">S${wnum}</span>
+            </div>`;
+        }
+      }
+    }
+
+    // ---- Sidebar + barres ----
+    let sideHtml = "";
+    let barsHtml = "";
+    let rowLinesHtml = "";
+    itv.forEach((i, idx)=>{
+      const top = idx*rowH;
+      const color = lotColor(i.lot);
+      sideHtml += `
+        <div class="gantt-side-item" style="border-left-color:${color};">
+          <div class="side-texts">
+            <div class="side-artisan">${esc(i.artisan||"Sans nom")}</div>
+            <div class="side-lot">${esc(i.lot)}</div>
+          </div>
+          <div class="side-actions">
+            <button class="icon-btn" title="Modifier" onclick="PhenixPlanning.openEdit('${i.id}')">✎</button>
+          </div>
+        </div>`;
+      rowLinesHtml += `<div class="gantt-row-line" style="top:${top+rowH}px;"></div>`;
+      const left = offsetOf(i.dateDebut);
+      const width = Math.max(offsetOf(i.dateFin) - left, dw*0.6);
+      barsHtml += `
+        <div class="gantt-bar" data-id="${i.id}" style="top:${top+7}px; left:${left}px; width:${width}px; background:${color};" title="${esc(i.artisan)} — ${esc(i.lot)}">
+          <div class="handle left" data-edge="start"></div>
+          <span style="pointer-events:none; overflow:hidden; text-overflow:ellipsis;">${esc(i.artisan||i.lot)}</span>
+          <div class="handle right" data-edge="end"></div>
+        </div>`;
+    });
+
+    // ---- Aujourd'hui ----
+    const today = new Date(); today.setHours(0,0,0,0);
+    let todayHtml = "";
+    if(today >= minD && today <= maxD){
+      const left = diffDays(minD, today) * dw;
+      todayHtml = `<div class="gantt-today" style="left:${left}px;"><div class="flag">Aujourd'hui</div></div>`;
+    }
+
+    wrap.innerHTML = `
+      <div class="gantt-card">
+        <div class="gantt-scroll">
+          <div class="gantt-flow">
+            <div class="gantt-header-row">
+              <div class="gantt-corner">Lot / artisan</div>
+              <div class="gantt-timehead" style="width:${timelineW}px;">
+                <div class="gantt-months">${monthsHtml}</div>
+                <div class="gantt-days" style="height:${zoom==='jour'?34:26}px;">${ticksHtml}</div>
+              </div>
+            </div>
+            <div class="gantt-body-row">
+              <div class="gantt-sidebar">${sideHtml}</div>
+              <div class="gantt-plot" style="width:${timelineW}px; height:${itv.length*rowH}px;">
+                <div class="gantt-plot-bg">${bgHtml}${rowLinesHtml}</div>
+                ${todayHtml}
+                ${barsHtml}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+
+    attachDragHandlers(dw, minD);
+  }
+
+  function weekNumber(d){
+    const target = new Date(d.valueOf());
+    const dayNr = (d.getDay()+6)%7;
+    target.setDate(target.getDate()-dayNr+3);
+    const firstThursday = new Date(target.getFullYear(),0,4);
+    const diff = target - firstThursday;
+    return 1 + Math.round(diff/(7*DAY_MS));
+  }
+
+  function esc(s){
+    return String(s??"").replace(/[&<>"']/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+  }
+
+  // ============== Drag & resize ==============
+  function attachDragHandlers(dw, minD){
+    document.querySelectorAll(".gantt-bar").forEach(bar=>{
+      const id = bar.dataset.id;
+      bar.addEventListener("pointerdown", (e)=>{
+        const edge = e.target.dataset.edge || null;
+        e.stopPropagation();
+        bar.setPointerCapture(e.pointerId);
+        dragCtx = {
+          id, edge, startX:e.clientX, moved:0,
+          origLeft: parseFloat(bar.style.left), origWidth: parseFloat(bar.style.width),
+          bar, dw, minD
+        };
+        bar.classList.add("dragging");
+      });
+      bar.addEventListener("pointermove", (e)=>{
+        if(!dragCtx || dragCtx.id !== id) return;
+        const dx = e.clientX - dragCtx.startX;
+        dragCtx.moved = Math.max(dragCtx.moved, Math.abs(dx));
+        if(dragCtx.edge === "start"){
+          let newLeft = dragCtx.origLeft + dx;
+          let newWidth = dragCtx.origWidth - dx;
+          if(newWidth < dw*0.6){ newWidth = dw*0.6; newLeft = dragCtx.origLeft + dragCtx.origWidth - newWidth; }
+          bar.style.left = newLeft+"px"; bar.style.width = newWidth+"px";
+        } else if(dragCtx.edge === "end"){
+          let newWidth = dragCtx.origWidth + dx;
+          if(newWidth < dw*0.6) newWidth = dw*0.6;
+          bar.style.width = newWidth+"px";
+        } else {
+          bar.style.left = (dragCtx.origLeft + dx)+"px";
+        }
+      });
+      bar.addEventListener("pointerup", (e)=>{
+        if(!dragCtx || dragCtx.id !== id) return;
+        bar.classList.remove("dragging");
+        const wasClick = dragCtx.moved < 4;
+        if(wasClick && !dragCtx.edge){
+          dragCtx = null;
+          openEdit(id);
+          return;
+        }
+        // Commit snapped-to-day dates
+        const leftPx = parseFloat(bar.style.left);
+        const widthPx = parseFloat(bar.style.width);
+        const startOffsetDays = Math.round(leftPx/dw);
+        const endOffsetDays = Math.round((leftPx+widthPx)/dw);
+        const newStart = addDays(dragCtx.minD, startOffsetDays);
+        const newEnd = addDays(dragCtx.minD, Math.max(endOffsetDays, startOffsetDays+1));
+        const list = currentChantier().interventions;
+        const rec = list.find(x=>x.id===id);
+        if(rec){
+          rec.dateDebut = toISO(newStart);
+          rec.dateFin = toISO(newEnd);
+          saveState();
+        }
+        dragCtx = null;
+        renderGantt();
+      });
+    });
+  }
+
+  // ============== Modale intervention ==============
+  function fillLotSelect(sel){
+    sel.innerHTML = LOTS.map(l=>`<option value="${esc(l.n)}">${esc(l.n)}</option>`).join("");
+  }
+  fillLotSelect(document.getElementById("itvLot"));
+
+  function openModal(id){ document.getElementById(id).classList.add("show"); }
+  function closeModal(id){ document.getElementById(id).classList.remove("show"); }
+  document.querySelectorAll("[data-close]").forEach(b=> b.addEventListener("click", ()=> closeModal(b.dataset.close)));
+  document.querySelectorAll(".modal-overlay").forEach(ov=>{
+    ov.addEventListener("click", (e)=>{ if(e.target===ov) closeModal(ov.id); });
+  });
+
+  function openAdd(){
+    document.getElementById("modalItvTitle").textContent = "Nouvelle intervention";
+    document.getElementById("itvId").value = "";
+    document.getElementById("itvLot").value = LOTS[0].n;
+    document.getElementById("itvArtisan").value = "";
+    const today = toISO(new Date());
+    document.getElementById("itvDebut").value = today;
+    document.getElementById("itvFin").value = toISO(addDays(new Date(), 2));
+    document.getElementById("itvNotes").value = "";
+    document.getElementById("btnSupprimerItv").style.display = "none";
+    updateDureeField();
+    openModal("modalItv");
+  }
+  function openEdit(id){
+    const rec = currentChantier().interventions.find(x=>x.id===id);
+    if(!rec) return;
+    document.getElementById("modalItvTitle").textContent = "Modifier l'intervention";
+    document.getElementById("itvId").value = rec.id;
+    document.getElementById("itvLot").value = rec.lot;
+    document.getElementById("itvArtisan").value = rec.artisan||"";
+    document.getElementById("itvDebut").value = rec.dateDebut;
+    document.getElementById("itvFin").value = rec.dateFin;
+    document.getElementById("itvNotes").value = rec.notes||"";
+    document.getElementById("btnSupprimerItv").style.display = "inline-flex";
+    updateDureeField();
+    openModal("modalItv");
+  }
+  function updateDureeField(){
+    const d0 = document.getElementById("itvDebut").value;
+    const d1 = document.getElementById("itvFin").value;
+    if(d0 && d1){
+      const n = diffDays(toDate(d0), toDate(d1));
+      document.getElementById("itvDuree").value = n>0 ? `${n} jour${n>1?"s":""}` : "—";
+    }
+  }
+  document.getElementById("itvDebut").addEventListener("change", updateDureeField);
+  document.getElementById("itvFin").addEventListener("change", updateDureeField);
+
+  document.getElementById("btnAjout").addEventListener("click", openAdd);
+  document.getElementById("btnEnregistrerItv").addEventListener("click", ()=>{
+    const id = document.getElementById("itvId").value;
+    const lot = document.getElementById("itvLot").value;
+    const artisan = document.getElementById("itvArtisan").value.trim();
+    let d0 = document.getElementById("itvDebut").value;
+    let d1 = document.getElementById("itvFin").value;
+    const notes = document.getElementById("itvNotes").value.trim();
+    if(!d0 || !d1){ toast("Merci de renseigner les deux dates"); return; }
+    if(toDate(d1) <= toDate(d0)) d1 = toISO(addDays(toDate(d0),1));
+    const list = currentChantier().interventions;
+    if(id){
+      const rec = list.find(x=>x.id===id);
+      Object.assign(rec, { lot, artisan, dateDebut:d0, dateFin:d1, notes });
+    } else {
+      list.push({ id:uid(), lot, artisan, dateDebut:d0, dateFin:d1, notes });
+    }
+    saveState();
+    closeModal("modalItv");
+    renderAll();
+    toast("Intervention enregistrée");
+  });
+  document.getElementById("btnSupprimerItv").addEventListener("click", ()=>{
+    const id = document.getElementById("itvId").value;
+    if(!confirm("Supprimer cette intervention ?")) return;
+    const c = currentChantier();
+    c.interventions = c.interventions.filter(x=>x.id!==id);
+    saveState();
+    closeModal("modalItv");
+    renderAll();
+    toast("Intervention supprimée");
+  });
+
+  // ============== Export / import JSON ==============
+  document.getElementById("btnExportJson").addEventListener("click", ()=>{
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type:"application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `phenix-planning-${toISO(new Date())}.json`;
+    a.click();
+  });
+  document.getElementById("btnImportJson").addEventListener("click", ()=> document.getElementById("fileImportJson").click());
+  document.getElementById("fileImportJson").addEventListener("change", async (e)=>{
+    const f = e.target.files[0]; if(!f) return;
+    try{
+      const txt = await f.text();
+      const data = JSON.parse(txt);
+      if(!data.chantiers || !data.currentChantierId) throw new Error("format invalide");
+      state = data;
+      saveState(); renderAll();
+      toast("Sauvegarde restaurée");
+    }catch(err){ toast("Fichier illisible : " + err.message); }
+    e.target.value = "";
+  });
+
+  document.getElementById("btnImprimer").addEventListener("click", ()=> window.print());
+
+  // ============== Import IA ==============
+  const modalIA = document.getElementById("modalIA");
+  let iaFiles = [];
+  let iaResults = [];
+
+  function resetIAModal(){
+    iaFiles = []; iaResults = [];
+    document.getElementById("iaStep1").style.display = "block";
+    document.getElementById("iaStep2").style.display = "none";
+    document.getElementById("filePills").innerHTML = "";
+    document.getElementById("iaStatus").classList.remove("show");
+    document.getElementById("iaError").classList.remove("show");
+    document.getElementById("btnLancerIA").style.display = "none";
+    document.getElementById("btnValiderIA").style.display = "none";
+    document.getElementById("fileIA").value = "";
+  }
+  document.getElementById("btnImportIA").addEventListener("click", ()=>{
+    resetIAModal();
+    openModal("modalIA");
+  });
+  document.getElementById("dropZone").addEventListener("click", ()=> document.getElementById("fileIA").click());
+  document.getElementById("dropZone").addEventListener("dragover", (e)=>{ e.preventDefault(); });
+  document.getElementById("dropZone").addEventListener("drop", (e)=>{
+    e.preventDefault();
+    handleFiles(e.dataTransfer.files);
+  });
+  document.getElementById("fileIA").addEventListener("change", (e)=> handleFiles(e.target.files));
+
+  function handleFiles(fileList){
+    iaFiles = Array.from(fileList).filter(f=> f.type==="application/pdf");
+    const pills = document.getElementById("filePills");
+    pills.innerHTML = iaFiles.map(f=>`<span class="file-pill">📄 ${esc(f.name)}</span>`).join("");
+    document.getElementById("btnLancerIA").style.display = iaFiles.length ? "inline-flex" : "none";
+  }
+
+  document.getElementById("btnLancerIA").addEventListener("click", async ()=>{
+    const statusEl = document.getElementById("iaStatus");
+    const statusText = document.getElementById("iaStatusText");
+    const errEl = document.getElementById("iaError");
+    errEl.classList.remove("show");
+    statusEl.classList.add("show");
+    document.getElementById("btnLancerIA").disabled = true;
+    let allResults = [];
+    let anyError = null;
+    for(let i=0;i<iaFiles.length;i++){
+      statusText.textContent = `Analyse ${i+1}/${iaFiles.length} — ${iaFiles[i].name}`;
+      try{
+        const res = await analyseContratPDF(iaFiles[i]);
+        allResults = allResults.concat(res);
+      }catch(err){
+        anyError = err;
+        console.error(err);
+      }
+    }
+    statusEl.classList.remove("show");
+    document.getElementById("btnLancerIA").disabled = false;
+    if(anyError && allResults.length===0){
+      errEl.textContent = errorMessageFor(anyError);
+      errEl.classList.add("show");
+      return;
+    }
+    if(anyError){
+      errEl.textContent = "Certains fichiers n'ont pas pu être analysés — " + errorMessageFor(anyError);
+      errEl.classList.add("show");
+    }
+    iaResults = allResults;
+    showReview();
+  });
+
+  function errorMessageFor(err){
+    const isFileProtocol = location.protocol === "file:";
+    if(isFileProtocol && /fetch/i.test(err.message)){
+      return "L'analyse IA ne peut pas se connecter au proxy Phénix depuis un fichier ouvert directement (" + location.protocol + "//…) : le navigateur bloque cet appel par sécurité (CORS). Ouvrez ce fichier via un serveur local (ex. python -m http.server) ou déposez-le sur l'hébergement Phénix habituel, comme pour les autres modules — l'import IA fonctionnera normalement. En attendant, vous pouvez ajouter les interventions manuellement.";
+    }
+    return "L'analyse IA a échoué (" + err.message + "). Vérifiez la connexion au proxy Phénix, ou ajoutez les interventions manuellement.";
+  }
+
+  async function analyseContratPDF(file){
+    const b64 = await fileToBase64(file);
+    const prompt = `Tu analyses un contrat d'engagement signé entre Phénix-Architecture (contractant général) et un artisan, pour préparer un planning de chantier.
+Extrait, pour CHAQUE intervention/lot mentionné dans ce document, un objet JSON avec :
+- "artisan": nom de l'entreprise ou de l'artisan
+- "lot": le lot parmi EXACTEMENT cette liste (choisis le plus proche) : ${LOTS.map(l=>l.n).join(", ")}
+- "dateDebut": date de début d'intervention au format AAAA-MM-JJ
+- "dateFin": date de fin estimée au format AAAA-MM-JJ (si seule une durée ou un créneau est donné, calcule une date de fin plausible ; si seule une date ponctuelle est donnée, mets dateFin = dateDebut + 1 jour)
+Réponds UNIQUEMENT avec un tableau JSON valide, sans texte autour, sans balises markdown. Exemple : [{"artisan":"SARL Dupont","lot":"Maçonnerie","dateDebut":"2026-09-01","dateFin":"2026-09-12"}]`;
+
+    const body = {
+      model: AI_MODEL,
+      max_tokens: 2000,
+      messages: [{
+        role: "user",
+        content: [
+          { type:"document", source:{ type:"base64", media_type:"application/pdf", data:b64 } },
+          { type:"text", text: prompt }
+        ]
+      }]
+    };
+    const resp = await fetch(PROXY_URL, {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify(body)
+    });
+    if(!resp.ok) throw new Error("proxy IA (" + resp.status + ")");
+    const data = await resp.json();
+    const textBlock = (data.content||[]).find(b=>b.type==="text");
+    if(!textBlock) throw new Error("réponse IA vide");
+    let clean = textBlock.text.trim().replace(/^```json/i,"").replace(/^```/,"").replace(/```$/,"").trim();
+    const arr = JSON.parse(clean);
+    return arr.map(o=>({
+      id: uid(),
+      artisan: o.artisan || "",
+      lot: LOTS.find(l=>l.n===o.lot) ? o.lot : "Autre",
+      dateDebut: /^\d{4}-\d{2}-\d{2}$/.test(o.dateDebut) ? o.dateDebut : toISO(new Date()),
+      dateFin: /^\d{4}-\d{2}-\d{2}$/.test(o.dateFin) ? o.dateFin : toISO(addDays(new Date(),1)),
+      source: file.name
+    }));
+  }
+
+  function fileToBase64(file){
+    return new Promise((resolve,reject)=>{
+      const r = new FileReader();
+      r.onload = ()=> resolve(r.result.split(",")[1]);
+      r.onerror = ()=> reject(new Error("lecture fichier impossible"));
+      r.readAsDataURL(file);
+    });
+  }
+
+  function showReview(){
+    document.getElementById("iaStep1").style.display = "none";
+    document.getElementById("iaStep2").style.display = "block";
+    document.getElementById("btnValiderIA").style.display = "inline-flex";
+    const box = document.getElementById("reviewList");
+    if(iaResults.length===0){
+      box.innerHTML = `<p class="hint">Aucune intervention détectée. Fermez cette fenêtre et ajoutez-les manuellement.</p>`;
+      return;
+    }
+    box.innerHTML = iaResults.map((r,idx)=>`
+      <div class="review-row" data-idx="${idx}">
+        <input type="checkbox" checked>
+        <input type="text" value="${esc(r.artisan)}" data-f="artisan">
+        <select data-f="lot">${LOTS.map(l=>`<option ${l.n===r.lot?"selected":""}>${esc(l.n)}</option>`).join("")}</select>
+        <input type="date" value="${r.dateDebut}" data-f="dateDebut">
+        <input type="date" value="${r.dateFin}" data-f="dateFin">
+      </div>`).join("");
+  }
+
+  document.getElementById("btnValiderIA").addEventListener("click", ()=>{
+    const rows = document.querySelectorAll("#reviewList .review-row");
+    const list = currentChantier().interventions;
+    let n = 0;
+    rows.forEach(row=>{
+      const idx = +row.dataset.idx;
+      const checked = row.querySelector('input[type=checkbox]').checked;
+      if(!checked) return;
+      const artisan = row.querySelector('[data-f=artisan]').value.trim();
+      const lot = row.querySelector('[data-f=lot]').value;
+      const dateDebut = row.querySelector('[data-f=dateDebut]').value;
+      const dateFin = row.querySelector('[data-f=dateFin]').value;
+      list.push({ id:uid(), artisan, lot, dateDebut, dateFin, notes: "Importé par IA — " + (iaResults[idx].source||"") });
+      n++;
+    });
+    saveState();
+    closeModal("modalIA");
+    renderAll();
+    toast(n + " intervention(s) ajoutée(s) au planning");
+  });
+
+  // ============== Rendu global ==============
+  function renderAll(){
+    if(!state){
+      document.getElementById("ganttWrap").innerHTML = `<div class="empty-state"><h2>Connexion…</h2><p>Chargement du planning depuis Phénix Suite.</p></div>`;
+      return;
+    }
+    renderChantierSelect();
+    renderLegende();
+    renderGantt();
+  }
+
+  window.PhenixPlanning = { openEdit };
+
+  // Le planning ne se charge qu'une fois l'authentification confirmée
+  // (voir le bloc Firebase en tête de fichier) — comme le reste de la suite Phénix.
+  function startFirestoreSync(){
+    renderAll();
+    window._fbPlanning.listenState((remote)=>{
+      state = remote || defaultState();
+      if(!state.currentChantierId || !state.chantiers){ state = defaultState(); }
+      renderAll();
+    });
+  }
+  if(window._auth && window._auth.current()){
+    startFirestoreSync();
+  } else {
+    window.addEventListener("firebase-ready", startFirestoreSync, { once:true });
+  }
+})();
+</script>
+</body>
+</html>

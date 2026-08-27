@@ -221,6 +221,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
     <div class="shell-nav-item" data-view="dashboard" data-tip="Suivi d'équipe" onclick="shellShowView('dashboard',this)"><i class="ti ti-list-check"></i><span class="lbl">Suivi</span></div>
     <div class="shell-nav-item" data-view="module" data-module="chiffrage" data-tip="Chiffrage" onclick="shellOpenModule('chiffrage',this)"><i class="ti ti-calculator"></i><span class="lbl">Chiffrage</span></div>
     <div class="shell-nav-item" data-view="module" data-module="contrat" data-tip="Contrats" onclick="shellOpenModule('contrat',this)"><i class="ti ti-signature"></i><span class="lbl">Contrats</span></div>
+    <div class="shell-nav-item" data-view="module" data-module="planning" data-tip="Planning de chantier" onclick="shellOpenModule('planning',this)"><i class="ti ti-calendar-time"></i><span class="lbl">Planning</span></div>
     <div class="shell-nav-item" data-view="module" data-module="chantier" data-tip="Chantier" onclick="shellOpenModule('chantier',this)"><i class="ti ti-building"></i><span class="lbl">Chantier</span></div>
     <div class="shell-nav-item" data-view="module" data-module="permis" data-tip="Permis de construire" onclick="shellOpenModule('permis',this)"><i class="ti ti-clipboard-check"></i><span class="lbl">Permis</span></div>
     <div class="shell-nav-item" data-view="module" data-module="financement" data-tip="Financement" onclick="shellOpenModule('financement',this)"><i class="ti ti-building-bank"></i><span class="lbl">Financ.</span></div>
@@ -371,6 +372,13 @@ window.doLogin = function() {
   btn.disabled = true; btn.textContent = 'Connexion…';
   signInWithEmailAndPassword(auth, email, pwd)
     .then(cred => {
+      // Mémoriser les identifiants MAINTENANT, tant que le mot de passe est
+      // disponible : au moment de l'activation de l'empreinte, l'écran de
+      // connexion est déjà refermé et le champ vidé — c'est ce qui empêchait
+      // la connexion automatique de fonctionner ensuite.
+      try {
+        if (pwd) localStorage.setItem('phenix_bio_creds', btoa(email + '|||' + pwd));
+      } catch(e) {}
       // Proposer l'activation de l'empreinte si l'appareil la gère et qu'aucune
       // n'est encore enregistrée. Intégré ici (script module) et non dans le
       // script classique : les modules s'exécutent en dernier, donc toute
@@ -637,6 +645,7 @@ const MODULES = {
   comptabilite: { src: 'phenix_dossier.html',            title: 'Comptabilité', gotoPage: 'comptabilite' },
   chiffrage:    { src: 'phenix_chiffrage.html',          title: 'Chiffrage — métré & devis artisans' },
   contrat:      { src: 'phenix_contrat.html',            title: 'Contrats — MOE / contractant général' },
+  planning:     { src: 'phenix_planning.html',           title: 'Planning — Gantt de chantier' },
   chantier:     { src: 'phenix_chantier.html',           title: 'Chantier — suivi de travaux' },
   permis:       { src: 'phenix_permis.html',             title: 'Permis de construire' },
   financement:  { src: 'phenix_financement.html',        title: 'Dossier de financement' },
@@ -789,7 +798,8 @@ async function phenixBioLogin(){
     document.getElementById('pl-email').value = savedEmail;
     document.getElementById('pl-email').style.background = '#e8f5e9';
     document.getElementById('pl-email').readOnly = true;
-    err.style.color = '#4db8e8'; err.textContent = '✓ Empreinte reconnue — saisissez votre mot de passe.';
+    err.style.color = '#4db8e8';
+    err.textContent = '✓ Empreinte reconnue — saisissez votre mot de passe cette fois, la connexion sera automatique ensuite.';
     document.getElementById('pl-pwd').focus();
   } catch(e){
     err.style.color = '#E74C3C'; err.style.fontWeight = '600';
@@ -823,9 +833,18 @@ async function phenixBioEnroll(userOverride){
     });
     localStorage.setItem(BIO_KEY, _b64u(credential.rawId));
     localStorage.setItem(BIO_EMAIL_KEY, user.email);
-    const pwd = document.getElementById('pl-pwd').value;
+    // Les identifiants ont normalement déjà été mémorisés au moment de la
+    // connexion (le champ mot de passe est vidé une fois l'écran refermé).
+    // On ne réécrit ici que si le champ est encore rempli, par sécurité.
+    const pwd = (document.getElementById('pl-pwd')||{}).value || '';
     if(pwd) localStorage.setItem('phenix_bio_creds', btoa(user.email + '|||' + pwd));
-    if(wrap){ wrap.innerHTML = '<div style="color:#7DC6E8;font-size:13px;font-weight:600">✓ Empreinte activée — connexion automatique dès maintenant !</div>'; setTimeout(()=>{ wrap.style.display='none'; }, 3000); }
+    const dejaMemorise = !!localStorage.getItem('phenix_bio_creds');
+    if(wrap){
+      wrap.innerHTML = dejaMemorise
+        ? '<div style="color:#7DC6E8;font-size:13px;font-weight:600">✓ Empreinte activée — connexion automatique dès maintenant !</div>'
+        : '<div style="color:#F5D97A;font-size:12.5px;font-weight:600;line-height:1.5">✓ Empreinte activée.<br><span style="font-weight:400">Déconnectez-vous puis reconnectez-vous une fois avec votre mot de passe pour activer la connexion automatique.</span></div>';
+      setTimeout(()=>{ wrap.style.display='none'; }, dejaMemorise ? 3000 : 8000);
+    }
   } catch(e){
     // L'erreur doit s'afficher dans la carte elle-même : pl-err appartient à
     // l'écran de connexion, déjà masqué à ce stade — le message y serait invisible.
