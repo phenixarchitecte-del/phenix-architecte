@@ -2555,9 +2555,6 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
         <i class="ti ti-microphone" style="font-size:22px" id="rvocal-mic-icon"></i>
         <span id="rvocal-mic-label">Appuyer pour parler</span>
       </button>
-      <button id="rvocal-validate-btn" onclick="rvocalValidateAnswer()" style="width:100%;padding:11px;border-radius:10px;background:linear-gradient(135deg,#2D7A4F,#3FA968);color:#fff;border:none;font-size:14px;font-weight:700;cursor:pointer;display:none;align-items:center;justify-content:center;gap:8px">
-        <i class="ti ti-check"></i> Valider cette réponse
-      </button>
       <div style="display:flex;gap:8px">
         <button onclick="rvocalSkipStep()" class="btn" style="flex:1;font-size:12px"><i class="ti ti-arrow-right"></i> Passer</button>
         <button onclick="rvocalPrevStep()" class="btn" style="flex:1;font-size:12px"><i class="ti ti-arrow-left"></i> Retour</button>
@@ -2756,7 +2753,7 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
       <!-- ═══ CHECKLIST PROJET — vue exhaustive de toutes les tâches ═══ -->
       <div class="page" id="page-checklist">
         <div class="page-header">
-          <div><div class="page-title">Checklist projet</div><div class="page-subtitle">Vue d'ensemble de tous les dossiers, puis détail tâche par tâche</div></div>
+          <div><div class="page-title">Checklist projet</div><div class="page-subtitle">Basée sur le livret de process Phénix — vue d'ensemble de tous les dossiers, puis détail tâche par tâche</div></div>
           <select class="btn" id="checklistSelect" onchange="renderChecklist(this.value)" style="padding:7px 12px;font-size:13px;border-radius:var(--r-md)"></select>
         </div>
         <div id="checklistOverview" style="margin-bottom:16px"></div>
@@ -3576,6 +3573,14 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
 // ── État local (miroir de Firestore) ──────────────────────
 const stateDossier = { projets: [], echeances: [], factures: [], taches: [], nextId: 1 };
 
+// État de la page Checklist projet — en dehors de stateDossier car purement
+// local à l'affichage (pas de synchronisation Firestore) : quel dossier est
+// affiché, et quels groupes sont dépliés pour ce dossier. Conservé explicitement
+// pour survivre aux re-rendus déclenchés par les listeners temps réel (sinon,
+// une simple coche de case referme tout le panneau — bug corrigé ici).
+let checklistSelectedId = null;
+const checklistOpenGroups = {}; // projetId -> Set des id de groupes ouverts
+
 // ── Sync honoraires depuis module Chantier ─────────────────────
 function syncHonorairesToDossier() {
   try {
@@ -4320,7 +4325,6 @@ function _rvocalRenderStep() {
   document.getElementById('rvocal-answer-wrap').style.display     = 'none';
   document.getElementById('rvocal-recap').style.display           = 'none';
   document.getElementById('rvocal-confirm-btn').style.display     = 'none';
-  document.getElementById('rvocal-validate-btn').style.display    = 'none';
 
   if (isRecap) { _rvocalRenderRecap(); return; }
 
@@ -4365,41 +4369,8 @@ function toggleReunionVocalListening() {
     _rvocal.userStopped = false;
     _rvocal.finalTranscript = '';
     _rvocal.lastFinalSegment = '';
-    _rvocal.segments = [];
     _rvocalStartListening();
   }
-}
-
-// Fusionne un nouveau segment "final" — gère répétition exacte ET relance qui
-// retranscrit tout depuis le début (voir _crvMergeSegment dans Chantier, même
-// logique) : le segment le plus long/complet remplace le précédent au lieu de
-// s'y ajouter.
-// Fusionne un nouveau segment "final" — gère répétition exacte, relance qui
-// retranscrit tout depuis le début (voir _crvMergeSegment dans Chantier, même
-// logique) : le segment le plus long/complet remplace le précédent au lieu de
-// s'y ajouter — ET bégaiement sur mot(s) court(s) qui alternent (ex: "toucher",
-// "ostéopathe", "toucher"...), limité aux segments de 1-2 mots pour ne jamais
-// supprimer une vraie répétition intentionnelle dans une phrase plus longue.
-function _rvocalMergeSegment(segments, nouveauSegment) {
-  const seg = (nouveauSegment || '').trim();
-  if (!seg) return segments;
-  if (!segments.length) { segments.push(seg); return segments; }
-  const dernier = segments[segments.length - 1];
-  const segLower = seg.toLowerCase();
-  const dernierLower = dernier.toLowerCase();
-  const nbMots = seg.split(/\s+/).length;
-  if (segLower === dernierLower) {
-    // doublon exact : ignoré
-  } else if (segLower.startsWith(dernierLower)) {
-    segments[segments.length - 1] = seg;
-  } else if (dernierLower.startsWith(segLower)) {
-    // ignoré (re-déclenchement plus court)
-  } else if (nbMots <= 2 && segments.slice(-3).some(s => s.toLowerCase() === segLower)) {
-    // bégaiement sur mot(s) court(s) déjà vu récemment : ignoré
-  } else {
-    segments.push(seg);
-  }
-  return segments;
 }
 
 function _rvocalStartListening() {
@@ -4426,23 +4397,17 @@ function _rvocalStartListening() {
   };
   _rvocal.reco.onresult = e => {
     let interim = '';
-    if (!Array.isArray(_rvocal.segments)) _rvocal.segments = _rvocal.finalTranscript ? [_rvocal.finalTranscript] : [];
+    // Chaque session (continuous:false) ne contient qu'UNE seule phrase.
     for (let i = 0; i < e.results.length; i++) {
       const r = e.results[i];
       if (r.isFinal) {
         const segment = r[0].transcript.trim();
-        if (segment) {
-          _rvocal.segments = _rvocalMergeSegment(_rvocal.segments, segment);
-          _rvocal.finalTranscript = _rvocal.segments.join(' ');
-        }
+        if (segment) _rvocal.finalTranscript = (_rvocal.finalTranscript + ' ' + segment).trim();
       } else {
         interim += r[0].transcript;
       }
     }
     document.getElementById('rvocal-transcript').textContent = (_rvocal.finalTranscript + ' ' + interim).trim();
-    const contenu = (_rvocal.finalTranscript + ' ' + interim).trim();
-    const vbtn = document.getElementById('rvocal-validate-btn');
-    if (vbtn) vbtn.style.display = contenu ? 'flex' : 'none';
   };
   _rvocal.reco.onerror = e => {
     if (e.error === 'no-speech' || e.error === 'aborted') return; // pause : onend relance discrètement
@@ -4503,7 +4468,7 @@ function _rvocalProcess(text) {
     parsed = _rvocalParseProjet(t);
     if (!parsed) { _rvocalSetStatus('Projet non trouvé. Réessayez.'); _rvocalSpeak('Projet non reconnu. Répétez le nom.'); return; }
   } else if (s.type === 'date') {
-    parsed = _tvocalParseDate(t) || ''; // analyseur de dates de Dossier (Tâche vocale)
+    parsed = _crvParseDate(t) || ''; // réutiliser le parser de CRV chantier
     if (!parsed && !s.skippable) { _rvocalSetStatus('Date non comprise. Réessayez.'); return; }
   } else {
     parsed = text.trim();
@@ -4540,28 +4505,11 @@ function _rvocalNext() {
   if (_rvocal.step < RVOCAL_STEPS.length)
     setTimeout(() => _rvocalSpeak(RVOCAL_STEPS[_rvocal.step].question), 400);
 }
-// Valide directement ce qui est affiché à l'écran (final + en cours de
-// reconnaissance), sans dépendre de la détection de fin de parole du
-// navigateur — c'est ce qui coinçait parfois en toute fin de phrase et
-// obligeait à réappuyer une seconde fois pour que ça valide vraiment.
-function rvocalValidateAnswer() {
-  const texte = (document.getElementById('rvocal-transcript').textContent || '').trim();
-  if (!texte) return;
-  _rvocalStopListening(true); // discard : le futur onend ne doit pas re-traiter ce texte
-  document.getElementById('rvocal-validate-btn').style.display = 'none';
-  _rvocalProcess(texte);
-}
-
 function rvocalPrevStep() { _rvocalStopListening(true); if(_rvocal.step>0)_rvocal.step--; _rvocalRenderStep(); if(_rvocal.step<RVOCAL_STEPS.length) setTimeout(()=>_rvocalSpeak(RVOCAL_STEPS[_rvocal.step].question),400); }
 function rvocalSkipStep() {
   const s = RVOCAL_STEPS[_rvocal.step];
   if (!s.skippable) { _rvocalSetStatus('⚠️ Cette information est obligatoire — répondez ou dites "aujourd\'hui".'); return; }
-  _rvocalStopListening(true);
-  // "Passer" veut dire "rien de nouveau à ajouter ici" — pas "effacer ce qui y
-  // était déjà" (ex. en revenant en arrière modifier une autre étape, puis en
-  // rappuyant sur Passer sur une étape déjà remplie plus tôt).
-  if (_rvocal.data[s.id] === undefined) _rvocal.data[s.id] = '';
-  _rvocalNext();
+  _rvocalStopListening(true); _rvocal.data[s.id]=''; _rvocalNext();
 }
 
 function rvocalConfirmSave() {
@@ -5640,102 +5588,198 @@ function renderPhases(id) {
 // ═══════════════════════════════════════════════════════════════
 //  CHECKLIST PROJET — vue exhaustive de toutes les tâches d'un
 //  projet de maîtrise d'œuvre / contractant général, de la prise
-//  de contact à la livraison. Organisée en grands groupes (calés
-//  sur les phases loi MOP) puis en sous-groupes de tâches précises.
-//  Pensée pour qu'un salarié puisse s'y référer sans connaître
-//  tout le métier par cœur.
+//  de contact à la livraison.
+//
+//  Groupes F1 à F11 : repris à l'identique du livret de process
+//  Phénix-Architecture (fiches d'intégration collaborateur) — c'est
+//  la source de vérité, à garder synchronisée si le livret évolue.
+//  Groupes sans préfixe F (Financement, Sélection des entreprises,
+//  Dépôt & instruction du permis) : compléments utiles pas encore
+//  détaillés dans le livret.
+//  Groupes "— à venir" (Chantier & exécution, Réception & livraison) :
+//  contenu antérieur conservé tel quel, en attendant que Maxime
+//  fournisse les fiches correspondantes du livret.
 // ═══════════════════════════════════════════════════════════════
 const CHECKLIST_TEMPLATE = [
-  { id:'avp', titre:'Avant-projet & prise de mandat', icone:'ti-handshake', sousGroupes:[
-    { id:'contact', titre:'Premier contact & qualification', taches:[
-      'Prise de contact initiale et écoute du besoin',
-      'Qualification du budget et des délais souhaités',
-      'RDV découverte / visite du terrain ou du bien existant',
-      'Vérification de la faisabilité (PLU, servitudes, zone protégée, ABF)',
-      'Étude de faisabilité sommaire (constructibilité, orientation, accès)',
+  { id:'f1', titre:'F1 — La rencontre client', icone:'ti-handshake', sousGroupes:[
+    { id:'deroule', titre:'Déroulé', taches:[
+      "Écouter la demande du client et reformuler pour vérifier qu'elle est bien comprise.",
+      "Identifier les raisons réelles de la demande, au-delà de ce qui est énoncé au premier abord.",
+      "En rénovation, effectuer un audit rapide du bâti concerné (état général, contraintes visibles, points d'attention).",
+      "Évaluer objectivement si notre intervention est nécessaire et adaptée à la situation.",
+      "Donner son avis de professionnel, même s'il diverge de la vision initiale du client.",
     ]},
-    { id:'devis', titre:'Devis & contractualisation', taches:[
-      'Établissement du programme avec le client',
-      'Chiffrage des honoraires (module Chiffrage)',
-      'Édition et envoi de la proposition d\'honoraires / devis',
-      'Choix du type de contrat (maîtrise d\'œuvre ou contractant général)',
-      'Vigilance requalification CCMI si maison individuelle ≤ 2 logements',
-      'Génération du contrat (module Contrat)',
-      'Signature du contrat par le client',
-      'Ouverture du dossier projet dans Phénix Dossier',
+  ]},
+  { id:'f2', titre:'F2 — Le devis', icone:'ti-file-text', sousGroupes:[
+    { id:'deroule', titre:'Déroulé', taches:[
+      "Rédiger le devis sur la base des éléments recueillis pendant la rencontre client.",
+      "Joindre des instructions claires pour la signature (comment signer, ce que cela engage, les étapes suivantes).",
+      "Expliquer le contexte dans lequel le client va signer, pour qu'il n'y ait aucune ambiguïté sur ce qu'il valide.",
+      "Envoyer le tout avec un ton rassurant et accompagnant, jamais commercial ou pressant.",
     ]},
-    { id:'financement', titre:'Financement (si applicable)', taches:[
+    { id:'contrat', titre:'Contractualisation', taches:[
+      "Choisir le type de contrat (maîtrise d'œuvre ou contractant général).",
+      "Vigilance : requalification CCMI si maison individuelle ≤ 2 logements.",
+      "Générer le contrat (module Contrat).",
+      "Faire signer le contrat par le client.",
+      "Ouvrir le dossier projet dans Phénix Dossier.",
+    ]},
+  ]},
+  { id:'financement', titre:'Financement (si applicable)', icone:'ti-building-bank', sousGroupes:[
+    { id:'dossier', titre:'Dossier de financement', taches:[
       'Constitution du dossier de financement (module Financement)',
       'Envoi des pièces à la banque ou au courtier',
-      'Suivi de l\'accord de prêt',
+      "Suivi de l'accord de prêt",
     ]},
   ]},
-  { id:'conception', titre:'Conception (ESQ → APD)', icone:'ti-pencil', sousGroupes:[
-    { id:'esq', titre:'ESQ — Esquisse', taches:[
-      'Relevé du terrain / de l\'existant',
-      'Analyse approfondie du programme et des besoins',
-      'Étude d\'implantation et d\'orientation',
-      'Premières esquisses et partis architecturaux',
-      'Présentation au client et validation de l\'esquisse',
+  { id:'f3', titre:'F3 — Le relevé', icone:'ti-ruler-2', sousGroupes:[
+    { id:'deroule', titre:'Déroulé', taches:[
+      "Se rendre sur site dans les conditions convenues avec le client.",
+      "Préparer et vérifier le matériel avant le départ (charge des batteries, piles de rechange, carte mémoire vidée).",
+      "Prendre les côtes rapidement, avec précision, sans rien négliger.",
+      "Adopter un code couleur pendant le relevé pour retrouver facilement chaque côte par la suite.",
+      "Photographier abondamment l'ensemble du bien, y compris les éléments particuliers ou singuliers.",
+      "Compléter par des vidéos si certains éléments sont difficiles à saisir par la photo seule.",
     ]},
-    { id:'aps', titre:'APS — Avant-projet sommaire', taches:[
-      'Plans, coupes et façades au 1/200e',
-      'Estimation sommaire du coût des travaux',
-      'Validation du parti architectural par le client',
+    { id:'tablette', titre:'Méthode sur tablette', taches:[
+      "Créer le fichier Note au nom du client, enregistré dans le dossier Dropbox correspondant.",
+      "Réaliser un croquis coté avec code couleur, lisible pour une remise au propre par un tiers.",
     ]},
-    { id:'apd', titre:'APD — Avant-projet définitif', taches:[
-      'Plans, coupes et façades au 1/100e',
+  ]},
+  { id:'f4', titre:'F4 — Le plan préliminaire', icone:'ti-layout', sousGroupes:[
+    { id:'reglementaire', titre:'Contexte réglementaire (obligatoire)', taches:[
+      "Regarder l'emplacement du projet sur Géoportail (contexte satellite et cadastral).",
+      "Aller sur Géoportail de l'urbanisme, identifier la parcelle et lire l'intégralité du règlement associé.",
+    ]},
+    { id:'elaboration', titre:'Élaboration du plan', taches:[
+      "Construire un plan d'aménagement basique, pensé pour être compris rapidement.",
+      "Annoter chaque pièce avec sa fonction et sa surface.",
+      "Appliquer un code couleur pour identifier clairement l'usage de chaque pièce.",
+      "Faire figurer les côtes principales, suffisantes pour saisir l'empattement des pièces.",
+      "Produire des images de synthèse associées au plan, extrapolées selon le même principe.",
+      "Utiliser ces images pour montrer l'aménagement et engager la discussion sur les finitions et matériaux.",
+    ]},
+    { id:'rdv', titre:'Prise de rendez-vous', taches:[
+      "Informer le client du règlement (30 % de la mission AP) dès la prise de rendez-vous — SMS, mail ou vocal.",
+    ]},
+  ]},
+  { id:'f5', titre:'F5 — Rencontre plans préliminaires', icone:'ti-presentation', sousGroupes:[
+    { id:'deroule', titre:'Déroulé du rendez-vous', taches:[
+      "Présenter simplement le plan, sans surcharger d'explications à ce stade.",
+      "Présenter ensuite les images de synthèse, sans entrer dans le détail.",
+      "Laisser au client le temps d'intégrer les informations et de se faire son propre avis.",
+      "Confronter le plan extrapolé à l'idée que le client avait initialement en tête.",
+      "Si le plan correspond déjà à la demande du client, valider simplement.",
+      "Si le plan s'en écarte, expliquer l'intérêt de la démarche et appuyer la démonstration si besoin.",
+      "Faire émerger un troisième plan qui correspond réellement au client.",
+      "Une fois l'échange conclu, aborder le règlement de façon décontractée (chèque, virement, espèces).",
+    ]},
+    { id:'annotation', titre:'Annotation sur tablette', taches:[
+      "Reprendre le même fichier Note que celui du relevé, pour garder une trace continue.",
+      "Insertion → Impression de fichier → sélectionner le PDF du plan préliminaire.",
+      "Annoter en direct les modifications demandées par le client (texte, dessin, annotation manuscrite).",
+    ]},
+  ]},
+  { id:'f6', titre:'F6 — Reprise du plan préliminaire', icone:'ti-refresh', sousGroupes:[
+    { id:'deroule', titre:'Déroulé', taches:[
+      "Reprendre les notes dessinées et annotées sur tablette lors du rendez-vous précédent.",
+      "Reprendre le plan point par point, en traitant tous les sujets identifiés avec le client.",
+      "Une fois le travail terminé, organiser une nouvelle réunion avec le client pour lui présenter la reprise.",
+      "À l'issue de cette réunion, faire valider le plan comme plan définitif.",
+      "Prévenir le client que le projet entre en phase de chiffrage.",
+    ]},
+    { id:'verif', titre:'Vérifications techniques', taches:[
       'Définition des surfaces détaillées (SHAB, surface de plancher)',
-      'Choix des systèmes constructifs et des matériaux',
-      'Estimation définitive du coût prévisionnel (précision ±10%)',
       'Vérification de conformité RE2020 / réglementation thermique',
       'Vérification accessibilité PMR si applicable',
-      'Validation définitive du programme par le client',
     ]},
   ]},
-  { id:'pc', titre:'Permis de construire (PC)', icone:'ti-stamp', sousGroupes:[
-    { id:'montage', titre:'Montage du dossier', taches:[
-      'Plan de situation et plan de masse',
-      'Plans, coupes et façades réglementaires',
-      'Notice descriptive (PC4)',
-      'Insertion paysagère / photomontages',
-      'Étude et attestation RE2020 si nécessaire',
-      'Constitution du dossier via le module Permis',
+  { id:'f7', titre:'F7 — Le chiffrage', icone:'ti-calculator', sousGroupes:[
+    { id:'deroule', titre:'Déroulé', taches:[
+      "Dans Phénix Suite, se rendre dans l'onglet Chiffrage et sélectionner le type de projet.",
+      "En rénovation, importer directement le PDF du plan dans le logiciel.",
+      "Rédiger une description claire des travaux.",
+      "Laisser le logiciel créer le chantier avec les lots et lignes correspondants.",
+      "Inspecter une à une les lignes proposées par l'IA pour les corriger si besoin.",
+      "Générer le devis client PDF une fois le chiffrage réalisé et contrôlé.",
+      "Transférer le chiffrage vers la plateforme d'appel d'offres.",
+      "Faire valider le chiffrage — lots et marge — par un supérieur compétent.",
+      "Prendre rendez-vous avec le client pour valider le chiffrage et les plans.",
     ]},
-    { id:'instruction', titre:'Dépôt & instruction', taches:[
+    { id:'appel-offres', titre:"Transfert vers appel d'offres", taches:[
+      "Phénix Chiffrage → cliquer sur le chiffrage concerné → « Envoyer vers appel d'offres ».",
+      "Appel d'offres, espace pro → importer le DPGF depuis Chiffrage.",
+      "Renseigner les informations du chantier (sans adresse précise, sans photo localisable).",
+    ]},
+  ]},
+  { id:'selection-entreprises', titre:'Sélection des entreprises', icone:'ti-clipboard-list', sousGroupes:[
+    { id:'analyse', titre:'Analyse et validation des offres', taches:[
+      'Réception et analyse des devis artisans (import IA — Chiffrage)',
+      'Négociation et mise au point des offres',
+      "Rapport d'analyse des offres",
+      'Validation du choix des entreprises par le client',
+    ]},
+  ]},
+  { id:'f8', titre:'F8 — Rendez-vous chiffrage', icone:'ti-users', sousGroupes:[
+    { id:'deroule', titre:'Déroulé', taches:[
+      "Expliquer chaque lot avec précision.",
+      "Faire comprendre clairement au client ce qui est compris, et ce qui ne l'est pas, dans le chiffrage.",
+      "Rester à l'écoute et dans l'empathie tout au long de l'échange.",
+      "À l'issue du rendez-vous, expliquer au client le déclenchement de la mission de déclaration administrative.",
+      "Prendre le temps de détailler en quoi consiste cette mission.",
+    ]},
+  ]},
+  { id:'f9', titre:'F9 — Déclaration administrative (principes)', icone:'ti-file-certificate', sousGroupes:[
+    { id:'montage', titre:'Identifier et monter le dossier', taches:[
+      "Sur un moteur de recherche, taper le projet concerné pour identifier le type de dossier.",
+      "Se rendre sur service-public.fr → « Assistance pour votre demande d'autorisation d'urbanisme ».",
+      "Consulter les fiches pratiques correspondant au projet.",
+      "En l'absence de réponse, appeler la mairie de la commune du projet.",
+      "Télécharger le CERFA correspondant sur un site du gouvernement.",
+      "Ne fournir dans le dossier que les informations demandées — rien de plus, rien de moins.",
+    ]},
+  ]},
+  { id:'f10', titre:'F10 — Constitution du dossier graphique', icone:'ti-files', sousGroupes:[
+    { id:'pieces', titre:'Pièces à produire', taches:[
+      'Page de garde (projet, client, adresse, nom du dossier, liste des pages)',
+      'Plan de situation (IGN dézoomé, vue satellite, extrait cadastral)',
+      'Le plan de masse',
+      'La coupe du terrain',
+      'La notice descriptive',
+      'Les façades',
+      "L'insertion (projection photoréaliste)",
+      'La photo proche',
+      'Les photos lointaines',
+      'Remplir le CERFA',
+    ]},
+  ]},
+  { id:'depot-pc', titre:'Dépôt & instruction du permis', icone:'ti-stamp', sousGroupes:[
+    { id:'instruction', titre:'Suivi administratif', taches:[
       'Dépôt du dossier en mairie',
       'Affichage réglementaire du panneau chez le client',
-      'Suivi du délai d\'instruction',
+      "Suivi du délai d'instruction",
       'Réponse aux éventuelles demandes de pièces complémentaires',
-      'Réception de l\'arrêté (accord, refus ou prescriptions)',
-      'Gestion d\'un éventuel recours de tiers',
+      "Réception de l'arrêté (accord, refus ou prescriptions)",
+      "Gestion d'un éventuel recours de tiers",
       'Purge du délai de recours des tiers (2 mois)',
     ]},
   ]},
-  { id:'consultation', titre:'Consultation des entreprises (DCE / ACT)', icone:'ti-file-search', sousGroupes:[
-    { id:'dce', titre:'DCE — Dossier de consultation', taches:[
-      'CCTP détaillé par lot',
-      'DPGF / cadre de décomposition des prix',
-      'Plans d\'exécution nécessaires à la consultation',
-      'Planning prévisionnel de travaux',
+  { id:'f11', titre:'F11 — Préparation de chantier', icone:'ti-clipboard-check', sousGroupes:[
+    { id:'cctp', titre:'Contractualisation & CCTP', taches:[
+      "Faire signer le contrat d'engagement par chaque artisan positionné (montant + date/créneau).",
+      "Rédiger le CCTP à partir du DPGF produit lors du chiffrage.",
+      "Faire signer le CCTP par chaque artisan concerné par son lot.",
+      "Produire les plans de DCE, idéalement un jeu par lot.",
+      "S'acquitter des obligations légales de préparation de chantier (panneau, déchets, sous-traitance).",
     ]},
-    { id:'act', titre:'ACT — Choix des entreprises', taches:[
-      'Identification et sollicitation des artisans (module Annuaire)',
-      'Envoi des dossiers de consultation aux entreprises',
-      'Réception et analyse des devis artisans (import IA — Chiffrage)',
-      'Négociation et mise au point des offres',
-      'Rapport d\'analyse des offres',
-      'Validation du choix des entreprises par le client',
-      'Édition des marchés de travaux / bons de commande',
-      'Signature des marchés par les entreprises retenues',
-    ]},
-    { id:'financement-travaux', titre:'Financement des travaux', taches:[
-      'Vérification du déblocage des fonds',
-      'Souscription de l\'assurance dommage-ouvrage',
+    { id:'planning', titre:'Planning', taches:[
+      'Rassembler les contrats d\'engagement signés par chaque artisan positionné.',
+      "En extraire, pour chacun, le lot, l'artisan et la date ou le créneau d'intervention.",
+      'Construire le planning de chantier (Phénix Planning).',
     ]},
   ]},
-  { id:'chantier', titre:'Chantier & exécution (DET)', icone:'ti-building', sousGroupes:[
-    { id:'preparation', titre:'Préparation de chantier', taches:[
+  { id:'chantier', titre:'Chantier & exécution (DET) — à venir', icone:'ti-building', sousGroupes:[
+    { id:'preparation', titre:'Préparation de chantier (complément)', taches:[
       'Déclaration d\'ouverture de chantier (DOC) en mairie',
       'Constat d\'huissier avant travaux si bâti mitoyen',
       'Installation de chantier (base vie, clôture, panneau)',
@@ -5758,7 +5802,7 @@ const CHECKLIST_TEMPLATE = [
       'Suivi des déclarations complémentaires si travaux modificatifs',
     ]},
   ]},
-  { id:'reception', titre:'Réception & livraison (AOR)', icone:'ti-key', sousGroupes:[
+  { id:'reception', titre:'Réception & livraison (AOR) — à venir', icone:'ti-key', sousGroupes:[
     { id:'reception-travaux', titre:'Réception des travaux', taches:[
       'Pré-visite avant réception',
       'Organisation des opérations préalables à la réception (OPR)',
@@ -5828,8 +5872,14 @@ function renderChecklistPage() {
     document.getElementById('checklistContent').innerHTML = '<div class="empty-state"><div class="empty-icon"><i class="ti ti-checklist"></i></div><div class="empty-title">Aucun projet</div></div>';
     return;
   }
+  // Garder le dossier déjà affiché s'il existe toujours, plutôt que de
+  // revenir systématiquement au premier de la liste à chaque re-rendu.
+  if (!checklistSelectedId || !stateDossier.projets.some(p => p.id == checklistSelectedId)) {
+    checklistSelectedId = stateDossier.projets[0].id;
+  }
+  sel.value = checklistSelectedId;
   renderChecklistOverview();
-  renderChecklist(stateDossier.projets[0].id);
+  renderChecklist(checklistSelectedId);
 }
 
 function renderChecklistOverview() {
@@ -5869,9 +5919,20 @@ function renderChecklistOverview() {
 function renderChecklist(id) {
   const p = stateDossier.projets.find(x => x.id == id);
   if (!p) return;
+  checklistSelectedId = id;
   const counts = _checklistCounts(p);
   const pctGlobal = counts.total ? Math.round(counts.faits / counts.total * 100) : 0;
-  let _premierGroupeOuvert = false;
+
+  // Premier affichage de ce dossier : ouvrir par défaut son premier groupe
+  // pas encore terminé. Une fois initialisé, l'état ouvert/fermé n'est plus
+  // recalculé automatiquement — il ne bouge que si l'utilisateur clique sur
+  // un en-tête de groupe (voir toggleChecklistGroup), pour rester stable
+  // face aux re-rendus déclenchés par la synchronisation temps réel.
+  if (!checklistOpenGroups[id]) {
+    const firstIncomplete = CHECKLIST_TEMPLATE.find(g => counts.parGroupe[g.id].faits < counts.parGroupe[g.id].total);
+    checklistOpenGroups[id] = new Set(firstIncomplete ? [firstIncomplete.id] : []);
+  }
+  const openSet = checklistOpenGroups[id];
 
   document.getElementById('checklistContent').innerHTML = `
     <div class="card" style="margin-bottom:14px">
@@ -5884,13 +5945,10 @@ function renderChecklist(id) {
     ${CHECKLIST_TEMPLATE.map(g => {
       const gc = counts.parGroupe[g.id];
       const gPct = gc.total ? Math.round(gc.faits / gc.total * 100) : 0;
-      // Le premier groupe pas encore terminé s'ouvre par défaut (même à 0%),
-      // pour qu'il y ait toujours quelque chose d'actionnable à l'écran.
-      const groupOpen = !_premierGroupeOuvert && gc.faits < gc.total;
-      if (groupOpen) _premierGroupeOuvert = true;
+      const groupOpen = openSet.has(g.id);
       return `
       <div class="card checklist-group" style="margin-bottom:10px;padding:0;overflow:hidden">
-        <div class="checklist-group-header" onclick="toggleChecklistGroup(this)" style="cursor:pointer;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;background:${gPct===100?'var(--green-bg)':'var(--bg)'}">
+        <div class="checklist-group-header" onclick="toggleChecklistGroup(this,'${g.id}')" style="cursor:pointer;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;background:${gPct===100?'var(--green-bg)':'var(--bg)'}">
           <div style="display:flex;align-items:center;gap:10px">
             <i class="ti ${g.icone}" style="font-size:18px;color:${gPct===100?'var(--green)':'var(--accent)'}"></i>
             <div>
@@ -5923,12 +5981,14 @@ function renderChecklist(id) {
   `;
 }
 
-function toggleChecklistGroup(headerEl) {
+function toggleChecklistGroup(headerEl, groupId) {
   const body = headerEl.nextElementSibling;
   const chevron = headerEl.querySelector('.checklist-chevron');
   const isOpen = body.style.display !== 'none';
   body.style.display = isOpen ? 'none' : '';
   if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
+  const openSet = checklistOpenGroups[checklistSelectedId] || (checklistOpenGroups[checklistSelectedId] = new Set());
+  if (isOpen) openSet.delete(groupId); else openSet.add(groupId);
 }
 
 async function toggleChecklistItem(projetId, itemId, valeur) {
@@ -5938,15 +5998,9 @@ async function toggleChecklistItem(projetId, itemId, valeur) {
   if (valeur) p.checklist[itemId] = true; else delete p.checklist[itemId];
   await saveProjet(p);
   if (typeof renderChecklistOverview === 'function') renderChecklistOverview();
-  // On mémorise quels groupes étaient ouverts pour les rouvrir après le rafraîchissement
-  const ouverts = [...document.querySelectorAll('.checklist-group-body')]
-    .map((el, i) => el.style.display !== 'none' ? i : -1).filter(i => i >= 0);
+  // L'état ouvert/fermé des groupes est conservé dans checklistOpenGroups,
+  // donc renderChecklist le restitue fidèlement sans hack de positions DOM.
   renderChecklist(projetId);
-  const bodies = document.querySelectorAll('.checklist-group-body');
-  const headers = document.querySelectorAll('.checklist-group-header');
-  ouverts.forEach(i => {
-    if (bodies[i]) { bodies[i].style.display = ''; const c = headers[i]?.querySelector('.checklist-chevron'); if (c) c.style.transform = 'rotate(180deg)'; }
-  });
 }
 
 // ── AGENDA ─────────────────────────────────────────────────

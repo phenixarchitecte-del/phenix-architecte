@@ -116,6 +116,34 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 .progress-bar{height:5px;background:var(--bg2);border-radius:99px;overflow:hidden}
 .progress-fill{height:100%;background:var(--blue);border-radius:99px;transition:width .3s}
 
+/* ── CHECKLIST DE PROCESS ── */
+.process-panel{background:#fff;border:.5px solid var(--border);border-radius:8px;padding:10px 12px;margin-top:10px}
+.process-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;cursor:pointer;user-select:none}
+.process-title{font-size:10px;font-weight:700;color:var(--mute);text-transform:uppercase;letter-spacing:.08em;display:flex;align-items:center;gap:6px}
+.process-title i{font-size:13px}
+.process-pct{font-size:11px;font-weight:700;color:var(--blue)}
+.process-overall-bar{height:4px;background:var(--bg2);border-radius:99px;overflow:hidden;margin:6px 0 8px}
+.process-overall-fill{height:100%;background:linear-gradient(90deg,#4A9CC7,#2D6A4F);border-radius:99px;transition:width .3s}
+.process-fiches{display:none}
+.process-fiches.open{display:block}
+.process-fiche{border-top:.5px solid var(--border);padding:7px 0}
+.process-fiche:first-child{border-top:none}
+.process-fiche-head{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
+.process-fiche-chevron{font-size:11px;color:var(--mute);transition:transform .15s;flex-shrink:0;width:12px}
+.process-fiche-chevron.open{transform:rotate(90deg)}
+.process-fiche-num{font-size:10px;font-weight:700;color:#fff;background:var(--navy);border-radius:5px;padding:1px 6px;flex-shrink:0}
+.process-fiche-num.complete{background:var(--ok)}
+.process-fiche-num.current{background:var(--blue)}
+.process-fiche-titre{font-size:12.5px;font-weight:600;color:var(--ink);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.process-fiche-count{font-size:10.5px;color:var(--mute);flex-shrink:0}
+.process-fiche-steps{display:none;padding:6px 0 2px 20px}
+.process-fiche-steps.open{display:block}
+.process-step-row{display:flex;align-items:flex-start;gap:7px;padding:3px 0}
+.process-step-row input{width:14px;height:14px;accent-color:var(--ok);cursor:pointer;margin-top:2px;flex-shrink:0}
+.process-step-txt{font-size:12px;color:var(--ink);line-height:1.4}
+.process-step-txt.done{color:var(--mute);text-decoration:line-through}
+.process-phase-empty{font-size:11.5px;color:var(--mute);font-style:italic;padding:2px 0}
+
 /* ── EMPTY ── */
 .empty{text-align:center;padding:40px 20px;color:var(--mute);font-size:14px}
 .empty i{font-size:36px;display:block;margin-bottom:8px;opacity:.4}
@@ -180,7 +208,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 
 <script type="module">
 import { initializeApp }   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-import { getFirestore, collection, onSnapshot, doc, updateDoc }
+import { getFirestore, collection, onSnapshot, doc, updateDoc, setDoc }
                            from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged }
                            from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
@@ -201,10 +229,15 @@ const auth = getAuth(app);
 // ─── état global ───────────────────────────────────────────────
 let projets  = [];
 let taches   = [];
+let processSteps = [];  // docs de phenix_process_steps (checklist du livret, par projet)
 let me       = '';   // email du collaborateur connecté
 let curFilter = 'all';
 let unsubProjets = null;
 let unsubTaches  = null;
+let unsubProcess = null;
+let expandedFiches = new Set(); // clés "projetId-ficheNum" dépliées dans l'UI
+let expandedProcessPanel = new Set(); // clés projetId dont le panneau checklist est ouvert
+let provisioned = new Set(); // projetId déjà vérifiés pour la génération des étapes manquantes
 
 // ─── phases ────────────────────────────────────────────────────
 const PHASES = ['ESQ','APS','APD','PC','DCE','ACT','DET','AOR'];
@@ -218,6 +251,111 @@ const PHASE_GROUP = {
   PC:'Permis de construire',DCE:'DCE / Contrats',ACT:'DCE / Contrats',
   DET:'Chantier',AOR:'Chantier'
 };
+
+// ─── référentiel du process Phénix (Livret de process) ──────────
+// Chaque fiche du livret d'intégration, rattachée à la phase du projet
+// correspondante. Modifiable ici si le livret évolue — les étapes déjà
+// cochées sur les dossiers en cours sont conservées (voir ensureProcessSteps).
+const PROCESS_FICHES = [
+  { num:1, titre:"La rencontre client", phase:'ESQ', steps:[
+    "Écouter la demande du client et reformuler pour vérifier qu'elle est bien comprise.",
+    "Identifier les raisons réelles de la demande, au-delà de ce qui est énoncé au premier abord.",
+    "En rénovation, effectuer un audit rapide du bâti concerné (état général, contraintes visibles, points d'attention).",
+    "Évaluer objectivement si notre intervention est nécessaire et adaptée à la situation.",
+    "Donner son avis de professionnel, même s'il diverge de la vision initiale du client.",
+  ]},
+  { num:2, titre:"Le devis", phase:'ESQ', steps:[
+    "Rédiger le devis sur la base des éléments recueillis pendant la rencontre client.",
+    "Joindre des instructions claires pour la signature (comment signer, ce que cela engage, les étapes suivantes).",
+    "Expliquer le contexte dans lequel le client va signer, pour qu'il n'y ait aucune ambiguïté sur ce qu'il valide.",
+    "Envoyer le tout avec un ton rassurant et accompagnant, jamais commercial ou pressant.",
+  ]},
+  { num:3, titre:"Le relevé", phase:'ESQ', steps:[
+    "Se rendre sur site dans les conditions convenues avec le client.",
+    "Préparer et vérifier le matériel avant le départ (charge des batteries, piles de rechange, carte mémoire vidée).",
+    "Prendre les côtes rapidement, avec précision, sans rien négliger.",
+    "Adopter un code couleur pendant le relevé pour retrouver facilement chaque côte par la suite.",
+    "Photographier abondamment l'ensemble du bien, y compris les éléments particuliers ou singuliers.",
+    "Compléter par des vidéos si certains éléments sont difficiles à saisir par la photo seule.",
+  ]},
+  { num:4, titre:"Le plan préliminaire", phase:'APS', steps:[
+    "Regarder l'emplacement du projet sur Géoportail (contexte satellite et cadastral).",
+    "Aller sur Géoportail de l'urbanisme, identifier la parcelle et lire l'intégralité du règlement associé.",
+    "Construire un plan d'aménagement basique, pensé pour être compris rapidement.",
+    "Annoter chaque pièce avec sa fonction et sa surface.",
+    "Appliquer un code couleur pour identifier clairement l'usage de chaque pièce.",
+    "Faire figurer les côtes principales, suffisantes pour saisir l'empattement des pièces.",
+    "Produire des images de synthèse associées au plan, extrapolées selon le même principe.",
+    "Utiliser ces images pour montrer l'aménagement et engager la discussion sur les finitions et matériaux.",
+  ]},
+  { num:5, titre:"Rencontre client — plans préliminaires", phase:'APS', steps:[
+    "Présenter simplement le plan, sans surcharger d'explications à ce stade.",
+    "Présenter ensuite les images de synthèse, sans entrer dans le détail.",
+    "Laisser au client le temps d'intégrer les informations et de se faire son propre avis.",
+    "Confronter le plan extrapolé à l'idée que le client avait initialement en tête.",
+    "Si le plan s'en écarte, expliquer l'intérêt de la démarche et appuyer la démonstration si besoin.",
+    "Faire émerger un troisième plan qui correspond réellement au client.",
+    "Annoter en direct, sur la tablette, les modifications demandées par le client.",
+    "Aborder le règlement de façon décontractée, en proposant plusieurs moyens de paiement.",
+  ]},
+  { num:6, titre:"Reprise du plan préliminaire", phase:'APD', steps:[
+    "Reprendre les notes dessinées et annotées sur tablette lors du rendez-vous précédent.",
+    "Reprendre le plan point par point, en traitant tous les sujets identifiés avec le client.",
+    "Une fois le travail terminé, organiser une nouvelle réunion avec le client pour lui présenter la reprise.",
+    "À l'issue de cette réunion, faire valider le plan comme plan définitif.",
+    "Prévenir le client que le projet entre en phase de chiffrage.",
+  ]},
+  { num:7, titre:"Le chiffrage", phase:'APD', steps:[
+    "Dans Phénix Suite, se rendre dans l'onglet Chiffrage et sélectionner le type de projet.",
+    "En rénovation, importer directement le PDF du plan dans le logiciel.",
+    "Rédiger une description claire des travaux.",
+    "Laisser le logiciel créer le chantier avec les lots et lignes correspondants.",
+    "Inspecter une à une les lignes proposées par l'IA pour les corriger si besoin.",
+    "Générer le devis client PDF une fois le chiffrage réalisé et contrôlé.",
+    "Transférer le chiffrage vers la plateforme d'appel d'offres.",
+    "Faire valider le chiffrage — lots et marge — par un supérieur compétent.",
+    "Prendre rendez-vous avec le client pour valider le chiffrage et les plans.",
+  ]},
+  { num:8, titre:"Rendez-vous chiffrage", phase:'APD', steps:[
+    "Expliquer chaque lot avec précision.",
+    "Faire comprendre clairement au client ce qui est compris, et ce qui ne l'est pas, dans le chiffrage.",
+    "Rester à l'écoute et dans l'empathie tout au long de l'échange.",
+    "Expliquer au client le déclenchement de la mission de déclaration administrative.",
+  ]},
+  { num:9, titre:"Déclaration administrative — principes", phase:'PC', steps:[
+    "Identifier le type de dossier à monter (moteur de recherche, service-public.fr, ou mairie).",
+    "Télécharger le CERFA correspondant sur un site du gouvernement.",
+    "Ne fournir dans le dossier que les informations demandées — rien de plus, rien de moins.",
+  ]},
+  { num:10, titre:"Constitution du dossier graphique", phase:'PC', steps:[
+    "Page de garde (projet, client, adresse, nom du dossier, liste des pages).",
+    "Plan de situation (IGN dézoomé, vue satellite, extrait cadastral).",
+    "Le plan de masse.",
+    "La coupe du terrain.",
+    "La notice descriptive.",
+    "Les façades.",
+    "L'insertion (projection photoréaliste).",
+    "La photo proche.",
+    "Les photos lointaines.",
+    "Remplir le CERFA.",
+  ]},
+  { num:11, titre:"Préparation de chantier", phase:'DCE', steps:[
+    "Faire signer le contrat d'engagement par chaque artisan positionné.",
+    "Rédiger le CCTP à partir du DPGF produit lors du chiffrage.",
+    "Faire signer le CCTP par chaque artisan concerné par son lot.",
+    "Produire les plans de DCE, idéalement un jeu par lot.",
+    "S'acquitter des obligations légales de préparation de chantier.",
+    "Rassembler les contrats d'engagement signés pour en extraire les dates d'intervention.",
+    "Construire le planning de chantier à partir de ces dates (Phénix Planning).",
+  ]},
+];
+// Liste à plat, avec une clé stable par étape (utilisée comme identifiant Firestore)
+const PROCESS_STEPS_FLAT = [];
+PROCESS_FICHES.forEach(f => {
+  f.steps.forEach((texte, i) => {
+    PROCESS_STEPS_FLAT.push({ stepKey:`f${f.num}-${i+1}`, ficheNum:f.num, ficheTitre:f.titre, phase:f.phase, texte });
+  });
+});
 
 // ─── auth ───────────────────────────────────────────────────────
 onAuthStateChanged(auth, user => {
@@ -233,6 +371,7 @@ onAuthStateChanged(auth, user => {
     document.getElementById('main-content').style.display = 'none';
     if (unsubProjets) { unsubProjets(); unsubProjets = null; }
     if (unsubTaches)  { unsubTaches();  unsubTaches  = null; }
+    if (unsubProcess) { unsubProcess(); unsubProcess = null; }
   }
 });
 
@@ -265,6 +404,7 @@ function startListeners() {
 
   unsubProjets = onSnapshot(collection(db,'phenix_projets'), snap => {
     projets = snap.docs.map(d => d.data());
+    ensureProcessSteps();
     render();
   });
   unsubTaches = onSnapshot(collection(db,'phenix_taches'), snap => {
@@ -272,6 +412,36 @@ function startListeners() {
     render();
     setSyncStatus('ok','En direct');
   });
+  unsubProcess = onSnapshot(collection(db,'phenix_process_steps'), snap => {
+    processSteps = snap.docs.map(d => d.data());
+    render();
+  });
+}
+
+// ─── checklist de process : génération des étapes manquantes ────
+// Pour chaque dossier actif, crée dans Firestore les étapes du livret qui
+// n'existent pas encore pour ce projet — sans jamais toucher à celles déjà
+// présentes (donc sans jamais effacer une case déjà cochée).
+async function ensureProcessSteps() {
+  const actifs = projets.filter(p => p.statut !== 'cloture' && p.statut !== 'archive');
+  for (const p of actifs) {
+    const pid = String(p.id);
+    if (provisioned.has(pid)) continue;
+    provisioned.add(pid);
+    const existantes = new Set(
+      processSteps.filter(s => String(s.projetId) === pid).map(s => s.stepKey)
+    );
+    const manquantes = PROCESS_STEPS_FLAT.filter(s => !existantes.has(s.stepKey));
+    if (!manquantes.length) continue;
+    manquantes.forEach(s => {
+      const docId = pid + '__' + s.stepKey;
+      setDoc(doc(db,'phenix_process_steps', docId), {
+        id: docId, projetId: p.id, stepKey: s.stepKey,
+        ficheNum: s.ficheNum, ficheTitre: s.ficheTitre, phase: s.phase,
+        texte: s.texte, done: false
+      }).catch(()=>{ provisioned.delete(pid); });
+    });
+  }
 }
 
 // ─── filtres ────────────────────────────────────────────────────
@@ -289,6 +459,26 @@ window.toggleTache = async function(id, checked) {
     await updateDoc(doc(db,'phenix_taches', String(id)), { statut: newStatut, updatedAt: new Date().toISOString() });
     toast(checked ? '✅ Tâche marquée achevée' : '↩ Tâche remise à faire');
   } catch(e) { toast('⚠️ Erreur : ' + e.message); }
+};
+
+// ─── toggle étape de process (checklist du livret) ───────────────
+window.toggleProcessStep = async function(docId, checked) {
+  try {
+    await updateDoc(doc(db,'phenix_process_steps', docId), {
+      done: checked,
+      doneAt: checked ? new Date().toISOString() : null,
+      doneBy: checked ? me : null
+    });
+  } catch(e) { toast('⚠️ Erreur : ' + e.message); }
+};
+
+window.toggleFicheOpen = function(key) {
+  if (expandedFiches.has(key)) expandedFiches.delete(key); else expandedFiches.add(key);
+  render();
+};
+window.toggleProcessPanel = function(pid) {
+  if (expandedProcessPanel.has(pid)) expandedProcessPanel.delete(pid); else expandedProcessPanel.add(pid);
+  render();
 };
 
 // ─── utilitaires ────────────────────────────────────────────────
@@ -452,6 +642,8 @@ function cardHtml(p, groupe) {
       <div class="progress-bar"><div class="progress-fill" style="width:${avancement}%"></div></div>
     </div>
 
+    ${processChecklistHtml(p)}
+
     <div class="tasks-panel" style="margin-top:10px">
       <div class="tasks-label">Tâches <span style="font-weight:400;color:var(--mute)">(${tasksTodo.length} restante${tasksTodo.length>1?'s':''})</span></div>
       ${tasksHtml}
@@ -462,6 +654,55 @@ function cardHtml(p, groupe) {
 function esc(s) {
   if (!s) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─── checklist de process (livret Phénix) ────────────────────────
+function processChecklistHtml(p) {
+  const pid = String(p.id);
+  const steps = processSteps.filter(s => String(s.projetId) === pid);
+  if (!steps.length) return ''; // pas encore provisionné (ou dossier tout juste créé)
+
+  const total = steps.length;
+  const done  = steps.filter(s => s.done).length;
+  const pct   = total ? Math.round(done / total * 100) : 0;
+  const panelOpen = expandedProcessPanel.has(pid);
+
+  const fichesHtml = PROCESS_FICHES.map(f => {
+    const fSteps = steps.filter(s => s.ficheNum === f.num).sort((a,b)=>a.stepKey.localeCompare(b.stepKey,undefined,{numeric:true}));
+    if (!fSteps.length) return '';
+    const fDone = fSteps.filter(s=>s.done).length;
+    const fTotal = fSteps.length;
+    const complete = fDone === fTotal;
+    const isCurrentPhase = f.phase === p.phase;
+    const key = pid + '-' + f.num;
+    const open = expandedFiches.has(key);
+    const numCls = complete ? 'complete' : (isCurrentPhase ? 'current' : '');
+    const rows = fSteps.map(s => `
+      <div class="process-step-row">
+        <input type="checkbox" ${s.done?'checked':''} onchange="toggleProcessStep('${esc(s.id)}',this.checked)">
+        <span class="process-step-txt ${s.done?'done':''}">${esc(s.texte)}</span>
+      </div>`).join('');
+    return `
+      <div class="process-fiche">
+        <div class="process-fiche-head" onclick="toggleFicheOpen('${key}')">
+          <span class="process-fiche-chevron ${open?'open':''}"><i class="ti ti-chevron-right"></i></span>
+          <span class="process-fiche-num ${numCls}">F${f.num}</span>
+          <span class="process-fiche-titre">${esc(f.titre)}</span>
+          <span class="process-fiche-count">${fDone}/${fTotal}</span>
+        </div>
+        <div class="process-fiche-steps ${open?'open':''}">${rows}</div>
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="process-panel">
+      <div class="process-head" onclick="toggleProcessPanel('${pid}')">
+        <span class="process-title"><i class="ti ${panelOpen?'ti-chevron-down':'ti-chevron-right'}"></i><i class="ti ti-list-check"></i> Checklist de process (livret)</span>
+        <span class="process-pct">${done}/${total} · ${pct}%</span>
+      </div>
+      <div class="process-overall-bar"><div class="process-overall-fill" style="width:${pct}%"></div></div>
+      <div class="process-fiches ${panelOpen?'open':''}">${fichesHtml}</div>
+    </div>`;
 }
 
 // ─── sync status ────────────────────────────────────────────────
