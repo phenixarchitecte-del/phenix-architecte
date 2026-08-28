@@ -6,7 +6,7 @@
 <title>Phénix Planning — Gantt de chantier</title>
 <script type="module">
 import { initializeApp }       from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-import { getFirestore, doc, setDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { getFirestore, collection, doc, setDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import { initializeAppCheck, ReCaptchaV3Provider } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js';
 
@@ -47,6 +47,23 @@ window._fbPlanning = {
         } else callback(null);
       },
       err => { console.error('Firebase planning listener error:', err.message || err); callback(null); }
+    );
+  }
+};
+
+// Lecture seule des dossiers Phénix Dossier (phenix_projets) — Planning ne crée
+// ni ne modifie jamais un projet, il se contente de rattacher ses interventions
+// à un dossier existant, comme le reste de la suite (Chiffrage, Chantier...).
+window._fbProjets = {
+  listen(callback){
+    return onSnapshot(
+      collection(db, 'phenix_projets'),
+      snap => {
+        const list = [];
+        snap.forEach(d => list.push(d.data()));
+        callback(list);
+      },
+      err => { console.error('Firebase projets listener error:', err.message || err); callback([]); }
     );
   }
 };
@@ -353,7 +370,7 @@ onAuthStateChanged(auth, user => {
     background:#fff; border-radius:14px; width:100%; max-width:480px;
     box-shadow:var(--shadow-lg); max-height:88vh; overflow:auto;
   }
-  .modal-wide{ max-width:720px; }
+  .modal-wide{ max-width:760px; }
   .modal-head{
     padding:20px 24px 14px; border-bottom:1px solid var(--line);
     display:flex; align-items:center; justify-content:space-between;
@@ -445,6 +462,56 @@ onAuthStateChanged(auth, user => {
     .gantt-card{ box-shadow:none; border:none; }
     .gantt-scroll{ max-height:none; overflow:visible; }
     @page{ size: landscape; margin:10mm; }
+    /* Sans cette consigne, Chrome/Firefox n'impriment pas les couleurs de fond
+       par défaut (case "Graphiques d'arrière-plan" décochée) : les barres du
+       Gantt, qui ne reposent que sur un fond coloré, deviendraient invisibles
+       à l'impression et à l'export PDF. */
+    *{ -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; color-adjust:exact !important; }
+  }
+
+  /* ---------- Export PDF dédié (clients / artisans) ---------- */
+  .print-export-only{ display:none; }
+  body.print-export-mode > *:not(.print-export-only){ display:none !important; }
+  body.print-export-mode .print-export-only{ display:block !important; }
+  .pexp-header{
+    display:flex; justify-content:space-between; align-items:flex-start;
+    border-bottom:2px solid var(--navy); padding-bottom:14px; margin-bottom:18px;
+  }
+  .pexp-brand{ font-family:'Cormorant Garamond', serif; font-weight:700; font-size:26px; color:var(--navy); }
+  .pexp-brand span{ color:var(--blue); }
+  .pexp-subtitle{ font-size:11px; color:var(--ink-soft); font-family:'DM Sans',sans-serif; text-transform:uppercase; letter-spacing:1px; margin-top:2px; }
+  .pexp-meta{ text-align:right; font-size:12px; color:var(--ink-soft); }
+  .pexp-meta strong{ color:var(--navy); font-size:15px; display:block; margin-bottom:3px; }
+  .pexp-section-title{
+    font-family:'Cormorant Garamond', serif; font-weight:700; font-size:18px; color:var(--navy);
+    margin:0 0 10px; padding-top:4px;
+  }
+  .pexp-legend{ display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px; }
+  .pexp-legend span{ display:inline-flex; align-items:center; gap:5px; font-size:11px; color:var(--ink); }
+  .pexp-legend i{ width:9px; height:9px; border-radius:50%; display:inline-block; }
+  .pexp-gantt{ position:relative; border:1px solid var(--line); border-radius:6px; overflow:hidden; margin-bottom:28px; }
+  .pexp-row-label{
+    position:absolute; left:0; width:210px; font-size:10.5px; font-weight:600; color:var(--navy);
+    padding:4px 8px; box-sizing:border-box; border-right:1px solid var(--line); border-bottom:1px solid #f1f1f1;
+    display:flex; align-items:center; height:22px; background:#fff;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .pexp-bar{ position:absolute; height:14px; border-radius:3px; }
+  .pexp-detail-page{ page-break-before:always; padding-top:6mm; }
+  .pexp-detail-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px 14px; }
+  .pexp-detail-card{
+    border:1px solid var(--line); border-left:4px solid var(--navy); border-radius:7px;
+    padding:10px 12px; break-inside:avoid;
+  }
+  .pexp-detail-card .dt-title{ font-size:13px; font-weight:700; color:var(--navy); margin-bottom:2px; }
+  .pexp-detail-card .dt-lot{ font-size:10.5px; color:var(--ink-soft); margin-bottom:8px; }
+  .pexp-detail-card .dt-row{ display:flex; justify-content:space-between; font-size:11px; padding:2px 0; border-top:1px solid #f1f1f1; }
+  .pexp-detail-card .dt-row span:first-child{ color:var(--ink-soft); }
+  .pexp-detail-card .dt-notes{ margin-top:6px; font-size:10.5px; color:var(--ink-soft); font-style:italic; border-top:1px solid #f1f1f1; padding-top:6px; }
+  .pexp-footer{ margin-top:16px; font-size:9.5px; color:var(--ink-soft); text-align:center; }
+  @media print{
+    @page{ size: landscape; margin:12mm; }
+    body.print-export-mode{ background:#fff; }
   }
 
   @media (max-width:720px){
@@ -506,14 +573,14 @@ onAuthStateChanged(auth, user => {
     </div>
     <div class="chantier-select">
       <select id="selChantier"></select>
+      <span id="chantierMeta" style="font-size:11px; color:var(--blue-pale); margin-left:2px;"></span>
     </div>
     <div class="topbar-spacer"></div>
     <div class="topbar-actions">
       <span class="user-chip" id="userChip"></span>
       <button class="btn-ghost-dark" onclick="phenixDoLogout()">Déconnexion</button>
-      <button class="btn-ghost-dark" id="btnNouveauChantier">+ Nouveau chantier</button>
-      <button class="btn-ghost-dark" id="btnRenommer">Renommer</button>
-      <button class="btn-ghost-dark" id="btnSupprimerChantier">Supprimer</button>
+      <button class="btn-ghost-dark" id="btnOrphelins" style="display:none;">🔗 Plannings à rattacher</button>
+      <button class="btn-ghost-dark" id="btnViderChantier">Vider ce planning</button>
     </div>
   </div>
 
@@ -527,7 +594,8 @@ onAuthStateChanged(auth, user => {
       <button class="btn-outline btn-sm" id="btnExportJson">⇩ Sauvegarde .json</button>
       <button class="btn-outline btn-sm" id="btnImportJson">⇧ Restaurer .json</button>
       <input type="file" id="fileImportJson" accept="application/json" style="display:none;">
-      <button class="btn-outline btn-sm" id="btnImprimer">🖨 Imprimer / PDF</button>
+      <button class="btn-outline btn-sm" id="btnImprimer">🖨 Imprimer</button>
+      <button class="btn-outline" id="btnExportPDF">📑 Export PDF (client / artisans)</button>
       <button class="btn-outline" id="btnImportIA">📄 Importer un contrat (IA)</button>
       <button class="btn-accent" id="btnAjout">+ Intervention</button>
     </div>
@@ -600,10 +668,7 @@ onAuthStateChanged(auth, user => {
           <div class="alert-banner" id="iaError"></div>
         </div>
         <div id="iaStep2" style="display:none;">
-          <p class="hint" style="margin-bottom:10px;">Vérifiez chaque ligne avant import — l'IA peut se tromper, surtout sur les dates.</p>
-          <div class="review-head">
-            <span></span><span>Artisan</span><span>Lot</span><span>Début</span><span>Fin</span>
-          </div>
+          <p class="hint" style="margin-bottom:10px;">Vérifiez chaque ligne avant import — l'IA peut se tromper, surtout sur les dates. Un artisan peut prendre en charge plusieurs lots : ajoutez-en autant que nécessaire, chacun avec ses propres dates.</p>
           <div id="reviewList"></div>
         </div>
       </div>
@@ -618,6 +683,26 @@ onAuthStateChanged(auth, user => {
   </div>
 
   <div class="toast" id="toast"></div>
+
+  <!-- MODALE : Rattachement des plannings orphelins -->
+  <div class="modal-overlay" id="modalOrphans">
+    <div class="modal modal-wide">
+      <div class="modal-head">
+        <h3>Rattacher à un dossier</h3>
+        <button class="modal-close" data-close="modalOrphans">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="hint" style="margin-bottom:14px;">Ces interventions ont été créées avant que Phénix Planning ne soit relié aux dossiers Phénix Dossier. Associez chacune au dossier correspondant pour ne pas perdre le travail déjà fait — ou ignorez-les pour les supprimer.</p>
+        <div id="orphanList"></div>
+      </div>
+      <div class="modal-foot">
+        <div></div>
+        <button class="btn-outline" data-close="modalOrphans">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="print-export-only" id="printExportView"></div>
 
 <script>
 (function(){
@@ -653,18 +738,32 @@ onAuthStateChanged(auth, user => {
 
   // ============== État ==============
   let state = null; // chargé depuis Firestore après connexion — source de vérité unique
+  let projetsAll = [];    // tous les dossiers Phénix Dossier (pour le rattachement des orphelins)
+  let projetsActifs = []; // dossiers non clôturés/archivés (proposés dans le sélecteur)
   let zoom = "jour"; // "jour" | "semaine"
   let dragCtx = null;
 
   function defaultState(){
-    const id = uid();
-    return { currentChantierId: id, chantiers: { [id]: { nom:"Nouveau chantier", interventions: [] } } };
+    return { currentChantierId: null, chantiers: {} };
   }
   function saveState(){
     if(!state) return;
     window._fbPlanning && window._fbPlanning.saveState(state);
   }
-  function currentChantier(){ return state.chantiers[state.currentChantierId]; }
+  // Rattache toujours le planning à un vrai dossier Phénix Dossier — jamais de
+  // chantier créé localement. L'entrée est auto-créée à la première sélection.
+  function currentChantier(){
+    if(!state || !state.currentChantierId) return null;
+    if(!state.chantiers[state.currentChantierId]) state.chantiers[state.currentChantierId] = { interventions: [] };
+    return state.chantiers[state.currentChantierId];
+  }
+  function currentProjetMeta(){
+    if(!state || !state.currentChantierId) return null;
+    return projetsAll.find(p => String(p.id) === String(state.currentChantierId)) || null;
+  }
+  function projetLabel(p){
+    return p.nom || p.ref || ("Dossier " + p.id) + (p.client ? " — " + p.client : "");
+  }
   function uid(){ return Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4); }
 
   function toast(msg){
@@ -681,52 +780,126 @@ onAuthStateChanged(auth, user => {
     const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,"0"), day=String(d.getDate()).padStart(2,"0");
     return `${y}-${m}-${day}`;
   }
+  function fmtShort(iso){
+    if(!iso) return "";
+    const d = toDate(iso);
+    return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}`;
+  }
   function addDays(d, n){ const nd = new Date(d); nd.setDate(nd.getDate()+n); return nd; }
   function diffDays(a,b){ return Math.round((b-a)/DAY_MS); }
   function startOfWeekMonday(d){ const nd=new Date(d); const dow=(nd.getDay()+6)%7; nd.setDate(nd.getDate()-dow); return nd; }
 
-  // ============== Sélecteur de chantier ==============
+  // ============== Sélecteur de chantier (= dossier Phénix Dossier) ==============
   function renderChantierSelect(){
     const sel = document.getElementById("selChantier");
+    const meta = document.getElementById("chantierMeta");
     sel.innerHTML = "";
-    Object.entries(state.chantiers).forEach(([id, c]) => {
+
+    if(!projetsActifs.length){
       const opt = document.createElement("option");
-      opt.value = id; opt.textContent = c.nom;
-      if(id === state.currentChantierId) opt.selected = true;
+      opt.textContent = projetsAll.length ? "Chargement des dossiers…" : "Aucun dossier — créez-le dans Phénix Dossier";
+      opt.disabled = true; opt.selected = true;
+      sel.appendChild(opt);
+      meta.textContent = "";
+      return;
+    }
+
+    // Si le dossier sélectionné n'est plus actif (clôturé/archivé) mais existe
+    // toujours, on le garde visible en tête de liste pour ne pas le perdre.
+    const current = currentProjetMeta();
+    const options = projetsActifs.slice();
+    if(current && !options.some(p=>String(p.id)===String(current.id))) options.unshift(current);
+
+    options.forEach(p => {
+      const opt = document.createElement("option");
+      opt.value = p.id; opt.textContent = projetLabel(p);
+      if(String(p.id) === String(state.currentChantierId)) opt.selected = true;
       sel.appendChild(opt);
     });
+
+    if(!state.currentChantierId || !options.some(p=>String(p.id)===String(state.currentChantierId))){
+      state.currentChantierId = String(options[0].id);
+      saveState();
+    }
+    meta.textContent = current ? [current.client, current.phase].filter(Boolean).join(" · ") : "";
   }
   document.getElementById("selChantier").addEventListener("change", (e)=>{
     state.currentChantierId = e.target.value;
     saveState();
     renderAll();
   });
-  document.getElementById("btnNouveauChantier").addEventListener("click", ()=>{
-    const nom = prompt("Nom du nouveau chantier :", "");
-    if(!nom) return;
-    const id = uid();
-    state.chantiers[id] = { nom: nom.trim(), interventions: [] };
-    state.currentChantierId = id;
+  document.getElementById("btnViderChantier").addEventListener("click", ()=>{
+    const meta = currentProjetMeta();
+    if(!meta){ toast("Sélectionnez d'abord un dossier"); return; }
+    if(!confirm(`Vider toutes les interventions du planning de « ${projetLabel(meta)} » ?`)) return;
+    state.chantiers[state.currentChantierId] = { interventions: [] };
     saveState(); renderAll();
-    toast("Chantier créé");
+    toast("Planning vidé");
   });
-  document.getElementById("btnRenommer").addEventListener("click", ()=>{
-    const c = currentChantier();
-    const nom = prompt("Renommer le chantier :", c.nom);
-    if(!nom) return;
-    c.nom = nom.trim();
-    saveState(); renderChantierSelect();
-    toast("Chantier renommé");
-  });
-  document.getElementById("btnSupprimerChantier").addEventListener("click", ()=>{
-    const ids = Object.keys(state.chantiers);
-    if(ids.length <= 1){ toast("Impossible de supprimer le seul chantier"); return; }
-    if(!confirm(`Supprimer « ${currentChantier().nom} » et toutes ses interventions ?`)) return;
-    delete state.chantiers[state.currentChantierId];
-    state.currentChantierId = Object.keys(state.chantiers)[0];
-    saveState(); renderAll();
-    toast("Chantier supprimé");
-  });
+
+  // ---- Rattachement des plannings orphelins (créés avant la liaison aux dossiers) ----
+  function findOrphans(){
+    if(!state || !state.chantiers) return [];
+    return Object.keys(state.chantiers).filter(id =>
+      (state.chantiers[id].interventions||[]).length > 0 &&
+      !projetsAll.some(p => String(p.id) === String(id))
+    );
+  }
+  function renderOrphanButton(){
+    const btn = document.getElementById("btnOrphelins");
+    const orphans = findOrphans();
+    if(orphans.length){
+      btn.style.display = "inline-flex";
+      btn.textContent = `🔗 ${orphans.length} planning(s) à rattacher`;
+    } else {
+      btn.style.display = "none";
+    }
+  }
+  document.getElementById("btnOrphelins").addEventListener("click", ()=> openOrphanModal());
+
+  function openOrphanModal(){
+    const orphans = findOrphans();
+    const box = document.getElementById("orphanList");
+    if(!orphans.length){ closeModal("modalOrphans"); return; }
+    box.innerHTML = orphans.map(id => {
+      const n = (state.chantiers[id].interventions||[]).length;
+      return `
+        <div class="review-group" data-orphan-id="${esc(id)}" style="border:1px solid var(--blue-pale); border-radius:10px; padding:12px 14px; margin-bottom:10px;">
+          <div style="font-size:13px; margin-bottom:8px;"><strong>${n} intervention${n>1?"s":""}</strong> non rattachée${n>1?"s":""} à un dossier.</div>
+          <div style="display:flex; gap:8px;">
+            <select data-role="target" style="flex:1; padding:7px 9px; border:1px solid var(--line); border-radius:7px; font-family:'DM Sans',sans-serif; font-size:13px;">
+              <option value="">— Choisir le dossier correspondant —</option>
+              ${projetsAll.map(p=>`<option value="${p.id}">${esc(projetLabel(p))}</option>`).join("")}
+            </select>
+            <button type="button" class="btn-accent btn-sm" onclick="PhenixPlanning.attachOrphan('${esc(id)}')">Rattacher</button>
+            <button type="button" class="btn-danger btn-sm" onclick="PhenixPlanning.discardOrphan('${esc(id)}')">Ignorer</button>
+          </div>
+        </div>`;
+    }).join("");
+    openModal("modalOrphans");
+  }
+  function attachOrphan(orphanId){
+    const sel = document.querySelector(`#orphanList [data-orphan-id="${orphanId}"] [data-role="target"]`);
+    const targetId = sel && sel.value;
+    if(!targetId){ toast("Choisissez un dossier"); return; }
+    const orphanData = state.chantiers[orphanId];
+    if(!state.chantiers[targetId]) state.chantiers[targetId] = { interventions: [] };
+    state.chantiers[targetId].interventions.push(...(orphanData.interventions||[]));
+    delete state.chantiers[orphanId];
+    if(state.currentChantierId === orphanId) state.currentChantierId = targetId;
+    saveState();
+    closeModal("modalOrphans");
+    renderAll();
+    toast("Planning rattaché au dossier");
+  }
+  function discardOrphan(orphanId){
+    if(!confirm("Supprimer définitivement ces interventions non rattachées ?")) return;
+    delete state.chantiers[orphanId];
+    saveState();
+    closeModal("modalOrphans");
+    renderAll();
+    toast("Planning ignoré supprimé");
+  }
 
   // ============== Zoom ==============
   document.getElementById("zoomJour").addEventListener("click", ()=>{ zoom="jour"; setZoomBtns(); renderGantt(); });
@@ -741,7 +914,9 @@ onAuthStateChanged(auth, user => {
   function renderLegende(){
     const box = document.getElementById("legendLots");
     box.innerHTML = "";
-    const used = new Set(currentChantier().interventions.map(i=>i.lot));
+    const c = currentChantier();
+    if(!c) return;
+    const used = new Set(c.interventions.map(i=>i.lot));
     LOTS.filter(l => used.has(l.n)).forEach(l=>{
       const chip = document.createElement("span");
       chip.className = "chip";
@@ -753,7 +928,22 @@ onAuthStateChanged(auth, user => {
   // ============== Rendu Gantt ==============
   function renderGantt(){
     const wrap = document.getElementById("ganttWrap");
-    const itv = currentChantier().interventions.slice().sort((a,b)=> a.dateDebut.localeCompare(b.dateDebut));
+
+    if(!projetsAll.length && !projetsActifs.length){
+      wrap.innerHTML = `<div class="empty-state"><h2>Chargement…</h2><p>Récupération des dossiers depuis Phénix Dossier.</p></div>`;
+      return;
+    }
+    if(!state.currentChantierId){
+      wrap.innerHTML = `
+        <div class="empty-state">
+          <h2>Aucun dossier</h2>
+          <p>Créez d'abord un dossier dans Phénix Dossier, puis revenez ici pour lui construire un planning.</p>
+        </div>`;
+      return;
+    }
+
+    const c = currentChantier();
+    const itv = c.interventions.slice().sort((a,b)=> a.dateDebut.localeCompare(b.dateDebut));
 
     if(itv.length === 0){
       wrap.innerHTML = `
@@ -825,11 +1015,13 @@ onAuthStateChanged(auth, user => {
     itv.forEach((i, idx)=>{
       const top = idx*rowH;
       const color = lotColor(i.lot);
+      const label = i.artisan ? `${i.artisan} (${i.lot})` : i.lot;
+      const dateRange = `${fmtShort(i.dateDebut)} → ${fmtShort(i.dateFin)}`;
       sideHtml += `
         <div class="gantt-side-item" style="border-left-color:${color};">
           <div class="side-texts">
-            <div class="side-artisan">${esc(i.artisan||"Sans nom")}</div>
-            <div class="side-lot">${esc(i.lot)}</div>
+            <div class="side-artisan">${esc(label)}</div>
+            <div class="side-lot">${esc(dateRange)}</div>
           </div>
           <div class="side-actions">
             <button class="icon-btn" title="Modifier" onclick="PhenixPlanning.openEdit('${i.id}')">✎</button>
@@ -839,9 +1031,9 @@ onAuthStateChanged(auth, user => {
       const left = offsetOf(i.dateDebut);
       const width = Math.max(offsetOf(i.dateFin) - left, dw*0.6);
       barsHtml += `
-        <div class="gantt-bar" data-id="${i.id}" style="top:${top+7}px; left:${left}px; width:${width}px; background:${color};" title="${esc(i.artisan)} — ${esc(i.lot)}">
+        <div class="gantt-bar" data-id="${i.id}" style="top:${top+7}px; left:${left}px; width:${width}px; background:${color};" title="${esc(label)}">
           <div class="handle left" data-edge="start"></div>
-          <span style="pointer-events:none; overflow:hidden; text-overflow:ellipsis;">${esc(i.artisan||i.lot)}</span>
+          <span style="pointer-events:none; overflow:hidden; text-overflow:ellipsis;">${esc(label)}</span>
           <div class="handle right" data-edge="end"></div>
         </div>`;
     });
@@ -968,6 +1160,7 @@ onAuthStateChanged(auth, user => {
   });
 
   function openAdd(){
+    if(!state.currentChantierId){ toast("Sélectionnez d'abord un dossier"); return; }
     document.getElementById("modalItvTitle").textContent = "Nouvelle intervention";
     document.getElementById("itvId").value = "";
     document.getElementById("itvLot").value = LOTS[0].n;
@@ -1061,6 +1254,132 @@ onAuthStateChanged(auth, user => {
   });
 
   document.getElementById("btnImprimer").addEventListener("click", ()=> window.print());
+  document.getElementById("btnExportPDF").addEventListener("click", ()=> exportPDF());
+
+  function buildExportHtml(){
+    const c = currentChantier();
+    const meta = currentProjetMeta();
+    const nomDossier = meta ? projetLabel(meta) : "Dossier";
+    const itv = c.interventions.slice().sort((a,b)=> a.dateDebut.localeCompare(b.dateDebut));
+    const todayStr = new Date().toLocaleDateString("fr-FR", { day:"2-digit", month:"long", year:"numeric" });
+
+    const header = `
+      <div class="pexp-header">
+        <div class="pexp-brand">Phénix<span>-Architecture</span></div>
+        <div class="pexp-meta"><strong>${esc(nomDossier)}</strong>Planning de chantier — édité le ${todayStr}</div>
+      </div>`;
+
+    if(itv.length === 0){
+      return `${header}
+        <p style="font-family:'DM Sans',sans-serif; color:var(--ink-soft); font-size:13px;">Aucune intervention à afficher pour ce chantier.</p>`;
+    }
+
+    let minD = toDate(itv[0].dateDebut), maxD = toDate(itv[0].dateFin);
+    itv.forEach(i=>{
+      const d0=toDate(i.dateDebut), d1=toDate(i.dateFin);
+      if(d0<minD) minD=d0; if(d1>maxD) maxD=d1;
+    });
+    minD = addDays(minD,-2); maxD = addDays(maxD,2);
+    const totalDays = Math.max(diffDays(minD,maxD), 7);
+
+    const LABEL_W = 210;
+    const TIMELINE_W = 760; // largeur dispo en px pour l'impression paysage
+    const dw = TIMELINE_W / totalDays;
+    const rowH = 22;
+    const offsetOf = (iso) => diffDays(minD, toDate(iso)) * dw;
+
+    // Repères de mois (simplifié pour l'impression) — un label n'est affiché que
+    // si son segment est assez large, pour ne jamais chevaucher le suivant
+    // quand la plage démarre ou finit en plein milieu d'un mois.
+    let monthTicks = "";
+    { let cur = new Date(minD.getFullYear(), minD.getMonth(), 1);
+      while(cur < maxD){
+        const next = new Date(cur.getFullYear(), cur.getMonth()+1, 1);
+        const segStart = cur < minD ? minD : cur;
+        const segEnd = next > maxD ? maxD : next;
+        const left = diffDays(minD, segStart) * dw;
+        const w = diffDays(segStart, segEnd) * dw;
+        const txt = w >= 34 ? `${MONTHS[cur.getMonth()].slice(0,3)} ${cur.getFullYear()}` : "";
+        monthTicks += `<div style="position:absolute; left:${LABEL_W+left}px; top:0; width:${w}px; height:16px; font-size:9px; font-weight:700; color:var(--navy); border-left:1px solid var(--line); padding-left:4px; box-sizing:border-box; overflow:hidden; white-space:nowrap;">${txt}</div>`;
+        cur = next;
+      }
+    }
+
+    // Lignes + barres
+    let rows = "";
+    itv.forEach((i, idx)=>{
+      const top = 16 + idx*rowH;
+      const color = lotColor(i.lot);
+      const label = i.artisan ? `${i.artisan} (${i.lot})` : i.lot;
+      rows += `<div class="pexp-row-label" style="top:${top}px;">${esc(label)}</div>`;
+      const left = offsetOf(i.dateDebut);
+      const w = Math.max(offsetOf(i.dateFin)-left, 3);
+      rows += `<div class="pexp-bar" style="top:${top+4}px; left:${LABEL_W+left}px; width:${w}px; background:${color};" title="${esc(label)}"></div>`;
+    });
+    const totalH = 16 + itv.length*rowH + 6;
+
+    // Aujourd'hui
+    const today = new Date(); today.setHours(0,0,0,0);
+    let todayLine = "";
+    if(today>=minD && today<=maxD){
+      const left = diffDays(minD, today)*dw;
+      todayLine = `<div style="position:absolute; top:0; bottom:0; left:${LABEL_W+left}px; width:1px; background:var(--alerte);"></div>`;
+    }
+
+    // Légende des lots utilisés
+    const usedLots = LOTS.filter(l => itv.some(i=>i.lot===l.n));
+    const legend = usedLots.map(l=>`<span><i style="background:${l.c}"></i>${esc(l.n)}</span>`).join("");
+
+    // ---- Page 2 : détail par intervention ----
+    const detailCards = itv.map(i=>{
+      const color = lotColor(i.lot);
+      const duree = diffDays(toDate(i.dateDebut), toDate(i.dateFin));
+      return `
+        <div class="pexp-detail-card" style="border-left-color:${color};">
+          <div class="dt-title">${esc(i.artisan||"Sans nom")}</div>
+          <div class="dt-lot">${esc(i.lot)}</div>
+          <div class="dt-row"><span>Début</span><span>${fmtLong(i.dateDebut)}</span></div>
+          <div class="dt-row"><span>Fin</span><span>${fmtLong(i.dateFin)}</span></div>
+          <div class="dt-row"><span>Durée</span><span>${duree} jour${duree>1?"s":""}</span></div>
+          ${i.notes ? `<div class="dt-notes">${esc(i.notes)}</div>` : ""}
+        </div>`;
+    }).join("");
+
+    return `
+      ${header}
+      <div class="pexp-section-title">Vue d'ensemble</div>
+      <div class="pexp-legend">${legend}</div>
+      <div class="pexp-gantt" style="height:${totalH}px;">
+        <div style="position:absolute; left:${LABEL_W}px; top:0; right:0; height:16px; border-bottom:1px solid var(--line);"></div>
+        ${monthTicks}
+        ${todayLine}
+        ${rows}
+      </div>
+      <div class="pexp-footer">Phénix-Architecture — document généré automatiquement, à titre indicatif. Les dates peuvent évoluer selon l'avancement du chantier.</div>
+
+      <div class="pexp-detail-page">
+        ${header}
+        <div class="pexp-section-title">Détail des interventions</div>
+        <div class="pexp-detail-grid">${detailCards}</div>
+      </div>
+    `;
+  }
+
+  function fmtLong(iso){
+    if(!iso) return "";
+    const d = toDate(iso);
+    return d.toLocaleDateString("fr-FR", { day:"2-digit", month:"short", year:"numeric" });
+  }
+
+  function exportPDF(){
+    if(!state.currentChantierId){ toast("Sélectionnez d'abord un dossier"); return; }
+    document.getElementById("printExportView").innerHTML = buildExportHtml();
+    document.body.classList.add("print-export-mode");
+    window.print();
+  }
+  window.addEventListener("afterprint", ()=>{
+    document.body.classList.remove("print-export-mode");
+  });
 
   // ============== Import IA ==============
   const modalIA = document.getElementById("modalIA");
@@ -1079,6 +1398,7 @@ onAuthStateChanged(auth, user => {
     document.getElementById("fileIA").value = "";
   }
   document.getElementById("btnImportIA").addEventListener("click", ()=>{
+    if(!state.currentChantierId){ toast("Sélectionnez d'abord un dossier"); return; }
     resetIAModal();
     openModal("modalIA");
   });
@@ -1223,39 +1543,120 @@ Réponds UNIQUEMENT avec un tableau JSON valide, sans texte autour, sans balises
     });
   }
 
+  let reviewGroups = []; // [{ artisanName, source, rows:[{checked,lot,dateDebut,dateFin}] }]
+
   function showReview(){
     document.getElementById("iaStep1").style.display = "none";
     document.getElementById("iaStep2").style.display = "block";
     document.getElementById("btnValiderIA").style.display = "inline-flex";
-    const box = document.getElementById("reviewList");
     if(iaResults.length===0){
-      box.innerHTML = `<p class="hint">Aucune intervention détectée. Fermez cette fenêtre et ajoutez-les manuellement.</p>`;
+      reviewGroups = [];
+      document.getElementById("reviewList").innerHTML = `<p class="hint">Aucune intervention détectée. Ajoutez un artisan manuellement ci-dessous, ou fermez cette fenêtre.</p>`;
       return;
     }
-    box.innerHTML = iaResults.map((r,idx)=>`
-      <div class="review-row" data-idx="${idx}">
-        <input type="checkbox" checked>
-        <input type="text" value="${esc(r.artisan)}" data-f="artisan">
-        <select data-f="lot">${LOTS.map(l=>`<option ${l.n===r.lot?"selected":""}>${esc(l.n)}</option>`).join("")}</select>
-        <input type="date" value="${r.dateDebut}" data-f="dateDebut">
-        <input type="date" value="${r.dateFin}" data-f="dateFin">
-      </div>`).join("");
+    // Regroupe les lignes détectées par artisan (même nom, insensible à la casse)
+    // pour permettre plusieurs lots — chacun avec ses propres dates — par artisan.
+    reviewGroups = [];
+    iaResults.forEach(r=>{
+      const key = (r.artisan||"").trim().toLowerCase();
+      let g = reviewGroups.find(x => x._key === key && key !== "");
+      if(!g){
+        g = { _key:key, artisanName: r.artisan||"", source: r.source||"", rows:[] };
+        reviewGroups.push(g);
+      }
+      g.rows.push({ checked:true, lot: LOTS.find(l=>l.n===r.lot) ? r.lot : "Autre", dateDebut:r.dateDebut, dateFin:r.dateFin });
+    });
+    renderReviewGroups();
+  }
+
+  function renderReviewGroups(){
+    const box = document.getElementById("reviewList");
+    box.innerHTML = reviewGroups.map((g,gi)=>`
+      <div class="review-group" data-gidx="${gi}" style="border:1px solid var(--blue-pale); border-radius:10px; padding:12px 14px; margin-bottom:12px;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+          <input type="text" value="${esc(g.artisanName)}" data-role="artisan-name" placeholder="Nom de l'artisan"
+            style="flex:1; font-weight:700; font-size:13.5px; padding:7px 9px; border:1px solid var(--blue-pale); border-radius:7px; font-family:'DM Sans',sans-serif;">
+          <button type="button" class="icon-btn" title="Supprimer cet artisan" onclick="PhenixPlanning.removeReviewGroup(${gi})">🗑</button>
+        </div>
+        <div class="review-head" style="grid-template-columns:24px 1fr 0.85fr 0.85fr 26px;">
+          <span></span><span>Lot</span><span>Début</span><span>Fin</span><span></span>
+        </div>
+        ${g.rows.map((row,ri)=>`
+          <div class="review-lot-row" data-ridx="${ri}" style="display:grid; grid-template-columns:24px 1fr 0.85fr 0.85fr 26px; gap:8px; align-items:center; padding:5px 0;">
+            <input type="checkbox" ${row.checked?"checked":""} data-role="chk">
+            <select data-role="lot">${LOTS.map(l=>`<option ${l.n===row.lot?"selected":""}>${esc(l.n)}</option>`).join("")}</select>
+            <input type="date" value="${row.dateDebut}" data-role="debut">
+            <input type="date" value="${row.dateFin}" data-role="fin">
+            <button type="button" class="icon-btn" title="Retirer ce lot" onclick="PhenixPlanning.removeReviewRow(${gi},${ri})">✕</button>
+          </div>`).join("")}
+        <button type="button" class="btn-outline btn-sm" style="margin-top:8px;" onclick="PhenixPlanning.addReviewRow(${gi})">+ Ajouter un lot pour cet artisan</button>
+      </div>`).join("")
+      + `<button type="button" class="btn-outline btn-sm" onclick="PhenixPlanning.addReviewGroup()">+ Ajouter un artisan</button>`;
+  }
+
+  function syncReviewFromDOM(){
+    document.querySelectorAll("#reviewList .review-group").forEach(gEl=>{
+      const gi = +gEl.dataset.gidx;
+      const g = reviewGroups[gi];
+      if(!g) return;
+      const nameInput = gEl.querySelector('[data-role="artisan-name"]');
+      if(nameInput) g.artisanName = nameInput.value.trim();
+      gEl.querySelectorAll(".review-lot-row").forEach(rEl=>{
+        const ri = +rEl.dataset.ridx;
+        const row = g.rows[ri];
+        if(!row) return;
+        row.checked = rEl.querySelector('[data-role="chk"]').checked;
+        row.lot = rEl.querySelector('[data-role="lot"]').value;
+        row.dateDebut = rEl.querySelector('[data-role="debut"]').value;
+        row.dateFin = rEl.querySelector('[data-role="fin"]').value;
+      });
+    });
+  }
+
+  function addReviewRow(gi){
+    syncReviewFromDOM();
+    const g = reviewGroups[gi];
+    if(!g) return;
+    const last = g.rows[g.rows.length-1];
+    g.rows.push({
+      checked:true, lot:"Autre",
+      dateDebut: last ? last.dateDebut : toISO(new Date()),
+      dateFin: last ? last.dateFin : toISO(addDays(new Date(),1)),
+    });
+    renderReviewGroups();
+  }
+  function removeReviewRow(gi, ri){
+    syncReviewFromDOM();
+    const g = reviewGroups[gi];
+    if(!g) return;
+    g.rows.splice(ri,1);
+    renderReviewGroups();
+  }
+  function addReviewGroup(){
+    syncReviewFromDOM();
+    reviewGroups.push({ _key:"", artisanName:"", source:"", rows:[
+      { checked:true, lot:LOTS[0].n, dateDebut: toISO(new Date()), dateFin: toISO(addDays(new Date(),2)) }
+    ]});
+    renderReviewGroups();
+  }
+  function removeReviewGroup(gi){
+    syncReviewFromDOM();
+    reviewGroups.splice(gi,1);
+    renderReviewGroups();
   }
 
   document.getElementById("btnValiderIA").addEventListener("click", ()=>{
-    const rows = document.querySelectorAll("#reviewList .review-row");
+    syncReviewFromDOM();
     const list = currentChantier().interventions;
     let n = 0;
-    rows.forEach(row=>{
-      const idx = +row.dataset.idx;
-      const checked = row.querySelector('input[type=checkbox]').checked;
-      if(!checked) return;
-      const artisan = row.querySelector('[data-f=artisan]').value.trim();
-      const lot = row.querySelector('[data-f=lot]').value;
-      const dateDebut = row.querySelector('[data-f=dateDebut]').value;
-      const dateFin = row.querySelector('[data-f=dateFin]').value;
-      list.push({ id:uid(), artisan, lot, dateDebut, dateFin, notes: "Importé par IA — " + (iaResults[idx].source||"") });
-      n++;
+    reviewGroups.forEach(g=>{
+      const artisan = (g.artisanName||"").trim();
+      g.rows.forEach(row=>{
+        if(!row.checked) return;
+        if(!row.dateDebut || !row.dateFin) return;
+        list.push({ id:uid(), artisan, lot:row.lot, dateDebut:row.dateDebut, dateFin:row.dateFin, notes: "Importé par IA" + (g.source?(" — "+g.source):"") });
+        n++;
+      });
     });
     saveState();
     closeModal("modalIA");
@@ -1270,19 +1671,27 @@ Réponds UNIQUEMENT avec un tableau JSON valide, sans texte autour, sans balises
       return;
     }
     renderChantierSelect();
+    renderOrphanButton();
     renderLegende();
     renderGantt();
   }
 
-  window.PhenixPlanning = { openEdit };
+  window.PhenixPlanning = { openEdit, addReviewRow, removeReviewRow, addReviewGroup, removeReviewGroup, attachOrphan, discardOrphan };
 
   // Le planning ne se charge qu'une fois l'authentification confirmée
   // (voir le bloc Firebase en tête de fichier) — comme le reste de la suite Phénix.
+  // Deux flux Firestore indépendants : l'état du planning (nos interventions) et
+  // la liste des dossiers Phénix Dossier (lecture seule, pour le rattachement).
   function startFirestoreSync(){
     renderAll();
     window._fbPlanning.listenState((remote)=>{
       state = remote || defaultState();
-      if(!state.currentChantierId || !state.chantiers){ state = defaultState(); }
+      if(!state.chantiers) state = defaultState();
+      renderAll();
+    });
+    window._fbProjets.listen((list)=>{
+      projetsAll = list;
+      projetsActifs = list.filter(p => p.statut !== "cloture" && p.statut !== "archive");
       renderAll();
     });
   }
