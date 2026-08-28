@@ -1139,6 +1139,27 @@ onAuthStateChanged(auth, user => {
     return "L'analyse IA a échoué (" + err.message + "). Vérifiez la connexion au proxy Phénix, ou ajoutez les interventions manuellement.";
   }
 
+  // Extrait le texte assistant d'une réponse SSE (event-stream) de l'API
+  // Messages — le proxy Phénix renvoie ce format même sans "stream:true" demandé.
+  function extractTextFromSSE(raw){
+    let text = "";
+    raw.split("\n").forEach(line => {
+      line = line.trim();
+      if(!line.startsWith("data:")) return;
+      const payload = line.slice(5).trim();
+      if(payload === "[DONE]" || !payload) return;
+      try{
+        const evt = JSON.parse(payload);
+        if(evt.type === "content_block_delta" && evt.delta && evt.delta.type === "text_delta"){
+          text += evt.delta.text;
+        } else if(evt.type === "content_block_start" && evt.content_block && evt.content_block.type === "text"){
+          text += evt.content_block.text || "";
+        }
+      }catch(e){ /* ligne non-JSON, ignorée */ }
+    });
+    return text;
+  }
+
   async function analyseContratPDF(file){
     const b64 = await fileToBase64(file);
     const prompt = `Tu analyses un contrat d'engagement signé entre Phénix-Architecture (contractant général) et un artisan, pour préparer un planning de chantier.
@@ -1152,6 +1173,7 @@ Réponds UNIQUEMENT avec un tableau JSON valide, sans texte autour, sans balises
     const body = {
       model: AI_MODEL,
       max_tokens: 2000,
+      stream: false,
       messages: [{
         role: "user",
         content: [
@@ -1166,10 +1188,21 @@ Réponds UNIQUEMENT avec un tableau JSON valide, sans texte autour, sans balises
       body: JSON.stringify(body)
     });
     if(!resp.ok) throw new Error("proxy IA (" + resp.status + ")");
-    const data = await resp.json();
-    const textBlock = (data.content||[]).find(b=>b.type==="text");
-    if(!textBlock) throw new Error("réponse IA vide");
-    let clean = textBlock.text.trim().replace(/^```json/i,"").replace(/^```/,"").replace(/```$/,"").trim();
+    const raw = await resp.text();
+
+    let assistantText = null;
+    // Cas normal : réponse JSON complète (non-streamée)
+    try{
+      const data = JSON.parse(raw);
+      const textBlock = (data.content||[]).find(b=>b.type==="text");
+      if(textBlock) assistantText = textBlock.text;
+    }catch(e){
+      // Cas SSE : le proxy a streamé la réponse malgré stream:false
+      assistantText = extractTextFromSSE(raw);
+    }
+    if(!assistantText) throw new Error("réponse IA vide ou illisible");
+
+    let clean = assistantText.trim().replace(/^```json/i,"").replace(/^```/,"").replace(/```$/,"").trim();
     const arr = JSON.parse(clean);
     return arr.map(o=>({
       id: uid(),
