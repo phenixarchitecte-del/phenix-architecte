@@ -379,6 +379,11 @@ window.doLogin = function() {
       try {
         if (pwd) localStorage.setItem('phenix_bio_creds', btoa(email + '|||' + pwd));
       } catch(e) {}
+      // Mémorisé aussi en mémoire pour être retransmis aux modules (voir
+      // _phenixBroadcastAutoLogin) : évite de redemander une connexion à
+      // chaque changement de module.
+      window._phenixCreds = { email: email, password: pwd };
+      window._phenixBroadcastAutoLogin();
       // Proposer l'activation de l'empreinte si l'appareil la gère et qu'aucune
       // n'est encore enregistrée. Intégré ici (script module) et non dans le
       // script classique : les modules s'exécutent en dernier, donc toute
@@ -657,6 +662,37 @@ let shellCurrentFrame = null;   // référence à l'iframe actuellement chargée
 let shellCurrentModule = null;
 let shellPendingOrder  = null;  // ordre à transmettre dès que le module signale qu'il est prêt
 
+// ════════════════════════════════════════════════════════════
+//  AUTO-LOGIN DES MODULES — évite de redemander l'empreinte/mot
+//  de passe à chaque changement de module. Le Shell mémorise les
+//  identifiants au moment de sa propre connexion (mot de passe ou
+//  empreinte) et les repasse en silence à chaque module chargé en
+//  iframe, qui se connecte alors sans jamais afficher son écran
+//  de connexion. Fonctionne en file:// (postMessage n'est pas
+//  soumis au cloisonnement par origine, contrairement à
+//  localStorage) — c'est pour ça qu'une vraie session partagée ne
+//  suffisait pas et qu'il faut ce relais explicite.
+// ════════════════════════════════════════════════════════════
+window._phenixCreds = null;
+let _phenixAutoLoginTimer = null;
+window._phenixBroadcastAutoLogin = function() {
+  if (!window._phenixCreds || !shellCurrentFrame) return;
+  let tries = 0;
+  if (_phenixAutoLoginTimer) clearInterval(_phenixAutoLoginTimer);
+  _phenixAutoLoginTimer = setInterval(() => {
+    tries++;
+    try {
+      if (shellCurrentFrame && shellCurrentFrame.contentWindow) {
+        shellCurrentFrame.contentWindow.postMessage(
+          { source:'phenix-shell', action:'auto-login', email: window._phenixCreds.email, password: window._phenixCreds.password },
+          '*'
+        );
+      }
+    } catch(e) {}
+    if (tries >= 20) clearInterval(_phenixAutoLoginTimer); // ~3s de tentatives, largement suffisant
+  }, 150);
+};
+
 window.shellShowView = function(view, el) {
   document.querySelectorAll('.shell-view').forEach(v => v.classList.remove('active'));
   document.querySelectorAll('.shell-nav-item').forEach(n => n.classList.remove('active'));
@@ -681,6 +717,7 @@ window.shellOpenModule = function(name, el, order) {
     container.innerHTML = `<iframe class="module-frame" id="module-iframe" src="${mod.src}"></iframe>`;
     shellCurrentFrame = document.getElementById('module-iframe');
     shellCurrentModule = name;
+    window._phenixBroadcastAutoLogin();
   }
 
   shellPendingOrder = order || (mod.gotoPage ? { source:'phenix-shell', action:'goto-page', page: mod.gotoPage } : null);
@@ -784,6 +821,8 @@ async function phenixBioLogin(){
       const parts = atob(savedCreds).split('|||');
       if(parts.length === 2){
         err.style.color = '#4db8e8'; err.textContent = '✓ Connexion en cours…';
+        window._phenixCreds = { email: parts[0], password: parts[1] };
+        window._phenixBroadcastAutoLogin();
         window._auth.login(parts[0], parts[1]).catch(() => {
           err.style.color = '#FFB4A8';
           err.textContent = 'Session expirée — saisissez votre mot de passe.';

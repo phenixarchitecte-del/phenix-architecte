@@ -29,6 +29,22 @@ window._fb={
 };
 // ── Authentification ──
 const _authI = getAuth();
+
+// ════════════════════════════════════════════════════════════
+//  AUTO-LOGIN VIA LE SHELL — si ce module est chargé en iframe
+//  depuis phenix_shell.html, le Shell repasse les identifiants
+//  déjà validés (mot de passe ou empreinte) juste après sa propre
+//  connexion, pour éviter de redemander une authentification à
+//  chaque changement de module. Sans effet si le fichier est
+//  ouvert seul (aucun message ne peut alors arriver).
+// ════════════════════════════════════════════════════════════
+window.addEventListener('message', function(_pxEv){
+  var _pxD = _pxEv.data;
+  if(_pxD && _pxD.source === 'phenix-shell' && _pxD.action === 'auto-login' && _pxD.email && _pxD.password){
+    signInWithEmailAndPassword(_authI, _pxD.email, _pxD.password).catch(function(){});
+  }
+});
+
 window._auth = { login:(e,p)=>signInWithEmailAndPassword(_authI,e,p), logout:()=>signOut(_authI), current:()=>_authI.currentUser };
 window.phenixDoLogin = function(){
   const email=(document.getElementById('pl-email').value||'').trim();

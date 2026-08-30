@@ -1730,6 +1730,22 @@ try {
 } catch (e) { console.warn('App Check non initialisé :', e); }
 
 const auth = getAuth(app);
+
+// ════════════════════════════════════════════════════════════
+//  AUTO-LOGIN VIA LE SHELL — si ce module est chargé en iframe
+//  depuis phenix_shell.html, le Shell repasse les identifiants
+//  déjà validés (mot de passe ou empreinte) juste après sa propre
+//  connexion, pour éviter de redemander une authentification à
+//  chaque changement de module. Sans effet si le fichier est
+//  ouvert seul (aucun message ne peut alors arriver).
+// ════════════════════════════════════════════════════════════
+window.addEventListener('message', function(_pxEv){
+  var _pxD = _pxEv.data;
+  if(_pxD && _pxD.source === 'phenix-shell' && _pxD.action === 'auto-login' && _pxD.email && _pxD.password){
+    signInWithEmailAndPassword(auth, _pxD.email, _pxD.password).catch(function(){});
+  }
+});
+
 const db   = getFirestore(app);
 
 // ── Auth gate ────────────────────────────────────────────────
