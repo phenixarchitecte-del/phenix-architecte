@@ -7019,9 +7019,11 @@ function tvaRowHtml(t) {
     justifCell = `<span style="display:inline-flex;align-items:center;gap:5px;color:var(--amber);font-size:12px"><i class="ti ti-alert-circle"></i> Manquant</span>`;
   }
   const transfereTag = t.transfereCompta ? `<span title="Déjà envoyé en Comptabilité" style="display:inline-block;margin-left:6px;color:var(--accent)"><i class="ti ti-database-export"></i></span>` : '';
+  const noteTag = t.note ? `<span style="color:var(--text3);font-style:italic"> (${esc(t.note)})</span>` : '';
+  const sensLbl = t.sens==='entree' ? 'sortie' : 'rentrée';
   return `<tr>
     <td style="white-space:nowrap">${fmtDate_d(t.date)}</td>
-    <td>${esc(t.libelle)||'—'}${transfereTag}</td>
+    <td>${esc(t.libelle)||'—'}${noteTag}${transfereTag}</td>
     <td style="text-align:right;font-weight:600;white-space:nowrap">${fmtEur_d(t.montant)}</td>
     <td>${justifCell}</td>
     <td style="white-space:nowrap">
@@ -7031,6 +7033,8 @@ function tvaRowHtml(t) {
                 <label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text2);cursor:pointer;margin-left:6px">
                   <input type="checkbox" ${t.sansJustificatif?'checked':''} onchange="tvaToggleSansJustificatif('${t.id}',this.checked)"> aucun
                 </label>`}
+      <button class="btn btn-sm" onclick="tvaBasculerSens('${t.id}')" title="Basculer en ${sensLbl}" style="margin-left:6px"><i class="ti ti-arrows-left-right"></i></button>
+      <button class="btn btn-sm" onclick="tvaEditerNote('${t.id}')" title="Ajouter/modifier une note"><i class="ti ti-note"></i></button>
     </td>
   </tr>`;
 }
@@ -7101,6 +7105,33 @@ async function tvaToggleSansJustificatif(transactionId, checked) {
   renderTvaDetail();
 }
 
+// Corrige une erreur de classification de l'IA (rentrée ↔ sortie) — la ligne
+// bascule simplement de tableau au prochain rendu, rien d'autre ne change.
+async function tvaBasculerSens(transactionId) {
+  const r = tvaGetCurrentReleve();
+  if (!r) return;
+  const t = (r.transactions||[]).find(x=>x.id===transactionId);
+  if (!t) return;
+  t.sens = t.sens==='entree' ? 'sortie' : 'entree';
+  await window._fb.saveTvaReleve(r);
+  renderTvaDetail();
+  toast_d(`↔️ Basculé en ${t.sens==='entree'?'rentrée':'sortie'}.`);
+}
+
+// Annotation libre par mouvement (ex: "(échelle de relevé)"), affichée entre
+// parenthèses juste après le libellé.
+async function tvaEditerNote(transactionId) {
+  const r = tvaGetCurrentReleve();
+  if (!r) return;
+  const t = (r.transactions||[]).find(x=>x.id===transactionId);
+  if (!t) return;
+  const saisie = prompt('Note pour ce mouvement (laisser vide pour supprimer) :', t.note || '');
+  if (saisie === null) return; // annulé
+  t.note = saisie.trim();
+  await window._fb.saveTvaReleve(r);
+  renderTvaDetail();
+}
+
 async function tvaSupprimerReleve() {
   const r = tvaGetCurrentReleve();
   if (!r) return;
@@ -7163,9 +7194,10 @@ async function tvaExporterRecap() {
     const j = stateDossier.tvaJustificatifs[t.id];
     const statutTxt = j ? '✓ Justifié' : (t.sansJustificatif ? '— Sans justificatif' : '⚠ MANQUANT');
     const statutColor = j ? '#2D7A4F' : (t.sansJustificatif ? '#8BA5C0' : '#C0392B');
+    const noteTxt = t.note ? ` <span style="color:#8BA5C0;font-style:italic">(${esc(t.note)})</span>` : '';
     return `<tr>
       <td style="padding:6px 8px;border-bottom:1px solid #e5e5e5">${fmtDate_d(t.date)}</td>
-      <td style="padding:6px 8px;border-bottom:1px solid #e5e5e5">${esc(t.libelle)||'—'}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #e5e5e5">${esc(t.libelle)||'—'}${noteTxt}</td>
       <td style="padding:6px 8px;border-bottom:1px solid #e5e5e5;text-align:right;white-space:nowrap">${fmtEur_d(t.montant)}</td>
       <td style="padding:6px 8px;border-bottom:1px solid #e5e5e5;color:${statutColor};font-weight:600;white-space:nowrap">${statutTxt}</td>
     </tr>`;
