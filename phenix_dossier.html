@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <title>Phénix-Architecture · Gestion de Dossier</title>
 <script type="module">
 import { initializeApp }       from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
@@ -3305,6 +3306,7 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start">
               <button class="btn btn-danger" onclick="tvaSupprimerReleve()"><i class="ti ti-trash"></i> Supprimer</button>
               <button class="btn" onclick="tvaOuvrirTransfert()"><i class="ti ti-database-export"></i> Envoyer vers Comptabilité</button>
+              <button class="btn" onclick="tvaTelechargerJustificatifs()"><i class="ti ti-file-zip"></i> Télécharger les justificatifs</button>
               <button class="btn btn-primary" onclick="tvaExporterRecap()"><i class="ti ti-file-export"></i> Export pour le comptable</button>
             </div>
           </div>
@@ -7050,15 +7052,22 @@ function tvaJustifFileChosen(file) {
   const targetId = _tvaJustifTargetId;
   const reader = new FileReader();
   reader.onload = async e => {
-    const justificatif = {
-      id: targetId,
-      releveId: _tvaCurrentReleveId,
-      base64: e.target.result,
-      nom: file.name,
-      type: file.type,
-      uploadedAt: new Date().toISOString()
-    };
+    toast_d('⏳ Envoi du justificatif…');
     try {
+      // Stocké dans Firebase Storage (pas dans Firestore) — un justificatif
+      // scanné dépasse facilement 1 Mo, la limite d'un document Firestore.
+      const storagePath = 'tva_justificatifs/' + targetId;
+      const url = await window._fbChantier.uploadFile(storagePath, e.target.result);
+      if (!url) throw new Error('Échec de l\'envoi du fichier (connexion ?)');
+      const justificatif = {
+        id: targetId,
+        releveId: _tvaCurrentReleveId,
+        storagePath,
+        storageUrl: url,
+        nom: file.name,
+        type: file.type,
+        uploadedAt: new Date().toISOString()
+      };
       await window._fb.saveTvaJustificatif(justificatif);
       stateDossier.tvaJustificatifs[targetId] = justificatif;
       // Un justificatif attaché annule automatiquement la case "pas de justificatif"
@@ -7079,6 +7088,8 @@ function tvaJustifFileChosen(file) {
 
 async function tvaSupprimerJustificatif(transactionId) {
   if (!confirm('Retirer ce justificatif ?')) return;
+  const j = stateDossier.tvaJustificatifs[transactionId];
+  if (j && j.storagePath) await window._fbChantier.deleteFile(j.storagePath);
   await window._fb.deleteTvaJustificatif(transactionId);
   delete stateDossier.tvaJustificatifs[transactionId];
   renderTvaDetail();
@@ -7086,13 +7097,8 @@ async function tvaSupprimerJustificatif(transactionId) {
 
 function tvaVoirJustificatif(transactionId) {
   const j = stateDossier.tvaJustificatifs[transactionId];
-  if (!j) return;
-  const win = window.open('', '_blank');
-  if (j.type === 'application/pdf') {
-    win.document.write(`<!DOCTYPE html><html><head><title>${esc(j.nom)}</title><style>body{margin:0;padding:0;background:#333}iframe{width:100vw;height:100vh;border:none}</style></head><body><iframe src="${j.base64}"></iframe></body></html>`);
-  } else {
-    win.document.write(`<!DOCTYPE html><html><head><title>${esc(j.nom)}</title><style>body{margin:0;padding:20px;background:#222;text-align:center}img{max-width:100%;border-radius:6px}</style></head><body><img src="${j.base64}"></body></html>`);
-  }
+  if (!j || !j.storageUrl) return;
+  window.open(j.storageUrl, '_blank');
 }
 
 async function tvaToggleSansJustificatif(transactionId, checked) {
@@ -7169,11 +7175,13 @@ async function tvaExporterRecap() {
   // Convertit chaque justificatif en une ou plusieurs images (pages) prêtes à imprimer
   async function justifToImages(t) {
     const j = stateDossier.tvaJustificatifs[t.id];
-    if (!j) return [];
-    if (j.type === 'application/pdf') {
-      try {
-        const pdfData = atob(j.base64.split(',')[1]);
-        const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
+    if (!j || !j.storageUrl) return [];
+    try {
+      const resp = await fetch(j.storageUrl);
+      const blob = await resp.blob();
+      if (j.type === 'application/pdf') {
+        const arrayBuf = await blob.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuf) }).promise;
         const images = [];
         for (let pn=1; pn<=pdf.numPages; pn++) {
           const page = await pdf.getPage(pn);
@@ -7185,9 +7193,16 @@ async function tvaExporterRecap() {
           canvas.width = 0; canvas.height = 0;
         }
         return images;
-      } catch(e) { return []; }
-    }
-    return [j.base64];
+      }
+      // Image : reconvertir le blob en data URL exploitable dans <img src="...">
+      const dataUrl = await new Promise((resolve,reject) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(fr.result);
+        fr.onerror = reject;
+        fr.readAsDataURL(blob);
+      });
+      return [dataUrl];
+    } catch(e) { return []; }
   }
 
   const rowHtml = (t) => {
@@ -7254,6 +7269,54 @@ async function tvaExporterRecap() {
   win.document.close();
   status.innerHTML = '';
   toast_d('✅ Document généré dans un nouvel onglet.');
+}
+
+// ── Téléchargement groupé des justificatifs (fichiers d'origine) ──────
+// Complète l'export imprimable : celui-ci aplatit tout en images pour la
+// lecture, ceci fournit les fichiers exacts tels qu'importés (PDF, photo),
+// utile si le comptable a besoin des documents sources plutôt que du visuel.
+async function tvaTelechargerJustificatifs() {
+  const r = tvaGetCurrentReleve();
+  if (!r) return;
+  const avecJustif = (r.transactions||[]).filter(t => stateDossier.tvaJustificatifs[t.id]);
+  if (!avecJustif.length) { toast_d('ℹ️ Aucun justificatif à télécharger sur ce relevé.'); return; }
+  if (typeof JSZip === 'undefined') { toast_d('⚠️ Bibliothèque de compression indisponible (vérifiez la connexion).'); return; }
+
+  const status = document.getElementById('tva-export-status');
+  status.innerHTML = `<div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--accent2);background:var(--accent-bg);border:1.5px solid var(--accent);border-radius:var(--r-md);padding:12px 14px"><div class="ai-loading"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div></div> Préparation de l'archive — récupération des fichiers…</div>`;
+
+  const zip = new JSZip();
+  let nbOk = 0, nbEchec = 0;
+  for (const t of avecJustif) {
+    const j = stateDossier.tvaJustificatifs[t.id];
+    try {
+      const resp = await fetch(j.storageUrl);
+      const blob = await resp.blob();
+      const ext = (j.nom && j.nom.includes('.')) ? j.nom.slice(j.nom.lastIndexOf('.')) : (j.type==='application/pdf' ? '.pdf' : '.jpg');
+      const nomPropre = (t.libelle||'mouvement').replace(/[\/\\:*?"<>|]/g,'').slice(0,40).trim();
+      const nomFichier = `${t.date||'sans-date'}_${nomPropre}_${t.montant}e${ext}`;
+      zip.file(nomFichier, blob);
+      nbOk++;
+    } catch(e) { nbEchec++; }
+  }
+
+  if (!nbOk) {
+    status.innerHTML = `<div style="background:var(--rbg);border:1.5px solid var(--red);border-radius:var(--r-md);padding:12px 14px;font-size:13px;color:var(--red)">⚠️ Aucun fichier n'a pu être récupéré.</div>`;
+    return;
+  }
+
+  const blob = await zip.generateAsync({type:'blob'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `Justificatifs_TVA_${tvaMoisNom(r.mois)}_${r.annee}.zip`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  status.innerHTML = '';
+  toast_d(`✅ Archive téléchargée — ${nbOk} fichier(s)${nbEchec?', '+nbEchec+' échec(s)':''}.`);
 }
 
 // ── Transfert vers Comptabilité ─────────────────────────────
