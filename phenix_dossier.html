@@ -7283,6 +7283,27 @@ function tvaTrouverFactureCorrespondante(t) {
   });
 }
 
+// Reconnaissance du dossier concerné par une rentrée d'argent : compare les
+// mots du nom de projet et du client à ceux du libellé bancaire (accents et
+// casse ignorés — les virements bancaires déforment souvent les noms).
+function tvaNormaliser(s) {
+  return (s||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
+}
+function tvaTrouverProjetPourTransaction(t) {
+  const libelleNorm = tvaNormaliser(t.libelle);
+  if (!libelleNorm) return null;
+  let meilleur = null, meilleurScore = 0;
+  for (const p of (stateDossier.projets||[])) {
+    const mots = (((p.nom||'')+' '+(p.client||'')).split(/\s+/))
+      .map(tvaNormaliser)
+      .filter(m => m.length >= 3);
+    let score = 0;
+    for (const mot of mots) { if (libelleNorm.includes(mot)) score++; }
+    if (score > meilleurScore) { meilleurScore = score; meilleur = p; }
+  }
+  return meilleur;
+}
+
 function tvaOuvrirTransfert() {
   const r = tvaGetCurrentReleve();
   if (!r) return;
@@ -7294,7 +7315,12 @@ function tvaOuvrirTransfert() {
 
   _tvaTransfertItems = trs.map(t => {
     const match = t.sens==='sortie' ? tvaTrouverChargeCorrespondante(t) : tvaTrouverFactureCorrespondante(t);
-    return { transaction:t, match, choix: match ? null : 'nouveau' };
+    const projetDetecte = t.sens==='entree' ? tvaTrouverProjetPourTransaction(t) : null;
+    return {
+      transaction:t, match, choix: match ? null : 'nouveau',
+      projetId: projetDetecte ? String(projetDetecte.id) : (match && match.projetId ? String(match.projetId) : ''),
+      projetDetecteAuto: !!projetDetecte
+    };
   });
   tvaRenderTransfertModal();
   const m = document.getElementById('tvaTransfertModal'); if (m) m.classList.add('open');
@@ -7304,19 +7330,37 @@ function tvaRenderTransfertModal() {
   const body = document.getElementById('tva-transfert-body');
   const sansJustifCount = _tvaTransfertItems.filter(it => !it.transaction.sansJustificatif && !stateDossier.tvaJustificatifs[it.transaction.id]).length;
   const avertissement = sansJustifCount ? `<div style="background:var(--rbg);border:1.5px solid var(--red);border-radius:var(--r-md);padding:10px 14px;font-size:12.5px;color:var(--red);margin-bottom:1rem"><i class="ti ti-alert-triangle"></i> ${sansJustifCount} mouvement(s) n'ont pas encore de justificatif (repérés ci-dessous). Vous pouvez les envoyer quand même, une confirmation vous sera demandée.</div>` : '';
+
+  const projetSelectHtml = (item, i) => {
+    const options = ['<option value="">— Aucun dossier —</option>'].concat(
+      (stateDossier.projets||[]).map(p => `<option value="${p.id}" ${String(item.projetId)===String(p.id)?'selected':''}>${esc(p.nom)}</option>`)
+    ).join('');
+    const detecteTag = item.projetDetecteAuto
+      ? `<span style="display:inline-flex;align-items:center;gap:4px;color:var(--green);font-size:11px;margin-left:8px"><i class="ti ti-sparkles"></i> détecté automatiquement</span>`
+      : `<span style="display:inline-flex;align-items:center;gap:4px;color:var(--amber);font-size:11px;margin-left:8px"><i class="ti ti-alert-circle"></i> dossier non reconnu — à affecter</span>`;
+    return `<div style="margin-top:8px">
+      <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:3px">Dossier concerné${detecteTag}</label>
+      <select class="form-input" style="padding:5px 8px;font-size:12.5px" onchange="tvaSetTransfertProjet(${i},this.value)">${options}</select>
+    </div>`;
+  };
+
   body.innerHTML = avertissement + _tvaTransfertItems.map((item,i) => {
     const t = item.transaction;
     const sensLbl = t.sens==='entree' ? 'Rentrée' : 'Sortie';
     const sensColor = t.sens==='entree' ? 'var(--green)' : 'var(--red)';
     const sansJustif = !t.sansJustificatif && !stateDossier.tvaJustificatifs[t.id];
     const justifTag = sansJustif ? `<span style="display:inline-flex;align-items:center;gap:4px;color:var(--red);font-size:11px;font-weight:600;margin-left:8px"><i class="ti ti-alert-circle"></i> sans justificatif</span>` : '';
+    const projetBloc = t.sens==='entree' ? projetSelectHtml(item, i) : '';
     if (!item.match) {
-      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1.5px solid ${sansJustif?'var(--red)':'var(--border)'};border-radius:var(--r-md);margin-bottom:8px">
-        <div>
-          <span style="font-size:11px;font-weight:700;color:${sensColor};text-transform:uppercase">${sensLbl}</span>
-          <div style="font-size:13px">${fmtDate_d(t.date)} · ${esc(t.libelle)||'—'} · <strong>${fmtEur_d(t.montant)}</strong>${justifTag}</div>
+      return `<div style="padding:10px 12px;border:1.5px solid ${sansJustif?'var(--red)':'var(--border)'};border-radius:var(--r-md);margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <span style="font-size:11px;font-weight:700;color:${sensColor};text-transform:uppercase">${sensLbl}</span>
+            <div style="font-size:13px">${fmtDate_d(t.date)} · ${esc(t.libelle)||'—'} · <strong>${fmtEur_d(t.montant)}</strong>${justifTag}</div>
+          </div>
+          <span class="badge badge-green">Nouveau</span>
         </div>
-        <span class="badge badge-green">Nouveau</span>
+        ${projetBloc}
       </div>`;
     }
     const mLabel   = t.sens==='sortie' ? (item.match.libelle||'—') : (item.match.client||item.match.numero||'—');
@@ -7331,12 +7375,17 @@ function tvaRenderTransfertModal() {
         <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="tva-choix-${i}" ${item.choix==='nouveau'?'checked':''} onchange="tvaSetTransfertChoix(${i},'nouveau')"> Créer quand même</label>
         <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="tva-choix-${i}" ${item.choix==='ignorer'?'checked':''} onchange="tvaSetTransfertChoix(${i},'ignorer')"> Ignorer</label>
       </div>
+      ${projetBloc}
     </div>`;
   }).join('');
 }
 
 function tvaSetTransfertChoix(i, choix) {
   _tvaTransfertItems[i].choix = choix;
+}
+
+function tvaSetTransfertProjet(i, projetId) {
+  _tvaTransfertItems[i].projetId = projetId;
 }
 
 async function tvaConfirmerTransfert() {
@@ -7384,12 +7433,13 @@ async function tvaConfirmerTransfert() {
       t.compteRefType = 'charge'; t.compteRefId = chargeId;
     } else {
       const factureId = ecrase ? item.match.id : ('fact-tva-'+t.id);
+      const projetChoisi = item.projetId ? stateDossier.projets.find(p=>String(p.id)===String(item.projetId)) : null;
       const f = {
         id: factureId,
         type: 'facture',
         numero: ecrase ? item.match.numero : ('REL-'+String(t.id).slice(-6)),
-        projetId: ecrase ? (item.match.projetId||'') : '',
-        client: ecrase ? item.match.client : (t.libelle||'—'),
+        projetId: item.projetId || '',
+        client: projetChoisi ? projetChoisi.client : (ecrase ? item.match.client : (t.libelle||'—')),
         objet: ecrase ? item.match.objet : ('Encaissement — '+(t.libelle||'')),
         dateEmission: ecrase ? item.match.dateEmission : t.date,
         dateEcheance: ecrase ? item.match.dateEcheance : t.date,
