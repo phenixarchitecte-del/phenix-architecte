@@ -3306,6 +3306,7 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start">
               <button class="btn btn-danger" onclick="tvaSupprimerReleve()"><i class="ti ti-trash"></i> Supprimer</button>
               <button class="btn" onclick="tvaOuvrirTransfert()"><i class="ti ti-database-export"></i> Envoyer vers Comptabilité</button>
+              <button class="btn btn-sm" onclick="tvaReinitialiserTransferts()" title="Marquer tous les mouvements comme non transférés, pour pouvoir relancer l'envoi même si les charges/factures existent toujours"><i class="ti ti-rotate"></i></button>
               <button class="btn" onclick="tvaTelechargerJustificatifs()"><i class="ti ti-file-zip"></i> Télécharger les justificatifs</button>
               <button class="btn btn-primary" onclick="tvaExporterRecap()"><i class="ti ti-file-export"></i> Export pour le comptable</button>
             </div>
@@ -7030,7 +7031,7 @@ function tvaRowHtml(t) {
   } else {
     justifCell = `<span style="display:inline-flex;align-items:center;gap:5px;color:var(--amber);font-size:12px"><i class="ti ti-alert-circle"></i> Manquant</span>`;
   }
-  const transfereTag = t.transfereCompta ? `<span title="Déjà envoyé en Comptabilité" style="display:inline-block;margin-left:6px;color:var(--accent)"><i class="ti ti-database-export"></i></span>` : '';
+  const transfereTag = tvaEstReellementTransfere(t) ? `<span title="Déjà envoyé en Comptabilité" style="display:inline-block;margin-left:6px;color:var(--accent)"><i class="ti ti-database-export"></i></span>` : '';
   const noteTag = t.note ? `<span style="color:var(--text3);font-style:italic"> (${esc(t.note)})</span>` : '';
   const sensLbl = t.sens==='entree' ? 'sortie' : 'rentrée';
   return `<tr>
@@ -7396,13 +7397,38 @@ function tvaTrouverProjetPourTransaction(t) {
   return meilleur;
 }
 
+// Un mouvement marqué "transféré" ne l'est en réalité que si la charge/facture
+// créée à l'époque existe toujours — si elle a été supprimée depuis (dans
+// Comptabilité, ou via un nettoyage), le mouvement redevient transférable
+// automatiquement, sans action manuelle.
+function tvaEstReellementTransfere(t) {
+  if (!t.transfereCompta) return false;
+  if (!t.compteRefId) return true; // ancien transfert sans référence enregistrée : on fait confiance au drapeau
+  if (t.compteRefType === 'charge') return (stateDossier.charges||[]).some(c => String(c.id)===String(t.compteRefId));
+  if (t.compteRefType === 'facture') return (stateDossier.factures||[]).some(f => String(f.id)===String(t.compteRefId));
+  return true;
+}
+
+async function tvaReinitialiserTransferts() {
+  const r = tvaGetCurrentReleve();
+  if (!r) return;
+  const nb = (r.transactions||[]).filter(t => t.transfereCompta).length;
+  if (!nb) { toast_d('ℹ️ Aucun mouvement marqué comme transféré sur ce relevé.'); return; }
+  if (!confirm(`Marquer les ${nb} mouvement(s) transféré(s) comme non transférés, pour pouvoir relancer l'envoi ?\n\n(Les charges/factures déjà créées ne sont pas supprimées — seul l'indicateur du relevé est réinitialisé.)`)) return;
+  (r.transactions||[]).forEach(t => { t.transfereCompta = false; t.compteRefId = null; t.compteRefType = null; });
+  await window._fb.saveTvaReleve(r);
+  renderTvaDetail();
+  toast_d('✅ Transferts réinitialisés — vous pouvez relancer "Envoyer vers Comptabilité".');
+}
+
 function tvaOuvrirTransfert() {
   const r = tvaGetCurrentReleve();
   if (!r) return;
   // Tous les mouvements pas encore transférés — justifiés ou non. Ceux sans
   // justificatif restent envoyables, mais seront signalés et confirmés
-  // explicitement avant l'envoi (voir tvaConfirmerTransfert).
-  const trs = (r.transactions||[]).filter(t => !t.transfereCompta);
+  // explicitement avant l'envoi (voir tvaConfirmerTransfert). Un mouvement
+  // dont la charge/facture a été supprimée entre-temps redevient éligible.
+  const trs = (r.transactions||[]).filter(t => !tvaEstReellementTransfere(t));
   if (!trs.length) { toast_d('ℹ️ Tous les mouvements sont déjà transférés.'); return; }
 
   _tvaTransfertItems = trs.map(t => {
