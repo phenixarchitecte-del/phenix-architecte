@@ -7158,7 +7158,7 @@ async function askAI(question) {
   msgs.scrollTop=msgs.scrollHeight;
   try {
     const res=await fetch('https://phenix-proxy.phenixarchitecte.workers.dev',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1000,system:`Tu es l'assistant intégré de Phénix-Architecture, une agence de maîtrise d'œuvre française. Tu aides l'architecte avec : contrats MOE, devis, comptes-rendus, lettres de mission, réglementation (PLU, RE2020, PMR, loi MOP). Réponds en français, professionnellement. Honoraires typiques 10-15% des travaux HT.`,messages:[{role:'user',content:question}]})});
-    const data=await res.json();
+    const data=await _phenixParseProxyResponse(res);
     const text=data.content?.map(b=>b.text||'').join('')||'Désolé, pas de réponse.';
     document.getElementById(loadId).outerHTML=`<div class="ai-msg"><div class="ai-msg-avatar ai-avatar-ai">P</div><div class="ai-msg-bubble ai-bubble-ai" style="white-space:pre-wrap">${text.replace(/</g,'&lt;')}</div></div>`;
   } catch(e) {
@@ -8016,7 +8016,7 @@ EXEMPLE : ligne "Commissionnement 10% | Qté:0,30 | forfait | PU HT:2147,87 | Mo
       const errBody = await res.text().catch(()=>'');
       throw new Error(`Proxy HTTP ${res.status}: ${errBody.slice(0,200)}`);
     }
-    const data = await res.json();
+    const data = await _phenixParseProxyResponse(res);
     if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
     const text = (data.content||[]).map(b=>b.text||'').join('');
     let parsed;
@@ -9241,7 +9241,7 @@ RÈGLES :
       })
     });
     if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
-    const data = await res.json();
+    const data = await _phenixParseProxyResponse(res);
     if (data.error) throw new Error(data.error.message||JSON.stringify(data.error));
     const text = (data.content||[]).map(b=>b.text||'').join('');
     const parsed = JSON.parse(text.replace(/```json|```/g,'').trim());
@@ -9328,7 +9328,7 @@ RÈGLES STRICTES :
       })
     });
     if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
-    const data = await res.json();
+    const data = await _phenixParseProxyResponse(res);
     if (data.error) throw new Error(data.error.message||JSON.stringify(data.error));
     const text = (data.content||[]).map(b=>b.text||'').join('');
     const parsed = JSON.parse(text.replace(/```json|```/g,'').trim());
@@ -9664,6 +9664,43 @@ function toggleCommPdfZone() {
   z.style.display = z.style.display === 'none' ? 'block' : 'none';
 }
 
+// ════════════════════════════════════════════════════════════
+//  Lecture robuste des réponses du proxy IA — le Worker Cloudflare
+//  répond normalement en JSON classique, mais bascule parfois en
+//  flux SSE (lignes "event: ..." / "data: {...}"), ce qui faisait
+//  échouer res.json() avec "Unexpected token 'e', event: mes...".
+//  Cette fonction accepte les deux formats et reconstruit toujours
+//  un objet {content:[{type:'text', text:...}]} exploitable par le
+//  reste du code, quel que soit le format réellement reçu.
+// ════════════════════════════════════════════════════════════
+async function _phenixParseProxyResponse(res) {
+  const raw = await res.text();
+  try {
+    return JSON.parse(raw);
+  } catch (e) {
+    if (raw.includes('event:') || raw.includes('data:')) {
+      let fullText = '';
+      const lines = raw.split('\n');
+      for (const line of lines) {
+        const l = line.trim();
+        if (!l.startsWith('data:')) continue;
+        const jsonPart = l.slice(5).trim();
+        if (!jsonPart || jsonPart === '[DONE]') continue;
+        try {
+          const evt = JSON.parse(jsonPart);
+          if (evt.type === 'content_block_delta' && evt.delta && typeof evt.delta.text === 'string') {
+            fullText += evt.delta.text;
+          } else if (evt.type === 'error' && evt.error) {
+            throw new Error(evt.error.message || 'Erreur API (flux SSE)');
+          }
+        } catch(e2) { if (e2 && e2.message && e2.message.indexOf('Erreur API')===0) throw e2; /* sinon ligne ignorée */ }
+      }
+      if (fullText) return { content: [{ type:'text', text: fullText }] };
+    }
+    throw new Error('Réponse du proxy illisible (ni JSON, ni flux reconnu).');
+  }
+}
+
 function handleCommPdf(file) {
   if (!file || file.type !== 'application/pdf') { toast_d('⚠️ Sélectionnez un fichier PDF.'); return; }
   const status = document.getElementById('comm-pdf-status');
@@ -9706,7 +9743,7 @@ Si une info est absente mets "" ou 0.`,
         })
       });
       if (!res.ok) throw new Error('Erreur proxy HTTP ' + res.status);
-      const data = await res.json();
+      const data = await _phenixParseProxyResponse(res);
       if (data.error) throw new Error(data.error.message || 'Erreur API');
       const text = (data.content||[]).map(b=>b.text||'').join('');
       let parsed;

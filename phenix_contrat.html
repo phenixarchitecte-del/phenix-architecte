@@ -418,6 +418,30 @@ let selectedPhases = {};   // { ESQ:true, ... }
 
 function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
 
+// Lecture robuste des réponses du proxy IA — bascule parfois en flux SSE
+// (event:/data:) au lieu du JSON classique attendu ; on gère les deux formats.
+async function _phenixParseProxyResponse(res) {
+  const raw = await res.text();
+  try { return JSON.parse(raw); }
+  catch (e) {
+    if (raw.includes('event:') || raw.includes('data:')) {
+      let fullText = '';
+      for (const line of raw.split('\n')) {
+        const l = line.trim();
+        if (!l.startsWith('data:')) continue;
+        const jsonPart = l.slice(5).trim();
+        if (!jsonPart || jsonPart === '[DONE]') continue;
+        try {
+          const evt = JSON.parse(jsonPart);
+          if (evt.type === 'content_block_delta' && evt.delta && typeof evt.delta.text === 'string') fullText += evt.delta.text;
+        } catch(e2) {}
+      }
+      if (fullText) return { content: [{ type:'text', text: fullText }] };
+    }
+    throw new Error('Réponse du proxy illisible (ni JSON, ni flux reconnu).');
+  }
+}
+
 function loadHandoff(){
   const urlParams = new URLSearchParams(window.location.search);
   const urlProjetId = urlParams.get('projet');
@@ -551,7 +575,7 @@ async function proposerClauseIA(key){
         messages:[{role:'user', content:`Rédige la clause « ${def.label} » (catégorie : ${def.cat}) pour ce dossier. ${contexte}\n\nClause actuelle à améliorer/adapter :\n${clauseState[key].text}`}]
       })
     });
-    const data = await res.json();
+    const data = await _phenixParseProxyResponse(res);
     const text = data.content?.map(b=>b.text||'').join('') || '';
     if (text) {
       clauseState[key].text = text.trim();

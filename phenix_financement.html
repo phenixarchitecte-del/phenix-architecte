@@ -398,6 +398,30 @@ const RATE_MAX_AGE_MS = 30 * 24 * 3600 * 1000; // 30 jours
 // Valeur de repli si aucune actualisation n'a encore réussi (référence juillet 2026)
 const RATE_FALLBACK = { taux20: 3.36, assurance: 0.34, date: '2026-07-02', source: 'Observatoire Crédit Logement/CSA' };
 
+// Lecture robuste des réponses du proxy IA — bascule parfois en flux SSE
+// (event:/data:) au lieu du JSON classique attendu ; on gère les deux formats.
+async function _phenixParseProxyResponse(res) {
+  const raw = await res.text();
+  try { return JSON.parse(raw); }
+  catch (e) {
+    if (raw.includes('event:') || raw.includes('data:')) {
+      let fullText = '';
+      for (const line of raw.split('\n')) {
+        const l = line.trim();
+        if (!l.startsWith('data:')) continue;
+        const jsonPart = l.slice(5).trim();
+        if (!jsonPart || jsonPart === '[DONE]') continue;
+        try {
+          const evt = JSON.parse(jsonPart);
+          if (evt.type === 'content_block_delta' && evt.delta && typeof evt.delta.text === 'string') fullText += evt.delta.text;
+        } catch(e2) {}
+      }
+      if (fullText) return { content: [{ type:'text', text: fullText }] };
+    }
+    throw new Error('Réponse du proxy illisible (ni JSON, ni flux reconnu).');
+  }
+}
+
 function getRateCache() {
   try {
     const raw = localStorage.getItem(RATE_CACHE_KEY);
@@ -434,7 +458,7 @@ async function refreshMarketRates(manual) {
         messages: [{ role:'user', content: "Quel est le taux immobilier moyen actuel en France sur 20 ans, et le taux moyen d'assurance emprunteur ?" }]
       })
     });
-    const data = await res.json();
+    const data = await _phenixParseProxyResponse(res);
     if (data.error) throw new Error(data.error.message || 'Erreur proxy');
     const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text||'').join('');
     const match = text.match(/\{[^{}]*\}/);

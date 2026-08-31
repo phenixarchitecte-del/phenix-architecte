@@ -621,6 +621,30 @@ let state = {
 // MODULE SWITCH
 // ═══════════════════════════════════════════════════════════
 
+// Lecture robuste des réponses du proxy IA — bascule parfois en flux SSE
+// (event:/data:) au lieu du JSON classique attendu ; on gère les deux formats.
+async function _phenixParseProxyResponse(res) {
+  const raw = await res.text();
+  try { return JSON.parse(raw); }
+  catch (e) {
+    if (raw.includes('event:') || raw.includes('data:')) {
+      let fullText = '';
+      for (const line of raw.split('\n')) {
+        const l = line.trim();
+        if (!l.startsWith('data:')) continue;
+        const jsonPart = l.slice(5).trim();
+        if (!jsonPart || jsonPart === '[DONE]') continue;
+        try {
+          const evt = JSON.parse(jsonPart);
+          if (evt.type === 'content_block_delta' && evt.delta && typeof evt.delta.text === 'string') fullText += evt.delta.text;
+        } catch(e2) {}
+      }
+      if (fullText) return { content: [{ type:'text', text: fullText }] };
+    }
+    throw new Error('Réponse du proxy illisible (ni JSON, ni flux reconnu).');
+  }
+}
+
 function setModule(mod, el) {
   document.querySelectorAll('.module-tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
@@ -784,7 +808,7 @@ Exigences spécifiques à la pièce ${piece.ref} en France (2025-2026).`;
       })
     });
     if (!resp.ok) { const e = await resp.json(); throw new Error(e.error?.message || 'Erreur API'); }
-    const data = await resp.json();
+    const data = await _phenixParseProxyResponse(resp);
     const text = data.content.map(b => b.text||'').join('\n');
     area.innerHTML = `<div class="result-instructions">${formatResult(text)}</div>
       <div class="result-actions">
@@ -963,7 +987,7 @@ Sois précis, concret, utile pour un maître d'œuvre qui va travailler sur Arch
     });
 
     if (!resp.ok) { const e = await resp.json(); throw new Error(e.error?.message || 'Erreur API'); }
-    const data = await resp.json();
+    const data = await _phenixParseProxyResponse(resp);
     const text = data.content.map(b => b.text||'').join('\n');
 
     area.innerHTML = renderVariantes(text);
@@ -1088,7 +1112,7 @@ Propose une version améliorée de cette variante en gardant le même format (NO
       body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1000,
         messages: [{ role: 'user', content: prompt2 }] })
     });
-    const data = await resp.json();
+    const data = await _phenixParseProxyResponse(resp);
     const text = data.content.map(b => b.text||'').join('\n');
     // Remplacer le bloc dans l'affichage
     const card = document.querySelectorAll('.variante-card')[idx];
