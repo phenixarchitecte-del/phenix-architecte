@@ -3877,6 +3877,10 @@ window.addEventListener('firebase-ready', async () => {
     list.forEach(j => { map[j.id] = j; });
     stateDossier.tvaJustificatifs = map;
     if (typeof renderTvaPage === 'function') renderTvaPage();
+    // Migration silencieuse des justificatifs enregistrés avant le passage au
+    // Stockage Firebase (ancien format : base64 en clair dans Firestore, sans
+    // storageUrl) — se corrige tout seul en tâche de fond, rien à faire.
+    if (typeof tvaMigrerJustificatifsLegacy === 'function') tvaMigrerJustificatifsLegacy(list);
   });
 
   // Écoute temps réel : tâches
@@ -7013,7 +7017,9 @@ function renderTvaDetail() {
 function tvaRowHtml(t) {
   const justif = stateDossier.tvaJustificatifs[t.id];
   let justifCell;
-  if (justif) {
+  if (justif && !justif.storageUrl) {
+    justifCell = `<span style="display:inline-flex;align-items:center;gap:5px;color:var(--accent);font-size:12px"><i class="ti ti-refresh"></i> Migration en cours…</span>`;
+  } else if (justif) {
     justifCell = `<span style="display:inline-flex;align-items:center;gap:5px;color:var(--green);font-size:12px"><i class="ti ti-circle-check"></i> ${esc(justif.nom||'Fichier')}</span>`;
   } else if (t.sansJustificatif) {
     justifCell = `<span style="display:inline-flex;align-items:center;gap:5px;color:var(--text3);font-size:12px"><i class="ti ti-circle-dashed"></i> Pas de justificatif</span>`;
@@ -7275,6 +7281,33 @@ async function tvaExporterRecap() {
 // Complète l'export imprimable : celui-ci aplatit tout en images pour la
 // lecture, ceci fournit les fichiers exacts tels qu'importés (PDF, photo),
 // utile si le comptable a besoin des documents sources plutôt que du visuel.
+// ── Migration des anciens justificatifs (pré-Stockage Firebase) ────────
+// Avant ce correctif, les petits justificatifs (< 1 Mo) étaient acceptés en
+// base64 directement dans Firestore. Ces entrées n'ont pas de storageUrl et
+// ne peuvent donc pas être ouvertes/exportées/zippées par le nouveau code.
+// On les détecte et on les migre automatiquement en tâche de fond, sans
+// aucune action requise de l'utilisateur ni perte du fichier déjà envoyé.
+let _tvaMigrationEnCours = new Set();
+async function tvaMigrerJustificatifsLegacy(list) {
+  const legacy = list.filter(j => j.base64 && !j.storageUrl && !_tvaMigrationEnCours.has(j.id));
+  for (const j of legacy) {
+    _tvaMigrationEnCours.add(j.id);
+    try {
+      const storagePath = 'tva_justificatifs/' + j.id;
+      const url = await window._fbChantier.uploadFile(storagePath, j.base64);
+      if (!url) continue;
+      const migre = { id: j.id, releveId: j.releveId, storagePath, storageUrl: url, nom: j.nom, type: j.type, uploadedAt: j.uploadedAt };
+      await window._fb.saveTvaJustificatif(migre);
+      stateDossier.tvaJustificatifs[j.id] = migre;
+      if (typeof renderTvaPage === 'function') renderTvaPage();
+    } catch(e) {
+      console.error('Migration justificatif TVA échouée pour', j.id, e.message||e);
+    } finally {
+      _tvaMigrationEnCours.delete(j.id);
+    }
+  }
+}
+
 async function tvaTelechargerJustificatifs() {
   const r = tvaGetCurrentReleve();
   if (!r) return;
@@ -7291,11 +7324,14 @@ async function tvaTelechargerJustificatifs() {
     const j = stateDossier.tvaJustificatifs[t.id];
     try {
       const resp = await fetch(j.storageUrl);
-      const blob = await resp.blob();
+      // .arrayBuffer() plutôt que .blob() : on passe des octets bruts et non
+      // ambigus à JSZip, pour éviter tout PDF corrompu à l'ouverture une fois
+      // extrait de l'archive.
+      const arrayBuffer = await resp.arrayBuffer();
       const ext = (j.nom && j.nom.includes('.')) ? j.nom.slice(j.nom.lastIndexOf('.')) : (j.type==='application/pdf' ? '.pdf' : '.jpg');
       const nomPropre = (t.libelle||'mouvement').replace(/[\/\\:*?"<>|]/g,'').slice(0,40).trim();
       const nomFichier = `${t.date||'sans-date'}_${nomPropre}_${t.montant}e${ext}`;
-      zip.file(nomFichier, blob);
+      zip.file(nomFichier, arrayBuffer, {binary:true});
       nbOk++;
     } catch(e) { nbEchec++; }
   }
