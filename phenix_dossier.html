@@ -7170,46 +7170,12 @@ async function tvaExporterRecap() {
   const r = tvaGetCurrentReleve();
   if (!r) return;
   const status = document.getElementById('tva-export-status');
-  status.innerHTML = `<div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--accent2);background:var(--accent-bg);border:1.5px solid var(--accent);border-radius:var(--r-md);padding:12px 14px"><div class="ai-loading"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div></div> Préparation du document — conversion des justificatifs…</div>`;
 
   const trs = r.transactions||[];
   const entrees = trs.filter(t=>t.sens==='entree').sort((a,b)=>new Date(a.date)-new Date(b.date));
   const sorties = trs.filter(t=>t.sens==='sortie').sort((a,b)=>new Date(a.date)-new Date(b.date));
   const totalEntrees = entrees.reduce((s,t)=>s+(parseFloat(t.montant)||0),0);
   const totalSorties = sorties.reduce((s,t)=>s+(parseFloat(t.montant)||0),0);
-
-  // Convertit chaque justificatif en une ou plusieurs images (pages) prêtes à imprimer
-  async function justifToImages(t) {
-    const j = stateDossier.tvaJustificatifs[t.id];
-    if (!j || !j.storageUrl) return [];
-    try {
-      const resp = await fetch(j.storageUrl);
-      const blob = await resp.blob();
-      if (j.type === 'application/pdf') {
-        const arrayBuf = await blob.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuf) }).promise;
-        const images = [];
-        for (let pn=1; pn<=pdf.numPages; pn++) {
-          const page = await pdf.getPage(pn);
-          const vp = page.getViewport({scale:1.6});
-          const canvas = document.createElement('canvas');
-          canvas.width = vp.width; canvas.height = vp.height;
-          await page.render({canvasContext:canvas.getContext('2d'), viewport:vp}).promise;
-          images.push(canvas.toDataURL('image/jpeg', 0.85));
-          canvas.width = 0; canvas.height = 0;
-        }
-        return images;
-      }
-      // Image : reconvertir le blob en data URL exploitable dans <img src="...">
-      const dataUrl = await new Promise((resolve,reject) => {
-        const fr = new FileReader();
-        fr.onload = () => resolve(fr.result);
-        fr.onerror = reject;
-        fr.readAsDataURL(blob);
-      });
-      return [dataUrl];
-    } catch(e) { return []; }
-  }
 
   const rowHtml = (t) => {
     const j = stateDossier.tvaJustificatifs[t.id];
@@ -7223,19 +7189,6 @@ async function tvaExporterRecap() {
       <td style="padding:6px 8px;border-bottom:1px solid #e5e5e5;color:${statutColor};font-weight:600;white-space:nowrap">${statutTxt}</td>
     </tr>`;
   };
-
-  // Pages justificatifs (une section par mouvement justifié)
-  let justifPages = '';
-  const avecJustif = trs.filter(t => stateDossier.tvaJustificatifs[t.id]);
-  for (const t of avecJustif) {
-    const images = await justifToImages(t);
-    images.forEach((img, i) => {
-      justifPages += `<div style="page-break-before:always;padding:30px">
-        <div style="font-family:Georgia,serif;font-size:15px;color:#1B2D5B;margin-bottom:4px">${fmtDate_d(t.date)} — ${esc(t.libelle)||'—'} — ${fmtEurTva(t.montant)} (${t.sens==='entree'?'rentrée':'sortie'})${images.length>1?' — page '+(i+1)+'/'+images.length:''}</div>
-        <img src="${img}" style="max-width:100%;border:1px solid #ddd;border-radius:4px;margin-top:8px">
-      </div>`;
-    });
-  }
 
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>TVA ${tvaMoisNom(r.mois)} ${r.annee}</title>
   <style>
@@ -7254,7 +7207,7 @@ async function tvaExporterRecap() {
   <div class="page">
     <div class="no-print" style="text-align:right;margin-bottom:12px"><button onclick="window.print()" style="background:linear-gradient(135deg,#1B2D5B,#2A5298);color:#fff;border:none;padding:9px 18px;border-radius:8px;font-size:13px;cursor:pointer">🖨️ Imprimer / Enregistrer en PDF</button></div>
     <h1>Phénix-Architecture EURL — Déclaration TVA</h1>
-    <div class="sub">${tvaMoisNom(r.mois)} ${r.annee} · Récapitulatif transmis au comptable · Généré le ${new Date().toLocaleDateString('fr-FR')}</div>
+    <div class="sub">${tvaMoisNom(r.mois)} ${r.annee} · Récapitulatif transmis au comptable · Généré le ${new Date().toLocaleDateString('fr-FR')} · Justificatifs fournis séparément (voir « Télécharger les justificatifs »)</div>
     <div class="totaux">
       <div><div class="lbl">Total entrées</div><div class="val" style="color:#2D7A4F">${fmtEurTva(totalEntrees)}</div></div>
       <div><div class="lbl">Total sorties</div><div class="val" style="color:#C0392B">${fmtEurTva(totalSorties)}</div></div>
@@ -7267,7 +7220,6 @@ async function tvaExporterRecap() {
     <table><thead><tr><th>Date</th><th>Libellé</th><th style="text-align:right">Montant</th><th>Justificatif</th></tr></thead>
     <tbody>${sorties.map(rowHtml).join('') || '<tr><td colspan="4" style="padding:10px;color:#999">Aucune</td></tr>'}</tbody></table>
   </div>
-  ${justifPages}
   </body></html>`;
 
   const win = window.open('', '_blank');
