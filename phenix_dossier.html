@@ -7407,6 +7407,58 @@ function tvaTrouverProjetPourTransaction(t) {
   return meilleur;
 }
 
+// ── Reconnaissance de catégorie par mots-clés (façon Indy) ─────────────
+// Deux niveaux, comme le fait Indy : d'abord ce que l'utilisateur a déjà
+// corrigé par le passé (appris, prioritaire), puis un dictionnaire de
+// marchands/mots-clés courants côté indépendant/architecte. Reste toujours
+// modifiable à la main dans la fenêtre de transfert.
+const TVA_CATEGORIES_MOTSCLES = {
+  assurance:      ['MAAF','MACIF','MAIF','ALLIANZ','GENERALI','GROUPAMA','MATMUT','MMA','AXA','SWISSLIFE','THELEM','EUROMAF','SMABTP'],
+  telecom:        ['ORANGE','SFR','BOUYGUES','FREE MOBILE','FREE','SOSH','RED SFR'],
+  logiciels:      ['GOOGLE','ADOBE','MICROSOFT','DROPBOX','ANTHROPIC','CLAUDE','ZAPIER','CANVA','NOTION','SLACK','GITHUB','OPENAI','CHATGPT','AUTODESK','AUTOCAD','SKETCHUP','ARCHICAD','FIGMA','1PASSWORD','OVH'],
+  materiel:       ['LEROY MERLIN','CASTORAMA','BRICO DEPOT','BRICOMAN','POINT P','GEDIMAT','BRICORAMA','WELDOM'],
+  bureau:         ['BUREAU VALLEE','OFFICE DEPOT','FNAC BUREAU'],
+  deplacement:    ['SNCF','TOTALENERGIES','TOTAL ACCES','ESSO','SHELL','BP FRANCE','AUTOROUTE','VINCI AUTOROUTES','APRR','SANEF','UBER','TRAINLINE','BLABLACAR','PARKING'],
+  social:         ['URSSAF','CIPAV','SSI','AGIRC','ARRCO','IRCEC'],
+  honoraires_ext: ['EXPERT COMPTABLE','COMPTABLE','AVOCAT','NOTAIRE','HUISSIER'],
+};
+const TVA_CATEGORIES_STORAGE_KEY = 'phenix_tva_categories_apprises';
+
+function tvaExtraireSignature(libelle) {
+  const norm = tvaNormaliser(libelle);
+  const mots = norm.split(/\s+/).filter(m => m.length >= 3 && !TVA_MOTS_VIDES.has(m) && !/^\d+$/.test(m));
+  return mots.slice(0, 2).join(' ');
+}
+
+function tvaChargerCategoriesApprises() {
+  try { return JSON.parse(localStorage.getItem(TVA_CATEGORIES_STORAGE_KEY) || '{}'); }
+  catch(e) { return {}; }
+}
+
+function tvaApprendreCategorie(libelle, categorie) {
+  if (!categorie || categorie === 'autre') return; // rien d'utile à retenir
+  const signature = tvaExtraireSignature(libelle);
+  if (!signature) return;
+  const appris = tvaChargerCategoriesApprises();
+  appris[signature] = categorie;
+  try { localStorage.setItem(TVA_CATEGORIES_STORAGE_KEY, JSON.stringify(appris)); } catch(e) {}
+}
+
+function tvaDeviserCategorie(libelle) {
+  const norm = tvaNormaliser(libelle);
+  if (!norm) return null;
+  // 1. Corrections déjà faites par l'utilisateur — toujours prioritaires
+  const appris = tvaChargerCategoriesApprises();
+  for (const signature in appris) {
+    if (signature && norm.includes(signature)) return appris[signature];
+  }
+  // 2. Dictionnaire de marchands/mots-clés courants
+  for (const cat in TVA_CATEGORIES_MOTSCLES) {
+    if (TVA_CATEGORIES_MOTSCLES[cat].some(mot => norm.includes(mot))) return cat;
+  }
+  return null;
+}
+
 // Un mouvement marqué "transféré" ne l'est en réalité que si la charge/facture
 // créée à l'époque existe toujours — si elle a été supprimée depuis (dans
 // Comptabilité, ou via un nettoyage), le mouvement redevient transférable
@@ -7444,10 +7496,13 @@ function tvaOuvrirTransfert() {
   _tvaTransfertItems = trs.map(t => {
     const match = t.sens==='sortie' ? tvaTrouverChargeCorrespondante(t) : tvaTrouverFactureCorrespondante(t);
     const projetDetecte = t.sens==='entree' ? tvaTrouverProjetPourTransaction(t) : null;
+    const categorieDetectee = t.sens==='sortie' ? tvaDeviserCategorie(t.libelle) : null;
     return {
       transaction:t, match, choix: match ? null : 'nouveau',
       projetId: projetDetecte ? String(projetDetecte.id) : (match && match.projetId ? String(match.projetId) : ''),
-      projetDetecteAuto: !!projetDetecte
+      projetDetecteAuto: !!projetDetecte,
+      categorie: categorieDetectee || (match && match.categorie ? match.categorie : 'autre'),
+      categorieDetecteeAuto: !!categorieDetectee
     };
   });
   tvaRenderTransfertModal();
@@ -7472,6 +7527,25 @@ function tvaRenderTransfertModal() {
     </div>`;
   };
 
+  const CATEGORIES_LABELS = {
+    sous_traitance:'🔨 Sous-traitance artisan', deplacement:'🚗 Déplacements', assurance:'📋 Assurances',
+    honoraires_ext:'👔 Honoraires externes', telecom:'📱 Télécommunications', logiciels:'🖥️ Logiciels & abonnements',
+    bureau:'🏢 Frais de bureau', formation:'📚 Formation', materiel:'🔧 Matériel & fournitures',
+    social:'💰 Charges sociales', autre:'📌 Autre'
+  };
+  const categorieSelectHtml = (item, i) => {
+    const options = Object.entries(CATEGORIES_LABELS).map(([val,lbl]) =>
+      `<option value="${val}" ${item.categorie===val?'selected':''}>${lbl}</option>`
+    ).join('');
+    const detecteTag = item.categorieDetecteeAuto
+      ? `<span style="display:inline-flex;align-items:center;gap:4px;color:var(--green);font-size:11px;margin-left:8px"><i class="ti ti-sparkles"></i> détectée automatiquement</span>`
+      : `<span style="display:inline-flex;align-items:center;gap:4px;color:var(--text3);font-size:11px;margin-left:8px">non reconnue — vérifiez</span>`;
+    return `<div style="margin-top:8px">
+      <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:3px">Catégorie${detecteTag}</label>
+      <select class="form-input" style="padding:5px 8px;font-size:12.5px" onchange="tvaSetTransfertCategorie(${i},this.value)">${options}</select>
+    </div>`;
+  };
+
   body.innerHTML = avertissement + _tvaTransfertItems.map((item,i) => {
     const t = item.transaction;
     const sensLbl = t.sens==='entree' ? 'Rentrée' : 'Sortie';
@@ -7479,6 +7553,7 @@ function tvaRenderTransfertModal() {
     const sansJustif = !t.sansJustificatif && !stateDossier.tvaJustificatifs[t.id];
     const justifTag = sansJustif ? `<span style="display:inline-flex;align-items:center;gap:4px;color:var(--red);font-size:11px;font-weight:600;margin-left:8px"><i class="ti ti-alert-circle"></i> sans justificatif</span>` : '';
     const projetBloc = t.sens==='entree' ? projetSelectHtml(item, i) : '';
+    const categorieBloc = t.sens==='sortie' ? categorieSelectHtml(item, i) : '';
     if (!item.match) {
       return `<div style="padding:10px 12px;border:1.5px solid ${sansJustif?'var(--red)':'var(--border)'};border-radius:var(--r-md);margin-bottom:8px">
         <div style="display:flex;justify-content:space-between;align-items:center">
@@ -7488,7 +7563,7 @@ function tvaRenderTransfertModal() {
           </div>
           <span class="badge badge-green">Nouveau</span>
         </div>
-        ${projetBloc}
+        ${projetBloc}${categorieBloc}
       </div>`;
     }
     const mLabel   = t.sens==='sortie' ? (item.match.libelle||'—') : (item.match.client||item.match.numero||'—');
@@ -7504,7 +7579,7 @@ function tvaRenderTransfertModal() {
         <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="tva-choix-${i}" ${item.choix==='nouveau'?'checked':''} onchange="tvaSetTransfertChoix(${i},'nouveau')"> Créer quand même</label>
         <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="tva-choix-${i}" ${item.choix==='ignorer'?'checked':''} onchange="tvaSetTransfertChoix(${i},'ignorer')"> Ignorer</label>
       </div>
-      ${projetBloc}
+      ${projetBloc}${categorieBloc}
     </div>`;
   }).join('');
 }
@@ -7515,6 +7590,11 @@ function tvaSetTransfertChoix(i, choix) {
 
 function tvaSetTransfertProjet(i, projetId) {
   _tvaTransfertItems[i].projetId = projetId;
+}
+
+function tvaSetTransfertCategorie(i, categorie) {
+  _tvaTransfertItems[i].categorie = categorie;
+  _tvaTransfertItems[i].categorieChoisieManuellement = true;
 }
 
 async function tvaConfirmerTransfert() {
@@ -7549,7 +7629,7 @@ async function tvaConfirmerTransfert() {
       const c = {
         id: chargeId,
         libelle: ecrase ? item.match.libelle : (t.libelle || 'Sortie relevé bancaire'),
-        categorie: ecrase ? item.match.categorie : 'autre',
+        categorie: ecrase ? item.match.categorie : (item.categorie||'autre'),
         projetId: ecrase ? (item.match.projetId||'') : '',
         type: ecrase ? item.match.type : 'variable',
         montantHt: ecrase ? item.match.montantHt : t.montant,
@@ -7562,6 +7642,10 @@ async function tvaConfirmerTransfert() {
         updatedAt: new Date().toISOString()
       };
       await saveChargeDb(c);
+      // Mémorise l'association mot-clé → catégorie pour les prochains imports
+      // (uniquement pour une charge réellement nouvelle, catégorie confirmée
+      // par l'utilisateur ou déjà détectée automatiquement avec succès).
+      if (!ecrase) tvaApprendreCategorie(t.libelle, c.categorie);
       t.compteRefType = 'charge'; t.compteRefId = chargeId;
     } else {
       const factureId = ecrase ? item.match.id : ('fact-tva-'+t.id);
