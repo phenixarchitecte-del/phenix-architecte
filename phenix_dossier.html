@@ -3320,10 +3320,12 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
           <div style="margin-bottom:1.75rem">
             <div style="font-family:var(--font-serif);font-size:17px;color:var(--green);margin-bottom:.75rem;display:flex;align-items:center;gap:8px"><i class="ti ti-arrow-down-circle"></i> Rentrées d'argent</div>
             <div style="background:var(--card);border:1.5px solid var(--border);border-radius:var(--r-lg);overflow:hidden">
-              <table class="data-table" style="margin:0">
-                <thead><tr><th>Date</th><th>Libellé</th><th style="text-align:right">Montant</th><th>Justificatif</th><th></th></tr></thead>
+              <div class="fact-table-wrap">
+              <table class="fact-table" style="margin:0">
+                <thead><tr><th style="padding-left:16px">Date</th><th>Libellé</th><th style="text-align:right">Montant</th><th>Justificatif</th><th></th></tr></thead>
                 <tbody id="tva-table-entrees"></tbody>
               </table>
+              </div>
             </div>
           </div>
 
@@ -3331,10 +3333,12 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
           <div>
             <div style="font-family:var(--font-serif);font-size:17px;color:var(--red);margin-bottom:.75rem;display:flex;align-items:center;gap:8px"><i class="ti ti-arrow-up-circle"></i> Sorties d'argent</div>
             <div style="background:var(--card);border:1.5px solid var(--border);border-radius:var(--r-lg);overflow:hidden">
-              <table class="data-table" style="margin:0">
-                <thead><tr><th>Date</th><th>Libellé</th><th style="text-align:right">Montant</th><th>Justificatif</th><th></th></tr></thead>
+              <div class="fact-table-wrap">
+              <table class="fact-table" style="margin:0">
+                <thead><tr><th style="padding-left:16px">Date</th><th>Libellé</th><th style="text-align:right">Montant</th><th>Justificatif</th><th></th></tr></thead>
                 <tbody id="tva-table-sorties"></tbody>
               </table>
+              </div>
             </div>
           </div>
 
@@ -7030,7 +7034,7 @@ function tvaRowHtml(t) {
   const noteTag = t.note ? `<span style="color:var(--text3);font-style:italic"> (${esc(t.note)})</span>` : '';
   const sensLbl = t.sens==='entree' ? 'sortie' : 'rentrée';
   return `<tr>
-    <td style="white-space:nowrap">${fmtDate_d(t.date)}</td>
+    <td style="white-space:nowrap;padding-left:16px">${fmtDate_d(t.date)}</td>
     <td>${esc(t.libelle)||'—'}${noteTag}${transfereTag}</td>
     <td style="text-align:right;font-weight:600;white-space:nowrap">${fmtEurTva(t.montant)}</td>
     <td>${justifCell}</td>
@@ -7279,15 +7283,29 @@ async function tvaTelechargerJustificatifs() {
     try {
       const resp = await fetch(j.storageUrl);
       if (!resp.ok) { echecs.push({nom:j.nom||t.libelle, raison:'téléchargement refusé (HTTP '+resp.status+')'}); continue; }
-      const arrayBuffer = await resp.arrayBuffer();
-      const bytes = new Uint8Array(arrayBuffer);
+      let arrayBuffer = await resp.arrayBuffer();
+      let bytes = new Uint8Array(arrayBuffer);
       // Vérifie que le contenu récupéré correspond bien à son type déclaré,
       // pour ne jamais glisser un fichier corrompu/vide dans l'archive sans
       // le signaler clairement.
       if (bytes.length === 0) { echecs.push({nom:j.nom||t.libelle, raison:'fichier vide récupéré'}); continue; }
       if (j.type === 'application/pdf') {
         const entete = String.fromCharCode(...bytes.slice(0,5));
-        if (entete !== '%PDF-') { echecs.push({nom:j.nom||t.libelle, raison:'le contenu récupéré n\'est pas un PDF valide (en-tête: "'+entete+'")'}); continue; }
+        if (entete !== '%PDF-') {
+          // Quelques octets parasites en tête de fichier (observé après une
+          // migration) empêchent Adobe d'ouvrir un PDF pourtant valide juste
+          // en-dessous — on cherche la vraie signature un peu plus loin et on
+          // supprime ce qui précède, plutôt que de rejeter le fichier.
+          const fenetre = String.fromCharCode(...bytes.slice(0,64));
+          const pos = fenetre.indexOf('%PDF-');
+          if (pos > 0) {
+            bytes = bytes.slice(pos);
+            arrayBuffer = bytes.buffer;
+          } else {
+            echecs.push({nom:j.nom||t.libelle, raison:'le contenu récupéré n\'est pas un PDF valide (en-tête: "'+entete+'")'});
+            continue;
+          }
+        }
       }
       const ext = (j.nom && j.nom.includes('.')) ? j.nom.slice(j.nom.lastIndexOf('.')) : (j.type==='application/pdf' ? '.pdf' : '.jpg');
       const nomPropre = (t.libelle||'mouvement').replace(/[\/\\:*?"<>|]/g,'').slice(0,40).trim();
