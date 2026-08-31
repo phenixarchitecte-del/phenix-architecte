@@ -189,6 +189,38 @@ window._fb = {
       snap.forEach(d => list.push(d.data()));
       callback(list);
     });
+  },
+  // ── Déclaration TVA : relevés bancaires ──
+  // Le relevé ne contient QUE les métadonnées des transactions (jamais le
+  // fichier du justificatif), pour rester loin de la limite de 1 Mo par
+  // document Firestore même avec de nombreux mouvements dans le mois.
+  async saveTvaReleve(r) {
+    await setDoc(doc(db, 'phenix_tva_releves', String(r.id)), r);
+  },
+  async deleteTvaReleve(id) {
+    await deleteDoc(doc(db, 'phenix_tva_releves', String(id)));
+  },
+  listenTvaReleves(callback) {
+    return onSnapshot(collection(db, 'phenix_tva_releves'), snap => {
+      const list = [];
+      snap.forEach(d => list.push(d.data()));
+      callback(list);
+    });
+  },
+  // ── Déclaration TVA : justificatifs (1 document par mouvement, pour que
+  // chaque PDF/photo reste sous la limite de 1 Mo indépendamment des autres) ──
+  async saveTvaJustificatif(j) {
+    await setDoc(doc(db, 'phenix_tva_justificatifs', String(j.id)), j);
+  },
+  async deleteTvaJustificatif(id) {
+    await deleteDoc(doc(db, 'phenix_tva_justificatifs', String(id)));
+  },
+  listenTvaJustificatifs(callback) {
+    return onSnapshot(collection(db, 'phenix_tva_justificatifs'), snap => {
+      const list = [];
+      snap.forEach(d => list.push(d.data()));
+      callback(list);
+    });
   }
 };
 
@@ -2648,6 +2680,7 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
     <div class="nav-item" onclick="show_d('devis',this)"><i class="ti ti-file-invoice"></i> Devis &amp; honoraires</div>
     <div class="nav-item" onclick="show_d('facturation',this)"><i class="ti ti-receipt-2"></i> Facturation <span class="nav-badge" id="navBadgeFactures">0</span></div>
     <div class="nav-item" onclick="show_d('comptabilite',this)"><i class="ti ti-calculator"></i> Comptabilité</div>
+    <div class="nav-item" onclick="show_d('tva',this)"><i class="ti ti-file-percent"></i> Déclaration TVA</div>
     <div class="nav-section">Documents</div>
     <div class="nav-item" onclick="show_d('docs',this)"><i class="ti ti-folder"></i> Bibliothèque</div>
     <div class="nav-item" onclick="show_d('new',this)"><i class="ti ti-plus"></i> Nouveau projet</div>
@@ -3210,6 +3243,124 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
 
       </div>
 
+      <!-- ═══ DÉCLARATION TVA ═══ -->
+      <div class="page" id="page-tva">
+
+        <!-- VUE LISTE DES RELEVÉS -->
+        <div id="tva-view-liste">
+          <div class="page-header">
+            <div>
+              <div class="page-title">Déclaration TVA</div>
+              <div class="page-subtitle">Importez votre relevé bancaire du mois, justifiez chaque mouvement, transmettez à votre comptable</div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-primary" onclick="openTvaNouveauReleve()"><i class="ti ti-upload"></i> Importer un relevé bancaire</button>
+            </div>
+          </div>
+
+          <!-- Zone d'import (masquée par défaut) -->
+          <div id="tva-import-zone" style="display:none;background:var(--card);border:1.5px solid var(--border);border-radius:var(--r-lg);padding:1.25rem;margin-bottom:1.5rem">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+              <div style="font-family:var(--font-serif);font-size:17px;color:var(--navy)">Nouveau relevé</div>
+              <button class="btn btn-sm" onclick="fermerTvaNouveauReleve()"><i class="ti ti-x"></i></button>
+            </div>
+            <div class="form-grid" style="grid-template-columns:1fr 1fr;margin-bottom:1rem">
+              <div class="form-group" style="margin:0">
+                <label class="form-label">Mois</label>
+                <select class="form-input" id="tva-new-mois">
+                  <option value="1">Janvier</option><option value="2">Février</option><option value="3">Mars</option>
+                  <option value="4">Avril</option><option value="5">Mai</option><option value="6">Juin</option>
+                  <option value="7">Juillet</option><option value="8">Août</option><option value="9">Septembre</option>
+                  <option value="10">Octobre</option><option value="11">Novembre</option><option value="12">Décembre</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin:0">
+                <label class="form-label">Année</label>
+                <select class="form-input" id="tva-new-annee">
+                  <option value="2024">2024</option><option value="2025">2025</option>
+                  <option value="2026" selected>2026</option><option value="2027">2027</option>
+                </select>
+              </div>
+            </div>
+            <div onclick="document.getElementById('tva-releve-input').click()" style="text-align:center;padding:1.5rem;cursor:pointer;border:1.5px dashed var(--border);border-radius:var(--r-md);background:var(--bg)" id="tva-releve-drop">
+              <div style="font-size:28px;color:var(--accent);margin-bottom:6px"><i class="ti ti-file-upload"></i></div>
+              <div style="font-weight:600;color:var(--navy);margin-bottom:2px">Glissez votre relevé bancaire (PDF) ici</div>
+              <div style="font-size:12px;color:var(--text2)">ou cliquez pour parcourir — l'IA extrait automatiquement chaque mouvement</div>
+              <input type="file" id="tva-releve-input" accept=".pdf" style="display:none" onchange="handleTvaRelevePdf(this.files[0])">
+            </div>
+            <div id="tva-import-status" style="margin-top:12px"></div>
+          </div>
+
+          <div id="tva-liste-body"></div>
+        </div>
+
+        <!-- VUE DÉTAIL D'UN RELEVÉ -->
+        <div id="tva-view-detail" style="display:none">
+          <div class="page-header">
+            <div>
+              <button class="btn btn-sm" onclick="tvaRetourListe()" style="margin-bottom:8px"><i class="ti ti-arrow-left"></i> Tous les relevés</button>
+              <div class="page-title" id="tva-detail-titre">—</div>
+              <div class="page-subtitle" id="tva-detail-soustitre">—</div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start">
+              <button class="btn btn-danger" onclick="tvaSupprimerReleve()"><i class="ti ti-trash"></i> Supprimer</button>
+              <button class="btn" onclick="tvaOuvrirTransfert()"><i class="ti ti-database-export"></i> Envoyer vers Comptabilité</button>
+              <button class="btn btn-primary" onclick="tvaExporterRecap()"><i class="ti ti-file-export"></i> Export pour le comptable</button>
+            </div>
+          </div>
+
+          <!-- KPI résumé -->
+          <div class="kpi-row" id="tva-kpi-row" style="margin-bottom:1.5rem"></div>
+
+          <div id="tva-export-status" style="margin-bottom:1rem"></div>
+
+          <!-- Rentrées -->
+          <div style="margin-bottom:1.75rem">
+            <div style="font-family:var(--font-serif);font-size:17px;color:var(--green);margin-bottom:.75rem;display:flex;align-items:center;gap:8px"><i class="ti ti-arrow-down-circle"></i> Rentrées d'argent</div>
+            <div style="background:var(--card);border:1.5px solid var(--border);border-radius:var(--r-lg);overflow:hidden">
+              <table class="data-table" style="margin:0">
+                <thead><tr><th>Date</th><th>Libellé</th><th style="text-align:right">Montant</th><th>Justificatif</th><th></th></tr></thead>
+                <tbody id="tva-table-entrees"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Sorties -->
+          <div>
+            <div style="font-family:var(--font-serif);font-size:17px;color:var(--red);margin-bottom:.75rem;display:flex;align-items:center;gap:8px"><i class="ti ti-arrow-up-circle"></i> Sorties d'argent</div>
+            <div style="background:var(--card);border:1.5px solid var(--border);border-radius:var(--r-lg);overflow:hidden">
+              <table class="data-table" style="margin:0">
+                <thead><tr><th>Date</th><th>Libellé</th><th style="text-align:right">Montant</th><th>Justificatif</th><th></th></tr></thead>
+                <tbody id="tva-table-sorties"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <input type="file" id="tva-justif-input" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="tvaJustifFileChosen(this.files[0])">
+        </div>
+
+      </div>
+
+      <!-- MODAL TRANSFERT VERS COMPTABILITÉ -->
+      <div class="modal-overlay" id="tvaTransfertModal" onmousedown="this._downOnSelf=(event.target===this)" onmouseup="if(this._downOnSelf&&event.target===this)closeModal_d('tvaTransfertModal');this._downOnSelf=false">
+        <div class="modal" style="max-width:720px">
+          <div class="modal-header">
+            <div class="modal-title">Envoyer vers Comptabilité</div>
+            <button class="btn btn-sm" onclick="closeModal_d('tvaTransfertModal')"><i class="ti ti-x"></i></button>
+          </div>
+          <div class="modal-body">
+            <div style="font-size:12.5px;color:var(--text2);margin-bottom:1rem">
+              Seuls les mouvements justifiés (fichier attaché ou « pas de justificatif » coché) sont proposés. Les sorties deviennent des <strong>charges</strong>, les rentrées deviennent des <strong>factures</strong> encaissées. Un mouvement déjà transféré n'est plus proposé la fois suivante.
+            </div>
+            <div id="tva-transfert-body"></div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn" onclick="closeModal_d('tvaTransfertModal')">Annuler</button>
+            <button class="btn btn-primary" onclick="tvaConfirmerTransfert()"><i class="ti ti-check"></i> Confirmer le transfert</button>
+          </div>
+        </div>
+      </div>
+
       <!-- MODAL RÉMUNÉRATION & COTISATIONS -->
 <div class="modal-overlay" id="remuModal" onmousedown="this._downOnSelf=(event.target===this)" onmouseup="if(this._downOnSelf&&event.target===this)closeModal_d('remuModal');this._downOnSelf=false">
   <div class="modal" style="max-width:600px">
@@ -3640,7 +3791,7 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
 <script>
 
 // ── État local (miroir de Firestore) ──────────────────────
-const stateDossier = { projets: [], echeances: [], factures: [], taches: [], nextId: 1 };
+const stateDossier = { projets: [], echeances: [], factures: [], taches: [], nextId: 1, tvaReleves: [], tvaJustificatifs: {} };
 
 // Noms des mois — déclaré tôt car utilisé dès l'initialisation du tableau de
 // bord (renderDashboard_d, appelé en bas de ce script) ; il était auparavant
@@ -3711,6 +3862,19 @@ window.addEventListener('firebase-ready', async () => {
     refreshAllViews();
     document.getElementById('navBadgeFactures').textContent =
       stateDossier.factures.filter(f=>f.type==='facture'||f.type==='avoir').length;
+  });
+
+  // Écoute temps réel : relevés TVA
+  window._fb.listenTvaReleves(list => {
+    stateDossier.tvaReleves = list.sort((a,b) => (b.annee-a.annee) || (b.mois-a.mois));
+    if (typeof renderTvaPage === 'function') renderTvaPage();
+  });
+  // Écoute temps réel : justificatifs TVA
+  window._fb.listenTvaJustificatifs(list => {
+    const map = {};
+    list.forEach(j => { map[j.id] = j; });
+    stateDossier.tvaJustificatifs = map;
+    if (typeof renderTvaPage === 'function') renderTvaPage();
   });
 
   // Écoute temps réel : tâches
@@ -4982,7 +5146,7 @@ function show_d(id, el) {
     : (document.getElementById('page-'+id) || document.getElementById('page-'+id+'_d'));
   if (_pageEl) _pageEl.classList.add('active');
   if (el) el.classList.add('active');
-  const titles={dashboard:'Tableau de bord',projets:'Projets',phases:'Phases & suivi',checklist:'Checklist projet',reunions:'Comptes Rendus de Réunion',agenda:'Agenda & échéances',taches:'Tâches',calendrier:'Calendrier',devis:'Devis & honoraires',facturation:'Facturation',comptabilite:'Comptabilité',docs:'Bibliothèque',new:'Nouveau projet'};
+  const titles={dashboard:'Tableau de bord',projets:'Projets',phases:'Phases & suivi',checklist:'Checklist projet',reunions:'Comptes Rendus de Réunion',agenda:'Agenda & échéances',taches:'Tâches',calendrier:'Calendrier',devis:'Devis & honoraires',facturation:'Facturation',comptabilite:'Comptabilité',tva:'Déclaration TVA',docs:'Bibliothèque',new:'Nouveau projet'};
   document.getElementById('topbarTitle_d').textContent = titles[id]||'';
   if (id==='dashboard') renderDashboard_d();
   if (id==='projets') renderProjets();
@@ -4993,6 +5157,7 @@ function show_d(id, el) {
   if (id==='calendrier') renderCalendrier();
   if (id==='devis') renderDevis();
   if (id==='facturation') renderFacturation();
+  if (id==='tva') renderTvaPage();
   // Fermer le drawer sur mobile après navigation
   closeSidebar_d();
 }
@@ -6656,6 +6821,568 @@ function renderFacturation() {
       </td>
     </tr>`).join('');
   }
+}
+
+// ════════════════════════════════════════════════════════════
+//  DÉCLARATION TVA — import du relevé bancaire, extraction IA des
+//  mouvements, justificatifs par mouvement, export pour le comptable
+// ════════════════════════════════════════════════════════════
+let _tvaCurrentReleveId = null;
+let _tvaJustifTargetId  = null; // id du mouvement en attente d'un fichier
+
+function tvaMoisNom(m) {
+  return ['','Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'][m]||'';
+}
+
+function renderTvaPage() {
+  if (_tvaCurrentReleveId) { renderTvaDetail(); } else { renderTvaListeReleves(); }
+}
+
+function openTvaNouveauReleve() {
+  document.getElementById('tva-import-zone').style.display = 'block';
+  document.getElementById('tva-import-status').innerHTML = '';
+}
+function fermerTvaNouveauReleve() {
+  document.getElementById('tva-import-zone').style.display = 'none';
+}
+
+function renderTvaListeReleves() {
+  document.getElementById('tva-view-liste').style.display = '';
+  document.getElementById('tva-view-detail').style.display = 'none';
+  const body = document.getElementById('tva-liste-body');
+  if (!stateDossier.tvaReleves.length) {
+    body.innerHTML = `<div class="empty-state"><div class="empty-icon"><i class="ti ti-file-percent"></i></div><div class="empty-title">Aucun relevé importé</div><div class="empty-desc">Importez le relevé bancaire du mois pour démarrer votre déclaration de TVA.</div></div>`;
+    return;
+  }
+  body.innerHTML = stateDossier.tvaReleves.map(r => {
+    const trs = r.transactions||[];
+    const nbTotal = trs.length;
+    const nbJustifies = trs.filter(t => t.sansJustificatif || stateDossier.tvaJustificatifs[t.id]).length;
+    const pct = nbTotal ? Math.round(nbJustifies/nbTotal*100) : 0;
+    const totalEntrees = trs.filter(t=>t.sens==='entree').reduce((s,t)=>s+(parseFloat(t.montant)||0),0);
+    const totalSorties = trs.filter(t=>t.sens==='sortie').reduce((s,t)=>s+(parseFloat(t.montant)||0),0);
+    const complet = nbTotal>0 && nbJustifies===nbTotal;
+    return `<div class="card" style="margin-bottom:1rem;cursor:pointer" onclick="tvaOuvrirReleve('${r.id}')">
+      <div class="card-header">
+        <div>
+          <div class="card-title">${esc(tvaMoisNom(r.mois))} ${r.annee}</div>
+          <div class="card-subtitle">${nbTotal} mouvement(s) · ${nbJustifies}/${nbTotal} justifié(s)</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px">
+          <div style="text-align:right">
+            <div style="font-size:11px;color:var(--green)">Entrées ${fmtEur_d(totalEntrees)}</div>
+            <div style="font-size:11px;color:var(--red)">Sorties ${fmtEur_d(totalSorties)}</div>
+          </div>
+          <span class="badge ${complet?'badge-green':'badge-amber'}">${complet ? 'Complet ✓' : pct+'% justifié'}</span>
+          <i class="ti ti-chevron-right" style="color:var(--text3)"></i>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function tvaOuvrirReleve(id) {
+  _tvaCurrentReleveId = id;
+  renderTvaDetail();
+}
+function tvaRetourListe() {
+  _tvaCurrentReleveId = null;
+  renderTvaListeReleves();
+}
+
+function tvaGetCurrentReleve() {
+  return stateDossier.tvaReleves.find(r => String(r.id) === String(_tvaCurrentReleveId));
+}
+
+async function handleTvaRelevePdf(file) {
+  if (!file || file.type !== 'application/pdf') { toast_d('⚠️ Sélectionnez un fichier PDF.'); return; }
+  const mois  = parseInt(document.getElementById('tva-new-mois').value, 10);
+  const annee = parseInt(document.getElementById('tva-new-annee').value, 10);
+  const status = document.getElementById('tva-import-status');
+  status.innerHTML = `<div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--accent2);background:var(--accent-bg);border:1.5px solid var(--accent);border-radius:var(--r-md);padding:12px 14px"><div class="ai-loading"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div></div> Lecture du relevé en cours — extraction de tous les mouvements…</div>`;
+
+  const reader = new FileReader();
+  reader.onload = async e => {
+    const base64 = e.target.result.split(',')[1];
+    try {
+      const res = await fetch('https://phenix-proxy.phenixarchitecte.workers.dev', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 4000,
+          system: `Tu analyses un relevé de compte bancaire professionnel français (plusieurs pages possibles). Extrais TOUS les mouvements (crédits ET débits), sans exception, y compris les frais bancaires et prélèvements.
+Retourne UNIQUEMENT ce JSON valide, sans markdown, sans texte autour :
+{"mouvements":[{"date":"AAAA-MM-JJ","libelle":"...","montant":0,"sens":"entree"}]}
+RÈGLES :
+- "sens" = "entree" si c'est un crédit (argent qui arrive sur le compte), "sortie" si c'est un débit (argent qui sort)
+- "montant" toujours positif (nombre décimal, jamais négatif, quel que soit le sens)
+- "libelle" = le libellé tel qu'affiché sur le relevé, nettoyé des références techniques illisibles mais en gardant le nom de l'émetteur/bénéficiaire quand il est visible
+- N'invente aucun mouvement, n'en oublie aucun, ne fusionne jamais deux lignes différentes en une seule
+- Ignore uniquement les lignes de solde (solde précédent / solde suivant / solde reporté)`,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
+              { type: 'text', text: 'Extrais tous les mouvements de ce relevé bancaire.' }
+            ]
+          }]
+        })
+      });
+      if (!res.ok) {
+        const errBody = await res.text().catch(()=>'');
+        throw new Error(`Proxy HTTP ${res.status}: ${errBody.slice(0,200)}`);
+      }
+      const data = await _phenixParseProxyResponse(res);
+      if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+      const text = (data.content||[]).map(b=>b.text||'').join('');
+      let parsed;
+      try { parsed = JSON.parse(text.replace(/```json|```/g,'').trim()); }
+      catch(pe) { throw new Error('Réponse IA non exploitable : '+text.slice(0,200)); }
+      const mouvements = parsed.mouvements || [];
+      if (!mouvements.length) throw new Error('Aucun mouvement détecté dans ce PDF.');
+
+      const transactions = mouvements.map((m,i) => ({
+        id: 'tv-'+Date.now()+'-'+i+'-'+Math.random().toString(36).slice(2,6),
+        date: m.date || '',
+        libelle: (m.libelle||'').trim(),
+        montant: parseFloat(m.montant)||0,
+        sens: m.sens==='entree' ? 'entree' : 'sortie',
+        sansJustificatif: false,
+        notes: ''
+      }));
+
+      const releve = {
+        id: 'tva-'+annee+'-'+String(mois).padStart(2,'0'),
+        mois, annee,
+        dateImport: new Date().toISOString(),
+        nomFichierSource: file.name,
+        transactions
+      };
+      // Écrase un éventuel relevé déjà existant pour ce mois (ré-import volontaire)
+      await window._fb.saveTvaReleve(releve);
+      const idx = stateDossier.tvaReleves.findIndex(r=>r.id===releve.id);
+      if (idx>=0) stateDossier.tvaReleves[idx]=releve; else stateDossier.tvaReleves.push(releve);
+
+      fermerTvaNouveauReleve();
+      toast_d(`✅ ${transactions.length} mouvement(s) extrait(s) — ${tvaMoisNom(mois)} ${annee}`);
+      tvaOuvrirReleve(releve.id);
+    } catch(err) {
+      status.innerHTML = `<div style="background:var(--rbg);border:1.5px solid var(--red);border-radius:var(--r-md);padding:12px 14px;font-size:13px;color:var(--red)">⚠️ ${esc(err.message)}</div>`;
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+function renderTvaDetail() {
+  const r = tvaGetCurrentReleve();
+  if (!r) { tvaRetourListe(); return; }
+  document.getElementById('tva-view-liste').style.display = 'none';
+  document.getElementById('tva-view-detail').style.display = '';
+
+  const trs = r.transactions||[];
+  const entrees = trs.filter(t=>t.sens==='entree').sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const sorties = trs.filter(t=>t.sens==='sortie').sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const totalEntrees = entrees.reduce((s,t)=>s+(parseFloat(t.montant)||0),0);
+  const totalSorties = sorties.reduce((s,t)=>s+(parseFloat(t.montant)||0),0);
+  const nbTotal = trs.length;
+  const nbJustifies = trs.filter(t => t.sansJustificatif || stateDossier.tvaJustificatifs[t.id]).length;
+
+  document.getElementById('tva-detail-titre').textContent = `${tvaMoisNom(r.mois)} ${r.annee}`;
+  document.getElementById('tva-detail-soustitre').textContent = `Relevé importé le ${fmtDate_d(r.dateImport)} · ${nbTotal} mouvement(s)`;
+
+  document.getElementById('tva-kpi-row').innerHTML = `
+    <div><div class="kpi-label">Entrées</div><div class="kpi-value" style="color:var(--green)">${fmtEur_d(totalEntrees)}</div></div>
+    <div><div class="kpi-label">Sorties</div><div class="kpi-value" style="color:var(--red)">${fmtEur_d(totalSorties)}</div></div>
+    <div><div class="kpi-label">Solde</div><div class="kpi-value">${fmtEur_d(totalEntrees-totalSorties)}</div></div>
+    <div><div class="kpi-label">Justifiés</div><div class="kpi-value">${nbJustifies}/${nbTotal}</div></div>`;
+
+  const exportStatus = document.getElementById('tva-export-status');
+  if (nbTotal>0 && nbJustifies<nbTotal) {
+    exportStatus.innerHTML = `<div style="background:var(--abg);border:1.5px solid var(--amber);border-radius:var(--r-md);padding:10px 14px;font-size:13px;color:var(--amber)"><i class="ti ti-alert-triangle"></i> ${nbTotal-nbJustifies} mouvement(s) sans justificatif — attachez un fichier ou cochez « pas de justificatif » avant l'export.</div>`;
+  } else {
+    exportStatus.innerHTML = '';
+  }
+
+  document.getElementById('tva-table-entrees').innerHTML = entrees.length ? entrees.map(t=>tvaRowHtml(t)).join('') : `<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:1.5rem">Aucune rentrée ce mois-ci</td></tr>`;
+  document.getElementById('tva-table-sorties').innerHTML = sorties.length ? sorties.map(t=>tvaRowHtml(t)).join('') : `<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:1.5rem">Aucune sortie ce mois-ci</td></tr>`;
+}
+
+function tvaRowHtml(t) {
+  const justif = stateDossier.tvaJustificatifs[t.id];
+  let justifCell;
+  if (justif) {
+    justifCell = `<span style="display:inline-flex;align-items:center;gap:5px;color:var(--green);font-size:12px"><i class="ti ti-circle-check"></i> ${esc(justif.nom||'Fichier')}</span>`;
+  } else if (t.sansJustificatif) {
+    justifCell = `<span style="display:inline-flex;align-items:center;gap:5px;color:var(--text3);font-size:12px"><i class="ti ti-circle-dashed"></i> Pas de justificatif</span>`;
+  } else {
+    justifCell = `<span style="display:inline-flex;align-items:center;gap:5px;color:var(--amber);font-size:12px"><i class="ti ti-alert-circle"></i> Manquant</span>`;
+  }
+  const transfereTag = t.transfereCompta ? `<span title="Déjà envoyé en Comptabilité" style="display:inline-block;margin-left:6px;color:var(--accent)"><i class="ti ti-database-export"></i></span>` : '';
+  return `<tr>
+    <td style="white-space:nowrap">${fmtDate_d(t.date)}</td>
+    <td>${esc(t.libelle)||'—'}${transfereTag}</td>
+    <td style="text-align:right;font-weight:600;white-space:nowrap">${fmtEur_d(t.montant)}</td>
+    <td>${justifCell}</td>
+    <td style="white-space:nowrap">
+      ${justif ? `<button class="btn btn-sm" onclick="tvaVoirJustificatif('${t.id}')" title="Voir"><i class="ti ti-eye"></i></button>
+                  <button class="btn btn-sm btn-danger" onclick="tvaSupprimerJustificatif('${t.id}')" title="Retirer"><i class="ti ti-x"></i></button>`
+             : `<button class="btn btn-sm" onclick="tvaDemanderJustificatif('${t.id}')" title="Attacher un fichier"><i class="ti ti-paperclip"></i></button>
+                <label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text2);cursor:pointer;margin-left:6px">
+                  <input type="checkbox" ${t.sansJustificatif?'checked':''} onchange="tvaToggleSansJustificatif('${t.id}',this.checked)"> aucun
+                </label>`}
+    </td>
+  </tr>`;
+}
+
+function tvaDemanderJustificatif(transactionId) {
+  _tvaJustifTargetId = transactionId;
+  document.getElementById('tva-justif-input').value = '';
+  document.getElementById('tva-justif-input').click();
+}
+
+function tvaJustifFileChosen(file) {
+  if (!file || !_tvaJustifTargetId) return;
+  const targetId = _tvaJustifTargetId;
+  const reader = new FileReader();
+  reader.onload = async e => {
+    const justificatif = {
+      id: targetId,
+      releveId: _tvaCurrentReleveId,
+      base64: e.target.result,
+      nom: file.name,
+      type: file.type,
+      uploadedAt: new Date().toISOString()
+    };
+    try {
+      await window._fb.saveTvaJustificatif(justificatif);
+      stateDossier.tvaJustificatifs[targetId] = justificatif;
+      // Un justificatif attaché annule automatiquement la case "pas de justificatif"
+      const r = tvaGetCurrentReleve();
+      const t = r && (r.transactions||[]).find(x=>x.id===targetId);
+      if (t && t.sansJustificatif) {
+        t.sansJustificatif = false;
+        await window._fb.saveTvaReleve(r);
+      }
+      toast_d('✅ Justificatif attaché.');
+      renderTvaDetail();
+    } catch(err) {
+      toast_d('⚠️ Erreur lors de l\'enregistrement : '+err.message);
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+async function tvaSupprimerJustificatif(transactionId) {
+  if (!confirm('Retirer ce justificatif ?')) return;
+  await window._fb.deleteTvaJustificatif(transactionId);
+  delete stateDossier.tvaJustificatifs[transactionId];
+  renderTvaDetail();
+}
+
+function tvaVoirJustificatif(transactionId) {
+  const j = stateDossier.tvaJustificatifs[transactionId];
+  if (!j) return;
+  const win = window.open('', '_blank');
+  if (j.type === 'application/pdf') {
+    win.document.write(`<!DOCTYPE html><html><head><title>${esc(j.nom)}</title><style>body{margin:0;padding:0;background:#333}iframe{width:100vw;height:100vh;border:none}</style></head><body><iframe src="${j.base64}"></iframe></body></html>`);
+  } else {
+    win.document.write(`<!DOCTYPE html><html><head><title>${esc(j.nom)}</title><style>body{margin:0;padding:20px;background:#222;text-align:center}img{max-width:100%;border-radius:6px}</style></head><body><img src="${j.base64}"></body></html>`);
+  }
+}
+
+async function tvaToggleSansJustificatif(transactionId, checked) {
+  const r = tvaGetCurrentReleve();
+  if (!r) return;
+  const t = (r.transactions||[]).find(x=>x.id===transactionId);
+  if (!t) return;
+  t.sansJustificatif = checked;
+  await window._fb.saveTvaReleve(r);
+  renderTvaDetail();
+}
+
+async function tvaSupprimerReleve() {
+  const r = tvaGetCurrentReleve();
+  if (!r) return;
+  if (!confirm(`Supprimer le relevé ${tvaMoisNom(r.mois)} ${r.annee} et tous ses justificatifs ? Cette action est irréversible.`)) return;
+  const ids = (r.transactions||[]).map(t=>t.id);
+  for (const id of ids) {
+    if (stateDossier.tvaJustificatifs[id]) {
+      await window._fb.deleteTvaJustificatif(id);
+      delete stateDossier.tvaJustificatifs[id];
+    }
+  }
+  await window._fb.deleteTvaReleve(r.id);
+  stateDossier.tvaReleves = stateDossier.tvaReleves.filter(x=>x.id!==r.id);
+  tvaRetourListe();
+  toast_d('🗑️ Relevé supprimé.');
+}
+
+// ── Export du récapitulatif pour le comptable ──────────────
+// Construit un document imprimable : tableau récapitulatif des mouvements,
+// suivi d'une page par justificatif (les PDF sont convertis en image via
+// pdf.js, déjà utilisé ailleurs dans l'appli, pour un rendu uniforme et
+// fiable à l'impression).
+async function tvaExporterRecap() {
+  const r = tvaGetCurrentReleve();
+  if (!r) return;
+  const status = document.getElementById('tva-export-status');
+  status.innerHTML = `<div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--accent2);background:var(--accent-bg);border:1.5px solid var(--accent);border-radius:var(--r-md);padding:12px 14px"><div class="ai-loading"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div></div> Préparation du document — conversion des justificatifs…</div>`;
+
+  const trs = r.transactions||[];
+  const entrees = trs.filter(t=>t.sens==='entree').sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const sorties = trs.filter(t=>t.sens==='sortie').sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const totalEntrees = entrees.reduce((s,t)=>s+(parseFloat(t.montant)||0),0);
+  const totalSorties = sorties.reduce((s,t)=>s+(parseFloat(t.montant)||0),0);
+
+  // Convertit chaque justificatif en une ou plusieurs images (pages) prêtes à imprimer
+  async function justifToImages(t) {
+    const j = stateDossier.tvaJustificatifs[t.id];
+    if (!j) return [];
+    if (j.type === 'application/pdf') {
+      try {
+        const pdfData = atob(j.base64.split(',')[1]);
+        const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
+        const images = [];
+        for (let pn=1; pn<=pdf.numPages; pn++) {
+          const page = await pdf.getPage(pn);
+          const vp = page.getViewport({scale:1.6});
+          const canvas = document.createElement('canvas');
+          canvas.width = vp.width; canvas.height = vp.height;
+          await page.render({canvasContext:canvas.getContext('2d'), viewport:vp}).promise;
+          images.push(canvas.toDataURL('image/jpeg', 0.85));
+          canvas.width = 0; canvas.height = 0;
+        }
+        return images;
+      } catch(e) { return []; }
+    }
+    return [j.base64];
+  }
+
+  const rowHtml = (t) => {
+    const j = stateDossier.tvaJustificatifs[t.id];
+    const statutTxt = j ? '✓ Justifié' : (t.sansJustificatif ? '— Sans justificatif' : '⚠ MANQUANT');
+    const statutColor = j ? '#2D7A4F' : (t.sansJustificatif ? '#8BA5C0' : '#C0392B');
+    return `<tr>
+      <td style="padding:6px 8px;border-bottom:1px solid #e5e5e5">${fmtDate_d(t.date)}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #e5e5e5">${esc(t.libelle)||'—'}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #e5e5e5;text-align:right;white-space:nowrap">${fmtEur_d(t.montant)}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #e5e5e5;color:${statutColor};font-weight:600;white-space:nowrap">${statutTxt}</td>
+    </tr>`;
+  };
+
+  // Pages justificatifs (une section par mouvement justifié)
+  let justifPages = '';
+  const avecJustif = trs.filter(t => stateDossier.tvaJustificatifs[t.id]);
+  for (const t of avecJustif) {
+    const images = await justifToImages(t);
+    images.forEach((img, i) => {
+      justifPages += `<div style="page-break-before:always;padding:30px">
+        <div style="font-family:Georgia,serif;font-size:15px;color:#1B2D5B;margin-bottom:4px">${fmtDate_d(t.date)} — ${esc(t.libelle)||'—'} — ${fmtEur_d(t.montant)} (${t.sens==='entree'?'rentrée':'sortie'})${images.length>1?' — page '+(i+1)+'/'+images.length:''}</div>
+        <img src="${img}" style="max-width:100%;border:1px solid #ddd;border-radius:4px;margin-top:8px">
+      </div>`;
+    });
+  }
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>TVA ${tvaMoisNom(r.mois)} ${r.annee}</title>
+  <style>
+    body{font-family:'DM Sans',Arial,sans-serif;color:#0F1E3D;margin:0}
+    .page{padding:30px}
+    h1{font-family:Georgia,serif;font-size:24px;margin:0 0 4px}
+    .sub{color:#4A6080;font-size:13px;margin-bottom:20px}
+    table{width:100%;border-collapse:collapse;margin-bottom:22px;font-size:12.5px}
+    th{text-align:left;padding:6px 8px;border-bottom:2px solid #1B2D5B;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#1B2D5B}
+    .totaux{display:flex;gap:24px;margin-bottom:24px}
+    .totaux div{background:#F0F4F8;border-radius:8px;padding:10px 16px}
+    .totaux .lbl{font-size:10px;text-transform:uppercase;color:#4A6080;letter-spacing:.05em}
+    .totaux .val{font-size:18px;font-weight:700;color:#1B2D5B}
+    @media print{ .no-print{display:none} }
+  </style></head><body>
+  <div class="page">
+    <div class="no-print" style="text-align:right;margin-bottom:12px"><button onclick="window.print()" style="background:linear-gradient(135deg,#1B2D5B,#2A5298);color:#fff;border:none;padding:9px 18px;border-radius:8px;font-size:13px;cursor:pointer">🖨️ Imprimer / Enregistrer en PDF</button></div>
+    <h1>Phénix-Architecture EURL — Déclaration TVA</h1>
+    <div class="sub">${tvaMoisNom(r.mois)} ${r.annee} · Récapitulatif transmis au comptable · Généré le ${new Date().toLocaleDateString('fr-FR')}</div>
+    <div class="totaux">
+      <div><div class="lbl">Total entrées</div><div class="val" style="color:#2D7A4F">${fmtEur_d(totalEntrees)}</div></div>
+      <div><div class="lbl">Total sorties</div><div class="val" style="color:#C0392B">${fmtEur_d(totalSorties)}</div></div>
+      <div><div class="lbl">Solde</div><div class="val">${fmtEur_d(totalEntrees-totalSorties)}</div></div>
+    </div>
+    <h3 style="font-family:Georgia,serif;color:#2D7A4F">Rentrées d'argent (${entrees.length})</h3>
+    <table><thead><tr><th>Date</th><th>Libellé</th><th style="text-align:right">Montant</th><th>Justificatif</th></tr></thead>
+    <tbody>${entrees.map(rowHtml).join('') || '<tr><td colspan="4" style="padding:10px;color:#999">Aucune</td></tr>'}</tbody></table>
+    <h3 style="font-family:Georgia,serif;color:#C0392B">Sorties d'argent (${sorties.length})</h3>
+    <table><thead><tr><th>Date</th><th>Libellé</th><th style="text-align:right">Montant</th><th>Justificatif</th></tr></thead>
+    <tbody>${sorties.map(rowHtml).join('') || '<tr><td colspan="4" style="padding:10px;color:#999">Aucune</td></tr>'}</tbody></table>
+  </div>
+  ${justifPages}
+  </body></html>`;
+
+  const win = window.open('', '_blank');
+  win.document.write(html);
+  win.document.close();
+  status.innerHTML = '';
+  toast_d('✅ Document généré dans un nouvel onglet.');
+}
+
+// ── Transfert vers Comptabilité ─────────────────────────────
+// Sorties → Charges, Rentrées → Factures encaissées. Détecte les doublons
+// probables (même montant, date proche) et laisse le choix : écraser
+// l'existante, créer quand même (deux montants identiques peuvent être deux
+// mouvements bien distincts), ou ignorer ce mouvement.
+let _tvaTransfertItems = [];
+
+function tvaTrouverChargeCorrespondante(t) {
+  return (stateDossier.charges||[]).find(c => {
+    if (Math.abs((parseFloat(c.montantHt)||0) - t.montant) > 0.01) return false;
+    if (!c.date || !t.date) return false;
+    const diffJours = Math.abs(new Date(c.date) - new Date(t.date)) / 86400000;
+    return diffJours <= 5;
+  });
+}
+function tvaTrouverFactureCorrespondante(t) {
+  return (stateDossier.factures||[]).find(f => {
+    if (f.type==='devis') return false;
+    const montantRef = parseFloat(f.montantPaye)||parseFloat(f.montantHt)||0;
+    if (Math.abs(montantRef - t.montant) > 0.01) return false;
+    const dateRef = f.datePaiement || f.dateEmission || f.date;
+    if (!dateRef || !t.date) return false;
+    const diffJours = Math.abs(new Date(dateRef) - new Date(t.date)) / 86400000;
+    return diffJours <= 5;
+  });
+}
+
+function tvaOuvrirTransfert() {
+  const r = tvaGetCurrentReleve();
+  if (!r) return;
+  // Tous les mouvements pas encore transférés — justifiés ou non. Ceux sans
+  // justificatif restent envoyables, mais seront signalés et confirmés
+  // explicitement avant l'envoi (voir tvaConfirmerTransfert).
+  const trs = (r.transactions||[]).filter(t => !t.transfereCompta);
+  if (!trs.length) { toast_d('ℹ️ Tous les mouvements sont déjà transférés.'); return; }
+
+  _tvaTransfertItems = trs.map(t => {
+    const match = t.sens==='sortie' ? tvaTrouverChargeCorrespondante(t) : tvaTrouverFactureCorrespondante(t);
+    return { transaction:t, match, choix: match ? null : 'nouveau' };
+  });
+  tvaRenderTransfertModal();
+  const m = document.getElementById('tvaTransfertModal'); if (m) m.classList.add('open');
+}
+
+function tvaRenderTransfertModal() {
+  const body = document.getElementById('tva-transfert-body');
+  const sansJustifCount = _tvaTransfertItems.filter(it => !it.transaction.sansJustificatif && !stateDossier.tvaJustificatifs[it.transaction.id]).length;
+  const avertissement = sansJustifCount ? `<div style="background:var(--rbg);border:1.5px solid var(--red);border-radius:var(--r-md);padding:10px 14px;font-size:12.5px;color:var(--red);margin-bottom:1rem"><i class="ti ti-alert-triangle"></i> ${sansJustifCount} mouvement(s) n'ont pas encore de justificatif (repérés ci-dessous). Vous pouvez les envoyer quand même, une confirmation vous sera demandée.</div>` : '';
+  body.innerHTML = avertissement + _tvaTransfertItems.map((item,i) => {
+    const t = item.transaction;
+    const sensLbl = t.sens==='entree' ? 'Rentrée' : 'Sortie';
+    const sensColor = t.sens==='entree' ? 'var(--green)' : 'var(--red)';
+    const sansJustif = !t.sansJustificatif && !stateDossier.tvaJustificatifs[t.id];
+    const justifTag = sansJustif ? `<span style="display:inline-flex;align-items:center;gap:4px;color:var(--red);font-size:11px;font-weight:600;margin-left:8px"><i class="ti ti-alert-circle"></i> sans justificatif</span>` : '';
+    if (!item.match) {
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1.5px solid ${sansJustif?'var(--red)':'var(--border)'};border-radius:var(--r-md);margin-bottom:8px">
+        <div>
+          <span style="font-size:11px;font-weight:700;color:${sensColor};text-transform:uppercase">${sensLbl}</span>
+          <div style="font-size:13px">${fmtDate_d(t.date)} · ${esc(t.libelle)||'—'} · <strong>${fmtEur_d(t.montant)}</strong>${justifTag}</div>
+        </div>
+        <span class="badge badge-green">Nouveau</span>
+      </div>`;
+    }
+    const mLabel   = t.sens==='sortie' ? (item.match.libelle||'—') : (item.match.client||item.match.numero||'—');
+    const mDate    = t.sens==='sortie' ? item.match.date : (item.match.datePaiement||item.match.dateEmission);
+    const mMontant = t.sens==='sortie' ? item.match.montantHt : (item.match.montantPaye||item.match.montantHt);
+    return `<div style="padding:10px 12px;border:1.5px solid var(--amber);background:var(--abg);border-radius:var(--r-md);margin-bottom:8px">
+      <span style="font-size:11px;font-weight:700;color:${sensColor};text-transform:uppercase">${sensLbl}</span>
+      <div style="font-size:13px;margin-bottom:6px">${fmtDate_d(t.date)} · ${esc(t.libelle)||'—'} · <strong>${fmtEur_d(t.montant)}</strong>${justifTag}</div>
+      <div style="font-size:11.5px;color:var(--amber);margin-bottom:8px"><i class="ti ti-alert-triangle"></i> Ressemble à une entrée déjà existante : ${fmtDate_d(mDate)} · ${esc(mLabel)} · ${fmtEur_d(mMontant)}</div>
+      <div style="display:flex;gap:14px;font-size:12.5px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="tva-choix-${i}" ${item.choix==='ecraser'?'checked':''} onchange="tvaSetTransfertChoix(${i},'ecraser')"> Écraser l'existante</label>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="tva-choix-${i}" ${item.choix==='nouveau'?'checked':''} onchange="tvaSetTransfertChoix(${i},'nouveau')"> Créer quand même</label>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="tva-choix-${i}" ${item.choix==='ignorer'?'checked':''} onchange="tvaSetTransfertChoix(${i},'ignorer')"> Ignorer</label>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function tvaSetTransfertChoix(i, choix) {
+  _tvaTransfertItems[i].choix = choix;
+}
+
+async function tvaConfirmerTransfert() {
+  const r = tvaGetCurrentReleve();
+  if (!r) return;
+  const sansChoix = _tvaTransfertItems.filter(it => it.match && !it.choix);
+  if (sansChoix.length) { toast_d('⚠️ Choisissez une option pour chaque doublon détecté.'); return; }
+
+  // Au moins une confirmation explicite avant d'envoyer des mouvements sans
+  // justificatif (demandé : possible, mais jamais silencieusement).
+  const sansJustifEnvoyes = _tvaTransfertItems.filter(it =>
+    it.choix !== 'ignorer' && !it.transaction.sansJustificatif && !stateDossier.tvaJustificatifs[it.transaction.id]
+  );
+  if (sansJustifEnvoyes.length) {
+    const liste = sansJustifEnvoyes.map(it => `- ${fmtDate_d(it.transaction.date)} · ${it.transaction.libelle||'—'} · ${fmtEur_d(it.transaction.montant)}`).join('\n');
+    const ok = confirm(`${sansJustifEnvoyes.length} mouvement(s) n'ont pas de justificatif :\n\n${liste}\n\nLes envoyer quand même vers Comptabilité ?`);
+    if (!ok) return;
+  }
+
+  let nbCrees = 0, nbEcrases = 0, nbIgnores = 0;
+  for (const item of _tvaTransfertItems) {
+    const t = item.transaction;
+    const ecrase = item.choix === 'ecraser' && item.match;
+
+    if (item.choix === 'ignorer') { nbIgnores++; t.transfereCompta = true; continue; }
+
+    if (t.sens === 'sortie') {
+      const chargeId = ecrase ? item.match.id : ('charge-tva-'+t.id);
+      const c = {
+        id: chargeId,
+        libelle: t.libelle || 'Sortie relevé bancaire',
+        categorie: ecrase ? item.match.categorie : 'autre',
+        projetId: ecrase ? (item.match.projetId||'') : '',
+        type: 'variable',
+        montantHt: t.montant,
+        tvaTaux: ecrase ? (item.match.tvaTaux||20) : 20,
+        tvaDed: ecrase ? (item.match.tvaDed||0) : 0,
+        date: t.date,
+        frequence: ecrase ? (item.match.frequence||'ponctuelle') : 'ponctuelle',
+        notes: 'Importé depuis la Déclaration TVA (' + tvaMoisNom(r.mois) + ' ' + r.annee + ')',
+        sourceTvaId: t.id,
+        updatedAt: new Date().toISOString()
+      };
+      await saveChargeDb(c);
+      t.compteRefType = 'charge'; t.compteRefId = chargeId;
+    } else {
+      const factureId = ecrase ? item.match.id : ('fact-tva-'+t.id);
+      const f = {
+        id: factureId,
+        type: 'facture',
+        numero: ecrase ? item.match.numero : ('REL-'+String(t.id).slice(-6)),
+        projetId: ecrase ? (item.match.projetId||'') : '',
+        client: ecrase ? item.match.client : (t.libelle||'—'),
+        objet: ecrase ? item.match.objet : ('Encaissement — '+(t.libelle||'')),
+        dateEmission: ecrase ? item.match.dateEmission : t.date,
+        dateEcheance: ecrase ? item.match.dateEcheance : t.date,
+        datePaiement: t.date,
+        montantHt: t.montant,
+        montantPaye: t.montant,
+        statut: 'payee',
+        notes: 'Importé depuis la Déclaration TVA (' + tvaMoisNom(r.mois) + ' ' + r.annee + ')',
+        sourceTvaId: t.id,
+        updatedAt: new Date().toISOString()
+      };
+      await window._fb.saveFacture(f);
+      const idx = stateDossier.factures.findIndex(x=>x.id===f.id);
+      if (idx>=0) stateDossier.factures[idx]=f; else stateDossier.factures.push(f);
+      t.compteRefType = 'facture'; t.compteRefId = factureId;
+    }
+    t.transfereCompta = true;
+    if (ecrase) nbEcrases++; else nbCrees++;
+  }
+
+  await window._fb.saveTvaReleve(r);
+  closeModal_d('tvaTransfertModal');
+  renderTvaDetail();
+  if (typeof renderComptabilite === 'function') renderComptabilite();
+  toast_d(`✅ Transfert terminé — ${nbCrees} créé(s), ${nbEcrases} écrasé(s)${nbIgnores?', '+nbIgnores+' ignoré(s)':''}.`);
 }
 
 // Ouvrir l'import PDF depuis un projet spécifique
