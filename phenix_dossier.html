@@ -7345,12 +7345,24 @@ async function tvaTelechargerJustificatifs() {
 // mouvements bien distincts), ou ignorer ce mouvement.
 let _tvaTransfertItems = [];
 
+// Reconnaissance de doublon : montant identique ET au moins un mot commun
+// significatif entre le libellé bancaire et la charge/facture existante — la
+// date seule n'est pas fiable (une charge saisie à la main porte souvent la
+// date de la facture, pas celle du prélèvement bancaire).
+const TVA_MOTS_VIDES = new Set(['VIR','SEPA','PRLV','INST','PAIEMENT','CARTE','CB','GC','RE','RSC','PSC','LE','LA','LES','DE','DU','DES','ET','MLLE','MME','MR','MONSIEUR','MADAME','EUR']);
+function tvaMotsCommuns(texteA, texteB) {
+  const normA = tvaNormaliser(texteA);
+  const normB = tvaNormaliser(texteB);
+  if (!normA || !normB) return 0;
+  const motsA = normA.split(/\s+/).filter(m => m.length >= 3 && !TVA_MOTS_VIDES.has(m));
+  let score = 0;
+  for (const mot of motsA) { if (normB.includes(mot)) score++; }
+  return score;
+}
 function tvaTrouverChargeCorrespondante(t) {
   return (stateDossier.charges||[]).find(c => {
     if (Math.abs((parseFloat(c.montantHt)||0) - t.montant) > 0.01) return false;
-    if (!c.date || !t.date) return false;
-    const diffJours = Math.abs(new Date(c.date) - new Date(t.date)) / 86400000;
-    return diffJours <= 5;
+    return tvaMotsCommuns(c.libelle, t.libelle) > 0;
   });
 }
 function tvaTrouverFactureCorrespondante(t) {
@@ -7358,10 +7370,8 @@ function tvaTrouverFactureCorrespondante(t) {
     if (f.type==='devis') return false;
     const montantRef = parseFloat(f.montantPaye)||parseFloat(f.montantHt)||0;
     if (Math.abs(montantRef - t.montant) > 0.01) return false;
-    const dateRef = f.datePaiement || f.dateEmission || f.date;
-    if (!dateRef || !t.date) return false;
-    const diffJours = Math.abs(new Date(dateRef) - new Date(t.date)) / 86400000;
-    return diffJours <= 5;
+    const texteRef = (f.client||'') + ' ' + (f.objet||'') + ' ' + (f.numero||'');
+    return tvaMotsCommuns(texteRef, t.libelle) > 0;
   });
 }
 
