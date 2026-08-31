@@ -6055,17 +6055,21 @@ function _checklistItemId(groupId, sgId, texteOuIdx, taches) {
 
 function _checklistCounts(p) {
   const done = p.checklist || {};
+  const na = p.checklistNA || {};
   let total = 0, faits = 0;
   const parGroupe = {};
   CHECKLIST_TEMPLATE.forEach(g => {
     let gTotal = 0, gFaits = 0;
     g.sousGroupes.forEach(sg => {
       sg.taches.forEach((tacheTxt, idx) => {
-        gTotal++; total++;
-        if (done[_checklistItemId(g.id, sg.id, tacheTxt)]) { gFaits++; faits++; }
+        gTotal++;
+        if (done[_checklistItemId(g.id, sg.id, tacheTxt)]) gFaits++;
       });
     });
-    parGroupe[g.id] = { total: gTotal, faits: gFaits };
+    parGroupe[g.id] = { total: gTotal, faits: gFaits, na: !!na[g.id] };
+    // Un groupe marqué "non applicable" à ce dossier ne compte pas dans le
+    // total global — ni comme restant à faire, ni comme fait.
+    if (!na[g.id]) { total += gTotal; faits += gFaits; }
   });
   return { total, faits, parGroupe };
 }
@@ -6146,12 +6150,13 @@ function renderChecklist(id) {
   const pctGlobal = counts.total ? Math.round(counts.faits / counts.total * 100) : 0;
 
   // Premier affichage de ce dossier : ouvrir par défaut son premier groupe
-  // pas encore terminé. Une fois initialisé, l'état ouvert/fermé n'est plus
-  // recalculé automatiquement — il ne bouge que si l'utilisateur clique sur
-  // un en-tête de groupe (voir toggleChecklistGroup), pour rester stable
+  // pas encore terminé (en ignorant les groupes marqués non applicables).
+  // Une fois initialisé, l'état ouvert/fermé n'est plus recalculé
+  // automatiquement — il ne bouge que si l'utilisateur clique sur un
+  // en-tête de groupe (voir toggleChecklistGroup), pour rester stable
   // face aux re-rendus déclenchés par la synchronisation temps réel.
   if (!checklistOpenGroups[id]) {
-    const firstIncomplete = CHECKLIST_TEMPLATE.find(g => counts.parGroupe[g.id].faits < counts.parGroupe[g.id].total);
+    const firstIncomplete = CHECKLIST_TEMPLATE.find(g => !counts.parGroupe[g.id].na && counts.parGroupe[g.id].faits < counts.parGroupe[g.id].total);
     checklistOpenGroups[id] = new Set(firstIncomplete ? [firstIncomplete.id] : []);
   }
   const openSet = checklistOpenGroups[id];
@@ -6167,22 +6172,27 @@ function renderChecklist(id) {
     ${CHECKLIST_TEMPLATE.map(g => {
       const gc = counts.parGroupe[g.id];
       const gPct = gc.total ? Math.round(gc.faits / gc.total * 100) : 0;
-      const groupOpen = openSet.has(g.id);
+      const groupOpen = openSet.has(g.id) && !gc.na;
       return `
-      <div class="card checklist-group" style="margin-bottom:10px;padding:0;overflow:hidden">
-        <div class="checklist-group-header" onclick="toggleChecklistGroup(this,'${g.id}')" style="cursor:pointer;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;background:${gPct===100?'var(--green-bg)':'var(--bg)'}">
-          <div style="display:flex;align-items:center;gap:10px">
-            <i class="ti ${g.icone}" style="font-size:18px;color:${gPct===100?'var(--green)':'var(--accent)'}"></i>
-            <div>
-              <div style="font-weight:700;font-size:14px">${esc(g.titre)}</div>
-              <div style="font-size:11.5px;color:var(--text3)">${gc.faits} / ${gc.total} tâches</div>
+      <div class="card checklist-group" style="margin-bottom:10px;padding:0;overflow:hidden${gc.na?';opacity:.72':''}">
+        <div class="checklist-group-header" onclick="${gc.na?'':`toggleChecklistGroup(this,'${g.id}')`}" style="cursor:${gc.na?'default':'pointer'};padding:14px 16px;display:flex;align-items:center;justify-content:space-between;background:${gc.na?'var(--red-bg)':(gPct===100?'var(--green-bg)':'var(--bg)')}">
+          <div style="display:flex;align-items:center;gap:10px;min-width:0">
+            <label onclick="event.stopPropagation()" title="Marquer non applicable à ce dossier" style="display:flex;align-items:center;flex-shrink:0;cursor:pointer">
+              <input type="checkbox" ${gc.na?'checked':''} onchange="toggleChecklistGroupNA('${p.id}','${g.id}',this.checked)" style="width:15px;height:15px;accent-color:var(--red);cursor:pointer">
+            </label>
+            <i class="ti ${g.icone}" style="font-size:18px;flex-shrink:0;color:${gc.na?'var(--red)':(gPct===100?'var(--green)':'var(--accent)')}"></i>
+            <div style="min-width:0">
+              <div style="font-weight:700;font-size:14px;${gc.na?'color:var(--red);text-decoration:line-through':''}">${esc(g.titre)}</div>
+              <div style="font-size:11.5px;color:var(--text3)">${gc.na?'Non applicable à ce dossier':`${gc.faits} / ${gc.total} tâches`}</div>
             </div>
           </div>
-          <div style="display:flex;align-items:center;gap:10px">
-            <span class="badge ${gPct===100?'badge-green':'badge-gray'}">${gPct}%</span>
-            <i class="ti ti-chevron-down checklist-chevron" style="transition:transform .15s${groupOpen?';transform:rotate(180deg)':''}"></i>
+          <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+            ${gc.na
+              ? `<span class="badge badge-red">N/A</span>`
+              : `<span class="badge ${gPct===100?'badge-green':'badge-gray'}">${gPct}%</span><i class="ti ti-chevron-down checklist-chevron" style="transition:transform .15s${groupOpen?';transform:rotate(180deg)':''}"></i>`}
           </div>
         </div>
+        ${gc.na ? '' : `
         <div class="checklist-group-body" style="${groupOpen?'':'display:none'}">
           ${g.sousGroupes.map(sg => `
             <div class="checklist-subgroup" style="padding:10px 16px 10px 20px;border-top:1px solid var(--border)">
@@ -6197,7 +6207,7 @@ function renderChecklist(id) {
               }).join('')}
             </div>
           `).join('')}
-        </div>
+        </div>`}
       </div>`;
     }).join('')}
   `;
@@ -6222,6 +6232,22 @@ async function toggleChecklistItem(projetId, itemId, valeur) {
   if (typeof renderChecklistOverview === 'function') renderChecklistOverview();
   // L'état ouvert/fermé des groupes est conservé dans checklistOpenGroups,
   // donc renderChecklist le restitue fidèlement sans hack de positions DOM.
+  renderChecklist(projetId);
+}
+
+// Marque un groupe entier (ex. "F9 — Déclaration administrative") comme non
+// applicable à ce dossier précis — par exemple un dossier limité à l'avant-projet,
+// sans déclaration administrative ni suivi de chantier. Le groupe s'affiche
+// alors barré en rouge et ne compte plus dans l'avancement du dossier.
+async function toggleChecklistGroupNA(projetId, groupId, valeur) {
+  const p = stateDossier.projets.find(x => x.id == projetId);
+  if (!p) return;
+  if (!p.checklistNA) p.checklistNA = {};
+  if (valeur) p.checklistNA[groupId] = true; else delete p.checklistNA[groupId];
+  const openSet = checklistOpenGroups[projetId];
+  if (openSet) openSet.delete(groupId);
+  await saveProjet(p);
+  if (typeof renderChecklistOverview === 'function') renderChecklistOverview();
   renderChecklist(projetId);
 }
 
