@@ -3642,6 +3642,14 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
 // ── État local (miroir de Firestore) ──────────────────────
 const stateDossier = { projets: [], echeances: [], factures: [], taches: [], nextId: 1 };
 
+// Noms des mois — déclaré tôt car utilisé dès l'initialisation du tableau de
+// bord (renderDashboard_d, appelé en bas de ce script) ; il était auparavant
+// déclaré bien plus loin, dans un <script> exécuté après, ce qui provoquait
+// une ReferenceError silencieuse au chargement de la page et empêchait tout
+// le code situé après cette erreur de s'initialiser correctement (dont la
+// variable utilisée par le bouton "Facturer (IA)").
+const MOIS_NOMS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+
 // État de la page Checklist projet — en dehors de stateDossier car purement
 // local à l'affichage (pas de synchronisation Firestore) : quel dossier est
 // affiché, et quels groupes sont dépliés pour ce dossier. Conservé explicitement
@@ -8250,7 +8258,6 @@ const CAT_COLORS = {
   telecom:'#4fa8f0', logiciels:'#8A2BE2', bureau:'#607080',
   formation:'#e2564a', materiel:'#5A4A3A', social:'#E6A817', autre:'#66809e'
 };
-const MOIS_NOMS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
 
 // ── Firebase charges ──────────────────────────────────────
 async function saveChargeDb(c) {
@@ -10192,6 +10199,7 @@ function openChangePwd() {
 
 // Vérifier si déjà authentifié
 (function() {
+  if (!document.getElementById('login-screen')) return; // écran legacy absent de cette version — rien à faire
   if (sessionStorage.getItem('phenix-auth') === '1') {
     document.getElementById('login-screen').style.display = 'none';
   } else {
