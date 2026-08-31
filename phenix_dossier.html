@@ -7319,25 +7319,34 @@ async function tvaTelechargerJustificatifs() {
   status.innerHTML = `<div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--accent2);background:var(--accent-bg);border:1.5px solid var(--accent);border-radius:var(--r-md);padding:12px 14px"><div class="ai-loading"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div></div> Préparation de l'archive — récupération des fichiers…</div>`;
 
   const zip = new JSZip();
-  let nbOk = 0, nbEchec = 0;
+  let nbOk = 0;
+  const echecs = []; // { nom, raison } — pour un diagnostic précis affiché à l'écran
   for (const t of avecJustif) {
     const j = stateDossier.tvaJustificatifs[t.id];
+    if (!j.storageUrl) { echecs.push({nom:j.nom||t.libelle, raison:'pas encore migré vers le nouveau stockage — réessayez dans quelques secondes'}); continue; }
     try {
       const resp = await fetch(j.storageUrl);
-      // .arrayBuffer() plutôt que .blob() : on passe des octets bruts et non
-      // ambigus à JSZip, pour éviter tout PDF corrompu à l'ouverture une fois
-      // extrait de l'archive.
+      if (!resp.ok) { echecs.push({nom:j.nom||t.libelle, raison:'téléchargement refusé (HTTP '+resp.status+')'}); continue; }
       const arrayBuffer = await resp.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer);
+      // Vérifie que le contenu récupéré correspond bien à son type déclaré,
+      // pour ne jamais glisser un fichier corrompu/vide dans l'archive sans
+      // le signaler clairement.
+      if (bytes.length === 0) { echecs.push({nom:j.nom||t.libelle, raison:'fichier vide récupéré'}); continue; }
+      if (j.type === 'application/pdf') {
+        const entete = String.fromCharCode(...bytes.slice(0,5));
+        if (entete !== '%PDF-') { echecs.push({nom:j.nom||t.libelle, raison:'le contenu récupéré n\'est pas un PDF valide (en-tête: "'+entete+'")'}); continue; }
+      }
       const ext = (j.nom && j.nom.includes('.')) ? j.nom.slice(j.nom.lastIndexOf('.')) : (j.type==='application/pdf' ? '.pdf' : '.jpg');
       const nomPropre = (t.libelle||'mouvement').replace(/[\/\\:*?"<>|]/g,'').slice(0,40).trim();
       const nomFichier = `${t.date||'sans-date'}_${nomPropre}_${t.montant}e${ext}`;
       zip.file(nomFichier, arrayBuffer, {binary:true});
       nbOk++;
-    } catch(e) { nbEchec++; }
+    } catch(e) { echecs.push({nom:j.nom||t.libelle, raison:e.message||'erreur inconnue'}); }
   }
 
   if (!nbOk) {
-    status.innerHTML = `<div style="background:var(--rbg);border:1.5px solid var(--red);border-radius:var(--r-md);padding:12px 14px;font-size:13px;color:var(--red)">⚠️ Aucun fichier n'a pu être récupéré.</div>`;
+    status.innerHTML = `<div style="background:var(--rbg);border:1.5px solid var(--red);border-radius:var(--r-md);padding:12px 14px;font-size:13px;color:var(--red)">⚠️ Aucun fichier n'a pu être récupéré.<br>${echecs.map(e=>`• ${esc(e.nom)} : ${esc(e.raison)}`).join('<br>')}</div>`;
     return;
   }
 
@@ -7351,8 +7360,12 @@ async function tvaTelechargerJustificatifs() {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 
-  status.innerHTML = '';
-  toast_d(`✅ Archive téléchargée — ${nbOk} fichier(s)${nbEchec?', '+nbEchec+' échec(s)':''}.`);
+  if (echecs.length) {
+    status.innerHTML = `<div style="background:var(--abg);border:1.5px solid var(--amber);border-radius:var(--r-md);padding:12px 14px;font-size:13px;color:var(--amber)">⚠️ Archive téléchargée avec ${nbOk} fichier(s), mais ${echecs.length} exclu(s) :<br>${echecs.map(e=>`• ${esc(e.nom)} : ${esc(e.raison)}`).join('<br>')}</div>`;
+  } else {
+    status.innerHTML = '';
+  }
+  toast_d(`✅ Archive téléchargée — ${nbOk} fichier(s)${echecs.length?', '+echecs.length+' exclu(s), voir détail ci-dessus':''}.`);
 }
 
 // ── Transfert vers Comptabilité ─────────────────────────────
