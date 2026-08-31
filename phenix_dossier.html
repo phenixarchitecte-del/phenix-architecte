@@ -7362,15 +7362,25 @@ function tvaMotsCommuns(texteA, texteB) {
 }
 function tvaTrouverChargeCorrespondante(t) {
   return (stateDossier.charges||[]).find(c => {
-    if (Math.abs((parseFloat(c.montantHt)||0) - t.montant) > 0.01) return false;
+    if (!tvaMontantsProches(t.montant, parseFloat(c.montantHt)||0)) return false;
     return tvaMotsCommuns(c.libelle, t.libelle) > 0;
   });
+}
+// Un mouvement bancaire représente l'argent réellement encaissé (TTC),
+// alors que la Facturation ne suit que le HT (un seul champ "Montant HT" au
+// formulaire, sans saisie de TVA séparée) — comparer les deux montants tels
+// quels ratait donc systématiquement les factures avec TVA. On compare au HT
+// tel quel ET au HT majoré des taux de TVA français courants.
+const TVA_TAUX_COURANTS = [1, 1.20, 1.10, 1.055, 1.021];
+function tvaMontantsProches(montantBanque, montantHt) {
+  if (!montantHt) return false;
+  return TVA_TAUX_COURANTS.some(taux => Math.abs(montantHt*taux - montantBanque) <= Math.max(0.5, montantBanque*0.005));
 }
 function tvaTrouverFactureCorrespondante(t) {
   return (stateDossier.factures||[]).find(f => {
     if (f.type==='devis') return false;
     const montantRef = parseFloat(f.montantPaye)||parseFloat(f.montantHt)||0;
-    if (Math.abs(montantRef - t.montant) > 0.01) return false;
+    if (!tvaMontantsProches(t.montant, montantRef)) return false;
     const texteRef = (f.client||'') + ' ' + (f.objet||'') + ' ' + (f.numero||'');
     return tvaMotsCommuns(texteRef, t.libelle) > 0;
   });
@@ -7484,10 +7494,11 @@ function tvaRenderTransfertModal() {
     const mLabel   = t.sens==='sortie' ? (item.match.libelle||'—') : (item.match.client||item.match.numero||'—');
     const mDate    = t.sens==='sortie' ? item.match.date : (item.match.datePaiement||item.match.dateEmission);
     const mMontant = t.sens==='sortie' ? item.match.montantHt : (item.match.montantPaye||item.match.montantHt);
+    const ecartTtc = Math.abs(mMontant - t.montant) > 0.5 ? ` <span style="color:var(--text3)">(HT ${fmtEurTva(mMontant)} vs ${fmtEurTva(t.montant)} encaissé — écart cohérent avec la TVA)</span>` : '';
     return `<div style="padding:10px 12px;border:1.5px solid var(--amber);background:var(--abg);border-radius:var(--r-md);margin-bottom:8px">
       <span style="font-size:11px;font-weight:700;color:${sensColor};text-transform:uppercase">${sensLbl}</span>
       <div style="font-size:13px;margin-bottom:6px">${fmtDate_d(t.date)} · ${esc(t.libelle)||'—'} · <strong>${fmtEurTva(t.montant)}</strong>${justifTag}</div>
-      <div style="font-size:11.5px;color:var(--amber);margin-bottom:8px"><i class="ti ti-alert-triangle"></i> Ressemble à une entrée déjà existante : ${fmtDate_d(mDate)} · ${esc(mLabel)} · ${fmtEurTva(mMontant)}</div>
+      <div style="font-size:11.5px;color:var(--amber);margin-bottom:8px"><i class="ti ti-alert-triangle"></i> Ressemble à une entrée déjà existante : ${fmtDate_d(mDate)} · ${esc(mLabel)} · ${fmtEurTva(mMontant)}${ecartTtc}</div>
       <div style="display:flex;gap:14px;font-size:12.5px;flex-wrap:wrap">
         <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="tva-choix-${i}" ${item.choix==='ecraser'?'checked':''} onchange="tvaSetTransfertChoix(${i},'ecraser')"> Écraser l'existante</label>
         <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="tva-choix-${i}" ${item.choix==='nouveau'?'checked':''} onchange="tvaSetTransfertChoix(${i},'nouveau')"> Créer quand même</label>
@@ -7532,18 +7543,21 @@ async function tvaConfirmerTransfert() {
 
     if (t.sens === 'sortie') {
       const chargeId = ecrase ? item.match.id : ('charge-tva-'+t.id);
+      // En écrasement, on garde le HT déjà saisi (correct) — le montant du
+      // relevé bancaire est un montant réellement encaissé (TTC), pas un HT ;
+      // il ne sert de valeur par défaut que pour une charge réellement nouvelle.
       const c = {
         id: chargeId,
-        libelle: t.libelle || 'Sortie relevé bancaire',
+        libelle: ecrase ? item.match.libelle : (t.libelle || 'Sortie relevé bancaire'),
         categorie: ecrase ? item.match.categorie : 'autre',
         projetId: ecrase ? (item.match.projetId||'') : '',
-        type: 'variable',
-        montantHt: t.montant,
+        type: ecrase ? item.match.type : 'variable',
+        montantHt: ecrase ? item.match.montantHt : t.montant,
         tvaTaux: ecrase ? (item.match.tvaTaux||20) : 20,
         tvaDed: ecrase ? (item.match.tvaDed||0) : 0,
-        date: t.date,
+        date: ecrase ? item.match.date : t.date,
         frequence: ecrase ? (item.match.frequence||'ponctuelle') : 'ponctuelle',
-        notes: 'Importé depuis la Déclaration TVA (' + tvaMoisNom(r.mois) + ' ' + r.annee + ')',
+        notes: ecrase ? ((item.match.notes||'') + ' · Rapproché avec la Déclaration TVA (' + tvaMoisNom(r.mois) + ' ' + r.annee + ')') : ('Importé depuis la Déclaration TVA (' + tvaMoisNom(r.mois) + ' ' + r.annee + ') — montant du relevé bancaire, à vérifier si HT/TTC'),
         sourceTvaId: t.id,
         updatedAt: new Date().toISOString()
       };
@@ -7552,20 +7566,22 @@ async function tvaConfirmerTransfert() {
     } else {
       const factureId = ecrase ? item.match.id : ('fact-tva-'+t.id);
       const projetChoisi = item.projetId ? stateDossier.projets.find(p=>String(p.id)===String(item.projetId)) : null;
+      // Même logique côté factures : en écrasement, on ne touche pas au HT
+      // déjà correct, on confirme seulement que le paiement est bien arrivé.
       const f = {
         id: factureId,
         type: 'facture',
         numero: ecrase ? item.match.numero : ('REL-'+String(t.id).slice(-6)),
-        projetId: item.projetId || '',
+        projetId: item.projetId || (ecrase ? (item.match.projetId||'') : ''),
         client: projetChoisi ? projetChoisi.client : (ecrase ? item.match.client : (t.libelle||'—')),
         objet: ecrase ? item.match.objet : ('Encaissement — '+(t.libelle||'')),
         dateEmission: ecrase ? item.match.dateEmission : t.date,
         dateEcheance: ecrase ? item.match.dateEcheance : t.date,
         datePaiement: t.date,
-        montantHt: t.montant,
-        montantPaye: t.montant,
+        montantHt: ecrase ? item.match.montantHt : t.montant,
+        montantPaye: ecrase ? (item.match.montantHt||item.match.montantPaye) : t.montant,
         statut: 'payee',
-        notes: 'Importé depuis la Déclaration TVA (' + tvaMoisNom(r.mois) + ' ' + r.annee + ')',
+        notes: ecrase ? ((item.match.notes||'') + ' · Rapproché avec la Déclaration TVA (' + tvaMoisNom(r.mois) + ' ' + r.annee + ')') : ('Importé depuis la Déclaration TVA (' + tvaMoisNom(r.mois) + ' ' + r.annee + ') — montant du relevé bancaire, à vérifier si HT/TTC'),
         sourceTvaId: t.id,
         updatedAt: new Date().toISOString()
       };
