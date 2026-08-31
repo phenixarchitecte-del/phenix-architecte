@@ -6870,8 +6870,8 @@ function renderTvaListeReleves() {
         </div>
         <div style="display:flex;align-items:center;gap:14px">
           <div style="text-align:right">
-            <div style="font-size:11px;color:var(--green)">Entrées ${fmtEur_d(totalEntrees)}</div>
-            <div style="font-size:11px;color:var(--red)">Sorties ${fmtEur_d(totalSorties)}</div>
+            <div style="font-size:11px;color:var(--green)">Entrées ${fmtEurTva(totalEntrees)}</div>
+            <div style="font-size:11px;color:var(--red)">Sorties ${fmtEurTva(totalSorties)}</div>
           </div>
           <span class="badge ${complet?'badge-green':'badge-amber'}">${complet ? 'Complet ✓' : pct+'% justifié'}</span>
           <i class="ti ti-chevron-right" style="color:var(--text3)"></i>
@@ -6992,9 +6992,9 @@ function renderTvaDetail() {
   document.getElementById('tva-detail-soustitre').textContent = `Relevé importé le ${fmtDate_d(r.dateImport)} · ${nbTotal} mouvement(s)`;
 
   document.getElementById('tva-kpi-row').innerHTML = `
-    <div><div class="kpi-label">Entrées</div><div class="kpi-value" style="color:var(--green)">${fmtEur_d(totalEntrees)}</div></div>
-    <div><div class="kpi-label">Sorties</div><div class="kpi-value" style="color:var(--red)">${fmtEur_d(totalSorties)}</div></div>
-    <div><div class="kpi-label">Solde</div><div class="kpi-value">${fmtEur_d(totalEntrees-totalSorties)}</div></div>
+    <div><div class="kpi-label">Entrées</div><div class="kpi-value" style="color:var(--green)">${fmtEurTva(totalEntrees)}</div></div>
+    <div><div class="kpi-label">Sorties</div><div class="kpi-value" style="color:var(--red)">${fmtEurTva(totalSorties)}</div></div>
+    <div><div class="kpi-label">Solde</div><div class="kpi-value">${fmtEurTva(totalEntrees-totalSorties)}</div></div>
     <div><div class="kpi-label">Justifiés</div><div class="kpi-value">${nbJustifies}/${nbTotal}</div></div>`;
 
   const exportStatus = document.getElementById('tva-export-status');
@@ -7024,7 +7024,7 @@ function tvaRowHtml(t) {
   return `<tr>
     <td style="white-space:nowrap">${fmtDate_d(t.date)}</td>
     <td>${esc(t.libelle)||'—'}${noteTag}${transfereTag}</td>
-    <td style="text-align:right;font-weight:600;white-space:nowrap">${fmtEur_d(t.montant)}</td>
+    <td style="text-align:right;font-weight:600;white-space:nowrap">${fmtEurTva(t.montant)}</td>
     <td>${justifCell}</td>
     <td style="white-space:nowrap">
       ${justif ? `<button class="btn btn-sm" onclick="tvaVoirJustificatif('${t.id}')" title="Voir"><i class="ti ti-eye"></i></button>
@@ -7198,7 +7198,7 @@ async function tvaExporterRecap() {
     return `<tr>
       <td style="padding:6px 8px;border-bottom:1px solid #e5e5e5">${fmtDate_d(t.date)}</td>
       <td style="padding:6px 8px;border-bottom:1px solid #e5e5e5">${esc(t.libelle)||'—'}${noteTxt}</td>
-      <td style="padding:6px 8px;border-bottom:1px solid #e5e5e5;text-align:right;white-space:nowrap">${fmtEur_d(t.montant)}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #e5e5e5;text-align:right;white-space:nowrap">${fmtEurTva(t.montant)}</td>
       <td style="padding:6px 8px;border-bottom:1px solid #e5e5e5;color:${statutColor};font-weight:600;white-space:nowrap">${statutTxt}</td>
     </tr>`;
   };
@@ -7210,7 +7210,7 @@ async function tvaExporterRecap() {
     const images = await justifToImages(t);
     images.forEach((img, i) => {
       justifPages += `<div style="page-break-before:always;padding:30px">
-        <div style="font-family:Georgia,serif;font-size:15px;color:#1B2D5B;margin-bottom:4px">${fmtDate_d(t.date)} — ${esc(t.libelle)||'—'} — ${fmtEur_d(t.montant)} (${t.sens==='entree'?'rentrée':'sortie'})${images.length>1?' — page '+(i+1)+'/'+images.length:''}</div>
+        <div style="font-family:Georgia,serif;font-size:15px;color:#1B2D5B;margin-bottom:4px">${fmtDate_d(t.date)} — ${esc(t.libelle)||'—'} — ${fmtEurTva(t.montant)} (${t.sens==='entree'?'rentrée':'sortie'})${images.length>1?' — page '+(i+1)+'/'+images.length:''}</div>
         <img src="${img}" style="max-width:100%;border:1px solid #ddd;border-radius:4px;margin-top:8px">
       </div>`;
     });
@@ -7235,9 +7235,9 @@ async function tvaExporterRecap() {
     <h1>Phénix-Architecture EURL — Déclaration TVA</h1>
     <div class="sub">${tvaMoisNom(r.mois)} ${r.annee} · Récapitulatif transmis au comptable · Généré le ${new Date().toLocaleDateString('fr-FR')}</div>
     <div class="totaux">
-      <div><div class="lbl">Total entrées</div><div class="val" style="color:#2D7A4F">${fmtEur_d(totalEntrees)}</div></div>
-      <div><div class="lbl">Total sorties</div><div class="val" style="color:#C0392B">${fmtEur_d(totalSorties)}</div></div>
-      <div><div class="lbl">Solde</div><div class="val">${fmtEur_d(totalEntrees-totalSorties)}</div></div>
+      <div><div class="lbl">Total entrées</div><div class="val" style="color:#2D7A4F">${fmtEurTva(totalEntrees)}</div></div>
+      <div><div class="lbl">Total sorties</div><div class="val" style="color:#C0392B">${fmtEurTva(totalSorties)}</div></div>
+      <div><div class="lbl">Solde</div><div class="val">${fmtEurTva(totalEntrees-totalSorties)}</div></div>
     </div>
     <h3 style="font-family:Georgia,serif;color:#2D7A4F">Rentrées d'argent (${entrees.length})</h3>
     <table><thead><tr><th>Date</th><th>Libellé</th><th style="text-align:right">Montant</th><th>Justificatif</th></tr></thead>
@@ -7356,7 +7356,7 @@ function tvaRenderTransfertModal() {
         <div style="display:flex;justify-content:space-between;align-items:center">
           <div>
             <span style="font-size:11px;font-weight:700;color:${sensColor};text-transform:uppercase">${sensLbl}</span>
-            <div style="font-size:13px">${fmtDate_d(t.date)} · ${esc(t.libelle)||'—'} · <strong>${fmtEur_d(t.montant)}</strong>${justifTag}</div>
+            <div style="font-size:13px">${fmtDate_d(t.date)} · ${esc(t.libelle)||'—'} · <strong>${fmtEurTva(t.montant)}</strong>${justifTag}</div>
           </div>
           <span class="badge badge-green">Nouveau</span>
         </div>
@@ -7368,8 +7368,8 @@ function tvaRenderTransfertModal() {
     const mMontant = t.sens==='sortie' ? item.match.montantHt : (item.match.montantPaye||item.match.montantHt);
     return `<div style="padding:10px 12px;border:1.5px solid var(--amber);background:var(--abg);border-radius:var(--r-md);margin-bottom:8px">
       <span style="font-size:11px;font-weight:700;color:${sensColor};text-transform:uppercase">${sensLbl}</span>
-      <div style="font-size:13px;margin-bottom:6px">${fmtDate_d(t.date)} · ${esc(t.libelle)||'—'} · <strong>${fmtEur_d(t.montant)}</strong>${justifTag}</div>
-      <div style="font-size:11.5px;color:var(--amber);margin-bottom:8px"><i class="ti ti-alert-triangle"></i> Ressemble à une entrée déjà existante : ${fmtDate_d(mDate)} · ${esc(mLabel)} · ${fmtEur_d(mMontant)}</div>
+      <div style="font-size:13px;margin-bottom:6px">${fmtDate_d(t.date)} · ${esc(t.libelle)||'—'} · <strong>${fmtEurTva(t.montant)}</strong>${justifTag}</div>
+      <div style="font-size:11.5px;color:var(--amber);margin-bottom:8px"><i class="ti ti-alert-triangle"></i> Ressemble à une entrée déjà existante : ${fmtDate_d(mDate)} · ${esc(mLabel)} · ${fmtEurTva(mMontant)}</div>
       <div style="display:flex;gap:14px;font-size:12.5px;flex-wrap:wrap">
         <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="tva-choix-${i}" ${item.choix==='ecraser'?'checked':''} onchange="tvaSetTransfertChoix(${i},'ecraser')"> Écraser l'existante</label>
         <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="tva-choix-${i}" ${item.choix==='nouveau'?'checked':''} onchange="tvaSetTransfertChoix(${i},'nouveau')"> Créer quand même</label>
@@ -7400,7 +7400,7 @@ async function tvaConfirmerTransfert() {
     it.choix !== 'ignorer' && !it.transaction.sansJustificatif && !stateDossier.tvaJustificatifs[it.transaction.id]
   );
   if (sansJustifEnvoyes.length) {
-    const liste = sansJustifEnvoyes.map(it => `- ${fmtDate_d(it.transaction.date)} · ${it.transaction.libelle||'—'} · ${fmtEur_d(it.transaction.montant)}`).join('\n');
+    const liste = sansJustifEnvoyes.map(it => `- ${fmtDate_d(it.transaction.date)} · ${it.transaction.libelle||'—'} · ${fmtEurTva(it.transaction.montant)}`).join('\n');
     const ok = confirm(`${sansJustifEnvoyes.length} mouvement(s) n'ont pas de justificatif :\n\n${liste}\n\nLes envoyer quand même vers Comptabilité ?`);
     if (!ok) return;
   }
@@ -8406,6 +8406,10 @@ async function deleteEchFromModal() {
 }
 // ── HELPERS ────────────────────────────────────────────────
 function fmtEur_d(v){return Number(v).toLocaleString('fr-FR',{maximumFractionDigits:0})+' €';}
+// Formatage dédié à la Déclaration TVA — jamais d'arrondi (toujours 2 décimales,
+// contrairement à fmtEur_d utilisé ailleurs dans l'appli), car un écart d'un
+// centime n'est pas acceptable sur cette partie.
+function fmtEurTva(v){return Number(v).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';}
 function fmtDate_d(s){if(!s)return'—';const d=new Date(s);return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'long',year:'numeric'});}
 function progressHtml(v){return `<div style="display:flex;align-items:center;gap:6px"><div class="progress-bar" style="width:60px"><div class="progress-fill" style="width:${v||0}%"></div></div><span style="font-size:11px">${v||0}%</span></div>`;}
 function statutBadge(s){const m={actif:'badge-green',demarrage:'badge-amber',etude:'badge-gray',cloture:'badge-gray'};const l={actif:'Actif',demarrage:'Démarrage',etude:'Étude',cloture:'Clôturé'};return `<span class="badge ${m[s]||'badge-gray'}">${l[s]||s}</span>`;}
