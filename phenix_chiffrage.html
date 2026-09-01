@@ -74,7 +74,7 @@ body{font-family:var(--font-sans);background-color:var(--bg);background-image:li
 .btn-danger:hover{background:#FDDCDB}
 
 /* STATS CARDS */
-.stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;padding:20px 28px}
+.stats-row{display:grid;grid-template-columns:0.7fr 1fr 1fr 1fr;gap:14px;padding:20px 28px}
 .stat-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r-lg);padding:16px 20px;box-shadow:var(--shadow);border-top:3px solid var(--accent)}
 .stat-label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);font-weight:600}
 .stat-value{font-family:var(--font-serif);font-size:30px;font-weight:400;color:var(--nav);margin-top:4px}
@@ -552,6 +552,7 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
       <div class="stat-card"><div class="stat-label">Nombre de lots</div><div class="stat-value" id="stat-lots">0</div><div class="stat-sub">0 terminé(s)</div></div>
       <div class="stat-card"><div class="stat-label">Total HT</div><div class="stat-value accent" id="stat-ht">0 €</div></div>
       <div class="stat-card"><div class="stat-label">Total TTC</div><div class="stat-value" id="stat-ttc">0 €</div><div class="stat-sub" id="stat-tva-sub">TVA 20%</div></div>
+      <div class="stat-card"><div class="stat-label">Marge totale artisans</div><div class="stat-value" id="stat-marge" style="color:#4fd18b">0 €</div><div class="stat-sub" id="stat-marge-pct">0%</div></div>
     </div>
 
     <!-- TVA générale du projet -->
@@ -1745,6 +1746,11 @@ window.addEventListener('message', function(_pxEv){
     signInWithEmailAndPassword(auth, _pxD.email, _pxD.password).catch(function(){});
   }
 });
+// Signale au Shell que ce module est prêt à recevoir l'auto-login — le Shell
+// répond immédiatement à ce signal (au lieu de tenter "à l'aveugle" pendant
+// quelques secondes), ce qui couvre aussi les cas où Firebase met du temps à
+// se charger (première visite, connexion lente).
+try { window.parent.postMessage({source:'phenix-module', readyForLogin:true}, '*'); } catch(e) {}
 
 const db   = getFirestore(app);
 
@@ -2749,6 +2755,10 @@ function updateStats(lots){
   document.getElementById('stat-lots').nextElementSibling.textContent=valide+' terminé(s)';
   document.getElementById('stat-ht').textContent=fmt(totalClient)+' €';
   document.getElementById('stat-ttc').textContent=fmt(totalTTC)+' €';
+  const margeTotale=totalClient-totalArtisan;
+  const margePct=totalArtisan>0 ? (margeTotale/totalArtisan*100) : 0;
+  document.getElementById('stat-marge').textContent=fmt(margeTotale)+' €';
+  document.getElementById('stat-marge-pct').textContent=margePct.toFixed(1)+'% sur prix artisans';
   const tvaSub=document.getElementById('stat-tva-sub');
   if(tvaSub){
     if(tauxVus.size===0) tvaSub.textContent='TVA 20%';

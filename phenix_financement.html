@@ -59,6 +59,11 @@ window.addEventListener('message', function(_pxEv){
     signInWithEmailAndPassword(auth, _pxD.email, _pxD.password).catch(function(){});
   }
 });
+// Signale au Shell que ce module est prêt à recevoir l'auto-login — le Shell
+// répond immédiatement à ce signal (au lieu de tenter "à l'aveugle" pendant
+// quelques secondes), ce qui couvre aussi les cas où Firebase met du temps à
+// se charger (première visite, connexion lente).
+try { window.parent.postMessage({source:'phenix-module', readyForLogin:true}, '*'); } catch(e) {}
 
 
 // ── Exposition globale pour le code non-module ci-dessous ──

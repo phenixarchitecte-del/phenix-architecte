@@ -332,6 +332,22 @@ onAuthStateChanged(auth, user => {
     document.getElementById('shell-root').style.display = '';
     document.getElementById('main-content').style.display = '';
     document.getElementById('userChip').textContent = me.split('@')[0];
+    // Session déjà active au chargement (reconnexion silencieuse de Firebase,
+    // sans repasser par l'écran de connexion) : le mot de passe n'a alors
+    // jamais été capturé en mémoire cette fois-ci. On le retrouve depuis les
+    // identifiants enregistrés pour l'empreinte (déjà mémorisés lors d'une
+    // connexion précédente), pour que la transmission automatique aux
+    // modules fonctionne quand même — sinon chaque module redemande une
+    // connexion à chaque changement, même après avoir déjà validé l'empreinte.
+    if (!window._phenixCreds) {
+      try {
+        const saved = localStorage.getItem('phenix_bio_creds');
+        if (saved) {
+          const parts = atob(saved).split('|||');
+          if (parts.length === 2) window._phenixCreds = { email: parts[0], password: parts[1] };
+        }
+      } catch(e) {}
+    }
     startListeners();
     // Dossier = page d'accueil du shell, ouverte automatiquement à la connexion
     shellOpenModule('dossier', document.querySelector('.shell-nav-item[data-module="dossier"]'));
@@ -689,7 +705,7 @@ window._phenixBroadcastAutoLogin = function() {
         );
       }
     } catch(e) {}
-    if (tries >= 20) clearInterval(_phenixAutoLoginTimer); // ~3s de tentatives, largement suffisant
+    if (tries >= 40) clearInterval(_phenixAutoLoginTimer); // ~6s — filet de sécurité, le signal readyForLogin couvre le cas normal
   }, 150);
 };
 
@@ -740,6 +756,19 @@ window.addEventListener('message', (ev) => {
   if (msg.source === 'phenix-dossier' && msg.ready && shellPendingOrder && shellCurrentFrame) {
     try { shellCurrentFrame.contentWindow.postMessage(shellPendingOrder, '*'); } catch(e) {}
     shellPendingOrder = null;
+  }
+  // Un module signale qu'il est prêt à recevoir l'auto-login (son script vient
+  // de charger Firebase et d'enregistrer son écouteur) — on répond aussitôt,
+  // sans attendre le prochain tir des tentatives "à l'aveugle" de
+  // _phenixBroadcastAutoLogin, ce qui couvre les cas où le module a mis plus
+  // de temps que prévu à charger (première visite, connexion lente).
+  if (msg.readyForLogin && window._phenixCreds && ev.source) {
+    try {
+      ev.source.postMessage(
+        { source:'phenix-shell', action:'auto-login', email: window._phenixCreds.email, password: window._phenixCreds.password },
+        '*'
+      );
+    } catch(e) {}
   }
   // Dossier ou Chantier demande à basculer vers un autre module
   if ((msg.source === 'phenix-dossier' || msg.source === 'phenix-chantier') && msg.action === 'open-module' && MODULES[msg.module]) {
