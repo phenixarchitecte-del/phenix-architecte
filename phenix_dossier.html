@@ -6926,9 +6926,9 @@ async function handleTvaRelevePdf(file) {
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
-          max_tokens: 4000,
+          max_tokens: 16000,
           system: `Tu analyses un relevé de compte bancaire professionnel français (plusieurs pages possibles). Extrais TOUS les mouvements (crédits ET débits), sans exception, y compris les frais bancaires et prélèvements.
-Retourne UNIQUEMENT ce JSON valide, sans markdown, sans texte autour :
+Retourne UNIQUEMENT ce JSON valide, sans markdown, sans texte autour, sans aucun raisonnement ni commentaire avant ou après :
 {"mouvements":[{"date":"AAAA-MM-JJ","libelle":"...","montant":0,"sens":"entree"}]}
 RÈGLES :
 - "sens" = "entree" si c'est un crédit (argent qui arrive sur le compte), "sortie" si c'est un débit (argent qui sort)
@@ -6936,13 +6936,20 @@ RÈGLES :
 - "libelle" = le libellé tel qu'affiché sur le relevé, nettoyé des références techniques illisibles mais en gardant le nom de l'émetteur/bénéficiaire quand il est visible
 - N'invente aucun mouvement, n'en oublie aucun, ne fusionne jamais deux lignes différentes en une seule
 - Ignore uniquement les lignes de solde (solde précédent / solde suivant / solde reporté)`,
-          messages: [{
-            role: 'user',
-            content: [
-              { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
-              { type: 'text', text: 'Extrais tous les mouvements de ce relevé bancaire.' }
-            ]
-          }]
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
+                { type: 'text', text: 'Extrais tous les mouvements de ce relevé bancaire.' }
+              ]
+            },
+            // Force la réponse à démarrer directement sur le JSON, sans
+            // préambule ni raisonnement à voix haute — évite qu'une réponse
+            // trop longue soit tronquée avant même d'atteindre le JSON utile
+            // (observé sur un relevé à beaucoup de mouvements/pages).
+            { role: 'assistant', content: '{"mouvements":[' }
+          ]
         })
       });
       if (!res.ok) {
@@ -6951,10 +6958,22 @@ RÈGLES :
       }
       const data = await _phenixParseProxyResponse(res);
       if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
-      const text = (data.content||[]).map(b=>b.text||'').join('');
+      const text = '{"mouvements":[' + (data.content||[]).map(b=>b.text||'').join('');
       let parsed;
       try { parsed = JSON.parse(text.replace(/```json|```/g,'').trim()); }
-      catch(pe) { throw new Error('Réponse IA non exploitable : '+text.slice(0,200)); }
+      catch(pe) {
+        // Réponse coupée en cours de liste (relevé exceptionnellement long) —
+        // on récupère les mouvements déjà complets plutôt que de tout perdre.
+        const dernierComplet = text.lastIndexOf('}');
+        if (dernierComplet > 0) {
+          try {
+            parsed = JSON.parse(text.slice(0, dernierComplet+1) + ']}');
+            toast_d('⚠️ Relevé très volumineux : extraction partielle, vérifiez qu\'il ne manque rien en fin de mois.');
+          } catch(pe2) { throw new Error('Réponse IA non exploitable : '+text.slice(0,200)); }
+        } else {
+          throw new Error('Réponse IA non exploitable : '+text.slice(0,200));
+        }
+      }
       const mouvements = parsed.mouvements || [];
       if (!mouvements.length) throw new Error('Aucun mouvement détecté dans ce PDF.');
 
