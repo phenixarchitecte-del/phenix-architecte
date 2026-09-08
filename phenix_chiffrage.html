@@ -1678,9 +1678,25 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
     <!-- Preview -->
     <div id="import-preview" style="display:none;margin-top:14px">
       <div style="font-size:12px;font-weight:700;color:var(--nav);margin-bottom:6px">Aperçu — <span id="preview-count">0</span> lignes détectées</div>
+
+      <!-- Barre d'action groupée : sélectionner plusieurs lignes d'un coup et
+           leur affecter le même lot en une seule action, plutôt que de
+           reprendre chaque ligne une par une. -->
+      <div id="bulk-lot-toolbar" style="display:none;margin-bottom:8px;padding:10px;background:var(--bg2);border-radius:var(--r-md);border:1px solid var(--border)">
+        <div id="bulk-suggestions" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"></div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span id="bulk-selected-count" style="font-size:12px;font-weight:600;color:var(--text2);white-space:nowrap">0 ligne(s) sélectionnée(s)</span>
+          <select id="bulk-lot-existant" style="padding:5px 8px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:12px;font-family:inherit"></select>
+          <button class="btn btn-sm" onclick="appliquerLotExistantSelection()">Affecter à ce lot</button>
+          <span style="color:var(--text3);font-size:12px">ou</span>
+          <input type="text" id="bulk-lot-nouveau" placeholder="Nom du nouveau lot" style="padding:5px 8px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:12px;font-family:inherit;width:160px">
+          <button class="btn btn-sm btn-accent" onclick="appliquerNouveauLotSelection()">Créer ce lot avec ces lignes</button>
+        </div>
+      </div>
+
       <div style="overflow-x:auto;max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r-md)">
         <table class="preview-table" id="preview-table">
-          <thead><tr><th>#</th><th>Désignation</th><th>Qté</th><th>Unité</th><th>PU artisan HT (€)</th><th id="th-lot" style="display:none">Lot</th></tr></thead>
+          <thead><tr><th id="th-select" style="display:none"><input type="checkbox" id="select-all-rows" onchange="toggleSelectAllImportRows(this.checked)"></th><th>#</th><th>Désignation</th><th>Qté</th><th>Unité</th><th>PU artisan HT (€)</th><th id="th-lot" style="display:none">Lot</th></tr></thead>
           <tbody id="preview-tbody"></tbody>
         </table>
       </div>
@@ -3253,12 +3269,18 @@ function parseRawText(text){
   return rows;
 }
 
-function lotSelectOptionsHtml(rowIndex, selectedLotNom){
+function lotSelectOptionsHtml(rowIndex, selectedLotNom, explicitChoice){
   const lots = state.chantiers[state.currentChantier]?.lots || [];
-  let opts = lots.map((l,li) => `<option value="idx:${li}" ${l.nom===selectedLotNom?'selected':''}>${l.num?l.num+' — ':''}${l.nom}</option>`).join('');
+  let opts = lots.map((l,li) => {
+    const val = 'idx:'+li;
+    const isSel = explicitChoice ? explicitChoice===val : l.nom===selectedLotNom;
+    return `<option value="${val}" ${isSel?'selected':''}>${l.num?l.num+' — ':''}${l.nom}</option>`;
+  }).join('');
   const matched = lots.some(l => l.nom === selectedLotNom);
   const newLabel = selectedLotNom && !matched ? selectedLotNom : (selectedLotNom || 'Nouveau lot');
-  opts += `<option value="new" ${(!matched)?'selected':''}>+ Nouveau lot : ${newLabel}</option>`;
+  const newVal = explicitChoice && explicitChoice.startsWith('new:') ? explicitChoice : 'new';
+  const newSel = explicitChoice ? explicitChoice===newVal : !matched;
+  opts += `<option value="${newVal}" ${newSel?'selected':''}>+ Nouveau lot : ${newLabel}</option>`;
   return opts;
 }
 
@@ -3269,9 +3291,13 @@ function showImportPreview(rows){
   const tb=document.getElementById('preview-tbody');
   tb.innerHTML='';
   document.getElementById('th-lot').style.display = importGlobalMode ? '' : 'none';
+  document.getElementById('th-select').style.display = importGlobalMode ? '' : 'none';
+  document.getElementById('bulk-lot-toolbar').style.display = importGlobalMode ? '' : 'none';
   rows.forEach((r,i)=>{
+    r.selected = false;
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td style="color:var(--text3)">${i+1}</td>
+    tr.innerHTML=`<td style="display:${importGlobalMode?'':'none'}"><input type="checkbox" onchange="toggleImportRowCheck(${i},this.checked)"></td>
+      <td style="color:var(--text3)">${i+1}</td>
       <td><input type="text" value="${r.n}" onchange="importPreviewData[${i}].n=this.value" style="width:100%;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit"></td>
       <td><input type="number" value="${r.q}" min="0" step="0.1" style="width:55px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit" onchange="importPreviewData[${i}].q=parseFloat(this.value)||0"></td>
       <td><input type="text" value="${r.u}" style="width:38px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit" onchange="importPreviewData[${i}].u=this.value"></td>
@@ -3285,6 +3311,99 @@ function showImportPreview(rows){
   document.getElementById('btn-confirm-import').style.display=rows.length?'':'none';
   document.getElementById('import-count-btn').textContent=rows.length;
   if(!rows.length)showToast('Aucune ligne détectée — vérifiez le format');
+  if(importGlobalMode) initBulkLotToolbar();
+}
+
+// === Sélection groupée pour l'affectation de lot ==========================
+// Permet de sélectionner d'un coup toutes les lignes d'un même lot (repérées
+// par l'IA, ou à la main) et de décider une seule fois si on crée un nouveau
+// lot ou si on les rattache à un lot existant — au lieu de reprendre chaque
+// ligne une par une quand il y en a 90.
+function toggleImportRowCheck(i, checked){
+  importPreviewData[i].selected = checked;
+  updateBulkSelectedCount();
+}
+
+function toggleSelectAllImportRows(checked){
+  importPreviewData.forEach(r=>r.selected=checked);
+  document.querySelectorAll('#preview-tbody input[type=checkbox]').forEach(cb=>cb.checked=checked);
+  updateBulkSelectedCount();
+}
+
+function updateBulkSelectedCount(){
+  const n = importPreviewData.filter(r=>r.selected).length;
+  const el = document.getElementById('bulk-selected-count');
+  if(el) el.textContent = n+' ligne(s) sélectionnée(s)';
+}
+
+function selectionnerGroupeSuggestion(nom){
+  importPreviewData.forEach((r,i)=>{
+    if((r.lotSuggestion||'').trim() === nom){
+      r.selected = true;
+      const cb = document.querySelectorAll('#preview-tbody input[type=checkbox]')[i];
+      if(cb) cb.checked = true;
+    }
+  });
+  updateBulkSelectedCount();
+  const champNom = document.getElementById('bulk-lot-nouveau');
+  if(champNom && !champNom.value) champNom.value = nom;
+}
+
+function initBulkLotToolbar(){
+  // Chips de sélection rapide : un bouton par nom de lot suggéré par l'IA,
+  // pour cocher en un clic toutes les lignes correspondantes.
+  const noms = [...new Set(importPreviewData.map(r=>(r.lotSuggestion||'').trim()).filter(Boolean))];
+  const box = document.getElementById('bulk-suggestions');
+  box.innerHTML = noms.map(nom => {
+    const n = importPreviewData.filter(r=>(r.lotSuggestion||'').trim()===nom).length;
+    return `<button type="button" class="btn btn-sm" onclick="selectionnerGroupeSuggestion('${nom.replace(/'/g,"\\'")}')" style="font-size:11px;padding:3px 9px"><i class="ti ti-tag" aria-hidden="true"></i> ${esc_dpgf(nom)} (${n})</button>`;
+  }).join('');
+
+  // Liste déroulante des lots déjà existants sur ce chantier
+  const lots = state.chantiers[state.currentChantier]?.lots || [];
+  const sel = document.getElementById('bulk-lot-existant');
+  sel.innerHTML = '<option value="">— Choisir un lot existant —</option>' +
+    lots.map((l,li) => `<option value="idx:${li}">${l.num?l.num+' — ':''}${esc_dpgf(l.nom)}</option>`).join('');
+
+  document.getElementById('bulk-lot-nouveau').value = '';
+  updateBulkSelectedCount();
+}
+
+function appliquerChoixAuxLignesSelectionnees(choice, labelNouveauLot){
+  const indices = importPreviewData.map((r,i)=>r.selected?i:-1).filter(i=>i>=0);
+  if(!indices.length){ showToast('Aucune ligne sélectionnée'); return; }
+  indices.forEach(i=>{
+    importPreviewData[i].lotChoice = choice;
+    if(labelNouveauLot) importPreviewData[i].lotSuggestion = labelNouveauLot;
+  });
+  // Reflète le choix dans les menus déroulants individuels de chaque ligne
+  const selects = document.querySelectorAll('#preview-tbody select');
+  indices.forEach(i=>{
+    if(selects[i]){
+      // Reconstruit les options pour que la nouvelle valeur soit bien listée
+      selects[i].innerHTML = lotSelectOptionsHtml(i, labelNouveauLot || importPreviewData[i].lotSuggestion, choice);
+      selects[i].value = choice;
+    }
+  });
+  // Désélectionne tout une fois l'affectation faite, pour repartir sur une
+  // sélection propre pour le prochain groupe (sinon elle se cumulerait avec
+  // la précédente et écraserait un choix déjà fait).
+  toggleSelectAllImportRows(false);
+  document.getElementById('bulk-lot-nouveau').value = '';
+  document.getElementById('bulk-lot-existant').value = '';
+  showToast(indices.length+' ligne(s) affectée(s)');
+}
+
+function appliquerLotExistantSelection(){
+  const val = document.getElementById('bulk-lot-existant').value;
+  if(!val){ showToast('Choisissez un lot existant'); return; }
+  appliquerChoixAuxLignesSelectionnees(val, null);
+}
+
+function appliquerNouveauLotSelection(){
+  const nom = document.getElementById('bulk-lot-nouveau').value.trim();
+  if(!nom){ showToast('Indiquez un nom de lot'); return; }
+  appliquerChoixAuxLignesSelectionnees('new:'+nom, nom);
 }
 
 function confirmImportArtisan(){
@@ -3326,6 +3445,19 @@ function confirmImportArtisan(){
     let lotIdx;
     if(choice.startsWith('idx:')){
       lotIdx = parseInt(choice.split(':')[1]);
+    } else if(choice.startsWith('new:')){
+      // Nom de lot explicite (affectation groupée) — on prend tout ce qui suit
+      // "new:" tel quel (au cas où le nom contiendrait lui-même un ":").
+      const nom = choice.slice(4).trim() || 'Lot importé';
+      if(newLotCache[nom]!==undefined){
+        lotIdx = newLotCache[nom];
+      } else {
+        const num='LOT '+(chantier.lots.length+1).toString().padStart(2,'0');
+        chantier.lots.push({num,nom,postes:[],aleas:5,honoraires:5,tva:20,statut:'Chiffrage',prestation:'std',notes:'Créé automatiquement depuis import devis artisan (IA)',marge:marge});
+        lotIdx = chantier.lots.length-1;
+        newLotCache[nom]=lotIdx;
+        nbCreated++;
+      }
     } else {
       const nom = (r.lotSuggestion||'').trim() || 'Lot importé';
       if(newLotCache[nom]!==undefined){
