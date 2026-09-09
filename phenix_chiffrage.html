@@ -1689,6 +1689,7 @@ if (window.parent !== window) {
     <!-- Preview -->
     <div id="import-preview" style="display:none;margin-top:14px">
       <div style="font-size:12px;font-weight:700;color:var(--nav);margin-bottom:6px">Aperçu — <span id="preview-count">0</span> lignes détectées</div>
+      <div id="import-controle-total" style="display:none;margin-bottom:8px"></div>
 
       <!-- Barre d'action groupée : sélectionner plusieurs lignes d'un coup et
            leur affecter le même lot en une seule action, plutôt que de
@@ -3151,15 +3152,19 @@ async function analyzePdfArtisan(base64){
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
-        model:'claude-haiku-4-5-20251001',
+        // Modèle plus capable que Haiku : sur un devis long et très répétitif
+        // (des dizaines de lignes quasi identiques), Haiku dupliquait des
+        // lignes et gonflait le total. Sonnet suit fidèlement le tableau.
+        model:'claude-sonnet-4-6',
         max_tokens:16000,
         metadata:{user_id:'chiffrage-import-pdf'},
         system:`Tu es un assistant spécialisé dans l'analyse de devis du bâtiment français.
 Analyse le devis artisan fourni et extrais TOUTES les lignes de prestations.
 Retourne UNIQUEMENT un JSON valide, sans markdown, sans texte avant ou après :
-{"postes":[{"n":"Désignation complète de la prestation","q":1.0,"u":"m²","pu":150.00${lotFieldSchema}},...]}
+{"totalHtDevis":13595.82,"postes":[{"n":"Désignation complète de la prestation","q":1.0,"u":"m²","pu":150.00${lotFieldSchema}},...]}
 
 RÈGLES STRICTES :
+- "totalHtDevis" : le TOTAL HT tel qu'imprimé sur le devis (dans le récapitulatif en fin de document). Recopie-le exactement, ne le recalcule pas. Si absent, mettre 0.
 - "n" : désignation complète (libellé de la ligne), SANS puce ni tiret de liste en début de texte (retire tout "-", "•", "*" placé au début, même si le devis source les affiche ainsi)
 - "q" : quantité numérique (ex: 80, 12.5) — si non trouvée mettre 1
 - "u" : unité (m², ml, m³, u, ff, h, kg, ens, forfait…) — normaliser en minuscules
@@ -3167,7 +3172,8 @@ RÈGLES STRICTES :
 - Ignorer les lignes de titre/sous-total/total/TVA/mentions légales
 - Inclure TOUTES les lignes de prestations, même celles sans prix
 - Si une ligne a un montant total mais pas de PU : diviser montant/qté pour obtenir PU
-- Utiliser le point comme séparateur décimal${lotRules}`,
+- Utiliser le point comme séparateur décimal
+- ATTENTION AUX RÉPÉTITIONS : ce type de devis contient souvent des dizaines de lignes quasi identiques (même libellé, même prix, sur des pièces différentes). Recopie le tableau ligne par ligne dans l'ordre exact, sans jamais dupliquer une ligne ni en inventer. Le nombre de lignes que tu produis doit correspondre exactement au nombre de lignes du tableau.${lotRules}`,
         messages:[{
           role:'user',
           content:[
@@ -3202,13 +3208,41 @@ RÈGLES STRICTES :
     // Filet de sécurité : retire toute puce/tiret de liste résiduel en tête de désignation
     // (ex: "-Prise de courant" → "Prise de courant"), même si l'IA ne l'a pas fait.
     const nettoyerDesignation = s => String(s||'').replace(/^[\s]*[-•*–—]+[\s]*/, '').trim();
-    showImportPreview(parsed.postes.map(p=>({
+    const postesExtraits = parsed.postes.map(p=>({
       n:nettoyerDesignation(p.n),
       q:parseFloat(p.q)||1,
       u:p.u||'u',
       puArtisan:parseFloat(p.pu)||0,
       lotSuggestion:p.lot||''
-    })));
+    }));
+    showImportPreview(postesExtraits);
+
+    // Contrôle de cohérence : compare la somme des lignes extraites au total HT
+    // imprimé sur le devis. Sur un devis long et répétitif, l'IA peut dupliquer
+    // ou oublier des lignes — cet écart le rend visible immédiatement, au lieu
+    // de se découvrir plus tard dans le chiffrage.
+    const totalExtrait = postesExtraits.reduce((s,p)=>s+(p.q*p.puArtisan),0);
+    const totalDevis = parseFloat(parsed.totalHtDevis)||0;
+    const zoneAlerte = document.getElementById('import-controle-total');
+    if(zoneAlerte){
+      if(totalDevis>0 && Math.abs(totalExtrait-totalDevis) > Math.max(1, totalDevis*0.005)){
+        const ecart = totalExtrait-totalDevis;
+        zoneAlerte.style.display='';
+        zoneAlerte.innerHTML = `<div style="background:var(--danger-bg);border:1.5px solid var(--danger);border-radius:var(--r-md);padding:10px 12px;font-size:12.5px;color:var(--danger);line-height:1.5">
+          ⚠️ <strong>Écart détecté avec le devis</strong><br>
+          Total du devis : <strong>${fmt(totalDevis)} €</strong> — somme des lignes extraites : <strong>${fmt(totalExtrait)} €</strong>
+          (${ecart>0?'+':''}${fmt(ecart)} €).<br>
+          Des lignes ont pu être dupliquées ou oubliées : vérifiez l'aperçu ci-dessus avant d'importer.
+        </div>`;
+      } else if(totalDevis>0){
+        zoneAlerte.style.display='';
+        zoneAlerte.innerHTML = `<div style="background:var(--success-bg);border:1.5px solid var(--success);border-radius:var(--r-md);padding:10px 12px;font-size:12.5px;color:var(--success)">
+          ✓ Total conforme au devis : <strong>${fmt(totalDevis)} €</strong> HT
+        </div>`;
+      } else {
+        zoneAlerte.style.display='none';
+      }
+    }
     showToast('✓ '+parsed.postes.length+' postes extraits par l\'IA');
   }catch(err){
     console.error('analyzePdfArtisan error:',err);
