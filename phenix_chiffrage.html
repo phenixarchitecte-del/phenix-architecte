@@ -589,6 +589,7 @@ if (window.parent !== window) {
         <table>
           <thead>
             <tr>
+              <th style="width:36px;text-align:center" title="Inclure ce lot dans les totaux"><i class="ti ti-eye" aria-hidden="true"></i></th>
               <th style="width:70px">LOT</th>
               <th>Désignation</th>
               <th style="width:110px">HT</th>
@@ -2546,13 +2547,17 @@ function renderLotsTable(){
     const margeEur=travClient-travArtisan;
     const margePct=travArtisan>0?Math.round((margeEur/travArtisan)*100):0;
     const sc={Chiffrage:'s-chiffrage',Valide:'s-valide',Revision:'s-revision'}[lot.statut||'Chiffrage']||'s-chiffrage';
+    const exclu = !!lot.exclu;
+    const styleBarre = exclu ? 'text-decoration:line-through;opacity:.45' : '';
     const tr=document.createElement('tr');
+    if(exclu) tr.style.opacity='.6';
     tr.innerHTML=`
-      <td class="lot-num">${lot.num||''}</td>
-      <td><div class="lot-name">${lot.nom}</div><div style="font-size:10px;color:var(--text3)">Achat artisan : ${fmt(travArtisan)} € HT</div></td>
-      <td class="ht-val">${fmt(ht)} €<br><span class="marge-badge${margeEur<0?' neg':''}">${margePct>=0?'+':''}${margePct}%</span></td>
-      <td class="ttc-val">${fmt(ttc)} €</td>
-      <td><span class="status-badge ${sc}">${lot.statut||'Chiffrage'}</span></td>
+      <td style="text-align:center"><input type="checkbox" ${exclu?'':'checked'} title="Décocher pour exclure ce lot des totaux (comparaison entre artisans, par exemple)" onchange="toggleLotExclusion(${li},!this.checked)"></td>
+      <td class="lot-num" style="${styleBarre}">${lot.num||''}</td>
+      <td style="${styleBarre}"><div class="lot-name">${lot.nom}</div><div style="font-size:10px;color:var(--text3)">Achat artisan : ${fmt(travArtisan)} € HT</div></td>
+      <td class="ht-val" style="${styleBarre}">${fmt(ht)} €<br><span class="marge-badge${margeEur<0?' neg':''}">${margePct>=0?'+':''}${margePct}%</span></td>
+      <td class="ttc-val" style="${styleBarre}">${fmt(ttc)} €</td>
+      <td><span class="status-badge ${sc}">${lot.statut||'Chiffrage'}</span>${exclu?'<div style="font-size:10px;color:var(--danger);margin-top:3px;font-weight:600">Exclu du total</div>':''}</td>
       <td class="row-actions">
         <button class="btn btn-sm btn-icon" onclick="moveLot(${li},-1)" ${ri===0?'disabled style="opacity:.3"':''} title="Monter"><i class="ti ti-arrow-up" aria-hidden="true"></i></button>
         <button class="btn btn-sm btn-icon" onclick="moveLot(${li},1)" ${ri===filtered.length-1?'disabled style="opacity:.3"':''} title="Descendre"><i class="ti ti-arrow-down" aria-hidden="true"></i></button>
@@ -2562,6 +2567,19 @@ function renderLotsTable(){
     tb.appendChild(tr);
   });
   updateStats(lots);
+}
+
+// Inclure/exclure un lot des totaux du chantier (Nombre de lots, Total HT/TTC,
+// Marge) sans le supprimer — utile pour comparer deux devis d'artisans sur un
+// même corps de métier (ex. deux électriciens) en ne gardant qu'un lot actif
+// à la fois. Le lot exclu reste visible, barré, dans la liste.
+function toggleLotExclusion(li, exclu){
+  const idx=state.currentChantier;
+  if(idx===null||!state.chantiers[idx])return;
+  const lot=state.chantiers[idx].lots[li];
+  if(!lot)return;
+  lot.exclu = !!exclu;
+  renderLotsTable();
 }
 
 // ── Export synthèse des lots vers Phénix Financement ─────────
@@ -2762,7 +2780,8 @@ window.confirmerExportAppelsOffres = confirmerExportAppelsOffres;
 function updateStats(lots){
   let totalArtisan=0,totalClient=0,totalTTC=0;
   const tauxVus=new Set();
-  lots.forEach(lot=>{
+  const lotsInclus = lots.filter(l=>!l.exclu);
+  lotsInclus.forEach(lot=>{
     let lotArtisan=0, lotClient=0;
     (lot.postes||[]).forEach(p=>{
       const q=parseFloat(p.q)||0;
@@ -2779,9 +2798,12 @@ function updateStats(lots){
     tauxVus.add(tauxLot);
     totalTTC+=lotClient*(1+tauxLot/100);
   });
-  const valide=lots.filter(l=>l.statut==='Valide').length;
+  const valide=lotsInclus.filter(l=>l.statut==='Valide').length;
+  const nbExclus = lots.length - lotsInclus.length;
   document.getElementById('stat-lots').textContent=lots.length;
-  document.getElementById('stat-lots').nextElementSibling.textContent=valide+' terminé(s)';
+  document.getElementById('stat-lots').nextElementSibling.textContent = nbExclus
+    ? valide+' terminé(s) · '+nbExclus+' exclu(s) du total'
+    : valide+' terminé(s)';
   document.getElementById('stat-ht').textContent=fmt(totalClient)+' €';
   document.getElementById('stat-ttc').textContent=fmt(totalTTC)+' €';
   const margeTotale=totalClient-totalArtisan;
@@ -4001,15 +4023,21 @@ function renderLotsMobileCards(){
     const margeEur = travClient - travArtisan;
     const margePct = travArtisan > 0 ? Math.round((margeEur/travArtisan)*100) : 0;
     const sc = {Chiffrage:'s-chiffrage', Valide:'s-valide', Revision:'s-revision'}[lot.statut||'Chiffrage'] || 's-chiffrage';
+    const exclu = !!lot.exclu;
+    const styleBarreMobile = exclu ? 'text-decoration:line-through;opacity:.5' : '';
 
     const card = document.createElement('div');
-    card.style.cssText = 'background:var(--surface);border-radius:var(--r-lg);padding:14px;margin-bottom:10px;box-shadow:var(--shadow);border:1.5px solid var(--border)';
+    card.style.cssText = 'background:var(--surface);border-radius:var(--r-lg);padding:14px;margin-bottom:10px;box-shadow:var(--shadow);border:1.5px solid var(--border)'+(exclu?';opacity:.65':'');
     card.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-        <div>
-          <div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.06em;text-transform:uppercase">${lot.num||''}</div>
-          <div style="font-size:16px;font-weight:600;color:var(--text);margin-top:2px">${lot.nom}</div>
-        </div>
+        <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer">
+          <input type="checkbox" ${exclu?'':'checked'} style="margin-top:3px" onchange="toggleLotExclusion(${li},!this.checked)">
+          <div>
+            <div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.06em;text-transform:uppercase">${lot.num||''}</div>
+            <div style="font-size:16px;font-weight:600;color:var(--text);margin-top:2px;${styleBarreMobile}">${lot.nom}</div>
+            ${exclu?'<div style="font-size:11px;color:var(--danger);font-weight:600;margin-top:2px">Exclu du total</div>':''}
+          </div>
+        </label>
         <span class="status-badge ${sc}" style="font-size:10px">${lot.statut||'Chiffrage'}</span>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
