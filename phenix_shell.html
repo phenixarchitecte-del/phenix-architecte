@@ -198,7 +198,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
   <div style="font-size:11px;color:rgba(255,255,255,.65);margin-bottom:12px">Votre empreinte restera stockée uniquement sur cet appareil.</div>
   <div style="display:flex;gap:8px">
     <button id="pl-enroll-btn" style="flex:1;padding:9px;border:none;border-radius:7px;background:linear-gradient(135deg,#4fa8f0,#2f6fc0);color:#fff;font-size:13px;font-weight:600;cursor:pointer">Activer</button>
-    <button onclick="document.getElementById('pl-enroll-wrap').style.display='none'" style="flex:1;padding:9px;border:1.5px solid rgba(255,255,255,.2);border-radius:7px;background:transparent;color:rgba(255,255,255,.6);font-size:13px;cursor:pointer">Plus tard</button>
+    <button onclick="phenixRefuserEnrolementBio()" style="flex:1;padding:9px;border:1.5px solid rgba(255,255,255,.2);border-radius:7px;background:transparent;color:rgba(255,255,255,.6);font-size:13px;cursor:pointer">Non merci</button>
   </div>
 </div>
 
@@ -355,20 +355,10 @@ onAuthStateChanged(auth, user => {
     // Proposition d'activation de l'empreinte — rattachée ICI (à l'événement de
     // connexion) plutôt qu'à la fonction de login par mot de passe : elle se
     // déclenche ainsi quel que soit le chemin de connexion, et après que l'écran
-    // de connexion a été refermé.
+    // de connexion a été refermé. Le contrôle (déjà activée ? déjà refusée ?)
+    // est centralisé dans phenixProposerEnrolementBio.
     try {
-      if (!localStorage.getItem('phenix_bio_credId') && window.PublicKeyCredential) {
-        PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(ok => {
-          if (!ok) return;
-          const wrap = document.getElementById('pl-enroll-wrap');
-          const bbtn = document.getElementById('pl-enroll-btn');
-          if (!wrap || !bbtn) return;
-          setTimeout(() => {
-            wrap.style.display = 'block';
-            bbtn.onclick = () => { if (window.phenixBioEnroll) window.phenixBioEnroll(user); };
-          }, 600);
-        }).catch(()=>{});
-      }
+      if (window.phenixProposerEnrolementBio) window.phenixProposerEnrolementBio(user);
     } catch(e) {}
   } else {
     ov.style.display = 'flex';
@@ -400,23 +390,10 @@ window.doLogin = function() {
       // chaque changement de module.
       window._phenixCreds = { email: email, password: pwd };
       window._phenixBroadcastAutoLogin();
-      // Proposer l'activation de l'empreinte si l'appareil la gère et qu'aucune
-      // n'est encore enregistrée. Intégré ici (script module) et non dans le
-      // script classique : les modules s'exécutent en dernier, donc toute
-      // redéfinition de doLogin ailleurs serait écrasée par celle-ci.
+      // Proposition d'empreinte : contrôle centralisé (déjà activée ? refusée ?)
+      // dans phenixProposerEnrolementBio, appelée aussi depuis onAuthStateChanged.
       try {
-        if (!localStorage.getItem('phenix_bio_credId') && window.PublicKeyCredential) {
-          PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(ok => {
-            if (ok) {
-              const wrap = document.getElementById('pl-enroll-wrap');
-              const bbtn = document.getElementById('pl-enroll-btn');
-              if (wrap && bbtn) {
-                wrap.style.display = 'block';
-                bbtn.onclick = () => { if (window.phenixBioEnroll) window.phenixBioEnroll(cred.user); };
-              }
-            }
-          }).catch(()=>{});
-        }
+        if (window.phenixProposerEnrolementBio) window.phenixProposerEnrolementBio(cred.user);
       } catch(e) {}
     })
     .catch(e => {
@@ -822,6 +799,10 @@ function phenixBioReset(){
   localStorage.removeItem(BIO_KEY);
   localStorage.removeItem(BIO_EMAIL_KEY);
   localStorage.removeItem('phenix_bio_creds');
+  // Efface aussi un éventuel refus antérieur, sinon la proposition
+  // d'activation ne réapparaîtrait plus jamais après une réinitialisation.
+  localStorage.removeItem('phenix_bio_enroll_refuse');
+  _bioPropositionFaite = false;
   const lbl = document.getElementById('pl-bio-label'); if(lbl) lbl.textContent = 'Activer l\'empreinte après connexion';
   const btn = document.getElementById('pl-bio-btn'); if(btn) btn.onclick = () => document.getElementById('pl-pwd').focus();
   const err = document.getElementById('pl-err');
@@ -879,6 +860,45 @@ async function phenixBioLogin(){
     btn.innerHTML = '<span style="font-size:24px">☝️</span> <span>Se connecter avec empreinte</span>';
   }
 }
+
+// ════════════════════════════════════════════════════════════
+//  Proposition d'activation de l'empreinte — point d'entrée UNIQUE
+//  Trois endroits différents proposaient l'enrôlement, et « Plus tard »
+//  ne faisait que masquer la carte sans rien mémoriser : la proposition
+//  revenait donc à chaque connexion. Désormais, un seul contrôle
+//  centralisé, et un refus est retenu définitivement sur cet appareil.
+// ════════════════════════════════════════════════════════════
+const BIO_REFUS_KEY = 'phenix_bio_enroll_refuse';
+let _bioPropositionFaite = false; // évite aussi les doublons dans une même session
+
+function phenixRefuserEnrolementBio(){
+  try { localStorage.setItem(BIO_REFUS_KEY, '1'); } catch(e) {}
+  const wrap = document.getElementById('pl-enroll-wrap');
+  if (wrap) wrap.style.display = 'none';
+}
+window.phenixRefuserEnrolementBio = phenixRefuserEnrolementBio;
+
+function phenixProposerEnrolementBio(user){
+  if (_bioPropositionFaite) return;               // déjà proposé dans cette session
+  if (!user) return;
+  try {
+    if (localStorage.getItem('phenix_bio_credId')) return; // empreinte déjà active
+    if (localStorage.getItem(BIO_REFUS_KEY)) return;       // refus déjà exprimé
+  } catch(e) {}
+  if (!window.PublicKeyCredential) return;
+  _bioPropositionFaite = true;
+  PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(ok => {
+    if (!ok) return;
+    const wrap = document.getElementById('pl-enroll-wrap');
+    const bbtn = document.getElementById('pl-enroll-btn');
+    if (!wrap || !bbtn) return;
+    setTimeout(() => {
+      wrap.style.display = 'block';
+      bbtn.onclick = () => { if (window.phenixBioEnroll) window.phenixBioEnroll(user); };
+    }, 600);
+  }).catch(()=>{});
+}
+window.phenixProposerEnrolementBio = phenixProposerEnrolementBio;
 
 async function phenixBioEnroll(userOverride){
   const err = document.getElementById('pl-err');
@@ -940,15 +960,7 @@ window.doLogin = function(){
   const err   = document.getElementById('pl-err'); if(err){ err.style.color='#FFB4A8'; err.textContent=''; }
   const btn   = document.getElementById('pl-btn'); if(btn) btn.disabled = true;
   window._auth.login(email, pwd).then((cred) => {
-    const user = cred.user;
-    if(!localStorage.getItem(BIO_KEY) && window.PublicKeyCredential){
-      PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(ok => {
-        if(ok){
-          const wrap = document.getElementById('pl-enroll-wrap');
-          if(wrap){ wrap.style.display='block'; document.getElementById('pl-enroll-btn').onclick = () => phenixBioEnroll(user); }
-        }
-      });
-    }
+    if (window.phenixProposerEnrolementBio) window.phenixProposerEnrolementBio(cred.user);
   }).catch((e) => {
     const c = (e && e.code) || '';
     if(err) err.textContent =

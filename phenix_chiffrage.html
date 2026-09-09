@@ -432,6 +432,17 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
 * { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 
 </style>
+<style id="px-iframe-hide"></style>
+<script>
+// Chargé dans le Shell (iframe) : masque immédiatement l'écran de connexion
+// de ce module, avant même que Firebase ne réponde. Sans ça, l'écran (et sa
+// demande d'empreinte) apparaissait une fraction de seconde à chaque
+// changement de module, alors que le Shell a déjà authentifié l'utilisateur.
+if (window.parent !== window) {
+  document.getElementById('px-iframe-hide').textContent =
+    '#phenix-login,#login-overlay{display:none!important}';
+}
+</script>
 </head>
 <body>
 
@@ -1804,6 +1815,7 @@ onAuthStateChanged(auth, user=>{
     if(ov)ov.style.display='none';
     if(!_dispatched){_dispatched=true;loadChantiers();}
   } else {
+    if (window.parent !== window) { if(ov) ov.style.display='none'; return; } // dans le Shell : c'est lui qui authentifie
     if(ov)ov.style.display='flex';
   }
 });
@@ -6374,7 +6386,13 @@ async function phenixBioEnroll(userOverride){
   }
 }
 
-document.addEventListener('DOMContentLoaded', phenixBioInit);
+// Chargé dans le Shell (iframe) : le Shell gère seul l'authentification et
+// transmet la connexion à ce module. On n'initialise donc PAS la biométrie
+// ici, sinon l'empreinte serait redemandée à chaque changement de module.
+document.addEventListener('DOMContentLoaded', function(){
+  if (window.parent !== window) return; // dans le Shell → rien à faire
+  phenixBioInit();
+});
 window.phenixBioLogin  = phenixBioLogin;
 window.phenixBioEnroll = phenixBioEnroll;
 window.phenixBioReset  = phenixBioReset;

@@ -482,6 +482,7 @@ onAuthStateChanged(auth, user => {
     if (ov) ov.style.display = 'none';
     if (!_phenixDispatched) { _phenixDispatched = true; window.dispatchEvent(new Event('firebase-ready')); }
   } else {
+    if (window.parent !== window) { if (ov) ov.style.display = 'none'; return; } // dans le Shell : c'est lui qui authentifie
     if (ov) ov.style.display = 'flex';
   }
 });
@@ -1799,6 +1800,17 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
 #chantierSidebar, #sidebar_d { will-change: transform; -webkit-backface-visibility: hidden; }
 
 </style>
+<style id="px-iframe-hide"></style>
+<script>
+// Chargé dans le Shell (iframe) : masque immédiatement l'écran de connexion
+// de ce module, avant même que Firebase ne réponde. Sans ça, l'écran (et sa
+// demande d'empreinte) apparaissait une fraction de seconde à chaque
+// changement de module, alors que le Shell a déjà authentifié l'utilisateur.
+if (window.parent !== window) {
+  document.getElementById('px-iframe-hide').textContent =
+    '#phenix-login,#login-overlay{display:none!important}';
+}
+</script>
 </head>
 <body>
 <div id="phenix-login" style="display:flex;position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#0F1E3D,#1B2D5B,#2A5298);align-items:center;justify-content:center;padding:20px;font-family:'DM Sans',system-ui,sans-serif">
@@ -6359,7 +6371,13 @@ function chantierBioReset(){
   var em=document.getElementById('pl-email');if(em){em.value='';em.readOnly=false;em.style.background='';}
   var err=document.getElementById('pl-err');if(err){err.style.color='#4db8e8';err.textContent='Empreinte supprimée.';}
 }
-document.addEventListener('DOMContentLoaded',chantierBioInit);
+// Chargé dans le Shell (iframe) : le Shell gère seul l'authentification et
+// transmet la connexion à ce module. On n'initialise donc PAS la biométrie
+// ici, sinon l'empreinte serait redemandée à chaque changement de module.
+document.addEventListener('DOMContentLoaded', function(){
+  if (window.parent !== window) return; // dans le Shell → rien à faire
+  chantierBioInit();
+});
 </script>
 </body>
 </html>

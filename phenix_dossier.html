@@ -441,6 +441,11 @@ onAuthStateChanged(auth, user => {
     // déjà valide). C'est ce qui causait un déclenchement accidentel en
     // cliquant ailleurs dans l'appli (ex. le bouton menu) juste après une
     // connexion déjà établie via le shell.
+    // Chargé dans le Shell (iframe) : c'est le Shell qui authentifie et
+    // transmet la connexion — on n'affiche donc ni écran de connexion ni
+    // demande d'empreinte, sinon elle serait redemandée à chaque changement
+    // de module.
+    if (window.parent !== window) { if (ov) ov.style.display = 'none'; return; }
     if (typeof phenixBioInit === 'function') phenixBioInit();
   }
 });
@@ -1980,6 +1985,17 @@ button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
 #chantierSidebar, #sidebar_d { will-change: transform; -webkit-backface-visibility: hidden; }
 
 </style>
+<style id="px-iframe-hide"></style>
+<script>
+// Chargé dans le Shell (iframe) : masque immédiatement l'écran de connexion
+// de ce module, avant même que Firebase ne réponde. Sans ça, l'écran (et sa
+// demande d'empreinte) apparaissait une fraction de seconde à chaque
+// changement de module, alors que le Shell a déjà authentifié l'utilisateur.
+if (window.parent !== window) {
+  document.getElementById('px-iframe-hide').textContent =
+    '#phenix-login,#login-overlay{display:none!important}';
+}
+</script>
 </head>
 <body>
 <div id="phenix-login" style="display:flex;position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#0a1628,#12233f,#2f6fc0);align-items:center;justify-content:center;padding:20px;font-family:'DM Sans',system-ui,sans-serif">

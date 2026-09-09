@@ -120,6 +120,7 @@ onAuthStateChanged(auth, user => {
     if(chip) chip.textContent = user.email || '';
     if(!_plDispatched){ _plDispatched = true; window.dispatchEvent(new Event('firebase-ready')); }
   } else {
+    if (window.parent !== window) { if(ov) ov.style.display = 'none'; return; } // dans le Shell : c'est lui qui authentifie
     if(ov) ov.style.display = 'flex';
   }
 });
@@ -574,6 +575,17 @@ onAuthStateChanged(auth, user => {
     font-size:12px; color:#fff; font-weight:500;
   }
 </style>
+<style id="px-iframe-hide"></style>
+<script>
+// Chargé dans le Shell (iframe) : masque immédiatement l'écran de connexion
+// de ce module, avant même que Firebase ne réponde. Sans ça, l'écran (et sa
+// demande d'empreinte) apparaissait une fraction de seconde à chaque
+// changement de module, alors que le Shell a déjà authentifié l'utilisateur.
+if (window.parent !== window) {
+  document.getElementById('px-iframe-hide').textContent =
+    '#phenix-login,#login-overlay{display:none!important}';
+}
+</script>
 </head>
 <body>
 

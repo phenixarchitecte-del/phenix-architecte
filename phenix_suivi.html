@@ -154,6 +154,17 @@ body{font-family:'DM Sans',system-ui,sans-serif;background-color:var(--bg);backg
 
 @media(max-width:600px){.card-top{flex-direction:column}.card-due{text-align:left}}
 </style>
+<style id="px-iframe-hide"></style>
+<script>
+// Chargé dans le Shell (iframe) : masque immédiatement l'écran de connexion
+// de ce module, avant même que Firebase ne réponde. Sans ça, l'écran (et sa
+// demande d'empreinte) apparaissait une fraction de seconde à chaque
+// changement de module, alors que le Shell a déjà authentifié l'utilisateur.
+if (window.parent !== window) {
+  document.getElementById('px-iframe-hide').textContent =
+    '#phenix-login,#login-overlay{display:none!important}';
+}
+</script>
 </head>
 <body>
 
@@ -388,6 +399,7 @@ onAuthStateChanged(auth, user => {
     document.getElementById('userChip').textContent = me.split('@')[0];
     startListeners();
   } else {
+    if (window.parent !== window) { ov.style.display = 'none'; return; } // dans le Shell : c'est lui qui authentifie
     ov.style.display = 'flex';
     document.getElementById('main-content').style.display = 'none';
     if (unsubProjets) { unsubProjets(); unsubProjets = null; }
