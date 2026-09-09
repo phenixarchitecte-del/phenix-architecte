@@ -3152,7 +3152,7 @@ async function analyzePdfArtisan(base64){
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
         model:'claude-haiku-4-5-20251001',
-        max_tokens:4000,
+        max_tokens:16000,
         metadata:{user_id:'chiffrage-import-pdf'},
         system:`Tu es un assistant spécialisé dans l'analyse de devis du bâtiment français.
 Analyse le devis artisan fourni et extrais TOUTES les lignes de prestations.
@@ -3181,7 +3181,22 @@ RÈGLES STRICTES :
     const text = await lireFluxAnthropic(res);
     let parsed;
     try{parsed=JSON.parse(text.replace(/```json|```/g,'').trim());}
-    catch(pe){throw new Error('Réponse IA non parseable : '+text.slice(0,200));}
+    catch(pe){
+      // Réponse coupée en cours de liste (devis très long) : on récupère les
+      // postes déjà complets plutôt que de tout perdre, avec le même
+      // mécanisme de réparation que celui déjà utilisé pour les plans IA.
+      const nettoye = text.replace(/```json|```/g,'').trim();
+      const jsonStart = nettoye.indexOf('{');
+      const utile = jsonStart >= 0 ? nettoye.slice(jsonStart) : nettoye;
+      let recupere = null;
+      try { recupere = tryRepairTruncatedJSON(utile, 'postes').data; } catch(pe2){}
+      if(recupere && recupere.postes && recupere.postes.length){
+        parsed = recupere;
+        showToast('⚠️ Devis très long : '+recupere.postes.length+' ligne(s) récupérée(s), vérifiez la fin du devis');
+      } else {
+        throw new Error('Réponse IA non parseable : '+text.slice(0,200));
+      }
+    }
     if(!parsed.postes||!parsed.postes.length)throw new Error('Aucun poste détecté dans le PDF');
     status.style.display='none';
     // Filet de sécurité : retire toute puce/tiret de liste résiduel en tête de désignation
@@ -5734,12 +5749,13 @@ function renoReset() {
 // dossier volumineux) en le refermant proprement au dernier lot complet.
 // Les lots déjà entièrement générés sont conservés ; seul le dernier lot
 // resté incomplet (le cas échéant) est perdu — bien mieux qu'un plantage total.
-function tryRepairTruncatedJSON(text){
+function tryRepairTruncatedJSON(text, cleKey){
   try { return { data: JSON.parse(text), repaired: false }; } catch(e){}
-  const lotsKeyIdx = text.indexOf('"lots"');
-  if (lotsKeyIdx === -1) throw new Error('Réponse IA incomplète et aucun lot n\'a pu être récupéré.');
+  const cle = cleKey || 'lots';
+  const lotsKeyIdx = text.indexOf('"'+cle+'"');
+  if (lotsKeyIdx === -1) throw new Error('Réponse IA incomplète et aucun élément n\'a pu être récupéré.');
   const arrStart = text.indexOf('[', lotsKeyIdx);
-  if (arrStart === -1) throw new Error('Réponse IA incomplète et aucun lot n\'a pu être récupéré.');
+  if (arrStart === -1) throw new Error('Réponse IA incomplète et aucun élément n\'a pu être récupéré.');
   let depth = 0, inStr = false, esc = false, lastGoodEnd = -1;
   for (let i = arrStart + 1; i < text.length; i++){
     const ch = text[i];
@@ -5750,7 +5766,7 @@ function tryRepairTruncatedJSON(text){
     if (ch === '{'){ depth++; }
     else if (ch === '}'){ depth--; if (depth === 0) lastGoodEnd = i; }
   }
-  if (lastGoodEnd === -1) throw new Error('Réponse IA incomplète : aucun lot entier n\'a pu être récupéré. Réessayez, idéalement avec un dossier moins volumineux ou une description plus courte.');
+  if (lastGoodEnd === -1) throw new Error('Réponse IA incomplète : aucun élément entier n\'a pu être récupéré. Réessayez, idéalement avec un dossier moins volumineux ou une description plus courte.');
   const repaired = text.slice(0, lastGoodEnd + 1) + ']}';
   return { data: JSON.parse(repaired), repaired: true };
 }
