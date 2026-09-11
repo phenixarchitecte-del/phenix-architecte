@@ -7045,7 +7045,7 @@ function renderFacturation() {
         <td><strong>${nomProjet(f.projetId)}</strong></td>
         <td><span class="badge badge-purple" style="font-size:10px">${f.phase||'—'}</span></td>
         <td style="font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.objet||'—'}</td>
-        <td style="font-size:12px">${fmtDateShort(f.dateEmission)}</td>
+        <td style="font-size:12px">${factDateAffichee(f)}</td>
         <td style="font-size:12px;color:${isLate?'var(--red)':'var(--text2)'};font-weight:${isLate?'700':'400'}">${fmtDateShort(f.dateEcheance)}</td>
         <td class="fact-montant">${fmtEur_d(f.montantHt)}</td>
         <td style="color:var(--green);font-weight:500">${parseFloat(f.montantPaye)?fmtEur_d(f.montantPaye):'—'}</td>
@@ -7072,7 +7072,7 @@ function renderFacturation() {
       <td><strong>${nomProjet(f.projetId)}</strong></td>
       <td><span class="badge badge-purple" style="font-size:10px">${f.phase||'—'}</span></td>
       <td style="font-size:12px">${f.objet||'—'}</td>
-      <td style="font-size:12px">${fmtDateShort(f.dateEmission)}</td>
+      <td style="font-size:12px">${factDateAffichee(f)}</td>
       <td class="fact-montant">${fmtEur_d(f.montantHt)}</td>
       <td>${statutFactBadge(f)}</td>
       <td>${f.pdfData ? `<button class="btn btn-sm" onclick="viewPdf('${f.id}')" title="Voir le PDF" style="color:var(--red)"><i class="ti ti-file-text"></i></button>` : '<span style="color:var(--text3);font-size:11px">—</span>'}</td>
@@ -8061,8 +8061,32 @@ function tvaConstruireDiagnostic() {
     sansBanque.push({ kind:'revenu', ref:rv });
   });
 
+  // I — dates de facture manquantes ou inventées. Une date de paiement posée
+  // automatiquement (date du jour) regroupe artificiellement des encaissements
+  // dans le mauvais mois comptable ; le relevé donne la vraie date.
+  const datesDouteuses = [];
+  (stateDossier.factures||[]).forEach(f => {
+    if (f.type==='devis') return;
+    const src = f.sourceTvaId ? mouvements[String(f.sourceTvaId)] : null;
+    let raison = null, dateProposee = null;
+    if (src && f.datePaiement && f.datePaiement !== src.t.date) {
+      raison = 'date de paiement ≠ date du mouvement bancaire';
+      dateProposee = src.t.date;
+    } else if (f.datePaiementEstimee) {
+      raison = 'date de paiement estimée automatiquement';
+      dateProposee = src ? src.t.date : null;
+    } else if (!f.dateEmission && (parseFloat(f.montantPaye)||0) > 0) {
+      raison = "pas de date d'émission";
+      dateProposee = src ? src.t.date : (f.datePaiement || null);
+    } else if (!f.dateEmission && !f.datePaiement) {
+      raison = 'aucune date';
+      dateProposee = null;
+    }
+    if (raison) datesDouteuses.push({ ref:f, raison, dateProposee, src: src?src.t:null });
+  });
+
   return { orphelines, doublons, aConvertir, transfertsCasses, liensCasses,
-           nonTraites, ecarts, sansBanque, moisCouverts: moisCouverts.size,
+           nonTraites, ecarts, sansBanque, datesDouteuses, moisCouverts: moisCouverts.size,
            totalImporte: issues.length, totalLignes: toutes.length };
 }
 
@@ -8119,6 +8143,14 @@ function tvaRenderDiagnostic() {
       d.sansBanque.length, '#8e44ad',
       `<span style="font-size:11px;color:var(--text3)">À vérifier manuellement</span>`)}
 
+    ${section('Dates de facture douteuses',
+      "Dates manquantes, estimées automatiquement, ou en désaccord avec le mouvement bancaire. Elles font tomber l'encaissement dans le mauvais mois comptable.",
+      d.datesDouteuses.map(x=>`<div style="font-size:12px;padding:3px 0;border-bottom:1px solid var(--border);color:var(--text2)">
+        <strong style="color:var(--text)">${esc(x.ref.numero||'sans n°')}</strong> · ${esc(nomProjet(x.ref.projetId)||x.ref.client||'—')} — ${x.raison}
+        ${x.dateProposee?` <span style="color:var(--green)">→ ${fmtDate_d(x.dateProposee)}</span>`:` <span style="color:var(--text3)">(à saisir à la main)</span>`}</div>`).join('') || '',
+      d.datesDouteuses.length, '#4fa8f0',
+      `<button class="btn btn-sm" onclick="tvaDiagReparerDates()" style="border-color:#4fa8f0;color:#4fa8f0"><i class="ti ti-calendar-check"></i> Corriger les dates</button>`)}
+
     ${section('Lignes orphelines',
       "Créées depuis un relevé qui a depuis été supprimé — elles gonflent encore vos totaux sans justificatif rattachable.",
       d.orphelines.map(ligneHtml).join('') || '',
@@ -8154,11 +8186,43 @@ function tvaRenderDiagnostic() {
   `;
 
   const total = d.orphelines.length + d.doublons.length + d.aConvertir.length + d.transfertsCasses.length
-              + d.liensCasses.length + d.nonTraites.length + d.ecarts.length + d.sansBanque.length;
+              + d.liensCasses.length + d.nonTraites.length + d.ecarts.length + d.sansBanque.length
+              + d.datesDouteuses.length;
   const resume = document.getElementById('tva-diag-resume');
   if (resume) resume.innerHTML = total
     ? `<span style="color:var(--amber);font-weight:600">${total} point(s) à corriger</span>`
     : `<span style="color:var(--green);font-weight:600">✅ Aucune incohérence détectée</span>`;
+}
+
+// Répare les dates de facture en prenant le relevé bancaire comme référence.
+async function tvaDiagReparerDates() {
+  const list = (_tvaDiag.datesDouteuses||[]).filter(x => x.dateProposee);
+  const sansSolution = (_tvaDiag.datesDouteuses||[]).length - list.length;
+  if (!list.length) {
+    toast_d(sansSolution ? `ℹ️ ${sansSolution} facture(s) sans date : aucune source fiable, à saisir à la main.` : '✅ Rien à corriger.');
+    return;
+  }
+  if (!confirm(`Corriger la date de ${list.length} facture(s) ?\n\nLa date du mouvement bancaire est retenue quand elle existe, sinon la date de paiement déjà enregistrée.${sansSolution?`\n\n${sansSolution} facture(s) restent sans date exploitable et devront être saisies à la main.`:''}`)) return;
+
+  let nb = 0;
+  for (const x of list) {
+    const f = { ...x.ref };
+    if (x.src) {
+      // Le relevé fait foi sur la date d'encaissement.
+      f.datePaiement = x.src.date;
+      if (!f.dateEmission) f.dateEmission = x.src.date;
+    } else if (!f.dateEmission && f.datePaiement) {
+      f.dateEmission = f.datePaiement;
+    }
+    delete f.datePaiementEstimee;
+    f.updatedAt = new Date().toISOString();
+    await window._fb.saveFacture(f);
+    const idx = stateDossier.factures.findIndex(y=>y.id===f.id);
+    if (idx>=0) stateDossier.factures[idx]=f;
+    nb++;
+  }
+  toast_d(`📅 ${nb} date(s) corrigée(s)${sansSolution?`, ${sansSolution} à saisir à la main`:''}.`);
+  tvaDiagRafraichir();
 }
 
 // Ouvre le relevé le plus ancien contenant des mouvements non traités, puis
@@ -9139,6 +9203,20 @@ function openImportPdfProjet(projetId, type) {
   }, 300);
 }
 
+// ── Date affichée d'une facture ─────────────────────────────────────────────
+// Facturation n'affichait que la date d'émission : une facture encaissée mais
+// sans date d'émission apparaissait « — » alors qu'elle était bien comptée dans
+// la Comptabilité à sa date de paiement. On affiche la date disponible, en
+// signalant quand il s'agit d'un repli ou d'une date estimée.
+function factDateAffichee(f) {
+  if (f.dateEmission) return fmtDateShort(f.dateEmission);
+  if (f.datePaiement) {
+    const estimee = f.datePaiementEstimee;
+    return `<span style="color:${estimee?'var(--amber)':'var(--text2)'}" title="${estimee?'Date estimée automatiquement — à vérifier':'Pas de date d\u2019émission : date de paiement affichée'}">${fmtDateShort(f.datePaiement)}${estimee?' <i class="ti ti-alert-circle"></i>':' <span style="font-size:10px">(payé)</span>'}</span>`;
+  }
+  return '<span style="color:var(--text3)">—</span>';
+}
+
 function renderFactParProjet() {
   const container = document.getElementById('factParProjetBody');
   if (!stateDossier.projets.length) {
@@ -9236,7 +9314,7 @@ function renderFactParProjet() {
           <td><span class="badge ${f.type==='devis'?'badge-gray':'badge-purple'}" style="font-size:10px">${f.type==='avoir'?'Avoir':f.type==='devis'?'Devis':'Facture'}</span></td>
           <td style="font-size:12px">${f.phase||'—'}</td>
           <td style="font-size:12px">${f.objet||'—'}</td>
-          <td style="font-size:12px">${fmtDateShort(f.dateEmission)}</td>
+          <td style="font-size:12px">${factDateAffichee(f)}</td>
           <td class="fact-montant">${fmtEur_d(f.montantHt)}</td>
           <td style="color:var(--green);font-weight:500">${parseFloat(f.montantPaye)?fmtEur_d(f.montantPaye):'—'}</td>
           <td>${payProgressHtml(f)}</td>
@@ -9522,10 +9600,19 @@ async function saveFacture_d() {
     baseHonoraires: parseFloat(document.getElementById('fact-base-honoraires')?.value)||0,
   };
 
-  // Filet de sécurité : une facture payée sans date de paiement fausse le rattachement
-  // comptable au mois. On retient alors la date du jour.
+  // Une facture payée sans date de paiement fausse le rattachement comptable au
+  // mois. On retombe sur la date d'émission (bien plus proche de la réalité que
+  // la date du jour, qui regroupait artificiellement toutes les factures
+  // enregistrées le même jour dans le même mois comptable). En dernier recours
+  // on retient la date du jour, mais on la marque comme estimée pour que l'outil
+  // de réparation puisse la corriger depuis les relevés.
   if (f.type !== 'devis' && (f.statut === 'payee' || f.statut === 'partiel') && parseFloat(f.montantPaye) > 0 && !f.datePaiement) {
-    f.datePaiement = new Date().toISOString().split('T')[0];
+    if (f.dateEmission) {
+      f.datePaiement = f.dateEmission;
+    } else {
+      f.datePaiement = new Date().toISOString().split('T')[0];
+      f.datePaiementEstimee = true;
+    }
   }
 
   if (editingFactureId) {
