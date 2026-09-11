@@ -3347,6 +3347,7 @@ if (window.parent !== window) {
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <button class="btn btn-primary" onclick="openTvaNouveauReleve()"><i class="ti ti-upload"></i> Importer un relevé bancaire</button>
               <button class="btn" onclick="tvaOuvrirDiagnostic()" style="border-color:#e6b95c;color:#e6b95c" title="Vérifier la cohérence entre les relevés et la comptabilité, et corriger en masse"><i class="ti ti-stethoscope"></i> Diagnostic & remise à plat</button>
+              <button class="btn" onclick="tvaOuvrirRemiseAPlat()" style="border-color:var(--red);color:var(--red)" title="Effacer tout ce que les imports ont produit pour reconstruire la comptabilité depuis les relevés"><i class="ti ti-refresh-alert"></i> Repartir de zéro</button>
             </div>
           </div>
 
@@ -3402,6 +3403,7 @@ if (window.parent !== window) {
               <button class="btn btn-sm" onclick="tvaRetourListe()" style="margin-bottom:8px"><i class="ti ti-arrow-left"></i> Tous les relevés</button>
               <div class="page-title" id="tva-detail-titre">—</div>
               <div class="page-subtitle" id="tva-detail-soustitre">—</div>
+              <button class="btn btn-sm" onclick="tvaOuvrirChangerPeriode()" style="margin-top:6px" title="Corriger le mois ou l'année de ce relevé"><i class="ti ti-calendar-cog"></i> Changer la période</button>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start">
               <button class="btn btn-danger" onclick="tvaSupprimerReleve()"><i class="ti ti-trash"></i> Supprimer</button>
@@ -3466,6 +3468,62 @@ if (window.parent !== window) {
           <div class="modal-footer">
             <button class="btn" onclick="closeModal_d('tvaTransfertModal')">Annuler</button>
             <button class="btn btn-primary" onclick="tvaConfirmerTransfert()"><i class="ti ti-check"></i> Confirmer le transfert</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODAL CHANGER LA PÉRIODE D'UN RELEVÉ -->
+      <div class="modal-overlay" id="tvaPeriodeModal" onmousedown="this._downOnSelf=(event.target===this)" onmouseup="if(this._downOnSelf&&event.target===this)closeModal_d('tvaPeriodeModal');this._downOnSelf=false">
+        <div class="modal" style="max-width:460px">
+          <div class="modal-header">
+            <div class="modal-title">Changer la période du relevé</div>
+            <button class="btn btn-sm" onclick="closeModal_d('tvaPeriodeModal')"><i class="ti ti-x"></i></button>
+          </div>
+          <div class="modal-body">
+            <div style="font-size:12.5px;color:var(--text2);margin-bottom:1rem">
+              Période actuelle : <strong id="tva-periode-actuel" style="color:var(--text)">—</strong><br>
+              Les mouvements, justificatifs et liens inter-comptes suivent le relevé — rien n'est perdu.
+            </div>
+            <div class="form-grid" style="grid-template-columns:1fr 1fr">
+              <div class="form-group" style="margin:0">
+                <label class="form-label">Mois</label>
+                <select class="form-input" id="tva-periode-mois">
+                  <option value="1">Janvier</option><option value="2">Février</option><option value="3">Mars</option>
+                  <option value="4">Avril</option><option value="5">Mai</option><option value="6">Juin</option>
+                  <option value="7">Juillet</option><option value="8">Août</option><option value="9">Septembre</option>
+                  <option value="10">Octobre</option><option value="11">Novembre</option><option value="12">Décembre</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin:0">
+                <label class="form-label">Année</label>
+                <select class="form-input" id="tva-periode-annee">
+                  <option value="2024">2024</option><option value="2025">2025</option>
+                  <option value="2026">2026</option><option value="2027">2027</option>
+                </select>
+              </div>
+            </div>
+            <div id="tva-periode-status" style="margin-top:12px"></div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn" onclick="closeModal_d('tvaPeriodeModal')">Annuler</button>
+            <button class="btn btn-primary" onclick="tvaConfirmerChangerPeriode()"><i class="ti ti-check"></i> Déplacer le relevé</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODAL REMISE À PLAT -->
+      <div class="modal-overlay" id="tvaRemiseModal" onmousedown="this._downOnSelf=(event.target===this)" onmouseup="if(this._downOnSelf&&event.target===this)closeModal_d('tvaRemiseModal');this._downOnSelf=false">
+        <div class="modal" style="max-width:680px">
+          <div class="modal-header">
+            <div class="modal-title">Remise à plat depuis les relevés</div>
+            <button class="btn btn-sm" onclick="closeModal_d('tvaRemiseModal')"><i class="ti ti-x"></i></button>
+          </div>
+          <div class="modal-body">
+            <div id="tva-remise-body"></div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn" onclick="closeModal_d('tvaRemiseModal')">Annuler</button>
+            <button class="btn btn-danger" onclick="tvaLancerRemiseAPlat()"><i class="ti ti-alert-triangle"></i> Lancer la remise à plat</button>
           </div>
         </div>
       </div>
@@ -7256,7 +7314,12 @@ function renderTvaListeReleves() {
   document.getElementById('tva-view-detail').style.display = 'none';
   tvaRenderProvisionEtat();
   const body = document.getElementById('tva-liste-body');
-  const releves = stateDossier.tvaReleves.filter(r => (r.compte||'pro') === _tvaActiveCompte);
+  const releves = stateDossier.tvaReleves
+    .filter(r => (r.compte||'pro') === _tvaActiveCompte)
+    // Du plus ancien au plus récent : on reconstruit une comptabilité dans
+    // l'ordre chronologique, sinon un encaissement pourrait solder une facture
+    // avant celle qu'il aurait dû solder.
+    .sort((a,b) => (a.annee-b.annee) || (a.mois-b.mois));
   if (!releves.length) {
     const msg = _tvaActiveCompte==='provision'
       ? { titre: 'Aucun relevé importé pour ce compte', desc: "Importez le relevé bancaire du compte sur lequel vous virez votre TVA et votre URSSAF." }
@@ -7272,20 +7335,29 @@ function renderTvaListeReleves() {
     const totalEntrees = trs.filter(t=>t.sens==='entree').reduce((s,t)=>s+(parseFloat(t.montant)||0),0);
     const totalSorties = trs.filter(t=>t.sens==='sortie').reduce((s,t)=>s+(parseFloat(t.montant)||0),0);
     const complet = nbTotal>0 && nbJustifies===nbTotal;
+    // Avancement du transfert en comptabilité : un mouvement classé « hors
+    // compta » ou lié à l'autre compte est traité, même sans ligne comptable.
+    const nbTraites = trs.filter(t => tvaEstReellementTransfere(t) || t.natureHorsCompta || t.lienInterCompte).length;
+    const pctTraite = nbTotal ? Math.round(nbTraites/nbTotal*100) : 0;
+    const toutTraite = nbTotal>0 && nbTraites===nbTotal;
     return `<div class="card" style="margin-bottom:1rem;cursor:pointer" onclick="tvaOuvrirReleve('${r.id}')">
       <div class="card-header">
         <div>
           <div class="card-title">${esc(tvaMoisNom(r.mois))} ${r.annee}</div>
-          <div class="card-subtitle">${nbTotal} mouvement(s) · ${nbJustifies}/${nbTotal} justifié(s)</div>
+          <div class="card-subtitle">${nbTotal} mouvement(s) · ${nbJustifies}/${nbTotal} justifié(s) · ${nbTraites}/${nbTotal} passé(s) en compta</div>
         </div>
         <div style="display:flex;align-items:center;gap:14px">
           <div style="text-align:right">
             <div style="font-size:11px;color:var(--green)">Entrées ${fmtEurTva(totalEntrees)}</div>
             <div style="font-size:11px;color:var(--red)">Sorties ${fmtEurTva(totalSorties)}</div>
           </div>
-          <span class="badge ${complet?'badge-green':'badge-amber'}">${complet ? 'Complet ✓' : pct+'% justifié'}</span>
+          <span class="badge ${complet?'badge-green':'badge-amber'}">${complet ? 'Justifié ✓' : pct+'% justifié'}</span>
+          <span class="badge ${toutTraite?'badge-green':'badge-gray'}">${toutTraite ? 'En compta ✓' : pctTraite+'% en compta'}</span>
           <i class="ti ti-chevron-right" style="color:var(--text3)"></i>
         </div>
+      </div>
+      <div style="height:5px;background:var(--bg2);border-radius:3px;overflow:hidden;margin-top:8px">
+        <div style="height:100%;width:${pctTraite}%;background:${toutTraite?'var(--green)':'#4fa8f0'};border-radius:3px"></div>
       </div>
     </div>`;
   }).join('');
@@ -7725,6 +7797,75 @@ async function tvaEditerNote(transactionId) {
   renderTvaDetail();
 }
 
+// ── Changer la période d'un relevé importé ─────────────────────────────────
+// Une erreur de mois à l'import n'était pas rattrapable autrement qu'en
+// supprimant le relevé et en réimportant le PDF (avec perte des justificatifs
+// déjà attachés). L'identifiant du relevé encode sa période : on le recrée
+// sous son nouvel identifiant en reportant justificatifs et liens.
+function tvaOuvrirChangerPeriode() {
+  const r = tvaGetCurrentReleve();
+  if (!r) return;
+  document.getElementById('tva-periode-mois').value  = r.mois;
+  document.getElementById('tva-periode-annee').value = r.annee;
+  document.getElementById('tva-periode-actuel').textContent = `${tvaMoisNom(r.mois)} ${r.annee} · ${(r.transactions||[]).length} mouvement(s)`;
+  document.getElementById('tva-periode-status').innerHTML = '';
+  const m = document.getElementById('tvaPeriodeModal'); if (m) m.classList.add('open');
+}
+
+async function tvaConfirmerChangerPeriode() {
+  const r = tvaGetCurrentReleve();
+  if (!r) return;
+  const mois  = parseInt(document.getElementById('tva-periode-mois').value, 10);
+  const annee = parseInt(document.getElementById('tva-periode-annee').value, 10);
+  const status = document.getElementById('tva-periode-status');
+  if (mois === r.mois && annee === r.annee) { closeModal_d('tvaPeriodeModal'); return; }
+
+  const compte = r.compte || 'pro';
+  const nouvelId = (compte==='provision' ? 'tva-provision-' : 'tva-') + annee + '-' + String(mois).padStart(2,'0');
+  if (stateDossier.tvaReleves.some(x => x.id === nouvelId)) {
+    status.innerHTML = `<div style="background:var(--rbg);border:1.5px solid var(--red);border-radius:var(--r-md);padding:10px 12px;font-size:12.5px;color:var(--red)">Un relevé existe déjà pour ${tvaMoisNom(mois)} ${annee} sur ce compte. Supprimez-le d'abord, ou choisissez une autre période.</div>`;
+    return;
+  }
+
+  const ancienId = r.id;
+  const nouveau = { ...r, id: nouvelId, mois, annee };
+  await window._fb.saveTvaReleve(nouveau);
+
+  // Les justificatifs pointent vers l'ancien identifiant de relevé : sans ce
+  // report, ils resteraient rattachés à un relevé qui n'existe plus.
+  for (const t of (nouveau.transactions||[])) {
+    const j = stateDossier.tvaJustificatifs[t.id];
+    if (j && String(j.releveId) === String(ancienId)) {
+      const maj = { ...j, releveId: nouvelId };
+      await window._fb.saveTvaJustificatif(maj);
+      stateDossier.tvaJustificatifs[t.id] = maj;
+    }
+  }
+
+  // Idem pour les liens inter-comptes établis depuis l'autre compte.
+  const aMettreAJour = new Set();
+  stateDossier.tvaReleves.forEach(autre => {
+    if (autre.id === ancienId) return;
+    (autre.transactions||[]).forEach(t => {
+      if (t.lienInterCompte && String(t.lienInterCompte.releveId) === String(ancienId)) {
+        t.lienInterCompte = { ...t.lienInterCompte, releveId: nouvelId };
+        aMettreAJour.add(autre);
+      }
+    });
+  });
+  for (const autre of aMettreAJour) await window._fb.saveTvaReleve(autre);
+
+  await window._fb.deleteTvaReleve(ancienId);
+  stateDossier.tvaReleves = stateDossier.tvaReleves.filter(x => x.id !== ancienId);
+  stateDossier.tvaReleves.push(nouveau);
+
+  closeModal_d('tvaPeriodeModal');
+  _tvaCurrentReleveId = nouvelId;
+  renderTvaDetail();
+  if (typeof renderComptabilite === 'function') renderComptabilite();
+  toast_d(`📅 Relevé déplacé en ${tvaMoisNom(mois)} ${annee}.`);
+}
+
 async function tvaSupprimerReleve() {
   const r = tvaGetCurrentReleve();
   if (!r) return;
@@ -7928,6 +8069,135 @@ async function tvaTelechargerJustificatifs() {
     status.innerHTML = '';
   }
   toast_d(`✅ Archive téléchargée — ${nbOk} fichier(s)${echecs.length?', '+echecs.length+' exclu(s), voir détail ci-dessus':''}.`);
+}
+
+// ════════════════════════════════════════════════════════════
+//  REMISE À PLAT COMPLÈTE
+//  Pour repartir de zéro à partir des relevés. On distingue deux cas, car les
+//  confondre détruirait de vraies factures :
+//   • les lignes CRÉÉES par un import (id préfixé) → supprimées, elles seront
+//     recréées proprement au prochain transfert ;
+//   • les lignes SAISIES à la main qu'un import a seulement soldées → gardées,
+//     on annule seulement l'encaissement pour pouvoir le réimputer.
+//  Les classements manuels (virement interne, rémunération, liens inter-comptes)
+//  sont conservés : ce sont des décisions déjà prises, inutile de les refaire.
+// ════════════════════════════════════════════════════════════
+const TVA_PREFIXES_IMPORT = ['charge-tva-', 'fact-tva-', 'revenu-tva-'];
+function tvaEstCreeParImport(o) {
+  return TVA_PREFIXES_IMPORT.some(p => String(o.id||'').startsWith(p));
+}
+
+function tvaAnalyserRemiseAPlat() {
+  const aSupprimer = [], aDesimputer = [], aDetacher = [];
+  (stateDossier.charges||[]).forEach(c => {
+    if (tvaEstCreeParImport(c)) aSupprimer.push({kind:'charge', ref:c});
+    else if (c.sourceTvaId)     aDetacher.push({kind:'charge', ref:c});
+  });
+  (stateDossier.revenus||[]).forEach(rv => {
+    if (tvaEstCreeParImport(rv)) aSupprimer.push({kind:'revenu', ref:rv});
+    else if (rv.sourceTvaId)     aDetacher.push({kind:'revenu', ref:rv});
+  });
+  (stateDossier.factures||[]).forEach(f => {
+    if (f.type==='devis') return;
+    if (tvaEstCreeParImport(f)) aSupprimer.push({kind:'facture', ref:f});
+    else if (f.sourceTvaId)     aDesimputer.push({kind:'facture', ref:f});
+  });
+  let mouvementsAReset = 0;
+  (stateDossier.tvaReleves||[]).forEach(r => {
+    (r.transactions||[]).forEach(t => {
+      if (t.transfereCompta && !t.natureHorsCompta && !t.lienInterCompte) mouvementsAReset++;
+    });
+  });
+  return { aSupprimer, aDesimputer, aDetacher, mouvementsAReset };
+}
+
+function tvaOuvrirRemiseAPlat() {
+  const a = tvaAnalyserRemiseAPlat();
+  const body = document.getElementById('tva-remise-body');
+  const totalDevis = (stateDossier.factures||[]).filter(f=>f.type==='devis').length;
+  const chargesManuelles = (stateDossier.charges||[]).filter(c=>!c.sourceTvaId && !tvaEstCreeParImport(c)).length;
+
+  body.innerHTML = `
+    <div style="padding:12px 14px;background:var(--rbg);border:1.5px solid var(--red);border-radius:var(--r-md);margin-bottom:1rem;font-size:12.5px;color:var(--red)">
+      <strong><i class="ti ti-alert-triangle"></i> Faites une sauvegarde avant de lancer.</strong> Cette opération est irréversible. Utilisez « Exporter tout » dans le menu de gauche.
+    </div>
+
+    <div style="font-size:12.5px;color:var(--text2);margin-bottom:1rem">
+      Objectif : effacer tout ce que les imports ont produit, sans toucher à ce que vous avez saisi vous-même. Vous réimporterez ensuite chaque relevé, mois par mois, avec les taux de TVA corrects.
+    </div>
+
+    <div style="border:1.5px solid var(--red);border-radius:var(--r-md);padding:10px 14px;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:3px">🗑️ ${a.aSupprimer.length} ligne(s) supprimée(s)</div>
+      <div style="font-size:11.5px;color:var(--text2)">Charges, factures et revenus entièrement créés par un import. Ils seront recréés proprement quand vous retransférerez les relevés.</div>
+    </div>
+
+    <div style="border:1.5px solid #F5A623;border-radius:var(--r-md);padding:10px 14px;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:700;color:#F5A623;margin-bottom:3px">↩️ ${a.aDesimputer.length} facture(s) remise(s) à « non encaissée »</div>
+      <div style="font-size:11.5px;color:var(--text2)">Vos vraies factures, qu'un import avait marquées payées. <strong>Elles ne sont pas supprimées</strong> — seul le règlement est annulé, pour être réimputé depuis le bon mouvement bancaire.</div>
+    </div>
+
+    <div style="border:1.5px solid #4fa8f0;border-radius:var(--r-md);padding:10px 14px;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:700;color:#4fa8f0;margin-bottom:3px">🔄 ${a.mouvementsAReset} mouvement(s) remis à traiter</div>
+      <div style="font-size:11.5px;color:var(--text2)">Ils redeviendront proposés dans « Envoyer vers Comptabilité ». Vos classements manuels (virement interne, rémunération, liens inter-comptes) sont conservés.</div>
+    </div>
+
+    <div style="border:1.5px solid var(--green);border-radius:var(--r-md);padding:10px 14px">
+      <div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:3px">✅ Conservé intégralement</div>
+      <div style="font-size:11.5px;color:var(--text2)">${totalDevis} devis · ${chargesManuelles} charge(s) saisie(s) à la main · tous vos dossiers, rémunérations, commissions et justificatifs.</div>
+    </div>`;
+  const m = document.getElementById('tvaRemiseModal'); if (m) m.classList.add('open');
+}
+
+async function tvaLancerRemiseAPlat() {
+  const a = tvaAnalyserRemiseAPlat();
+  const saisie = prompt(`Confirmation finale.\n\n${a.aSupprimer.length} ligne(s) seront SUPPRIMÉES définitivement et ${a.aDesimputer.length} facture(s) repasseront en « non encaissée ».\n\nTapez REMISE A PLAT pour confirmer :`);
+  if (!saisie || saisie.trim().toUpperCase().replace(/[ÀÁÂ]/g,'A') !== 'REMISE A PLAT') {
+    toast_d('Annulé — rien n\'a été modifié.');
+    return;
+  }
+
+  for (const x of a.aSupprimer) {
+    if (x.kind==='charge')      await deleteChargeDb(x.ref.id);
+    else if (x.kind==='revenu') await deleteRevenuDb(x.ref.id);
+    else {
+      stateDossier.factures = stateDossier.factures.filter(f=>f.id!==x.ref.id);
+      await window._fb.deleteFacture(x.ref.id);
+    }
+  }
+
+  for (const x of a.aDesimputer) {
+    const f = { ...x.ref, montantPaye: 0, datePaiement: '', statut: 'emise' };
+    delete f.sourceTvaId; delete f.datePaiementEstimee;
+    f.notes = (f.notes||'').replace(/ · (Règlement de|Encaissement rapproché|Importé depuis|Rapproché avec)[^·]*/g, '');
+    f.updatedAt = new Date().toISOString();
+    await window._fb.saveFacture(f);
+    const idx = stateDossier.factures.findIndex(y=>y.id===f.id);
+    if (idx>=0) stateDossier.factures[idx]=f;
+  }
+
+  // Les charges/revenus saisis à la main qu'un import avait seulement annotés :
+  // on retire juste le rattachement, les montants restent ceux que vous aviez saisis.
+  for (const x of a.aDetacher) {
+    const o = { ...x.ref }; delete o.sourceTvaId;
+    if (x.kind==='charge') await saveChargeDb(o); else await saveRevenuDb(o);
+  }
+
+  const releves = new Set();
+  (stateDossier.tvaReleves||[]).forEach(r => {
+    (r.transactions||[]).forEach(t => {
+      if (t.transfereCompta && !t.natureHorsCompta && !t.lienInterCompte) {
+        t.transfereCompta = false; t.compteRefId = null; t.compteRefType = null;
+        releves.add(r);
+      }
+    });
+  });
+  for (const r of releves) await window._fb.saveTvaReleve(r);
+
+  closeModal_d('tvaRemiseModal');
+  if (typeof renderComptabilite === 'function') renderComptabilite();
+  if (typeof renderFacturation === 'function') renderFacturation();
+  renderTvaPage();
+  toast_d(`✅ Remise à plat terminée — ${a.aSupprimer.length} supprimée(s), ${a.aDesimputer.length} facture(s) à réimputer, ${a.mouvementsAReset} mouvement(s) à retransférer.`);
 }
 
 // ════════════════════════════════════════════════════════════
