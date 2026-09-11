@@ -64,6 +64,7 @@ try {
 // ── Collections Firestore ──────────────────────────────────
 const PROJETS_COL    = collection(db, 'phenix_projets');
 const CHARGES_COL      = collection(db, 'phenix_charges');
+const REVENUS_COL      = collection(db, 'phenix_revenus');
 const COMMISSIONS_COL  = collection(db, 'phenix_commissions');
 const ECHEANCES_COL  = collection(db, 'phenix_echeances');
 const FACTURES_COL   = collection(db, 'phenix_factures');
@@ -218,6 +219,32 @@ window._fb = {
   },
   listenTvaJustificatifs(callback) {
     return onSnapshot(collection(db, 'phenix_tva_justificatifs'), snap => {
+      const list = [];
+      snap.forEach(d => list.push(d.data()));
+      callback(list);
+    });
+  },
+  // ── Déclaration TVA : solde initial du compte de provision TVA/URSSAF ──
+  // Un seul petit document (même principe que le compteur nextId) : le solde
+  // constaté sur ce compte au moment où l'utilisateur commence à l'importer,
+  // point de départ du calcul du solde réel cumulé.
+  async saveTvaProvisionMeta(m) {
+    await setDoc(doc(db, 'phenix_meta', 'tva_provision'), m);
+  },
+  async loadTvaProvisionMeta() {
+    const s = await getDoc(doc(db, 'phenix_meta', 'tva_provision'));
+    return s.exists() ? s.data() : { soldeInitial: 0, dateInitial: '' };
+  },
+  // ── Revenus manuels (Comptabilité) — mêmes principes que les charges,
+  // pour les rentrées d'argent qui ne passent pas par une facture ──
+  async saveRevenu(r) {
+    await setDoc(doc(db, 'phenix_revenus', String(r.id)), r);
+  },
+  async deleteRevenu(id) {
+    await deleteDoc(doc(db, 'phenix_revenus', String(id)));
+  },
+  listenRevenus(callback) {
+    return onSnapshot(REVENUS_COL, snap => {
       const list = [];
       snap.forEach(d => list.push(d.data()));
       callback(list);
@@ -3123,6 +3150,7 @@ if (window.parent !== window) {
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn" onclick="openChargeModal()"><i class="ti ti-plus"></i> Nouvelle charge</button>
+            <button class="btn" onclick="openRevenuModal()" style="border-color:#3fbb7d;color:#3fbb7d"><i class="ti ti-plus"></i> Nouveau revenu</button>
             <button class="btn" onclick="openImportChargeIA()" style="border-color:#e74c3c;color:#e74c3c"><i class="ti ti-file-import"></i> Importer facture artisan (IA)</button>
             <button class="btn btn-primary" onclick="openRemuModal()" style="background:linear-gradient(135deg,#8e44ad,#6c3483);border-color:#8e44ad">
               <i class="ti ti-user-dollar"></i> Rémunération & Cotisations
@@ -3166,7 +3194,7 @@ if (window.parent !== window) {
         <!-- KPIs mensuels -->
         <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:1rem;margin-bottom:1.25rem" id="compta-kpis">
           <div class="card" style="border-top:3px solid #4fa8f0;padding:1rem">
-            <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">CA Encaissé HT</div>
+            <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Revenus encaissés HT</div>
             <div style="font-family:var(--font-serif);font-size:22px;color:var(--navy)" id="ckpi-ca">0 €</div>
             <div style="font-size:11px;color:var(--text3)" id="ckpi-ca-sub">Ce mois</div>
           </div>
@@ -3201,6 +3229,7 @@ if (window.parent !== window) {
         <div class="tabs">
           <div class="tab active" id="ctab-mois" onclick="filterComptaTab('mois',this)"><i class="ti ti-calendar-month" style="font-size:13px"></i> Mois en cours</div>
           <div class="tab" id="ctab-charges" onclick="filterComptaTab('charges',this)"><i class="ti ti-list" style="font-size:13px"></i> Toutes les charges</div>
+          <div class="tab" id="ctab-revenus" onclick="filterComptaTab('revenus',this)"><i class="ti ti-report-money" style="font-size:13px"></i> Revenus</div>
           <div class="tab" id="ctab-remuneration" onclick="filterComptaTab('remuneration',this)"><i class="ti ti-user-dollar" style="font-size:13px"></i> Rémunération</div>
           <div class="tab" id="ctab-annuel" onclick="filterComptaTab('annuel',this)"><i class="ti ti-chart-bar" style="font-size:13px"></i> Bilan annuel</div>
         </div>
@@ -3253,6 +3282,45 @@ if (window.parent !== window) {
           </div>
         </div>
 
+        <!-- Vue revenus manuels -->
+        <div id="comptaView-revenus" style="display:none">
+          <div class="card" style="padding:0;overflow:hidden">
+            <div style="padding:1rem 1.25rem;border-bottom:1.5px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <div style="flex:1;font-size:13px;font-weight:600;color:var(--navy)">Revenus manuels <span style="font-weight:400;color:var(--text3)">— hors factures de la Facturation</span></div>
+              <select class="form-input" id="revenus-filter-cat" style="width:auto;padding:6px 10px" onchange="renderRevenusTable()">
+                <option value="">Toutes catégories</option>
+                <option value="honoraires_direct">👔 Honoraires (hors Facturation)</option>
+                <option value="subvention">🏛️ Subvention</option>
+                <option value="remboursement">↩️ Remboursement</option>
+                <option value="interets">💹 Intérêts financiers</option>
+                <option value="apport">💼 Apport</option>
+                <option value="autre">📌 Autre</option>
+              </select>
+              <select class="form-input" id="revenus-filter-type" style="width:auto;padding:6px 10px" onchange="renderRevenusTable()">
+                <option value="">Tous types</option>
+                <option value="fixe">Fixes récurrents</option>
+                <option value="variable">Variables</option>
+              </select>
+            </div>
+            <div style="padding:.6rem 1.25rem;font-size:11.5px;color:var(--text3);border-bottom:1px solid var(--border)">Les factures encaissées via Facturation apparaissent automatiquement dans « Mois en cours » et « Bilan annuel » — inutile de les ressaisir ici. Cet onglet sert aux rentrées d'argent qui ne passent pas par une facture.</div>
+            <div class="fact-table-wrap">
+              <table class="fact-table">
+                <thead style="background:var(--bg);color:var(--text)"><tr>
+                  <th style="padding-left:16px">Libellé</th>
+                  <th>Catégorie</th>
+                  <th>Type</th>
+                  <th>Période</th>
+                  <th style="text-align:right">Montant HT</th>
+                  <th style="text-align:right">TVA</th>
+                  <th style="text-align:right">Montant TTC</th>
+                  <th></th>
+                </tr></thead>
+                <tbody id="revenusTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
         <!-- Vue rémunération -->
         <div id="comptaView-remuneration" style="display:none">
           <div id="compta-remuneration-body"></div>
@@ -3273,17 +3341,27 @@ if (window.parent !== window) {
           <div class="page-header">
             <div>
               <div class="page-title">Déclaration TVA</div>
-              <div class="page-subtitle">Importez votre relevé bancaire du mois, justifiez chaque mouvement, transmettez à votre comptable</div>
+              <div class="page-subtitle" id="tva-page-subtitle">Importez votre relevé bancaire du mois, justifiez chaque mouvement, transmettez à votre comptable</div>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <button class="btn btn-primary" onclick="openTvaNouveauReleve()"><i class="ti ti-upload"></i> Importer un relevé bancaire</button>
+              <button class="btn" onclick="tvaOuvrirCorrectionMasse()" style="border-color:#e6b95c;color:#e6b95c" title="Recalculer en HT toutes les lignes importées avant la correction TTC/HT"><i class="ti ti-wand"></i> Corriger les imports passés</button>
             </div>
           </div>
+
+          <!-- Bascule Compte pro / Compte provision TVA-URSSAF -->
+          <div class="tabs" style="margin-bottom:1.25rem">
+            <div class="tab active" id="tva-tab-pro" onclick="tvaSwitchCompte('pro')"><i class="ti ti-building-bank" style="font-size:13px"></i> Compte pro</div>
+            <div class="tab" id="tva-tab-provision" onclick="tvaSwitchCompte('provision')"><i class="ti ti-pig-money" style="font-size:13px"></i> Compte provision TVA/URSSAF</div>
+          </div>
+
+          <!-- État du compte de provision (visible seulement sur cet onglet) -->
+          <div id="tva-provision-etat" style="display:none;margin-bottom:1.5rem"></div>
 
           <!-- Zone d'import (masquée par défaut) -->
           <div id="tva-import-zone" style="display:none;background:var(--card);border:1.5px solid var(--border);border-radius:var(--r-lg);padding:1.25rem;margin-bottom:1.5rem">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
-              <div style="font-family:var(--font-serif);font-size:17px;color:var(--navy)">Nouveau relevé</div>
+              <div style="font-family:var(--font-serif);font-size:17px;color:var(--navy)" id="tva-import-titre">Nouveau relevé</div>
               <button class="btn btn-sm" onclick="fermerTvaNouveauReleve()"><i class="ti ti-x"></i></button>
             </div>
             <div class="form-grid" style="grid-template-columns:1fr 1fr;margin-bottom:1rem">
@@ -3326,8 +3404,8 @@ if (window.parent !== window) {
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start">
               <button class="btn btn-danger" onclick="tvaSupprimerReleve()"><i class="ti ti-trash"></i> Supprimer</button>
-              <button class="btn" onclick="tvaOuvrirTransfert()"><i class="ti ti-database-export"></i> Envoyer vers Comptabilité</button>
-              <button class="btn btn-sm" onclick="tvaReinitialiserTransferts()" title="Marquer tous les mouvements comme non transférés, pour pouvoir relancer l'envoi même si les charges/factures existent toujours"><i class="ti ti-rotate"></i></button>
+              <button class="btn" id="tva-btn-transfert" onclick="tvaOuvrirTransfert()"><i class="ti ti-database-export"></i> Envoyer vers Comptabilité</button>
+              <button class="btn btn-sm" id="tva-btn-reinit-transfert" onclick="tvaReinitialiserTransferts()" title="Marquer tous les mouvements comme non transférés, pour pouvoir relancer l'envoi même si les charges/factures existent toujours"><i class="ti ti-rotate"></i></button>
               <button class="btn" onclick="tvaTelechargerJustificatifs()"><i class="ti ti-file-zip"></i> Télécharger les justificatifs</button>
               <button class="btn btn-primary" onclick="tvaExporterRecap()"><i class="ti ti-file-export"></i> Export pour le comptable</button>
             </div>
@@ -3340,7 +3418,7 @@ if (window.parent !== window) {
 
           <!-- Rentrées -->
           <div style="margin-bottom:1.75rem">
-            <div style="font-family:var(--font-serif);font-size:17px;color:var(--green);margin-bottom:.75rem;display:flex;align-items:center;gap:8px"><i class="ti ti-arrow-down-circle"></i> Rentrées d'argent</div>
+            <div style="font-family:var(--font-serif);font-size:17px;color:var(--green);margin-bottom:.75rem;display:flex;align-items:center;gap:8px"><i class="ti ti-arrow-down-circle"></i> <span id="tva-titre-entrees">Rentrées d'argent</span></div>
             <div style="background:var(--card);border:1.5px solid var(--border);border-radius:var(--r-lg);overflow:hidden">
               <div class="fact-table-wrap">
               <table class="fact-table" style="margin:0">
@@ -3353,7 +3431,7 @@ if (window.parent !== window) {
 
           <!-- Sorties -->
           <div>
-            <div style="font-family:var(--font-serif);font-size:17px;color:var(--red);margin-bottom:.75rem;display:flex;align-items:center;gap:8px"><i class="ti ti-arrow-up-circle"></i> Sorties d'argent</div>
+            <div style="font-family:var(--font-serif);font-size:17px;color:var(--red);margin-bottom:.75rem;display:flex;align-items:center;gap:8px"><i class="ti ti-arrow-up-circle"></i> <span id="tva-titre-sorties">Sorties d'argent</span></div>
             <div style="background:var(--card);border:1.5px solid var(--border);border-radius:var(--r-lg);overflow:hidden">
               <div class="fact-table-wrap">
               <table class="fact-table" style="margin:0">
@@ -3378,13 +3456,45 @@ if (window.parent !== window) {
           </div>
           <div class="modal-body">
             <div style="font-size:12.5px;color:var(--text2);margin-bottom:1rem">
-              Seuls les mouvements justifiés (fichier attaché ou « pas de justificatif » coché) sont proposés. Les sorties deviennent des <strong>charges</strong>, les rentrées deviennent des <strong>factures</strong> encaissées. Un mouvement déjà transféré n'est plus proposé la fois suivante.
+              Le relevé donne des montants <strong>TTC</strong> : choisissez le taux de TVA de chaque ligne, le HT est calculé automatiquement.<br>
+              Les <strong>sorties</strong> deviennent des charges (TVA déductible activée dès qu'il y a de la TVA). Les <strong>rentrées</strong> partent soit sur la <strong>facture du dossier</strong> qu'elles soldent, soit dans l'onglet <strong>Revenus</strong> si elles ne concernent aucun dossier — jamais les deux. Un mouvement déjà transféré n'est plus proposé la fois suivante.
             </div>
             <div id="tva-transfert-body"></div>
           </div>
           <div class="modal-footer">
             <button class="btn" onclick="closeModal_d('tvaTransfertModal')">Annuler</button>
             <button class="btn btn-primary" onclick="tvaConfirmerTransfert()"><i class="ti ti-check"></i> Confirmer le transfert</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODAL CORRECTION EN MASSE DES IMPORTS PASSÉS -->
+      <div class="modal-overlay" id="tvaCorrectionModal" onmousedown="this._downOnSelf=(event.target===this)" onmouseup="if(this._downOnSelf&&event.target===this)closeModal_d('tvaCorrectionModal');this._downOnSelf=false">
+        <div class="modal" style="max-width:860px">
+          <div class="modal-header">
+            <div class="modal-title">Corriger les imports passés</div>
+            <button class="btn btn-sm" onclick="closeModal_d('tvaCorrectionModal')"><i class="ti ti-x"></i></button>
+          </div>
+          <div class="modal-body">
+            <div style="font-size:12.5px;color:var(--text2);margin-bottom:1rem">
+              Les lignes importées avant la correction TTC/HT ont enregistré le montant du relevé (TTC) dans le champ « Montant HT », sans TVA déductible. Choisissez un taux — globalement ou ligne par ligne — et l'outil recalcule le HT, le taux et la déductibilité. Chaque ligne n'est corrigée qu'une seule fois.
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 12px;background:var(--bg);border-radius:var(--r-md);margin-bottom:1rem">
+              <span style="font-size:12px;font-weight:600;color:var(--navy)">Appliquer à tout :</span>
+              <button class="btn btn-sm" onclick="tvaCorrectionTauxGlobal(20)">20%</button>
+              <button class="btn btn-sm" onclick="tvaCorrectionTauxGlobal(10)">10%</button>
+              <button class="btn btn-sm" onclick="tvaCorrectionTauxGlobal(5.5)">5,5%</button>
+              <button class="btn btn-sm" onclick="tvaCorrectionTauxGlobal(0)">0% (hors TVA)</button>
+              <div style="flex:1"></div>
+              <button class="btn btn-sm" onclick="tvaCorrectionToutExclure()"><i class="ti ti-eye-off"></i> Tout exclure</button>
+              <button class="btn btn-sm" onclick="tvaCorrectionToutInclure()"><i class="ti ti-eye"></i> Tout inclure</button>
+            </div>
+            <div id="tva-correction-body"></div>
+          </div>
+          <div class="modal-footer">
+            <div id="tva-correction-resume" style="margin-right:auto;font-size:12px;color:var(--text2)"></div>
+            <button class="btn" onclick="closeModal_d('tvaCorrectionModal')">Annuler</button>
+            <button class="btn btn-primary" onclick="tvaAppliquerCorrectionMasse()"><i class="ti ti-check"></i> Appliquer la correction</button>
           </div>
         </div>
       </div>
@@ -3637,6 +3747,86 @@ if (window.parent !== window) {
         </div>
       </div>
 
+      <!-- ═══ MODAL REVENU MANUEL ═══ -->
+      <div class="modal-overlay" id="revenuModal" onmousedown="this._downOnSelf=(event.target===this)" onmouseup="if(this._downOnSelf&&event.target===this)closeRevenuModal();this._downOnSelf=false">
+        <div class="modal" style="max-width:560px">
+          <div class="modal-header">
+            <div class="modal-title" id="revenu-modal-title">Nouveau revenu</div>
+            <button class="btn btn-sm" onclick="closeRevenuModal()"><i class="ti ti-x"></i></button>
+          </div>
+          <div class="modal-body">
+            <div class="form-grid" style="grid-template-columns:1fr 1fr">
+              <div class="form-group" style="grid-column:1/-1">
+                <label class="form-label">Libellé *</label>
+                <input type="text" class="form-input" id="rv-libelle" placeholder="Ex: Subvention région, Remboursement assurance…">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Catégorie *</label>
+                <select class="form-input" id="rv-categorie">
+                  <option value="">— Choisir —</option>
+                  <option value="honoraires_direct">👔 Honoraires (hors Facturation)</option>
+                  <option value="subvention">🏛️ Subvention</option>
+                  <option value="remboursement">↩️ Remboursement</option>
+                  <option value="interets">💹 Intérêts financiers</option>
+                  <option value="apport">💼 Apport</option>
+                  <option value="autre">📌 Autre</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Projet lié <span style="font-weight:400;color:var(--text3)">(optionnel)</span></label>
+                <select class="form-input" id="rv-projet-id"><option value="">— Aucun projet lié —</option></select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Type</label>
+                <select class="form-input" id="rv-type">
+                  <option value="variable">Variable / ponctuel</option>
+                  <option value="fixe">Fixe récurrent</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Montant HT *</label>
+                <input type="number" class="form-input" id="rv-montant-ht" placeholder="0.00" step="0.01" oninput="calcRevenuTTC()">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Taux TVA (%)</label>
+                <select class="form-input" id="rv-tva-taux" onchange="calcRevenuTTC()">
+                  <option value="0" selected>0% (non soumis)</option>
+                  <option value="20">20% (standard)</option>
+                  <option value="10">10% (intermédiaire)</option>
+                  <option value="5.5">5,5% (réduit)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Montant TTC</label>
+                <input type="number" class="form-input" id="rv-montant-ttc" placeholder="0.00" step="0.01" style="background:var(--bg2);color:var(--text)" readonly>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Date</label>
+                <input type="date" class="form-input" id="rv-date">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Fréquence (si fixe)</label>
+                <select class="form-input" id="rv-frequence">
+                  <option value="mensuel">Mensuelle</option>
+                  <option value="trimestriel">Trimestrielle</option>
+                  <option value="annuel">Annuelle</option>
+                  <option value="ponctuel">Ponctuelle</option>
+                </select>
+              </div>
+              <div class="form-group" style="grid-column:1/-1">
+                <label class="form-label">Notes</label>
+                <input type="text" class="form-input" id="rv-notes" placeholder="Notes optionnelles…">
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-danger btn-sm" id="btn-del-revenu" style="display:none;margin-right:auto" onclick="deleteRevenu()"><i class="ti ti-trash"></i> Supprimer</button>
+            <button class="btn" onclick="closeRevenuModal()">Annuler</button>
+            <button class="btn btn-primary" onclick="saveRevenu()"><i class="ti ti-check"></i> Enregistrer</button>
+          </div>
+        </div>
+      </div>
+
       <!-- ═══ IMPORT FACTURE ARTISAN PAR IA (→ charge sous-traitance) ═══ -->
       <div class="modal-overlay" id="chargeIaModal" onmousedown="this._downOnSelf=(event.target===this)" onmouseup="if(this._downOnSelf&&event.target===this)closeChargeIaModal();this._downOnSelf=false">
         <div class="modal" style="max-width:480px">
@@ -3819,7 +4009,7 @@ if (window.parent !== window) {
 <script>
 
 // ── État local (miroir de Firestore) ──────────────────────
-const stateDossier = { projets: [], echeances: [], factures: [], taches: [], nextId: 1, tvaReleves: [], tvaJustificatifs: {} };
+const stateDossier = { projets: [], echeances: [], factures: [], taches: [], nextId: 1, tvaReleves: [], tvaJustificatifs: {}, tvaProvisionSoldeInitial: 0, tvaProvisionDateInitial: '', revenus: [] };
 
 // Noms des mois — déclaré tôt car utilisé dès l'initialisation du tableau de
 // bord (renderDashboard_d, appelé en bas de ce script) ; il était auparavant
@@ -3870,6 +4060,11 @@ window.addEventListener('firebase-ready', async () => {
 
   // Charger le compteur nextId
   stateDossier.nextId = await window._fb.loadNextId();
+
+  // Charger le solde initial du compte de provision TVA/URSSAF
+  const _provMeta = await window._fb.loadTvaProvisionMeta();
+  stateDossier.tvaProvisionSoldeInitial = parseFloat(_provMeta.soldeInitial) || 0;
+  stateDossier.tvaProvisionDateInitial  = _provMeta.dateInitial || '';
 
   // Écoute temps réel : projets
   window._fb.listenProjets(list => {
@@ -6861,6 +7056,9 @@ function renderFacturation() {
 // ════════════════════════════════════════════════════════════
 let _tvaCurrentReleveId = null;
 let _tvaJustifTargetId  = null; // id du mouvement en attente d'un fichier
+// Compte affiché dans Déclaration TVA : 'pro' (compte pro, historique) ou
+// 'provision' (compte dédié sur lequel sont virées TVA + URSSAF).
+let _tvaActiveCompte = 'pro';
 
 function tvaMoisNom(m) {
   return ['','Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'][m]||'';
@@ -6870,9 +7068,147 @@ function renderTvaPage() {
   if (_tvaCurrentReleveId) { renderTvaDetail(); } else { renderTvaListeReleves(); }
 }
 
+// ── Bascule entre le compte pro et le compte de provision TVA/URSSAF ──────
+function tvaSwitchCompte(compte) {
+  _tvaActiveCompte = compte;
+  document.getElementById('tva-tab-pro').classList.toggle('active', compte==='pro');
+  document.getElementById('tva-tab-provision').classList.toggle('active', compte==='provision');
+  const sousTitre = document.getElementById('tva-page-subtitle');
+  if (sousTitre) sousTitre.textContent = compte==='provision'
+    ? "Suivez le compte sur lequel vous virez votre TVA et votre URSSAF, et comparez-le à ce qui est réellement dû"
+    : "Importez votre relevé bancaire du mois, justifiez chaque mouvement, transmettez à votre comptable";
+  fermerTvaNouveauReleve();
+  renderTvaListeReleves();
+}
+
+// ── Calcule ce qui est théoriquement dû pour un mois donné : TVA à reverser
+// (collectée sur les encaissements − déductible sur les charges) + cotisations
+// sociales (URSSAF + retraite) issues de l'onglet Rémunération. mois est ici
+// en base 1-12 (comme stocké sur les relevés), converti en 0-11 pour réutiliser
+// les mêmes fonctions que la Comptabilité.
+function tvaCalcBesoinMois(mois1a12, annee) {
+  const m = mois1a12 - 1;
+  const factures = stateDossier.factures.filter(f=>f.type!=='devis');
+  let tvaCollectee = factures.reduce((s,f)=>{
+    const d = f.datePaiement || f.dateEmission;
+    if (!d) return s;
+    const dd = new Date(d);
+    if (dd.getMonth()!==m || dd.getFullYear()!==annee) return s;
+    const paye = parseFloat(f.montantPaye)||0;
+    const taux = (parseFloat(f.tva)||20)/100;
+    return s + paye*taux;
+  }, 0);
+  // + TVA collectée sur les revenus manuels (Comptabilité) soumis à TVA
+  tvaCollectee += getRevenusMois(m, annee).reduce((s,r)=>{
+    const ht = parseFloat(r.montantHt)||0;
+    const taux = (parseFloat(r.tvaTaux)||0)/100;
+    return s + ht*taux;
+  }, 0);
+  const chargesMois = getChargesMois(m, annee);
+  const tvaDeductible = chargesMois.filter(c=>c.tvaDed==1).reduce((s,c)=>{
+    const ht = parseFloat(c.montantHt)||0;
+    const taux = (parseFloat(c.tvaTaux)||20)/100;
+    return s + ht*taux;
+  }, 0);
+  const tvaAPayer = Math.max(0, tvaCollectee - tvaDeductible);
+  const remus = getRemuMois(m, annee);
+  const cotisations = remus.reduce((s,r)=>s+(parseFloat(r.totalCotisations)||0), 0);
+  return { tvaAPayer, cotisations, total: tvaAPayer + cotisations };
+}
+
+// ── Solde réel du compte de provision, cumulé depuis le solde initial
+// jusqu'au mois/année indiqués inclus (mois en base 1-12) ──────────────────
+function tvaProvisionSoldeReel(jusquMois, jusquAnnee) {
+  let solde = parseFloat(stateDossier.tvaProvisionSoldeInitial) || 0;
+  stateDossier.tvaReleves
+    .filter(r => (r.compte||'pro')==='provision')
+    .filter(r => r.annee < jusquAnnee || (r.annee===jusquAnnee && r.mois <= jusquMois))
+    .forEach(r => {
+      const trs = r.transactions||[];
+      const entrees = trs.filter(t=>t.sens==='entree').reduce((s,t)=>s+(parseFloat(t.montant)||0),0);
+      const sorties = trs.filter(t=>t.sens==='sortie').reduce((s,t)=>s+(parseFloat(t.montant)||0),0);
+      solde += entrees - sorties;
+    });
+  return solde;
+}
+
+// ── Besoin théorique cumulé sur toute la période couverte par les relevés
+// du compte de provision (du premier au dernier relevé importé) ───────────
+function tvaProvisionBesoinCumule() {
+  const releves = stateDossier.tvaReleves.filter(r => (r.compte||'pro')==='provision');
+  if (!releves.length) return { total: 0, dernierMois: null, dernierAnnee: null };
+  const sorted = [...releves].sort((a,b)=>(a.annee-b.annee)||(a.mois-b.mois));
+  const first = sorted[0], last = sorted[sorted.length-1];
+  let m = first.mois, y = first.annee, total = 0;
+  while (y < last.annee || (y===last.annee && m <= last.mois)) {
+    total += tvaCalcBesoinMois(m, y).total;
+    m++; if (m>12) { m=1; y++; }
+  }
+  return { total, dernierMois: last.mois, dernierAnnee: last.annee };
+}
+
+// ── Affiche (ou permet de saisir) le solde initial + la comparaison
+// solde réel / besoin théorique du compte de provision ────────────────────
+function tvaRenderProvisionEtat() {
+  const zone = document.getElementById('tva-provision-etat');
+  if (!zone) return;
+  if (_tvaActiveCompte !== 'provision') { zone.style.display = 'none'; return; }
+  zone.style.display = '';
+
+  const soldeInitial = parseFloat(stateDossier.tvaProvisionSoldeInitial) || 0;
+  const besoin = tvaProvisionBesoinCumule();
+  const soldeReel = besoin.dernierMois
+    ? tvaProvisionSoldeReel(besoin.dernierMois, besoin.dernierAnnee)
+    : soldeInitial;
+  const ecart = soldeReel - besoin.total;
+  const aDesReleves = besoin.dernierMois !== null;
+
+  zone.innerHTML = `
+    <div class="card" style="padding:1rem 1.25rem;margin-bottom:1rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:.75rem">
+        <div style="font-size:12px;color:var(--text2)">Solde initial constaté sur ce compte</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input type="number" id="tva-provision-solde-input" value="${soldeInitial}" style="width:110px;padding:5px 8px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:13px;background:var(--card);color:var(--text)"> €
+          <input type="date" id="tva-provision-date-input" value="${esc(stateDossier.tvaProvisionDateInitial||'')}" style="padding:5px 8px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:12px;background:var(--card);color:var(--text)">
+          <button class="btn btn-sm" onclick="tvaEnregistrerSoldeInitial()"><i class="ti ti-device-floppy"></i> Enregistrer</button>
+        </div>
+      </div>
+      ${aDesReleves ? `
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;padding-top:.75rem;border-top:1px solid var(--border)">
+        <div>
+          <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Solde réel du compte</div>
+          <div style="font-family:var(--font-serif);font-size:20px;color:var(--navy)">${fmtEurTva(soldeReel)}</div>
+          <div style="font-size:11px;color:var(--text3)">au ${tvaMoisNom(besoin.dernierMois)} ${besoin.dernierAnnee}</div>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Besoin théorique cumulé</div>
+          <div style="font-family:var(--font-serif);font-size:20px;color:#e6b95c">${fmtEurTva(besoin.total)}</div>
+          <div style="font-size:11px;color:var(--text3)">TVA + cotisations sociales</div>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Écart</div>
+          <div style="font-family:var(--font-serif);font-size:20px;color:${ecart>=0?'var(--green)':'var(--red)'}">${ecart>=0?'+':''}${fmtEurTva(ecart)}</div>
+          <div style="font-size:11px;color:${ecart>=0?'var(--text3)':'var(--red)'}">${ecart>=0?'Provision suffisante':'Sous-provisionné'}</div>
+        </div>
+      </div>` : `<div style="font-size:12px;color:var(--text3);padding-top:.5rem">Importez un relevé de ce compte pour comparer le solde réel au besoin théorique.</div>`}
+    </div>`;
+}
+
+async function tvaEnregistrerSoldeInitial() {
+  const solde = parseFloat(document.getElementById('tva-provision-solde-input').value) || 0;
+  const date  = document.getElementById('tva-provision-date-input').value || '';
+  stateDossier.tvaProvisionSoldeInitial = solde;
+  stateDossier.tvaProvisionDateInitial  = date;
+  await window._fb.saveTvaProvisionMeta({ soldeInitial: solde, dateInitial: date });
+  toast_d('✅ Solde initial enregistré.');
+  tvaRenderProvisionEtat();
+}
+
 function openTvaNouveauReleve() {
   document.getElementById('tva-import-zone').style.display = 'block';
   document.getElementById('tva-import-status').innerHTML = '';
+  const titre = document.getElementById('tva-import-titre');
+  if (titre) titre.textContent = _tvaActiveCompte==='provision' ? 'Nouveau relevé — compte provision TVA/URSSAF' : 'Nouveau relevé';
 }
 function fermerTvaNouveauReleve() {
   document.getElementById('tva-import-zone').style.display = 'none';
@@ -6881,12 +7217,17 @@ function fermerTvaNouveauReleve() {
 function renderTvaListeReleves() {
   document.getElementById('tva-view-liste').style.display = '';
   document.getElementById('tva-view-detail').style.display = 'none';
+  tvaRenderProvisionEtat();
   const body = document.getElementById('tva-liste-body');
-  if (!stateDossier.tvaReleves.length) {
-    body.innerHTML = `<div class="empty-state"><div class="empty-icon"><i class="ti ti-file-percent"></i></div><div class="empty-title">Aucun relevé importé</div><div class="empty-desc">Importez le relevé bancaire du mois pour démarrer votre déclaration de TVA.</div></div>`;
+  const releves = stateDossier.tvaReleves.filter(r => (r.compte||'pro') === _tvaActiveCompte);
+  if (!releves.length) {
+    const msg = _tvaActiveCompte==='provision'
+      ? { titre: 'Aucun relevé importé pour ce compte', desc: "Importez le relevé bancaire du compte sur lequel vous virez votre TVA et votre URSSAF." }
+      : { titre: 'Aucun relevé importé', desc: "Importez le relevé bancaire du mois pour démarrer votre déclaration de TVA." };
+    body.innerHTML = `<div class="empty-state"><div class="empty-icon"><i class="ti ti-file-percent"></i></div><div class="empty-title">${msg.titre}</div><div class="empty-desc">${msg.desc}</div></div>`;
     return;
   }
-  body.innerHTML = stateDossier.tvaReleves.map(r => {
+  body.innerHTML = releves.map(r => {
     const trs = r.transactions||[];
     const nbTotal = trs.length;
     const nbJustifies = trs.filter(t => t.sansJustificatif || stateDossier.tvaJustificatifs[t.id]).length;
@@ -7003,14 +7344,19 @@ RÈGLES :
         notes: ''
       }));
 
+      // Les ids du compte pro restent inchangés (rétrocompatibilité avec les
+      // relevés déjà importés) ; le compte provision est namespacé à part
+      // pour ne jamais entrer en collision avec un relevé du compte pro du
+      // même mois.
       const releve = {
-        id: 'tva-'+annee+'-'+String(mois).padStart(2,'0'),
+        id: (_tvaActiveCompte==='provision' ? 'tva-provision-' : 'tva-') + annee+'-'+String(mois).padStart(2,'0'),
         mois, annee,
+        compte: _tvaActiveCompte,
         dateImport: new Date().toISOString(),
         nomFichierSource: file.name,
         transactions
       };
-      // Écrase un éventuel relevé déjà existant pour ce mois (ré-import volontaire)
+      // Écrase un éventuel relevé déjà existant pour ce mois et ce compte (ré-import volontaire)
       await window._fb.saveTvaReleve(releve);
       const idx = stateDossier.tvaReleves.findIndex(r=>r.id===releve.id);
       if (idx>=0) stateDossier.tvaReleves[idx]=releve; else stateDossier.tvaReleves.push(releve);
@@ -7039,14 +7385,37 @@ function renderTvaDetail() {
   const nbTotal = trs.length;
   const nbJustifies = trs.filter(t => t.sansJustificatif || stateDossier.tvaJustificatifs[t.id]).length;
 
-  document.getElementById('tva-detail-titre').textContent = `${tvaMoisNom(r.mois)} ${r.annee}`;
-  document.getElementById('tva-detail-soustitre').textContent = `Relevé importé le ${fmtDate_d(r.dateImport)} · ${nbTotal} mouvement(s)`;
+  const estProvision = (r.compte||'pro') === 'provision';
 
-  document.getElementById('tva-kpi-row').innerHTML = `
-    <div><div class="kpi-label">Entrées</div><div class="kpi-value" style="color:var(--green)">${fmtEurTva(totalEntrees)}</div></div>
-    <div><div class="kpi-label">Sorties</div><div class="kpi-value" style="color:var(--red)">${fmtEurTva(totalSorties)}</div></div>
-    <div><div class="kpi-label">Solde</div><div class="kpi-value">${fmtEurTva(totalEntrees-totalSorties)}</div></div>
-    <div><div class="kpi-label">Justifiés</div><div class="kpi-value">${nbJustifies}/${nbTotal}</div></div>`;
+  document.getElementById('tva-detail-titre').textContent = `${tvaMoisNom(r.mois)} ${r.annee}${estProvision ? ' — Compte provision TVA/URSSAF' : ''}`;
+  document.getElementById('tva-detail-soustitre').textContent = `Relevé importé le ${fmtDate_d(r.dateImport)} · ${nbTotal} mouvement(s)`;
+  document.getElementById('tva-titre-entrees').textContent = estProvision ? "Provisions reçues (virements depuis le compte pro)" : "Rentrées d'argent";
+  document.getElementById('tva-titre-sorties').textContent = estProvision ? "Paiements effectués (TVA, URSSAF, impôts…)" : "Sorties d'argent";
+
+  // Le transfert vers Comptabilité (sorties → charges, entrées → factures)
+  // n'a de sens que pour le compte pro : les mouvements du compte provision
+  // sont de simples virements internes, pas des charges ou du revenu.
+  const btnTransfert = document.getElementById('tva-btn-transfert');
+  const btnReinit    = document.getElementById('tva-btn-reinit-transfert');
+  if (btnTransfert) btnTransfert.style.display = estProvision ? 'none' : '';
+  if (btnReinit)    btnReinit.style.display    = estProvision ? 'none' : '';
+
+  if (estProvision) {
+    const besoin = tvaCalcBesoinMois(r.mois, r.annee);
+    const mouvementNet = totalEntrees - totalSorties;
+    const ecartMois = mouvementNet - besoin.total;
+    document.getElementById('tva-kpi-row').innerHTML = `
+      <div><div class="kpi-label">Provisions reçues</div><div class="kpi-value" style="color:var(--green)">${fmtEurTva(totalEntrees)}</div></div>
+      <div><div class="kpi-label">Payé (TVA/URSSAF)</div><div class="kpi-value" style="color:var(--red)">${fmtEurTva(totalSorties)}</div></div>
+      <div><div class="kpi-label">Besoin théorique du mois</div><div class="kpi-value" style="color:#e6b95c">${fmtEurTva(besoin.total)}</div><div style="font-size:10px;color:var(--text3)">TVA ${fmtEurTva(besoin.tvaAPayer)} + cotis. ${fmtEurTva(besoin.cotisations)}</div></div>
+      <div><div class="kpi-label">Écart vs besoin</div><div class="kpi-value" style="color:${ecartMois>=0?'var(--green)':'var(--red)'}">${ecartMois>=0?'+':''}${fmtEurTva(ecartMois)}</div></div>`;
+  } else {
+    document.getElementById('tva-kpi-row').innerHTML = `
+      <div><div class="kpi-label">Entrées</div><div class="kpi-value" style="color:var(--green)">${fmtEurTva(totalEntrees)}</div></div>
+      <div><div class="kpi-label">Sorties</div><div class="kpi-value" style="color:var(--red)">${fmtEurTva(totalSorties)}</div></div>
+      <div><div class="kpi-label">Solde</div><div class="kpi-value">${fmtEurTva(totalEntrees-totalSorties)}</div></div>
+      <div><div class="kpi-label">Justifiés</div><div class="kpi-value">${nbJustifies}/${nbTotal}</div></div>`;
+  }
 
   const exportStatus = document.getElementById('tva-export-status');
   if (nbTotal>0 && nbJustifies<nbTotal) {
@@ -7072,11 +7441,12 @@ function tvaRowHtml(t) {
     justifCell = `<span style="display:inline-flex;align-items:center;gap:5px;color:var(--amber);font-size:12px"><i class="ti ti-alert-circle"></i> Manquant</span>`;
   }
   const transfereTag = tvaEstReellementTransfere(t) ? `<span title="Déjà envoyé en Comptabilité" style="display:inline-block;margin-left:6px;color:var(--accent)"><i class="ti ti-database-export"></i></span>` : '';
+  const natureTag = t.natureHorsCompta ? `<span style="display:inline-block;margin-left:6px;font-size:10px;padding:1px 7px;border-radius:20px;background:var(--bg2);color:var(--text2)">${TVA_HORS_CHARGE_LABELS[t.natureHorsCompta]||t.natureHorsCompta}</span>` : '';
   const noteTag = t.note ? `<span style="color:var(--text3);font-style:italic"> (${esc(t.note)})</span>` : '';
   const sensLbl = t.sens==='entree' ? 'sortie' : 'rentrée';
   return `<tr>
     <td style="white-space:nowrap;padding-left:16px">${fmtDate_d(t.date)}</td>
-    <td>${esc(t.libelle)||'—'}${noteTag}${transfereTag}</td>
+    <td>${esc(t.libelle)||'—'}${noteTag}${transfereTag}${natureTag}</td>
     <td style="text-align:right;font-weight:600;white-space:nowrap">${fmtEurTva(t.montant)}</td>
     <td>${justifCell}</td>
     <td style="white-space:nowrap">
@@ -7379,6 +7749,138 @@ async function tvaTelechargerJustificatifs() {
   toast_d(`✅ Archive téléchargée — ${nbOk} fichier(s)${echecs.length?', '+echecs.length+' exclu(s), voir détail ci-dessus':''}.`);
 }
 
+// ════════════════════════════════════════════════════════════
+//  CORRECTION EN MASSE DES IMPORTS PASSÉS
+//  Les lignes créées avant la correction TTC/HT ont enregistré le montant du
+//  relevé bancaire (TTC) dans "montantHt", avec tvaTaux=20 et tvaDed=0. On les
+//  retrouve grâce à sourceTvaId, on recalcule le HT au taux choisi et on pose
+//  ttcCorrige pour qu'une seconde passe ne redivise jamais le montant.
+// ════════════════════════════════════════════════════════════
+let _tvaCorrectionItems = [];
+
+function tvaCollecterLignesACorriger() {
+  const items = [];
+  const aCorriger = o => o && o.sourceTvaId && !o.ttcCorrige;
+  (stateDossier.charges||[]).forEach(c => {
+    if (aCorriger(c)) items.push({ kind:'charge', ref:c, taux: tvaTauxParDefaut(c.categorie), inclus:true });
+  });
+  (stateDossier.factures||[]).forEach(f => {
+    if (aCorriger(f) && f.type!=='devis') items.push({ kind:'facture', ref:f, taux: 20, inclus:true });
+  });
+  (stateDossier.revenus||[]).forEach(r => {
+    if (aCorriger(r)) items.push({ kind:'revenu', ref:r, taux: parseFloat(r.tvaTaux)||0, inclus:true });
+  });
+  items.sort((a,b)=>(a.ref.date||a.ref.dateEmission||'').localeCompare(b.ref.date||b.ref.dateEmission||''));
+  return items;
+}
+
+function tvaOuvrirCorrectionMasse() {
+  _tvaCorrectionItems = tvaCollecterLignesACorriger();
+  if (!_tvaCorrectionItems.length) {
+    toast_d('✅ Aucune ligne à corriger — tous les imports sont déjà enregistrés en HT.');
+    return;
+  }
+  tvaRenderCorrectionMasse();
+  const m = document.getElementById('tvaCorrectionModal'); if (m) m.classList.add('open');
+}
+
+function tvaRenderCorrectionMasse() {
+  const body = document.getElementById('tva-correction-body');
+  if (!body) return;
+  const kindLbl = { charge:'Charge', facture:'Facture', revenu:'Revenu' };
+  const kindCol = { charge:'var(--red)', facture:'#4fa8f0', revenu:'var(--green)' };
+
+  body.innerHTML = _tvaCorrectionItems.map((item,i) => {
+    const o = item.ref;
+    const ttc = parseFloat(o.montantHt)||0;   // valeur actuellement stockée = TTC
+    const ht  = tvaHtDepuisTtc(ttc, item.taux);
+    const tva = Math.round((ttc - ht)*100)/100;
+    const libelle = o.libelle || o.objet || o.numero || '—';
+    const date = o.date || o.datePaiement || o.dateEmission || '';
+    const tauxOptions = [0,5.5,10,20].map(v =>
+      `<option value="${v}" ${parseFloat(item.taux)===v?'selected':''}>${v===0?'0%':v+'%'}</option>`).join('');
+    return `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 12px;border:1.5px solid ${item.inclus?'var(--border)':'transparent'};background:${item.inclus?'transparent':'var(--bg2)'};opacity:${item.inclus?1:.5};border-radius:var(--r-md);margin-bottom:6px">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+        <input type="checkbox" ${item.inclus?'checked':''} onchange="tvaCorrectionToggle(${i},this.checked)">
+        <span style="font-size:10px;font-weight:700;text-transform:uppercase;color:${kindCol[item.kind]}">${kindLbl[item.kind]}</span>
+      </label>
+      <div style="flex:1;min-width:180px;font-size:12.5px">${fmtDate_d(date)} · ${esc(libelle)}</div>
+      <div style="font-size:12px;color:var(--text3)">actuel ${fmtEurTva(ttc)}</div>
+      <select class="form-input" style="padding:4px 7px;font-size:12px;width:auto" onchange="tvaCorrectionSetTaux(${i},this.value)">${tauxOptions}</select>
+      <div style="font-size:12px;white-space:nowrap">→ HT <strong style="color:var(--navy)">${fmtEurTva(ht)}</strong> <span style="color:var(--text3)">+ ${fmtEurTva(tva)} TVA</span></div>
+    </div>`;
+  }).join('');
+
+  const inclus = _tvaCorrectionItems.filter(it=>it.inclus);
+  const tvaRecup = inclus.filter(it=>it.kind==='charge').reduce((s,it)=>{
+    const ttc = parseFloat(it.ref.montantHt)||0;
+    return s + (ttc - tvaHtDepuisTtc(ttc, it.taux));
+  }, 0);
+  const resume = document.getElementById('tva-correction-resume');
+  if (resume) resume.innerHTML = `${inclus.length} ligne(s) sur ${_tvaCorrectionItems.length} — <strong style="color:var(--green)">${fmtEurTva(tvaRecup)}</strong> de TVA déductible récupérée sur les charges`;
+}
+
+function tvaCorrectionToggle(i, inclus) { _tvaCorrectionItems[i].inclus = inclus; tvaRenderCorrectionMasse(); }
+function tvaCorrectionSetTaux(i, taux)  { _tvaCorrectionItems[i].taux = parseFloat(taux)||0; tvaRenderCorrectionMasse(); }
+function tvaCorrectionTauxGlobal(taux)  { _tvaCorrectionItems.forEach(it=>{ if(it.inclus) it.taux = taux; }); tvaRenderCorrectionMasse(); }
+function tvaCorrectionToutExclure()     { _tvaCorrectionItems.forEach(it=>it.inclus=false); tvaRenderCorrectionMasse(); }
+function tvaCorrectionToutInclure()     { _tvaCorrectionItems.forEach(it=>it.inclus=true);  tvaRenderCorrectionMasse(); }
+
+async function tvaAppliquerCorrectionMasse() {
+  const inclus = _tvaCorrectionItems.filter(it=>it.inclus);
+  const exclus = _tvaCorrectionItems.filter(it=>!it.inclus);
+  if (!inclus.length && !exclus.length) return;
+  if (!confirm(`Corriger ${inclus.length} ligne(s) ?\n\nLes ${exclus.length} ligne(s) exclue(s) seront marquées comme déjà correctes et ne réapparaîtront plus dans cette fenêtre.\n\nCette action modifie vos données comptables — pensez à faire une sauvegarde si vous n'en avez pas de récente.`)) return;
+
+  let nb = 0;
+  for (const item of inclus) {
+    const o = item.ref;
+    const ttc = parseFloat(o.montantHt)||0;
+    const ht  = tvaHtDepuisTtc(ttc, item.taux);
+    const note = ' · HT recalculé depuis ' + fmtEurTva(ttc) + ' TTC au taux ' + item.taux + '%';
+
+    if (item.kind === 'charge') {
+      const c = { ...o, montantHt: ht, tvaTaux: item.taux, tvaDed: item.taux>0?1:0,
+                  notes: (o.notes||'') + note, ttcCorrige: true, updatedAt: new Date().toISOString() };
+      await saveChargeDb(c);
+    } else if (item.kind === 'facture') {
+      // Le montant payé suivait le montant TTC : il doit suivre le nouveau HT,
+      // sinon la facture apparaîtrait payée au-delà de son montant.
+      const dejaPaye = parseFloat(o.montantPaye)||0;
+      const f = { ...o, montantHt: ht, tva: item.taux,
+                  montantPaye: dejaPaye>0 ? Math.min(ht, tvaHtDepuisTtc(dejaPaye, item.taux)) : 0,
+                  notes: (o.notes||'') + note, ttcCorrige: true, updatedAt: new Date().toISOString() };
+      await window._fb.saveFacture(f);
+      const idx = stateDossier.factures.findIndex(x=>x.id===f.id);
+      if (idx>=0) stateDossier.factures[idx]=f; else stateDossier.factures.push(f);
+    } else {
+      const r = { ...o, montantHt: ht, tvaTaux: item.taux,
+                  notes: (o.notes||'') + note, ttcCorrige: true, updatedAt: new Date().toISOString() };
+      await saveRevenuDb(r);
+    }
+    nb++;
+  }
+
+  // Les lignes exclues sont considérées déjà justes : on pose le drapeau pour
+  // qu'elles ne soient plus reproposées à chaque ouverture.
+  for (const item of exclus) {
+    const o = item.ref;
+    if (item.kind === 'charge')  await saveChargeDb({ ...o, ttcCorrige: true });
+    else if (item.kind === 'revenu') await saveRevenuDb({ ...o, ttcCorrige: true });
+    else {
+      const f = { ...o, ttcCorrige: true };
+      await window._fb.saveFacture(f);
+      const idx = stateDossier.factures.findIndex(x=>x.id===f.id);
+      if (idx>=0) stateDossier.factures[idx]=f;
+    }
+  }
+
+  closeModal_d('tvaCorrectionModal');
+  if (typeof renderComptabilite === 'function') renderComptabilite();
+  renderTvaPage();
+  toast_d(`✅ ${nb} ligne(s) recalculée(s) en HT${exclus.length?', '+exclus.length+' marquée(s) comme déjà correcte(s)':''}.`);
+}
+
 // ── Transfert vers Comptabilité ─────────────────────────────
 // Sorties → Charges, Rentrées → Factures encaissées. Détecte les doublons
 // probables (même montant, date proche) et laisse le choix : écraser
@@ -7405,8 +7907,7 @@ function tvaTrouverChargeCorrespondante(t) {
     if (!tvaMontantsProches(t.montant, parseFloat(c.montantHt)||0)) return false;
     return tvaMotsCommuns(c.libelle, t.libelle) > 0;
   });
-}
-// Un mouvement bancaire représente l'argent réellement encaissé (TTC),
+}// Un mouvement bancaire représente l'argent réellement encaissé (TTC),
 // alors que la Facturation ne suit que le HT (un seul champ "Montant HT" au
 // formulaire, sans saisie de TVA séparée) — comparer les deux montants tels
 // quels ratait donc systématiquement les factures avec TVA. On compare au HT
@@ -7424,6 +7925,39 @@ function tvaTrouverFactureCorrespondante(t) {
     const texteRef = (f.client||'') + ' ' + (f.objet||'') + ' ' + (f.numero||'');
     return tvaMotsCommuns(texteRef, t.libelle) > 0;
   });
+}
+
+// Un encaissement peut aussi correspondre à un revenu déjà saisi à la main
+// dans l'onglet Revenus de Comptabilité — sans cette recherche, le transfert
+// créerait un doublon invisible (le revenu manuel ET une facture d'import
+// compteraient tous les deux dans le CA du mois).
+function tvaTrouverRevenuCorrespondant(t) {
+  return (stateDossier.revenus||[]).find(r => {
+    if (!tvaMontantsProches(t.montant, parseFloat(r.montantHt)||0)) return false;
+    return tvaMotsCommuns(r.libelle, t.libelle) > 0;
+  });
+}
+
+// Un encaissement qui concerne un dossier tombe presque toujours en face d'une
+// facture déjà émise mais pas encore marquée payée. On la cherche en priorité :
+// la marquer payée est toujours préférable à créer une seconde ligne, qui
+// gonflerait le "Facturé" du dossier et fausserait le % devis → facturé.
+function tvaTrouverFactureImpayeeDuProjet(t, projetId) {
+  if (!projetId) return null;
+  const candidates = (stateDossier.factures||[]).filter(f =>
+    f.type!=='devis' &&
+    String(f.projetId)===String(projetId) &&
+    (parseFloat(f.montantPaye)||0) < (parseFloat(f.montantHt)||0) - 0.01
+  );
+  // Celle dont le reste à payer colle le mieux au montant encaissé
+  let best = null, bestEcart = Infinity;
+  for (const f of candidates) {
+    const reste = (parseFloat(f.montantHt)||0) - (parseFloat(f.montantPaye)||0);
+    if (!tvaMontantsProches(t.montant, reste)) continue;
+    const ecart = Math.abs(reste - t.montant);
+    if (ecart < bestEcart) { bestEcart = ecart; best = f; }
+  }
+  return best;
 }
 
 // Reconnaissance du dossier concerné par une rentrée d'argent : compare les
@@ -7462,6 +7996,33 @@ const TVA_CATEGORIES_MOTSCLES = {
   social:         ['URSSAF','CIPAV','SSI','AGIRC','ARRCO','IRCEC'],
   honoraires_ext: ['EXPERT COMPTABLE','COMPTABLE','AVOCAT','NOTAIRE','HUISSIER'],
 };
+
+// ── Sorties qui ne sont PAS des charges ────────────────────────────────────
+// Un virement de salaire, un prélèvement du gérant ou une provision virée sur
+// le compte TVA/URSSAF ne sont pas des charges déductibles : les enregistrer
+// comme telles écrasait le bénéfice et faussait la TVA. Ces mouvements sont
+// reconnus, marqués comme traités, mais ne créent aucune ligne en charges.
+const TVA_HORS_CHARGE_MOTSCLES = {
+  remuneration: ['SALAIRE','REMUNERATION','REMUNERATION GERANT','PRELEVEMENT GERANT','VIR SUCHET','SUCHET MAXIME','MAXIME SUCHET','PAIE'],
+  interne:      ['PROVISION','EPARGNE','LIVRET','COMPTE PROVISION','VIR INTERNE','VIREMENT INTERNE','TVA URSSAF'],
+};
+const TVA_HORS_CHARGE_LABELS = {
+  remuneration: '💼 Rémunération / prélèvement gérant',
+  interne:      '🔁 Virement interne (compte provision)',
+  perso:        '🚫 Hors comptabilité (personnel)'
+};
+function tvaDeviserHorsCharge(libelle) {
+  const norm = tvaNormaliser(libelle);
+  if (!norm) return null;
+  const appris = tvaChargerCategoriesApprises();
+  for (const signature in appris) {
+    if (signature && norm.includes(signature) && TVA_HORS_CHARGE_LABELS[appris[signature]]) return appris[signature];
+  }
+  for (const kind in TVA_HORS_CHARGE_MOTSCLES) {
+    if (TVA_HORS_CHARGE_MOTSCLES[kind].some(mot => norm.includes(mot))) return kind;
+  }
+  return null;
+}
 const TVA_CATEGORIES_STORAGE_KEY = 'phenix_tva_categories_apprises';
 
 function tvaExtraireSignature(libelle) {
@@ -7506,9 +8067,24 @@ function tvaDeviserCategorie(libelle) {
 function tvaEstReellementTransfere(t) {
   if (!t.transfereCompta) return false;
   if (!t.compteRefId) return true; // ancien transfert sans référence enregistrée : on fait confiance au drapeau
-  if (t.compteRefType === 'charge') return (stateDossier.charges||[]).some(c => String(c.id)===String(t.compteRefId));
+  if (t.compteRefType === 'charge')  return (stateDossier.charges||[]).some(c => String(c.id)===String(t.compteRefId));
   if (t.compteRefType === 'facture') return (stateDossier.factures||[]).some(f => String(f.id)===String(t.compteRefId));
+  if (t.compteRefType === 'revenu')  return (stateDossier.revenus||[]).some(r => String(r.id)===String(t.compteRefId));
   return true;
+}
+
+// ── Taux de TVA par défaut d'un mouvement ──────────────────────────────────
+// Un relevé bancaire donne du TTC. Sans taux, l'import enregistrait ce TTC
+// dans le champ "Montant HT" — ce qui gonflait les charges/le CA et faussait
+// toute la déclaration. On propose donc un taux par défaut cohérent avec la
+// catégorie, modifiable ligne par ligne avant l'envoi.
+function tvaTauxParDefaut(categorie) {
+  if (categorie === 'social') return 0;   // URSSAF, CIPAV… hors champ TVA
+  return 20;
+}
+function tvaHtDepuisTtc(ttc, taux) {
+  const t = parseFloat(taux)||0;
+  return Math.round(((parseFloat(ttc)||0) / (1 + t/100)) * 100) / 100;
 }
 
 async function tvaReinitialiserTransferts() {
@@ -7534,15 +8110,55 @@ function tvaOuvrirTransfert() {
   if (!trs.length) { toast_d('ℹ️ Tous les mouvements sont déjà transférés.'); return; }
 
   _tvaTransfertItems = trs.map(t => {
-    const match = t.sens==='sortie' ? tvaTrouverChargeCorrespondante(t) : tvaTrouverFactureCorrespondante(t);
-    const projetDetecte = t.sens==='entree' ? tvaTrouverProjetPourTransaction(t) : null;
-    const categorieDetectee = t.sens==='sortie' ? tvaDeviserCategorie(t.libelle) : null;
+    if (t.sens === 'sortie') {
+      const horsCharge = tvaDeviserHorsCharge(t.libelle);
+      const match = horsCharge ? null : tvaTrouverChargeCorrespondante(t);
+      const categorieDetectee = horsCharge ? null : tvaDeviserCategorie(t.libelle);
+      const categorie = categorieDetectee || (match && match.categorie ? match.categorie : 'autre');
+      return {
+        transaction: t, match, matchType: match ? 'charge' : null,
+        destination: horsCharge || 'charge',
+        horsChargeDetecteAuto: !!horsCharge,
+        choix: match ? null : 'nouveau',
+        projetId: match && match.projetId ? String(match.projetId) : '',
+        categorie,
+        categorieDetecteeAuto: !!categorieDetectee,
+        tvaTaux: match && match.tvaTaux !== undefined ? match.tvaTaux : tvaTauxParDefaut(categorie)
+      };
+    }
+
+    // Rentrée d'argent — le routage est le cœur du circuit voulu :
+    //  • dossier reconnu + facture impayée qui colle  → on solde cette facture
+    //  • dossier reconnu sans facture en attente      → nouvelle facture du dossier
+    //  • aucun dossier reconnu                        → revenu manuel (Comptabilité)
+    // Ainsi Facturation ne se remplit jamais de lignes parasites, et le suivi
+    // "% facturé vs devis" du dossier reste juste.
+    const projetDetecte = tvaTrouverProjetPourTransaction(t);
+    const projetId = projetDetecte ? String(projetDetecte.id) : '';
+    const factureImpayee = tvaTrouverFactureImpayeeDuProjet(t, projetId);
+    let match = null, matchType = null;
+    if (factureImpayee) { match = factureImpayee; matchType = 'facture-impayee'; }
+    else {
+      const fMatch = tvaTrouverFactureCorrespondante(t);
+      if (fMatch) { match = fMatch; matchType = 'facture'; }
+      else {
+        const rMatch = tvaTrouverRevenuCorrespondant(t);
+        if (rMatch) { match = rMatch; matchType = 'revenu'; }
+      }
+    }
     return {
-      transaction:t, match, choix: match ? null : 'nouveau',
-      projetId: projetDetecte ? String(projetDetecte.id) : (match && match.projetId ? String(match.projetId) : ''),
+      transaction: t, match, matchType,
+      // Une facture déjà identifiée impose le circuit Facturation : sinon un
+      // "écraser" aurait créé un revenu manuel au lieu de mettre à jour la
+      // facture, laissant les deux en base (doublon).
+      destination: (matchType==='facture'||matchType==='facture-impayee') ? 'facture'
+                 : matchType==='revenu' ? 'revenu'
+                 : (projetId ? 'facture' : 'revenu'),
+      choix: matchType==='facture-impayee' ? 'ecraser' : (match ? null : 'nouveau'),
+      projetId,
       projetDetecteAuto: !!projetDetecte,
-      categorie: categorieDetectee || (match && match.categorie ? match.categorie : 'autre'),
-      categorieDetecteeAuto: !!categorieDetectee
+      categorie: 'honoraires_direct',
+      tvaTaux: 20
     };
   });
   tvaRenderTransfertModal();
@@ -7560,10 +8176,50 @@ function tvaRenderTransfertModal() {
     ).join('');
     const detecteTag = item.projetDetecteAuto
       ? `<span style="display:inline-flex;align-items:center;gap:4px;color:var(--green);font-size:11px;margin-left:8px"><i class="ti ti-sparkles"></i> détecté automatiquement</span>`
-      : `<span style="display:inline-flex;align-items:center;gap:4px;color:var(--amber);font-size:11px;margin-left:8px"><i class="ti ti-alert-circle"></i> dossier non reconnu — à affecter</span>`;
+      : `<span style="display:inline-flex;align-items:center;gap:4px;color:var(--amber);font-size:11px;margin-left:8px"><i class="ti ti-alert-circle"></i> dossier non reconnu</span>`;
     return `<div style="margin-top:8px">
       <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:3px">Dossier concerné${detecteTag}</label>
       <select class="form-input" style="padding:5px 8px;font-size:12.5px" onchange="tvaSetTransfertProjet(${i},this.value)">${options}</select>
+    </div>`;
+  };
+
+  // Choix du circuit pour une rentrée : Facturation (rattachée à un dossier,
+  // compte dans le % facturé) ou Revenus (hors dossier, aucune facture créée).
+  const destinationHtml = (item, i) => {
+    if (item.matchType === 'facture-impayee') return '';
+    return `<div style="margin-top:8px">
+      <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:3px">Où enregistrer cette rentrée ?</label>
+      <div style="display:flex;gap:14px;font-size:12.5px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="tva-dest-${i}" ${item.destination==='facture'?'checked':''} onchange="tvaSetTransfertDestination(${i},'facture')"> 🧾 Facture d'un dossier</label>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="tva-dest-${i}" ${item.destination==='revenu'?'checked':''} onchange="tvaSetTransfertDestination(${i},'revenu')"> 💰 Revenu hors dossier</label>
+      </div>
+    </div>`;
+  };
+
+  const revenuCategorieSelectHtml = (item, i) => {
+    const options = Object.entries(CAT_LABELS_REV).map(([val,lbl]) =>
+      `<option value="${val}" ${item.categorie===val?'selected':''}>${lbl}</option>`
+    ).join('');
+    return `<div style="margin-top:8px">
+      <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:3px">Catégorie de revenu</label>
+      <select class="form-input" style="padding:5px 8px;font-size:12.5px" onchange="tvaSetTransfertCategorie(${i},this.value)">${options}</select>
+    </div>`;
+  };
+
+  // Le relevé bancaire est du TTC : sans ce taux, le montant partirait tel quel
+  // dans le champ "Montant HT" et fausserait charges, CA et TVA.
+  const tauxSelectHtml = (item, i) => {
+    if (item.choix === 'ecraser') return ''; // on garde le HT déjà saisi
+    const taux = [0, 5.5, 10, 20];
+    const options = taux.map(v => `<option value="${v}" ${parseFloat(item.tvaTaux)===v?'selected':''}>${v===0?'0% (hors TVA)':v+'%'}</option>`).join('');
+    const ht = tvaHtDepuisTtc(item.transaction.montant, item.tvaTaux);
+    const tvaMontant = (parseFloat(item.transaction.montant)||0) - ht;
+    return `<div style="margin-top:8px">
+      <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:3px">Taux de TVA <span style="color:var(--text3)">— le relevé donne du TTC</span></label>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <select class="form-input" style="padding:5px 8px;font-size:12.5px;width:auto" onchange="tvaSetTransfertTaux(${i},this.value)">${options}</select>
+        <span style="font-size:12px;color:var(--text2)">→ HT <strong style="color:var(--navy)">${fmtEurTva(ht)}</strong> + TVA ${fmtEurTva(tvaMontant)}</span>
+      </div>
     </div>`;
   };
 
@@ -7573,6 +8229,19 @@ function tvaRenderTransfertModal() {
     bureau:'🏢 Frais de bureau', formation:'📚 Formation', materiel:'🔧 Matériel & fournitures',
     social:'💰 Charges sociales', autre:'📌 Autre'
   };
+  // Nature d'une sortie : vraie charge, ou mouvement qui ne doit rien créer
+  // en comptabilité (salaire, prélèvement, virement vers le compte provision).
+  const natureSortieHtml = (item, i) => {
+    const options = [['charge','🧾 Charge de l\'entreprise']].concat(Object.entries(TVA_HORS_CHARGE_LABELS))
+      .map(([val,lbl]) => `<option value="${val}" ${item.destination===val?'selected':''}>${lbl}</option>`).join('');
+    const tag = item.horsChargeDetecteAuto
+      ? `<span style="display:inline-flex;align-items:center;gap:4px;color:var(--green);font-size:11px;margin-left:8px"><i class="ti ti-sparkles"></i> reconnu automatiquement</span>` : '';
+    return `<div style="margin-top:8px">
+      <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:3px">Nature du mouvement${tag}</label>
+      <select class="form-input" style="padding:5px 8px;font-size:12.5px" onchange="tvaSetTransfertDestination(${i},this.value)">${options}</select>
+    </div>`;
+  };
+
   const categorieSelectHtml = (item, i) => {
     const options = Object.entries(CATEGORIES_LABELS).map(([val,lbl]) =>
       `<option value="${val}" ${item.categorie===val?'selected':''}>${lbl}</option>`
@@ -7592,8 +8261,37 @@ function tvaRenderTransfertModal() {
     const sensColor = t.sens==='entree' ? 'var(--green)' : 'var(--red)';
     const sansJustif = !t.sansJustificatif && !stateDossier.tvaJustificatifs[t.id];
     const justifTag = sansJustif ? `<span style="display:inline-flex;align-items:center;gap:4px;color:var(--red);font-size:11px;font-weight:600;margin-left:8px"><i class="ti ti-alert-circle"></i> sans justificatif</span>` : '';
-    const projetBloc = t.sens==='entree' ? projetSelectHtml(item, i) : '';
-    const categorieBloc = t.sens==='sortie' ? categorieSelectHtml(item, i) : '';
+
+    let blocs;
+    if (t.sens === 'sortie') {
+      blocs = natureSortieHtml(item, i)
+            + (item.destination==='charge' ? categorieSelectHtml(item, i) + tauxSelectHtml(item, i)
+               : `<div style="margin-top:6px;font-size:11.5px;color:var(--text3)"><i class="ti ti-info-circle"></i> Aucune charge ne sera créée — le mouvement sera simplement marqué comme traité.</div>`);
+    } else if (item.matchType === 'facture-impayee') {
+      blocs = tauxSelectHtml(item, i);
+    } else {
+      blocs = destinationHtml(item, i)
+            + (item.destination==='facture' ? projetSelectHtml(item, i) : revenuCategorieSelectHtml(item, i))
+            + tauxSelectHtml(item, i);
+    }
+
+    // Cas particulier : une facture du dossier attend précisément ce paiement.
+    if (item.matchType === 'facture-impayee') {
+      const reste = (parseFloat(item.match.montantHt)||0) - (parseFloat(item.match.montantPaye)||0);
+      return `<div style="padding:10px 12px;border:1.5px solid var(--green);background:var(--green-bg,#3fbb7d15);border-radius:var(--r-md);margin-bottom:8px">
+        <span style="font-size:11px;font-weight:700;color:${sensColor};text-transform:uppercase">${sensLbl}</span>
+        <div style="font-size:13px;margin-bottom:6px">${fmtDate_d(t.date)} · ${esc(t.libelle)||'—'} · <strong>${fmtEurTva(t.montant)}</strong>${justifTag}</div>
+        <div style="font-size:11.5px;color:var(--green);margin-bottom:8px"><i class="ti ti-circle-check"></i> Correspond à la facture <strong>${esc(item.match.numero||'—')}</strong> du dossier <strong>${esc(nomProjet(item.match.projetId)||'—')}</strong> — reste à payer ${fmtEurTva(reste)}</div>
+        <div style="display:flex;gap:14px;font-size:12.5px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="tva-choix-${i}" ${item.choix==='ecraser'?'checked':''} onchange="tvaSetTransfertChoix(${i},'ecraser')"> ✅ Marquer cette facture payée</label>
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="tva-choix-${i}" ${item.choix==='nouveau'?'checked':''} onchange="tvaSetTransfertChoix(${i},'nouveau')"> Créer une ligne séparée</label>
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="tva-choix-${i}" ${item.choix==='ignorer'?'checked':''} onchange="tvaSetTransfertChoix(${i},'ignorer')"> Ignorer</label>
+        </div>
+        ${item.choix==='nouveau' ? destinationHtml(item,i) + (item.destination==='facture'?projetSelectHtml(item,i):revenuCategorieSelectHtml(item,i)) : ''}
+        ${blocs}
+      </div>`;
+    }
+
     if (!item.match) {
       return `<div style="padding:10px 12px;border:1.5px solid ${sansJustif?'var(--red)':'var(--border)'};border-radius:var(--r-md);margin-bottom:8px">
         <div style="display:flex;justify-content:space-between;align-items:center">
@@ -7603,38 +8301,65 @@ function tvaRenderTransfertModal() {
           </div>
           <span class="badge badge-green">Nouveau</span>
         </div>
-        ${projetBloc}${categorieBloc}
+        ${blocs}
       </div>`;
     }
-    const mLabel   = t.sens==='sortie' ? (item.match.libelle||'—') : (item.match.client||item.match.numero||'—');
-    const mDate    = t.sens==='sortie' ? item.match.date : (item.match.datePaiement||item.match.dateEmission);
-    const mMontant = t.sens==='sortie' ? item.match.montantHt : (item.match.montantPaye||item.match.montantHt);
+
+    const mLabel = item.matchType==='charge' ? (item.match.libelle||'—')
+                 : item.matchType==='revenu' ? (item.match.libelle||'—')
+                 : (item.match.client||item.match.numero||'—');
+    const mDate    = item.matchType==='facture' ? (item.match.datePaiement||item.match.dateEmission) : item.match.date;
+    const mMontant = item.matchType==='facture' ? (item.match.montantPaye||item.match.montantHt) : item.match.montantHt;
+    const ouLbl    = item.matchType==='charge' ? 'une charge' : item.matchType==='revenu' ? 'un revenu manuel' : 'une facture';
     const ecartTtc = Math.abs(mMontant - t.montant) > 0.5 ? ` <span style="color:var(--text3)">(HT ${fmtEurTva(mMontant)} vs ${fmtEurTva(t.montant)} encaissé — écart cohérent avec la TVA)</span>` : '';
     return `<div style="padding:10px 12px;border:1.5px solid var(--amber);background:var(--abg);border-radius:var(--r-md);margin-bottom:8px">
       <span style="font-size:11px;font-weight:700;color:${sensColor};text-transform:uppercase">${sensLbl}</span>
       <div style="font-size:13px;margin-bottom:6px">${fmtDate_d(t.date)} · ${esc(t.libelle)||'—'} · <strong>${fmtEurTva(t.montant)}</strong>${justifTag}</div>
-      <div style="font-size:11.5px;color:var(--amber);margin-bottom:8px"><i class="ti ti-alert-triangle"></i> Ressemble à une entrée déjà existante : ${fmtDate_d(mDate)} · ${esc(mLabel)} · ${fmtEurTva(mMontant)}${ecartTtc}</div>
+      <div style="font-size:11.5px;color:var(--amber);margin-bottom:8px"><i class="ti ti-alert-triangle"></i> Ressemble à ${ouLbl} déjà enregistré${item.matchType==='charge'||item.matchType==='revenu'?'':'e'} : ${fmtDate_d(mDate)} · ${esc(mLabel)} · ${fmtEurTva(mMontant)}${ecartTtc}</div>
       <div style="display:flex;gap:14px;font-size:12.5px;flex-wrap:wrap">
-        <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="tva-choix-${i}" ${item.choix==='ecraser'?'checked':''} onchange="tvaSetTransfertChoix(${i},'ecraser')"> Écraser l'existante</label>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="tva-choix-${i}" ${item.choix==='ecraser'?'checked':''} onchange="tvaSetTransfertChoix(${i},'ecraser')"> Écraser l'existant${item.matchType==='facture'?'e':''}</label>
         <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="tva-choix-${i}" ${item.choix==='nouveau'?'checked':''} onchange="tvaSetTransfertChoix(${i},'nouveau')"> Créer quand même</label>
         <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="tva-choix-${i}" ${item.choix==='ignorer'?'checked':''} onchange="tvaSetTransfertChoix(${i},'ignorer')"> Ignorer</label>
       </div>
-      ${projetBloc}${categorieBloc}
+      ${blocs}
     </div>`;
   }).join('');
 }
 
 function tvaSetTransfertChoix(i, choix) {
   _tvaTransfertItems[i].choix = choix;
+  tvaRenderTransfertModal();
 }
 
 function tvaSetTransfertProjet(i, projetId) {
   _tvaTransfertItems[i].projetId = projetId;
 }
 
+function tvaSetTransfertDestination(i, destination) {
+  const item = _tvaTransfertItems[i];
+  item.destination = destination;
+  if (item.transaction.sens === 'sortie') {
+    // Mémorise le choix : le prochain virement de salaire sera reconnu seul.
+    if (TVA_HORS_CHARGE_LABELS[destination]) tvaApprendreCategorie(item.transaction.libelle, destination);
+  } else {
+    item.categorie = destination==='facture' ? 'honoraires_direct' : (item.categorie||'honoraires_direct');
+  }
+  tvaRenderTransfertModal();
+}
+
+function tvaSetTransfertTaux(i, taux) {
+  _tvaTransfertItems[i].tvaTaux = parseFloat(taux)||0;
+  tvaRenderTransfertModal();
+}
+
 function tvaSetTransfertCategorie(i, categorie) {
-  _tvaTransfertItems[i].categorie = categorie;
-  _tvaTransfertItems[i].categorieChoisieManuellement = true;
+  const item = _tvaTransfertItems[i];
+  item.categorie = categorie;
+  item.categorieChoisieManuellement = true;
+  // Une charge sociale (URSSAF, CIPAV…) est hors champ TVA : on aligne le taux
+  // automatiquement plutôt que de laisser 20% fausser la TVA déductible.
+  if (item.transaction.sens==='sortie') item.tvaTaux = tvaTauxParDefaut(categorie);
+  tvaRenderTransfertModal();
 }
 
 async function tvaConfirmerTransfert() {
@@ -7654,44 +8379,110 @@ async function tvaConfirmerTransfert() {
     if (!ok) return;
   }
 
-  let nbCrees = 0, nbEcrases = 0, nbIgnores = 0;
+  let nbCrees = 0, nbEcrases = 0, nbIgnores = 0, nbRevenus = 0, nbHorsCompta = 0;
   for (const item of _tvaTransfertItems) {
     const t = item.transaction;
     const ecrase = item.choix === 'ecraser' && item.match;
 
     if (item.choix === 'ignorer') { nbIgnores++; t.transfereCompta = true; continue; }
 
+    // Sortie qui n'est pas une charge (salaire, prélèvement, virement interne) :
+    // rien n'est créé en comptabilité, on note juste la nature du mouvement.
+    if (t.sens === 'sortie' && item.destination !== 'charge') {
+      t.natureHorsCompta = item.destination;
+      t.compteRefType = null; t.compteRefId = null;
+      t.transfereCompta = true;
+      nbHorsCompta++;
+      continue;
+    }
+
+    // Un "écraser" doit toujours viser le même circuit que l'existant repéré,
+    // faute de quoi on créerait une seconde ligne ailleurs au lieu de la
+    // mettre à jour.
+    if (ecrase && (item.matchType==='facture' || item.matchType==='facture-impayee')) item.destination = 'facture';
+    if (ecrase && item.matchType==='revenu') item.destination = 'revenu';
+
+    // Le relevé donne du TTC — on convertit avec le taux choisi ligne par ligne.
+    const taux = parseFloat(item.tvaTaux)||0;
+    const htCalcule = tvaHtDepuisTtc(t.montant, taux);
+
     if (t.sens === 'sortie') {
       const chargeId = ecrase ? item.match.id : ('charge-tva-'+t.id);
       // En écrasement, on garde le HT déjà saisi (correct) — le montant du
-      // relevé bancaire est un montant réellement encaissé (TTC), pas un HT ;
-      // il ne sert de valeur par défaut que pour une charge réellement nouvelle.
+      // relevé bancaire est TTC ; il ne sert que pour une charge nouvelle,
+      // et seulement après conversion en HT.
       const c = {
         id: chargeId,
         libelle: ecrase ? item.match.libelle : (t.libelle || 'Sortie relevé bancaire'),
         categorie: ecrase ? item.match.categorie : (item.categorie||'autre'),
         projetId: ecrase ? (item.match.projetId||'') : '',
         type: ecrase ? item.match.type : 'variable',
-        montantHt: ecrase ? item.match.montantHt : t.montant,
-        tvaTaux: ecrase ? (item.match.tvaTaux||20) : 20,
-        tvaDed: ecrase ? (item.match.tvaDed||0) : 0,
+        montantHt: ecrase ? item.match.montantHt : htCalcule,
+        tvaTaux: ecrase ? (item.match.tvaTaux||20) : taux,
+        // TVA déductible par défaut dès qu'il y a effectivement de la TVA :
+        // sans ça, aucune charge importée ne remontait en TVA déductible et
+        // la déclaration surestimait systématiquement la TVA à reverser.
+        tvaDed: ecrase ? (item.match.tvaDed||0) : (taux > 0 ? 1 : 0),
         date: ecrase ? item.match.date : t.date,
-        frequence: ecrase ? (item.match.frequence||'ponctuelle') : 'ponctuelle',
-        notes: ecrase ? ((item.match.notes||'') + ' · Rapproché avec la Déclaration TVA (' + tvaMoisNom(r.mois) + ' ' + r.annee + ')') : ('Importé depuis la Déclaration TVA (' + tvaMoisNom(r.mois) + ' ' + r.annee + ') — montant du relevé bancaire, à vérifier si HT/TTC'),
+        frequence: ecrase ? (item.match.frequence||'ponctuel') : 'ponctuel',
+        notes: ecrase ? ((item.match.notes||'') + ' · Rapproché avec la Déclaration TVA (' + tvaMoisNom(r.mois) + ' ' + r.annee + ')') : ('Importé depuis la Déclaration TVA (' + tvaMoisNom(r.mois) + ' ' + r.annee + ') — ' + fmtEurTva(t.montant) + ' TTC converti au taux ' + taux + '%'),
         sourceTvaId: t.id,
+        // Marque les lignes déjà enregistrées en HT correct : l'outil de
+        // correction en masse ne doit jamais les reconvertir une seconde fois.
+        ttcCorrige: true,
         updatedAt: new Date().toISOString()
       };
       await saveChargeDb(c);
-      // Mémorise l'association mot-clé → catégorie pour les prochains imports
-      // (uniquement pour une charge réellement nouvelle, catégorie confirmée
-      // par l'utilisateur ou déjà détectée automatiquement avec succès).
       if (!ecrase) tvaApprendreCategorie(t.libelle, c.categorie);
       t.compteRefType = 'charge'; t.compteRefId = chargeId;
+
+    } else if (item.matchType === 'facture-impayee' && ecrase) {
+      // Solder la facture déjà émise du dossier plutôt que d'en créer une
+      // seconde — c'est ce qui garde juste le "% facturé" du dossier.
+      const f = { ...item.match };
+      const dejaPaye = parseFloat(f.montantPaye)||0;
+      const totalHt  = parseFloat(f.montantHt)||0;
+      f.montantPaye  = Math.min(totalHt, Math.round((dejaPaye + htCalcule)*100)/100);
+      f.datePaiement = t.date;
+      f.statut       = f.montantPaye >= totalHt - 0.01 ? 'payee' : 'partiel';
+      f.notes        = (f.notes||'') + ' · Encaissement rapproché via la Déclaration TVA (' + tvaMoisNom(r.mois) + ' ' + r.annee + ')';
+      f.sourceTvaId  = t.id;
+      f.ttcCorrige   = true;
+      f.updatedAt    = new Date().toISOString();
+      await window._fb.saveFacture(f);
+      const idx = stateDossier.factures.findIndex(x=>x.id===f.id);
+      if (idx>=0) stateDossier.factures[idx]=f; else stateDossier.factures.push(f);
+      t.compteRefType = 'facture'; t.compteRefId = f.id;
+      nbEcrases++; t.transfereCompta = true; continue;
+
+    } else if (item.destination === 'revenu') {
+      // Rentrée hors dossier → onglet Revenus de Comptabilité. Aucune facture
+      // n'est créée : Facturation reste le reflet fidèle des devis/factures.
+      const revenuId = (ecrase && item.matchType==='revenu') ? item.match.id : ('revenu-tva-'+t.id);
+      const rev = {
+        id: revenuId,
+        libelle: t.libelle || 'Rentrée relevé bancaire',
+        categorie: item.categorie || 'autre',
+        projetId: '',
+        type: 'variable',
+        montantHt: htCalcule,
+        tvaTaux: taux,
+        date: t.date,
+        frequence: 'ponctuel',
+        notes: 'Importé depuis la Déclaration TVA (' + tvaMoisNom(r.mois) + ' ' + r.annee + ') — ' + fmtEurTva(t.montant) + ' TTC converti au taux ' + taux + '%',
+        sourceTvaId: t.id,
+        // Marque les lignes déjà enregistrées en HT correct : l'outil de
+        // correction en masse ne doit jamais les reconvertir une seconde fois.
+        ttcCorrige: true,
+        updatedAt: new Date().toISOString()
+      };
+      await saveRevenuDb(rev);
+      t.compteRefType = 'revenu'; t.compteRefId = revenuId;
+      nbRevenus++; t.transfereCompta = true; continue;
+
     } else {
       const factureId = ecrase ? item.match.id : ('fact-tva-'+t.id);
       const projetChoisi = item.projetId ? stateDossier.projets.find(p=>String(p.id)===String(item.projetId)) : null;
-      // Même logique côté factures : en écrasement, on ne touche pas au HT
-      // déjà correct, on confirme seulement que le paiement est bien arrivé.
       const f = {
         id: factureId,
         type: 'facture',
@@ -7702,11 +8493,17 @@ async function tvaConfirmerTransfert() {
         dateEmission: ecrase ? item.match.dateEmission : t.date,
         dateEcheance: ecrase ? item.match.dateEcheance : t.date,
         datePaiement: t.date,
-        montantHt: ecrase ? item.match.montantHt : t.montant,
-        montantPaye: ecrase ? (item.match.montantHt||item.match.montantPaye) : t.montant,
+        montantHt: ecrase ? item.match.montantHt : htCalcule,
+        montantPaye: ecrase ? (item.match.montantHt||item.match.montantPaye) : htCalcule,
+        // Sans ce taux, la TVA collectée était toujours calculée à 20% — faux
+        // dès qu'une prestation est à 10% ou hors champ.
+        tva: ecrase ? (item.match.tva!==undefined?item.match.tva:20) : taux,
         statut: 'payee',
-        notes: ecrase ? ((item.match.notes||'') + ' · Rapproché avec la Déclaration TVA (' + tvaMoisNom(r.mois) + ' ' + r.annee + ')') : ('Importé depuis la Déclaration TVA (' + tvaMoisNom(r.mois) + ' ' + r.annee + ') — montant du relevé bancaire, à vérifier si HT/TTC'),
+        notes: ecrase ? ((item.match.notes||'') + ' · Rapproché avec la Déclaration TVA (' + tvaMoisNom(r.mois) + ' ' + r.annee + ')') : ('Importé depuis la Déclaration TVA (' + tvaMoisNom(r.mois) + ' ' + r.annee + ') — ' + fmtEurTva(t.montant) + ' TTC converti au taux ' + taux + '%'),
         sourceTvaId: t.id,
+        // Marque les lignes déjà enregistrées en HT correct : l'outil de
+        // correction en masse ne doit jamais les reconvertir une seconde fois.
+        ttcCorrige: true,
         updatedAt: new Date().toISOString()
       };
       await window._fb.saveFacture(f);
@@ -7722,7 +8519,7 @@ async function tvaConfirmerTransfert() {
   closeModal_d('tvaTransfertModal');
   renderTvaDetail();
   if (typeof renderComptabilite === 'function') renderComptabilite();
-  toast_d(`✅ Transfert terminé — ${nbCrees} créé(s), ${nbEcrases} écrasé(s)${nbIgnores?', '+nbIgnores+' ignoré(s)':''}.`);
+  toast_d(`✅ Transfert terminé — ${nbCrees} créé(s)${nbRevenus?', '+nbRevenus+' en Revenus':''}, ${nbEcrases} rapproché(s)${nbHorsCompta?', '+nbHorsCompta+' hors compta':''}${nbIgnores?', '+nbIgnores+' ignoré(s)':''}.`);
 }
 
 // Ouvrir l'import PDF depuis un projet spécifique
@@ -7763,7 +8560,10 @@ function renderFactParProjet() {
     const commissions = parseFloat(p.commissions)||0;
     // Facturation client = honoraires uniquement. Les commissions artisans
     // ont leur propre bloc de suivi plus bas, on ne les mélange pas ici.
-    const caTotal = honoraires;
+    // À défaut d'honoraires saisis, on retombe sur le total des devis du
+    // dossier, pour que le % facturé reste lisible quand seuls les devis
+    // ont été enregistrés.
+    const caTotal = honoraires || devisP.filter(d=>d.type==='devis').reduce((s,d)=>s+(parseFloat(d.montantHt)||0),0);
     const pctFacture = caTotal>0?Math.min(100,Math.round(totalHt/caTotal*100)):0;
 
     return `<div class="card" style="margin-bottom:1rem">
@@ -7853,11 +8653,17 @@ function renderProjectFacturation(projetId) {
   if (!p) return;
   const pFacts = stateDossier.factures.filter(f=>f.projetId==projetId);
   const factures = pFacts.filter(f=>f.type!=='devis');
+  const devis    = pFacts.filter(f=>f.type==='devis');
   const totalHt  = factures.reduce((s,f)=>s+(parseFloat(f.montantHt)||0),0);
   const totalPay = factures.reduce((s,f)=>s+(parseFloat(f.montantPaye)||0),0);
-  const caTotal  = (parseFloat(p.honoraires)||0);
+  // Base de référence du % facturé : les honoraires du dossier si renseignés,
+  // sinon le total des devis du dossier — pour que le suivi fonctionne même
+  // quand on ne saisit que les devis, sans remplir la fiche projet.
+  const totalDevis = devis.reduce((s,f)=>s+(parseFloat(f.montantHt)||0),0);
+  const caTotal  = (parseFloat(p.honoraires)||0) || totalDevis;
+  const baseLbl  = (parseFloat(p.honoraires)||0) ? 'honoraires' : 'devis';
   const pctFacture = caTotal>0?Math.min(100,Math.round(totalHt/caTotal*100)):0;
-  const pct = totalHt>0?Math.min(100,Math.round(totalPay/totalHt*100)):0;
+  const resteAFacturer = Math.max(0, caTotal - totalHt);
 
   document.getElementById('projFactCount').textContent = pFacts.length;
   const container = document.getElementById('projectFacturationBody');
@@ -7869,13 +8675,14 @@ function renderProjectFacturation(projetId) {
     </div>
     ${caTotal>0?`<div style="background:var(--bg);border-radius:var(--r-md);padding:10px 14px;margin-bottom:1rem;color:var(--text)">
       <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-bottom:4px">
-        <span>Facturé vs honoraires (${fmtEur_d(caTotal)})</span><span><strong>${pctFacture}%</strong></span>
+        <span>Facturé vs ${baseLbl} (${fmtEur_d(caTotal)})</span><span><strong>${pctFacture}%</strong></span>
       </div>
       <div style="height:7px;background:var(--bg2);border-radius:3px;overflow:hidden;margin-bottom:6px;color:var(--text)">
         <div style="height:100%;width:${pctFacture}%;background:linear-gradient(90deg,#4fa8f0,#12233f);border-radius:3px"></div>
       </div>
       <div style="display:flex;gap:1.5rem;flex-wrap:wrap">
         ${factKpiMini('Facturé HT',fmtEur_d(totalHt))}
+        ${factKpiMini('Reste à facturer',fmtEur_d(resteAFacturer),resteAFacturer>0?'#4fa8f0':'var(--green)')}
         ${factKpiMini('Encaissé HT',fmtEur_d(totalPay),'var(--green)')}
         ${factKpiMini('Reste à payer',fmtEur_d(Math.max(0,totalHt-totalPay)),'var(--amber)')}
       </div>
@@ -9313,9 +10120,11 @@ function switchApp(target) {
 
 // État comptabilité
 if (!stateDossier.charges) stateDossier.charges = [];
+if (!stateDossier.revenus) stateDossier.revenus = [];
 let _comptaMois = new Date().getMonth();
 let _comptaAnnee = new Date().getFullYear();
 let _editChargeId = null;
+let _editRevenuId = null;
 
 const CAT_LABELS = {
   deplacement:'🚗 Déplacements', assurance:'📋 Assurances',
@@ -9328,6 +10137,17 @@ const CAT_COLORS = {
   deplacement:'#1a7abf', assurance:'#3fbb7d', honoraires_ext:'#e6b95c',
   telecom:'#4fa8f0', logiciels:'#8A2BE2', bureau:'#607080',
   formation:'#e2564a', materiel:'#5A4A3A', social:'#E6A817', autre:'#66809e'
+};
+
+// ── Catégories de revenus manuels (Comptabilité) ───────────
+const CAT_LABELS_REV = {
+  honoraires_direct:'👔 Honoraires (hors Facturation)', subvention:'🏛️ Subvention',
+  remboursement:'↩️ Remboursement', interets:'💹 Intérêts financiers',
+  apport:'💼 Apport', autre:'📌 Autre'
+};
+const CAT_COLORS_REV = {
+  honoraires_direct:'#4fa8f0', subvention:'#3fbb7d', remboursement:'#e6b95c',
+  interets:'#8A2BE2', apport:'#4fd18b', autre:'#66809e'
 };
 
 // ── Firebase charges ──────────────────────────────────────
@@ -9354,6 +10174,61 @@ function loadChargesLocal() {
   if (!stateDossier.charges) stateDossier.charges = [];
 }
 
+// ── Firebase revenus manuels ────────────────────────────────
+async function saveRevenuDb(r) {
+  const idx = stateDossier.revenus.findIndex(x=>x.id===r.id);
+  if (idx>=0) stateDossier.revenus[idx] = r;
+  else stateDossier.revenus.push(r);
+  if (window._fb && window._fb.saveRevenu) {
+    try { await window._fb.saveRevenu(r); } catch(e) { console.error('saveRevenu Firebase:', e); }
+  }
+}
+
+async function deleteRevenuDb(id) {
+  stateDossier.revenus = stateDossier.revenus.filter(x=>x.id!==id);
+  if (window._fb && window._fb.deleteRevenu) {
+    try { await window._fb.deleteRevenu(id); } catch(e) { console.error('deleteRevenu Firebase:', e); }
+  }
+}
+
+// ── Revenus manuels du mois (même logique de fréquence que les charges) ──
+function getRevenusMois(mois, annee) {
+  return (stateDossier.revenus||[]).filter(r=>{
+    if (r.type==='variable' || r.frequence==='ponctuel') {
+      if (!r.date) return false;
+      const d = new Date(r.date);
+      return d.getMonth()===mois && d.getFullYear()===annee;
+    }
+    if (!r.date) return false;
+    const debut = new Date(r.date);
+    if (debut.getFullYear() > annee || (debut.getFullYear()===annee && debut.getMonth()>mois)) return false;
+    if (r.frequence==='mensuel') return true;
+    if (r.frequence==='trimestriel') return (mois - debut.getMonth()) % 3 === 0;
+    if (r.frequence==='annuel') return debut.getMonth()===mois;
+    return debut.getMonth()===mois && debut.getFullYear()===annee;
+  });
+}
+
+// ── Total encaissé du mois = factures payées (Facturation) + revenus
+// manuels (Comptabilité). Centralise ce calcul pour que Mois en cours,
+// Bilan annuel et la Déclaration TVA restent toujours cohérents entre eux. ──
+function totalFacturesEncaisseesMois(mois, annee) {
+  const factures = stateDossier.factures.filter(f=>f.type!=='devis');
+  return factures.reduce((s,f)=>{
+    const d = f.datePaiement || f.dateEmission;
+    if (!d) return s;
+    const dd = new Date(d);
+    if (dd.getMonth()===mois && dd.getFullYear()===annee) return s + (parseFloat(f.montantPaye)||0);
+    return s;
+  }, 0);
+}
+function totalRevenusManuelsMois(mois, annee) {
+  return getRevenusMois(mois, annee).reduce((s,r)=>s+(parseFloat(r.montantHt)||0), 0);
+}
+function totalRevenusEncaisseesMois(mois, annee) {
+  return totalFacturesEncaisseesMois(mois, annee) + totalRevenusManuelsMois(mois, annee);
+}
+
 // ── Navigation mois ───────────────────────────────────────
 function comptaMoisPrev() {
   _comptaMois--;
@@ -9376,13 +10251,15 @@ function comptaGoAujourdhui() {
 function filterComptaTab(tab, el) {
   document.querySelectorAll('.tab[id^="ctab-"]').forEach(t=>t.classList.remove('active'));
   if (el) el.classList.add('active');
-  ['mois','charges','annuel'].forEach(t=>{
+  ['mois','charges','revenus','remuneration','annuel'].forEach(t=>{
     const v = document.getElementById('comptaView-'+t);
     if (v) v.style.display = t===tab ? 'block' : 'none';
   });
-  if (tab==='charges') renderChargesTable();
-  if (tab==='annuel')  renderBilanAnnuel();
-  if (tab==='mois')    renderMoisCompta();
+  if (tab==='charges')      renderChargesTable();
+  if (tab==='revenus')      renderRevenusTable();
+  if (tab==='remuneration') renderRemunerationTab();
+  if (tab==='annuel')       renderBilanAnnuel();
+  if (tab==='mois')         renderMoisCompta();
 }
 
 // ── Rendu principal ───────────────────────────────────────
@@ -9647,15 +10524,9 @@ const EURL_TAUX = {
 function _updateEURLBanner(caMonthHT) {
   // Calculer le CA cumulé de l'année
   const annee = _comptaAnnee;
-  const factures = stateDossier.factures.filter(f => f.type !== 'devis');
   let caCumul = 0;
   for (let m = 0; m <= 11; m++) {
-    caCumul += factures.reduce((s,f) => {
-      const d = new Date(f.datePaiement || f.dateEmission || '');
-      if (d.getMonth() === m && d.getFullYear() === annee)
-        return s + (parseFloat(f.montantPaye) || 0);
-      return s;
-    }, 0);
+    caCumul += totalRevenusEncaisseesMois(m, annee);
   }
 
   // Indicateur TVA
@@ -9864,16 +10735,8 @@ function renderComptabilite() {
   _comptaAnnee = annee;
   document.getElementById('compta-mois-label').textContent = MOIS_NOMS[_comptaMois] + ' ' + _comptaAnnee;
 
-  // CA encaissé du mois (depuis les factures)
-  const factures = stateDossier.factures.filter(f=>f.type!=='devis');
-  const caMonthHT = factures.reduce((s,f)=>{
-    if (!f.datePaiement && !f.dateEmission) return s;
-    const d = new Date(f.datePaiement || f.dateEmission);
-    if (d.getMonth()===_comptaMois && d.getFullYear()===_comptaAnnee) {
-      return s + (parseFloat(f.montantPaye) || 0);
-    }
-    return s;
-  }, 0);
+  // Revenus encaissés du mois (factures payées + revenus manuels)
+  const caMonthHT = totalRevenusEncaisseesMois(_comptaMois, _comptaAnnee);
 
   // Charges du mois
   const chargesMois = getChargesMois(_comptaMois, _comptaAnnee);
@@ -9924,6 +10787,7 @@ function renderComptabilite() {
   const tab = activeTab ? activeTab.id.replace('ctab-','') : 'mois';
   if (tab==='mois')         renderMoisCompta();
   if (tab==='charges')      renderChargesTable();
+  if (tab==='revenus')      renderRevenusTable();
   if (tab==='remuneration') renderRemunerationTab();
   if (tab==='annuel')       renderBilanAnnuel();
 }
@@ -9952,11 +10816,12 @@ function getChargesMois(mois, annee) {
 function renderMoisCompta() {
   const chargesMois = getChargesMois(_comptaMois, _comptaAnnee);
   const factures = stateDossier.factures.filter(f=>f.type!=='devis');
-  const caMonthHT = factures.reduce((s,f)=>{
+  const facturesMois = factures.filter(f=>{
     const d = new Date(f.datePaiement||f.dateEmission||'');
-    if(d.getMonth()===_comptaMois && d.getFullYear()===_comptaAnnee) return s+(parseFloat(f.montantPaye)||0);
-    return s;
-  }, 0);
+    return d.getMonth()===_comptaMois && d.getFullYear()===_comptaAnnee;
+  });
+  const revenusMois = getRevenusMois(_comptaMois, _comptaAnnee);
+  const caMonthHT = totalRevenusEncaisseesMois(_comptaMois, _comptaAnnee);
 
   const container = document.getElementById('compta-mois-body');
   if (!container) return;
@@ -9982,13 +10847,14 @@ function renderMoisCompta() {
 
   let html = '';
 
-  // Bloc CA
+  // Bloc revenus (factures encaissées + revenus manuels)
   html += `<div class="card" style="margin-bottom:1rem;border-left:4px solid #4fa8f0;padding:1rem 1.25rem">
     <div style="display:flex;align-items:center;justify-content:space-between">
-      <div style="font-size:13px;font-weight:600;color:var(--navy)">💰 CA encaissé HT — ${MOIS_NOMS[_comptaMois]}</div>
+      <div style="font-size:13px;font-weight:600;color:var(--navy)">💰 Revenus encaissés HT — ${MOIS_NOMS[_comptaMois]}</div>
       <div style="font-family:var(--font-serif);font-size:22px;color:#4fa8f0">${fmtEur_d(caMonthHT)}</div>
     </div>
-    ${caMonthHT>0?`<div style="font-size:12px;color:var(--text2);margin-top:4px">${factures.filter(f=>{const d=new Date(f.datePaiement||f.dateEmission||'');return d.getMonth()===_comptaMois&&d.getFullYear()===_comptaAnnee;}).map(f=>`${nomProjet(f.projetId)} · ${fmtEur_d(f.montantPaye||f.montantHt)}`).join(' — ')}</div>`:''}
+    ${facturesMois.length?`<div style="font-size:12px;color:var(--text2);margin-top:4px">${facturesMois.map(f=>`${nomProjet(f.projetId)} · ${fmtEur_d(f.montantPaye||f.montantHt)}`).join(' — ')}</div>`:''}
+    ${revenusMois.length?`<div style="font-size:12px;color:var(--green);margin-top:4px">${revenusMois.map(r=>`${esc(r.libelle)} · ${fmtEur_d(r.montantHt)}`).join(' — ')} <button class="btn btn-sm" style="margin-left:6px;padding:1px 8px;font-size:11px" onclick="filterComptaTab('revenus', document.getElementById('ctab-revenus'))">voir</button></div>`:''}
   </div>`;
 
   // Charges par catégorie
@@ -10098,10 +10964,46 @@ function renderChargesTable() {
   }).join('');
 }
 
+// ── Tableau tous les revenus manuels ──────────────────────
+function renderRevenusTable() {
+  const catFilter  = document.getElementById('revenus-filter-cat')?.value  || '';
+  const typeFilter = document.getElementById('revenus-filter-type')?.value || '';
+  const revenus = (stateDossier.revenus||[]).filter(r=>{
+    if (catFilter  && r.categorie !== catFilter)  return false;
+    if (typeFilter && r.type      !== typeFilter) return false;
+    return true;
+  }).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+
+  const tbody = document.getElementById('revenusTableBody');
+  if (!tbody) return;
+  if (!revenus.length) {
+    tbody.innerHTML='<tr><td colspan="8"><div class="empty-state" style="padding:2rem"><div class="empty-title">Aucun revenu manuel</div><div class="empty-sub">Les factures encaissées via Facturation n\'ont pas besoin d\'être ressaisies ici.</div></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = revenus.map(r=>{
+    const ht=parseFloat(r.montantHt)||0;
+    const taux=(parseFloat(r.tvaTaux)||0)/100;
+    const tva=ht*taux;
+    const ttc=ht+tva;
+    return `<tr>
+      <td style="padding-left:16px;font-weight:500">${r.libelle||'—'}</td>
+      <td><span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:2px 8px;border-radius:20px;background:${CAT_COLORS_REV[r.categorie]||'#66809e'}22;color:${CAT_COLORS_REV[r.categorie]||'#66809e'};font-weight:600">${CAT_LABELS_REV[r.categorie]||r.categorie}</span></td>
+      <td><span class="badge ${r.type==='fixe'?'badge-purple':'badge-gray'}" style="font-size:10px">${r.type==='fixe'?'Fixe':'Variable'}</span></td>
+      <td style="font-size:12px;color:var(--text2)">${r.date?fmtDateShort(r.date):''} ${r.frequence==='mensuel'?'· Mensuelle':r.frequence==='trimestriel'?'· Trim.':r.frequence==='annuel'?'· Ann.':''}</td>
+      <td style="text-align:right;font-weight:600;color:var(--green)">${fmtEur_d(ht)}</td>
+      <td style="text-align:right;font-size:12px">${fmtEur_d(tva)}</td>
+      <td style="text-align:right;font-size:12px">${fmtEur_d(ttc)}</td>
+      <td><div style="display:flex;gap:4px">
+        <button class="btn btn-sm" onclick="openEditRevenu('${r.id}')"><i class="ti ti-edit"></i></button>
+        <button class="btn btn-sm btn-danger" onclick="confirmDeleteRevenu('${r.id}')"><i class="ti ti-trash"></i></button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
 // ── Bilan annuel ──────────────────────────────────────────
 function renderBilanAnnuel() {
   const annee = _comptaAnnee;
-  const factures = stateDossier.factures.filter(f=>f.type!=='devis');
   const container = document.getElementById('compta-annuel-body');
   if (!container) return;
 
@@ -10109,11 +11011,7 @@ function renderBilanAnnuel() {
   const moisData = [];
 
   for (let m=0; m<12; m++) {
-    const caM = factures.reduce((s,f)=>{
-      const d=new Date(f.datePaiement||f.dateEmission||'');
-      if(d.getMonth()===m&&d.getFullYear()===annee) return s+(parseFloat(f.montantPaye)||0);
-      return s;
-    },0);
+    const caM = totalRevenusEncaisseesMois(m, annee);
     const chargesM = getChargesMois(m, annee);
     const chM = chargesM.reduce((s,c)=>s+(parseFloat(c.montantHt)||0),0);
     const ben = caM - chM;
@@ -10533,6 +11431,104 @@ async function saveCharge() {
   closeChargeModal();
   renderComptabilite();
   toast_d('✅ Charge enregistrée !');
+}
+
+function openRevenuModal(categoriePreset, projetIdPreset) {
+  _editRevenuId = null;
+  document.getElementById('revenu-modal-title').textContent = 'Nouveau revenu';
+  document.getElementById('btn-del-revenu').style.display = 'none';
+  document.getElementById('rv-libelle').value    = '';
+  document.getElementById('rv-categorie').value  = categoriePreset || '';
+  document.getElementById('rv-type').value       = 'variable';
+  document.getElementById('rv-montant-ht').value = '';
+  document.getElementById('rv-montant-ttc').value= '';
+  document.getElementById('rv-tva-taux').value   = '0';
+  document.getElementById('rv-date').value       = new Date().toISOString().split('T')[0];
+  document.getElementById('rv-frequence').value  = 'ponctuel';
+  document.getElementById('rv-notes').value      = '';
+  const projSel = document.getElementById('rv-projet-id');
+  if (projSel) {
+    projSel.innerHTML = '<option value="">— Aucun projet lié —</option>' +
+      stateDossier.projets.map(p=>`<option value="${p.id}">${esc(p.nom)}</option>`).join('');
+    if (projetIdPreset) projSel.value = projetIdPreset;
+  }
+  document.getElementById('revenuModal').classList.add('open');
+}
+
+function openEditRevenu(id) {
+  const r = (stateDossier.revenus||[]).find(x=>x.id===id);
+  if (!r) return;
+  _editRevenuId = id;
+  document.getElementById('revenu-modal-title').textContent = 'Modifier le revenu';
+  document.getElementById('btn-del-revenu').style.display = '';
+  document.getElementById('rv-libelle').value    = r.libelle||'';
+  document.getElementById('rv-categorie').value  = r.categorie||'';
+  document.getElementById('rv-type').value       = r.type||'variable';
+  document.getElementById('rv-montant-ht').value = r.montantHt||'';
+  document.getElementById('rv-tva-taux').value   = r.tvaTaux||'0';
+  document.getElementById('rv-date').value       = r.date||'';
+  document.getElementById('rv-frequence').value  = r.frequence||'ponctuel';
+  document.getElementById('rv-notes').value      = r.notes||'';
+  const projSel = document.getElementById('rv-projet-id');
+  if (projSel) {
+    projSel.innerHTML = '<option value="">— Aucun projet lié —</option>' +
+      stateDossier.projets.map(p=>`<option value="${p.id}" ${String(p.id)===String(r.projetId||'')?'selected':''}>${esc(p.nom)}</option>`).join('');
+  }
+  calcRevenuTTC();
+  document.getElementById('revenuModal').classList.add('open');
+}
+
+function closeRevenuModal() {
+  document.getElementById('revenuModal').classList.remove('open');
+  _editRevenuId = null;
+}
+
+function calcRevenuTTC() {
+  const ht   = parseFloat(document.getElementById('rv-montant-ht').value)||0;
+  const taux = parseFloat(document.getElementById('rv-tva-taux').value)||0;
+  document.getElementById('rv-montant-ttc').value = (ht*(1+taux/100)).toFixed(2);
+}
+
+async function saveRevenu() {
+  const libelle   = document.getElementById('rv-libelle').value.trim();
+  const categorie = document.getElementById('rv-categorie').value;
+  const montantHt = parseFloat(document.getElementById('rv-montant-ht').value)||0;
+  if (!libelle)   { toast_d('⚠️ Le libellé est obligatoire'); return; }
+  if (!categorie) { toast_d('⚠️ La catégorie est obligatoire'); return; }
+  if (!montantHt) { toast_d('⚠️ Le montant est obligatoire'); return; }
+
+  const r = {
+    id:         _editRevenuId || 'revenu-'+Date.now(),
+    libelle,
+    categorie,
+    projetId:   document.getElementById('rv-projet-id')?.value || '',
+    type:       document.getElementById('rv-type').value,
+    montantHt:  montantHt,
+    tvaTaux:    parseFloat(document.getElementById('rv-tva-taux').value)||0,
+    date:       document.getElementById('rv-date').value,
+    frequence:  document.getElementById('rv-frequence').value,
+    notes:      document.getElementById('rv-notes').value.trim(),
+    updatedAt:  new Date().toISOString(),
+  };
+
+  await saveRevenuDb(r);
+  closeRevenuModal();
+  renderComptabilite();
+  toast_d('✅ Revenu enregistré !');
+}
+
+function confirmDeleteRevenu(id) {
+  _editRevenuId = id;
+  deleteRevenu();
+}
+
+async function deleteRevenu() {
+  if (!_editRevenuId) return;
+  if (!confirm('Supprimer ce revenu ?')) return;
+  await deleteRevenuDb(_editRevenuId);
+  closeRevenuModal();
+  renderComptabilite();
+  toast_d('🗑️ Revenu supprimé.');
 }
 
 function confirmDeleteCharge(id) {
@@ -11178,12 +12174,21 @@ td.ca{color:#1E3A5F;font-weight:700}
 
 function exportComptaCSV() {
   const charges = stateDossier.charges;
-  let csv = "Libelle;Categorie;Type;Frequence;Date;Montant HT;Taux TVA;TVA;TTC;TVA deductible;Notes\n";
+  const revenus = stateDossier.revenus||[];
+  let csv = "=== CHARGES ===\nLibelle;Categorie;Type;Frequence;Date;Montant HT;Taux TVA;TVA;TTC;TVA deductible;Notes\n";
   charges.forEach(c=>{
     const ht=parseFloat(c.montantHt)||0;
     const taux=(parseFloat(c.tvaTaux)||20)/100;
     const tva=ht*taux;
     csv+=`"${c.libelle||''}";"${CAT_LABELS[c.categorie]||c.categorie||''}";"${c.type||''}";"${c.frequence||''}";"${c.date||''}";"${ht}";"${c.tvaTaux||20}%";"${tva.toFixed(2)}";"${(ht+tva).toFixed(2)}";"${c.tvaDed==1?'Oui':'Non'}";"${c.notes||''}"
+`;
+  });
+  csv += "\n=== REVENUS MANUELS (hors factures Facturation) ===\nLibelle;Categorie;Type;Frequence;Date;Montant HT;Taux TVA;TVA;TTC;Notes\n";
+  revenus.forEach(r=>{
+    const ht=parseFloat(r.montantHt)||0;
+    const taux=(parseFloat(r.tvaTaux)||0)/100;
+    const tva=ht*taux;
+    csv+=`"${r.libelle||''}";"${CAT_LABELS_REV[r.categorie]||r.categorie||''}";"${r.type||''}";"${r.frequence||''}";"${r.date||''}";"${ht}";"${r.tvaTaux||0}%";"${tva.toFixed(2)}";"${(ht+tva).toFixed(2)}";"${r.notes||''}"
 `;
   });
   const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
@@ -11290,6 +12295,20 @@ initCommissionsFirebase();
       window._fb.listenCharges(list => {
         stateDossier.charges = list;
         // Rafraîchir si page comptabilité active
+        const page = document.getElementById('page-comptabilite');
+        if (page && page.style.display !== 'none') renderComptabilite();
+      });
+    }
+  }, 500);
+})();
+
+// Écoute temps réel Firebase pour les revenus manuels
+(function initRevenusFirebase() {
+  const check = setInterval(() => {
+    if (window._fb && window._fb.listenRevenus) {
+      clearInterval(check);
+      window._fb.listenRevenus(list => {
+        stateDossier.revenus = list;
         const page = document.getElementById('page-comptabilite');
         if (page && page.style.display !== 'none') renderComptabilite();
       });
