@@ -3155,6 +3155,7 @@ if (window.parent !== window) {
             <button class="btn btn-primary" onclick="openRemuModal()" style="background:linear-gradient(135deg,#8e44ad,#6c3483);border-color:#8e44ad">
               <i class="ti ti-user-dollar"></i> Rémunération & Cotisations
             </button>
+            <button class="btn" onclick="tvaOuvrirDiagnostic()" style="border-color:#e6b95c;color:#e6b95c" title="Vérifier la cohérence avec les relevés de la Déclaration TVA et corriger"><i class="ti ti-stethoscope"></i> Diagnostic</button>
             <button class="btn" onclick="exportComptaCSV()"><i class="ti ti-download"></i> Exporter CSV</button>
           </div>
         </div>
@@ -3345,7 +3346,7 @@ if (window.parent !== window) {
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <button class="btn btn-primary" onclick="openTvaNouveauReleve()"><i class="ti ti-upload"></i> Importer un relevé bancaire</button>
-              <button class="btn" onclick="tvaOuvrirCorrectionMasse()" style="border-color:#e6b95c;color:#e6b95c" title="Recalculer en HT toutes les lignes importées avant la correction TTC/HT"><i class="ti ti-wand"></i> Corriger les imports passés</button>
+              <button class="btn" onclick="tvaOuvrirDiagnostic()" style="border-color:#e6b95c;color:#e6b95c" title="Vérifier la cohérence entre les relevés et la comptabilité, et corriger en masse"><i class="ti ti-stethoscope"></i> Diagnostic & remise à plat</button>
             </div>
           </div>
 
@@ -3406,6 +3407,7 @@ if (window.parent !== window) {
               <button class="btn btn-danger" onclick="tvaSupprimerReleve()"><i class="ti ti-trash"></i> Supprimer</button>
               <button class="btn" id="tva-btn-transfert" onclick="tvaOuvrirTransfert()"><i class="ti ti-database-export"></i> Envoyer vers Comptabilité</button>
               <button class="btn btn-sm" id="tva-btn-reinit-transfert" onclick="tvaReinitialiserTransferts()" title="Marquer tous les mouvements comme non transférés, pour pouvoir relancer l'envoi même si les charges/factures existent toujours"><i class="ti ti-rotate"></i></button>
+              <button class="btn btn-sm" onclick="tvaOuvrirDiagnostic()" title="Diagnostic & remise à plat de la comptabilité"><i class="ti ti-stethoscope"></i></button>
               <button class="btn" onclick="tvaTelechargerJustificatifs()"><i class="ti ti-file-zip"></i> Télécharger les justificatifs</button>
               <button class="btn btn-primary" onclick="tvaExporterRecap()"><i class="ti ti-file-export"></i> Export pour le comptable</button>
             </div>
@@ -3464,6 +3466,41 @@ if (window.parent !== window) {
           <div class="modal-footer">
             <button class="btn" onclick="closeModal_d('tvaTransfertModal')">Annuler</button>
             <button class="btn btn-primary" onclick="tvaConfirmerTransfert()"><i class="ti ti-check"></i> Confirmer le transfert</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODAL DIAGNOSTIC & REMISE À PLAT -->
+      <div class="modal-overlay" id="tvaDiagModal" onmousedown="this._downOnSelf=(event.target===this)" onmouseup="if(this._downOnSelf&&event.target===this)closeModal_d('tvaDiagModal');this._downOnSelf=false">
+        <div class="modal" style="max-width:820px">
+          <div class="modal-header">
+            <div class="modal-title">Diagnostic & remise à plat</div>
+            <button class="btn btn-sm" onclick="closeModal_d('tvaDiagModal')"><i class="ti ti-x"></i></button>
+          </div>
+          <div class="modal-body">
+            <div id="tva-diag-body"></div>
+          </div>
+          <div class="modal-footer">
+            <div id="tva-diag-resume" style="margin-right:auto;font-size:12.5px"></div>
+            <button class="btn" onclick="tvaDiagRafraichir()"><i class="ti ti-refresh"></i> Réanalyser</button>
+            <button class="btn btn-primary" onclick="closeModal_d('tvaDiagModal')">Fermer</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODAL LIEN INTER-COMPTES -->
+      <div class="modal-overlay" id="tvaLienModal" onmousedown="this._downOnSelf=(event.target===this)" onmouseup="if(this._downOnSelf&&event.target===this)closeModal_d('tvaLienModal');this._downOnSelf=false">
+        <div class="modal" style="max-width:640px">
+          <div class="modal-header">
+            <div class="modal-title">Lier à un mouvement de l'autre compte</div>
+            <button class="btn btn-sm" onclick="closeModal_d('tvaLienModal')"><i class="ti ti-x"></i></button>
+          </div>
+          <div class="modal-body">
+            <div id="tva-lien-entete" style="padding:10px 12px;background:var(--bg);border-radius:var(--r-md);margin-bottom:1rem"></div>
+            <div id="tva-lien-body"></div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn" onclick="closeModal_d('tvaLienModal')">Fermer</button>
           </div>
         </div>
       </div>
@@ -7230,7 +7267,7 @@ function renderTvaListeReleves() {
   body.innerHTML = releves.map(r => {
     const trs = r.transactions||[];
     const nbTotal = trs.length;
-    const nbJustifies = trs.filter(t => t.sansJustificatif || stateDossier.tvaJustificatifs[t.id]).length;
+    const nbJustifies = trs.filter(t => tvaEstJustifie(t)).length;
     const pct = nbTotal ? Math.round(nbJustifies/nbTotal*100) : 0;
     const totalEntrees = trs.filter(t=>t.sens==='entree').reduce((s,t)=>s+(parseFloat(t.montant)||0),0);
     const totalSorties = trs.filter(t=>t.sens==='sortie').reduce((s,t)=>s+(parseFloat(t.montant)||0),0);
@@ -7265,6 +7302,125 @@ function tvaRetourListe() {
 
 function tvaGetCurrentReleve() {
   return stateDossier.tvaReleves.find(r => String(r.id) === String(_tvaCurrentReleveId));
+}
+
+// ── Rapprochement inter-comptes ────────────────────────────────────────────
+// Un virement entre le compte pro et le compte provision TVA/URSSAF n'a pas de
+// justificatif à scanner : sa preuve, c'est le mouvement miroir sur l'autre
+// compte. Les lier vaut justificatif, et les exclut tous les deux de la
+// comptabilité (sinon le même euro compterait deux fois).
+function tvaEstJustifie(t) {
+  return !!(t.sansJustificatif || stateDossier.tvaJustificatifs[t.id] || t.lienInterCompte);
+}
+
+function tvaTrouverTransaction(releveId, transactionId) {
+  const r = stateDossier.tvaReleves.find(x => String(x.id)===String(releveId));
+  if (!r) return null;
+  return (r.transactions||[]).find(t => String(t.id)===String(transactionId)) || null;
+}
+
+// Candidats : mouvements de l'AUTRE compte, de sens opposé, montant identique
+// (à 1 € près) et date proche (±15 jours) — un virement compte à compte met
+// rarement plus de quelques jours à apparaître des deux côtés.
+function tvaCandidatsInterCompte(t, compteActuel) {
+  const autreCompte = compteActuel === 'provision' ? 'pro' : 'provision';
+  const dateT = new Date(t.date);
+  const out = [];
+  stateDossier.tvaReleves
+    .filter(r => (r.compte||'pro') === autreCompte)
+    .forEach(r => {
+      (r.transactions||[]).forEach(c => {
+        if (c.lienInterCompte) return;                      // déjà lié ailleurs
+        if (c.sens === t.sens) return;                      // doit être le miroir
+        if (Math.abs((parseFloat(c.montant)||0) - (parseFloat(t.montant)||0)) > 1) return;
+        const d = new Date(c.date);
+        const jours = Math.abs((d - dateT) / 86400000);
+        if (isNaN(jours) || jours > 15) return;
+        out.push({ releve: r, transaction: c, jours });
+      });
+    });
+  return out.sort((a,b)=>a.jours-b.jours);
+}
+
+let _tvaLienSource = null; // { releveId, transactionId }
+
+function tvaOuvrirLienInterCompte(transactionId) {
+  const r = tvaGetCurrentReleve();
+  if (!r) return;
+  const t = (r.transactions||[]).find(x=>x.id===transactionId);
+  if (!t) return;
+  _tvaLienSource = { releveId: r.id, transactionId };
+  const candidats = tvaCandidatsInterCompte(t, r.compte||'pro');
+  const autreLbl = (r.compte||'pro')==='provision' ? 'compte pro' : 'compte provision TVA/URSSAF';
+
+  const body = document.getElementById('tva-lien-body');
+  document.getElementById('tva-lien-entete').innerHTML =
+    `<div style="font-size:13px;margin-bottom:4px"><strong>${fmtDate_d(t.date)} · ${esc(t.libelle)||'—'} · ${fmtEurTva(t.montant)}</strong></div>
+     <div style="font-size:12px;color:var(--text2)">Cherchez le mouvement miroir sur le ${autreLbl}. Une fois liés, les deux mouvements sont considérés comme justifiés et exclus de la comptabilité (virement interne).</div>`;
+
+  if (t.lienInterCompte) {
+    const lie = tvaTrouverTransaction(t.lienInterCompte.releveId, t.lienInterCompte.transactionId);
+    body.innerHTML = `<div style="padding:12px 14px;border:1.5px solid var(--green);background:var(--green-bg,#3fbb7d15);border-radius:var(--r-md)">
+      <div style="font-size:12px;color:var(--green);font-weight:600;margin-bottom:4px"><i class="ti ti-link"></i> Déjà lié à :</div>
+      <div style="font-size:13px">${lie ? `${fmtDate_d(lie.date)} · ${esc(lie.libelle)||'—'} · ${fmtEurTva(lie.montant)}` : '<em style="color:var(--text3)">mouvement introuvable (relevé supprimé ?)</em>'}</div>
+      <button class="btn btn-sm btn-danger" style="margin-top:10px" onclick="tvaSupprimerLienInterCompte()"><i class="ti ti-unlink"></i> Supprimer le lien</button>
+    </div>`;
+  } else if (!candidats.length) {
+    body.innerHTML = `<div class="empty-state" style="padding:2rem"><div class="empty-title">Aucun mouvement correspondant</div><div class="empty-desc">Aucun mouvement de sens opposé, de même montant et à moins de 15 jours n'a été trouvé sur le ${autreLbl}. Vérifiez que le relevé de ce compte est bien importé pour le mois concerné.</div></div>`;
+  } else {
+    body.innerHTML = candidats.map((c,i) => `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);margin-bottom:6px">
+        <div>
+          <div style="font-size:13px">${fmtDate_d(c.transaction.date)} · ${esc(c.transaction.libelle)||'—'} · <strong>${fmtEurTva(c.transaction.montant)}</strong></div>
+          <div style="font-size:11px;color:var(--text3)">${tvaMoisNom(c.releve.mois)} ${c.releve.annee} · écart ${Math.round(c.jours)} jour(s)</div>
+        </div>
+        <button class="btn btn-sm btn-primary" onclick="tvaCreerLienInterCompte('${c.releve.id}','${c.transaction.id}')"><i class="ti ti-link"></i> Lier</button>
+      </div>`).join('');
+  }
+  const m = document.getElementById('tvaLienModal'); if (m) m.classList.add('open');
+}
+
+async function tvaCreerLienInterCompte(releveCibleId, transactionCibleId) {
+  if (!_tvaLienSource) return;
+  const rSrc = stateDossier.tvaReleves.find(x => String(x.id)===String(_tvaLienSource.releveId));
+  const rCib = stateDossier.tvaReleves.find(x => String(x.id)===String(releveCibleId));
+  if (!rSrc || !rCib) { toast_d('⚠️ Relevé introuvable.'); return; }
+  const tSrc = (rSrc.transactions||[]).find(t=>String(t.id)===String(_tvaLienSource.transactionId));
+  const tCib = (rCib.transactions||[]).find(t=>String(t.id)===String(transactionCibleId));
+  if (!tSrc || !tCib) { toast_d('⚠️ Mouvement introuvable.'); return; }
+
+  // Lien réciproque + marquage "virement interne" des deux côtés : plus aucun
+  // des deux ne produira de charge, de facture ou de revenu.
+  tSrc.lienInterCompte = { releveId: rCib.id, transactionId: tCib.id, compte: rCib.compte||'pro' };
+  tCib.lienInterCompte = { releveId: rSrc.id, transactionId: tSrc.id, compte: rSrc.compte||'pro' };
+  [tSrc, tCib].forEach(t => { t.natureHorsCompta = 'interne'; t.transfereCompta = true; t.compteRefType = null; t.compteRefId = null; });
+
+  await window._fb.saveTvaReleve(rSrc);
+  if (rCib.id !== rSrc.id) await window._fb.saveTvaReleve(rCib);
+  closeModal_d('tvaLienModal');
+  renderTvaDetail();
+  toast_d('🔗 Mouvements liés — justifiés et exclus de la comptabilité.');
+}
+
+async function tvaSupprimerLienInterCompte() {
+  if (!_tvaLienSource) return;
+  const rSrc = stateDossier.tvaReleves.find(x => String(x.id)===String(_tvaLienSource.releveId));
+  const tSrc = rSrc && (rSrc.transactions||[]).find(t=>String(t.id)===String(_tvaLienSource.transactionId));
+  if (!tSrc || !tSrc.lienInterCompte) return;
+  const rCib = stateDossier.tvaReleves.find(x => String(x.id)===String(tSrc.lienInterCompte.releveId));
+  const tCib = rCib && (rCib.transactions||[]).find(t=>String(t.id)===String(tSrc.lienInterCompte.transactionId));
+
+  [tSrc, tCib].forEach(t => {
+    if (!t) return;
+    t.lienInterCompte = null;
+    t.natureHorsCompta = null;
+    t.transfereCompta = false;
+  });
+  await window._fb.saveTvaReleve(rSrc);
+  if (rCib && rCib.id !== rSrc.id) await window._fb.saveTvaReleve(rCib);
+  closeModal_d('tvaLienModal');
+  renderTvaDetail();
+  toast_d('🔓 Lien supprimé — les deux mouvements redeviennent à traiter.');
 }
 
 async function handleTvaRelevePdf(file) {
@@ -7383,7 +7539,7 @@ function renderTvaDetail() {
   const totalEntrees = entrees.reduce((s,t)=>s+(parseFloat(t.montant)||0),0);
   const totalSorties = sorties.reduce((s,t)=>s+(parseFloat(t.montant)||0),0);
   const nbTotal = trs.length;
-  const nbJustifies = trs.filter(t => t.sansJustificatif || stateDossier.tvaJustificatifs[t.id]).length;
+  const nbJustifies = trs.filter(t => tvaEstJustifie(t)).length;
 
   const estProvision = (r.compte||'pro') === 'provision';
 
@@ -7402,11 +7558,15 @@ function renderTvaDetail() {
 
   if (estProvision) {
     const besoin = tvaCalcBesoinMois(r.mois, r.annee);
+    // Un virement lié au compte pro n'est pas un paiement à l'URSSAF ou aux
+    // impôts : on le sort du "Payé" pour ne pas surestimer ce qui a été réglé.
+    const sortiesInternes = sorties.filter(t=>t.lienInterCompte).reduce((s,t)=>s+(parseFloat(t.montant)||0),0);
+    const paiementsReels  = totalSorties - sortiesInternes;
     const mouvementNet = totalEntrees - totalSorties;
     const ecartMois = mouvementNet - besoin.total;
     document.getElementById('tva-kpi-row').innerHTML = `
       <div><div class="kpi-label">Provisions reçues</div><div class="kpi-value" style="color:var(--green)">${fmtEurTva(totalEntrees)}</div></div>
-      <div><div class="kpi-label">Payé (TVA/URSSAF)</div><div class="kpi-value" style="color:var(--red)">${fmtEurTva(totalSorties)}</div></div>
+      <div><div class="kpi-label">Payé (TVA/URSSAF)</div><div class="kpi-value" style="color:var(--red)">${fmtEurTva(paiementsReels)}</div>${sortiesInternes?`<div style="font-size:10px;color:var(--text3)">+ ${fmtEurTva(sortiesInternes)} viré au compte pro</div>`:''}</div>
       <div><div class="kpi-label">Besoin théorique du mois</div><div class="kpi-value" style="color:#e6b95c">${fmtEurTva(besoin.total)}</div><div style="font-size:10px;color:var(--text3)">TVA ${fmtEurTva(besoin.tvaAPayer)} + cotis. ${fmtEurTva(besoin.cotisations)}</div></div>
       <div><div class="kpi-label">Écart vs besoin</div><div class="kpi-value" style="color:${ecartMois>=0?'var(--green)':'var(--red)'}">${ecartMois>=0?'+':''}${fmtEurTva(ecartMois)}</div></div>`;
   } else {
@@ -7431,7 +7591,11 @@ function renderTvaDetail() {
 function tvaRowHtml(t) {
   const justif = stateDossier.tvaJustificatifs[t.id];
   let justifCell;
-  if (justif && !justif.storageUrl) {
+  if (t.lienInterCompte) {
+    const lie = tvaTrouverTransaction(t.lienInterCompte.releveId, t.lienInterCompte.transactionId);
+    const lbl = t.lienInterCompte.compte==='provision' ? 'compte provision' : 'compte pro';
+    justifCell = `<span style="display:inline-flex;align-items:center;gap:5px;color:var(--accent);font-size:12px" title="${lie?esc(fmtDate_d(lie.date)+' · '+(lie.libelle||'')):''}"><i class="ti ti-link"></i> Lié au ${lbl}</span>`;
+  } else if (justif && !justif.storageUrl) {
     justifCell = `<span style="display:inline-flex;align-items:center;gap:5px;color:var(--accent);font-size:12px"><i class="ti ti-refresh"></i> Migration en cours…</span>`;
   } else if (justif) {
     justifCell = `<span style="display:inline-flex;align-items:center;gap:5px;color:var(--green);font-size:12px"><i class="ti ti-circle-check"></i> ${esc(justif.nom||'Fichier')}</span>`;
@@ -7452,11 +7616,13 @@ function tvaRowHtml(t) {
     <td style="white-space:nowrap">
       ${justif ? `<button class="btn btn-sm" onclick="tvaVoirJustificatif('${t.id}')" title="Voir"><i class="ti ti-eye"></i></button>
                   <button class="btn btn-sm btn-danger" onclick="tvaSupprimerJustificatif('${t.id}')" title="Retirer"><i class="ti ti-x"></i></button>`
+             : t.lienInterCompte ? ''
              : `<button class="btn btn-sm" onclick="tvaDemanderJustificatif('${t.id}')" title="Attacher un fichier"><i class="ti ti-paperclip"></i></button>
                 <label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text2);cursor:pointer;margin-left:6px">
                   <input type="checkbox" ${t.sansJustificatif?'checked':''} onchange="tvaToggleSansJustificatif('${t.id}',this.checked)"> aucun
                 </label>`}
-      <button class="btn btn-sm" onclick="tvaBasculerSens('${t.id}')" title="Basculer en ${sensLbl}" style="margin-left:6px"><i class="ti ti-arrows-left-right"></i></button>
+      <button class="btn btn-sm" onclick="tvaOuvrirLienInterCompte('${t.id}')" title="${t.lienInterCompte?'Voir ou supprimer le lien inter-comptes':'Lier à un mouvement de l&rsquo;autre compte (virement interne)'}" style="margin-left:6px;${t.lienInterCompte?'border-color:var(--accent);color:var(--accent)':''}"><i class="ti ti-link"></i></button>
+      <button class="btn btn-sm" onclick="tvaBasculerSens('${t.id}')" title="Basculer en ${sensLbl}"><i class="ti ti-arrows-left-right"></i></button>
       <button class="btn btn-sm" onclick="tvaEditerNote('${t.id}')" title="Ajouter/modifier une note"><i class="ti ti-note"></i></button>
     </td>
   </tr>`;
@@ -7571,9 +7737,24 @@ async function tvaSupprimerReleve() {
     }
   }
   await window._fb.deleteTvaReleve(r.id);
+  // Détacher les mouvements de l'autre compte qui pointaient vers ce relevé,
+  // sinon ils resteraient marqués "liés" vers un mouvement qui n'existe plus.
+  const relevesAMettreAJour = new Set();
+  stateDossier.tvaReleves.forEach(autre => {
+    if (autre.id === r.id) return;
+    (autre.transactions||[]).forEach(t => {
+      if (t.lienInterCompte && String(t.lienInterCompte.releveId) === String(r.id)) {
+        t.lienInterCompte = null;
+        t.natureHorsCompta = null;
+        t.transfereCompta = false;
+        relevesAMettreAJour.add(autre);
+      }
+    });
+  });
+  for (const autre of relevesAMettreAJour) await window._fb.saveTvaReleve(autre);
   stateDossier.tvaReleves = stateDossier.tvaReleves.filter(x=>x.id!==r.id);
   tvaRetourListe();
-  toast_d('🗑️ Relevé supprimé.');
+  toast_d('🗑️ Relevé supprimé.' + (relevesAMettreAJour.size ? ' Les liens inter-comptes concernés ont été détachés.' : ''));
 }
 
 // ── Export du récapitulatif pour le comptable ──────────────
@@ -7747,6 +7928,216 @@ async function tvaTelechargerJustificatifs() {
     status.innerHTML = '';
   }
   toast_d(`✅ Archive téléchargée — ${nbOk} fichier(s)${echecs.length?', '+echecs.length+' exclu(s), voir détail ci-dessus':''}.`);
+}
+
+// ════════════════════════════════════════════════════════════
+//  DIAGNOSTIC & REMISE À PLAT
+//  Les relevés de la Déclaration TVA font foi : tout ce qui a été créé en
+//  comptabilité depuis un import porte l'identifiant du mouvement d'origine
+//  (sourceTvaId). On confronte les deux pour repérer les incohérences :
+//  lignes orphelines, doublons d'import, montants TTC non convertis, et
+//  mouvements marqués transférés dont la contrepartie a disparu.
+// ════════════════════════════════════════════════════════════
+let _tvaDiag = null;
+
+function tvaConstruireDiagnostic() {
+  // Index de tous les mouvements présents dans les relevés
+  const mouvements = {};
+  (stateDossier.tvaReleves||[]).forEach(r => {
+    (r.transactions||[]).forEach(t => { mouvements[String(t.id)] = { t, r }; });
+  });
+
+  const toutes = [
+    ...(stateDossier.charges ||[]).map(o=>({kind:'charge',  ref:o})),
+    ...(stateDossier.factures||[]).filter(f=>f.type!=='devis').map(o=>({kind:'facture', ref:o})),
+    ...(stateDossier.revenus ||[]).map(o=>({kind:'revenu',  ref:o})),
+  ];
+  const issues = toutes.filter(x => x.ref.sourceTvaId);
+
+  // A — lignes dont le mouvement d'origine n'existe plus (relevé supprimé)
+  const orphelines = issues.filter(x => !mouvements[String(x.ref.sourceTvaId)]);
+
+  // B — plusieurs lignes créées depuis le MÊME mouvement bancaire : doublon net
+  const parSource = {};
+  issues.forEach(x => {
+    const k = String(x.ref.sourceTvaId);
+    (parSource[k] = parSource[k] || []).push(x);
+  });
+  const doublons = Object.values(parSource).filter(g => g.length > 1);
+
+  // C — montants encore stockés en TTC dans le champ HT
+  const aConvertir = issues.filter(x => !x.ref.ttcCorrige);
+
+  // D — mouvements marqués transférés dont la charge/facture/revenu a disparu
+  const transfertsCasses = [];
+  (stateDossier.tvaReleves||[]).forEach(r => {
+    (r.transactions||[]).forEach(t => {
+      if (!t.transfereCompta || !t.compteRefId) return;
+      if (!tvaEstReellementTransfere(t)) transfertsCasses.push({ t, r });
+    });
+  });
+
+  // E — liens inter-comptes pointant dans le vide
+  const liensCasses = [];
+  (stateDossier.tvaReleves||[]).forEach(r => {
+    (r.transactions||[]).forEach(t => {
+      if (!t.lienInterCompte) return;
+      if (!tvaTrouverTransaction(t.lienInterCompte.releveId, t.lienInterCompte.transactionId)) liensCasses.push({ t, r });
+    });
+  });
+
+  return { orphelines, doublons, aConvertir, transfertsCasses, liensCasses,
+           totalImporte: issues.length, totalLignes: toutes.length };
+}
+
+function tvaOuvrirDiagnostic() {
+  _tvaDiag = tvaConstruireDiagnostic();
+  tvaRenderDiagnostic();
+  const m = document.getElementById('tvaDiagModal'); if (m) m.classList.add('open');
+}
+
+function tvaRenderDiagnostic() {
+  const d = _tvaDiag;
+  const body = document.getElementById('tva-diag-body');
+  if (!d || !body) return;
+  const kindLbl = { charge:'Charge', facture:'Facture', revenu:'Revenu' };
+  const lbl = o => (o.libelle || o.objet || o.numero || '—');
+  const dt  = o => (o.date || o.datePaiement || o.dateEmission || '');
+
+  const section = (titre, desc, contenu, nb, couleur, action) => `
+    <div style="border:1.5px solid ${nb?couleur:'var(--border)'};border-radius:var(--r-md);margin-bottom:12px;overflow:hidden">
+      <div style="padding:10px 14px;background:${nb?couleur+'15':'var(--bg)'};display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:${nb?couleur:'var(--text2)'}">${nb?'⚠️':'✅'} ${titre} — ${nb}</div>
+          <div style="font-size:11.5px;color:var(--text2);margin-top:2px">${desc}</div>
+        </div>
+        ${nb?action:''}
+      </div>
+      ${nb?`<div style="padding:8px 14px;max-height:190px;overflow-y:auto">${contenu}</div>`:''}
+    </div>`;
+
+  const ligneHtml = x => `<div style="font-size:12px;padding:3px 0;border-bottom:1px solid var(--border);color:var(--text2)">
+    <span style="font-weight:600;color:var(--text)">${kindLbl[x.kind]}</span> · ${fmtDate_d(dt(x.ref))} · ${esc(lbl(x.ref))} · ${fmtEur_d(x.ref.montantHt)}</div>`;
+
+  body.innerHTML = `
+    <div style="font-size:12.5px;color:var(--text2);margin-bottom:1rem;padding:10px 12px;background:var(--bg);border-radius:var(--r-md)">
+      ${d.totalLignes} ligne(s) en comptabilité, dont <strong>${d.totalImporte}</strong> issues d'un relevé bancaire. Les relevés de la Déclaration TVA servent de référence pour les contrôles ci-dessous.
+    </div>
+
+    ${section('Lignes orphelines',
+      "Créées depuis un relevé qui a depuis été supprimé — elles gonflent encore vos totaux sans justificatif rattachable.",
+      d.orphelines.map(ligneHtml).join('') || '',
+      d.orphelines.length, '#e2564a',
+      `<button class="btn btn-sm btn-danger" onclick="tvaDiagSupprimerOrphelines()"><i class="ti ti-trash"></i> Supprimer</button>`)}
+
+    ${section('Doublons d\'import',
+      "Plusieurs lignes créées depuis un même mouvement bancaire : le montant est compté deux fois.",
+      d.doublons.map(g => `<div style="font-size:12px;padding:4px 0;border-bottom:1px solid var(--border)">
+        <div style="color:var(--amber);font-weight:600">${g.length} lignes pour un seul mouvement :</div>
+        ${g.map(x=>`<div style="color:var(--text2);padding-left:10px">${kindLbl[x.kind]} · ${fmtDate_d(dt(x.ref))} · ${esc(lbl(x.ref))} · ${fmtEur_d(x.ref.montantHt)}</div>`).join('')}
+      </div>`).join('') || '',
+      d.doublons.length, '#F5A623',
+      `<button class="btn btn-sm" onclick="tvaDiagDedoublonner()" style="border-color:#F5A623;color:#F5A623"><i class="ti ti-copy-off"></i> Garder la plus récente</button>`)}
+
+    ${section('Montants TTC non convertis',
+      "Le montant du relevé (TTC) est encore enregistré comme du HT, sans TVA déductible.",
+      d.aConvertir.map(ligneHtml).join('') || '',
+      d.aConvertir.length, '#e6b95c',
+      `<button class="btn btn-sm" onclick="closeModal_d('tvaDiagModal');tvaOuvrirCorrectionMasse()" style="border-color:#e6b95c;color:#e6b95c"><i class="ti ti-wand"></i> Recalculer en HT</button>`)}
+
+    ${section('Transferts cassés',
+      "Mouvements marqués « envoyés en comptabilité » dont la charge ou la facture a été supprimée depuis.",
+      d.transfertsCasses.map(x=>`<div style="font-size:12px;padding:3px 0;border-bottom:1px solid var(--border);color:var(--text2)">${fmtDate_d(x.t.date)} · ${esc(x.t.libelle||'—')} · ${fmtEurTva(x.t.montant)} <span style="color:var(--text3)">(${tvaMoisNom(x.r.mois)} ${x.r.annee})</span></div>`).join('') || '',
+      d.transfertsCasses.length, '#4fa8f0',
+      `<button class="btn btn-sm" onclick="tvaDiagReparerTransferts()" style="border-color:#4fa8f0;color:#4fa8f0"><i class="ti ti-rotate"></i> Remettre à traiter</button>`)}
+
+    ${section('Liens inter-comptes cassés',
+      "Mouvements liés à une contrepartie qui n'existe plus.",
+      d.liensCasses.map(x=>`<div style="font-size:12px;padding:3px 0;border-bottom:1px solid var(--border);color:var(--text2)">${fmtDate_d(x.t.date)} · ${esc(x.t.libelle||'—')} · ${fmtEurTva(x.t.montant)}</div>`).join('') || '',
+      d.liensCasses.length, '#8e44ad',
+      `<button class="btn btn-sm" onclick="tvaDiagReparerLiens()" style="border-color:#8e44ad;color:#8e44ad"><i class="ti ti-unlink"></i> Détacher</button>`)}
+  `;
+
+  const total = d.orphelines.length + d.doublons.length + d.aConvertir.length + d.transfertsCasses.length + d.liensCasses.length;
+  const resume = document.getElementById('tva-diag-resume');
+  if (resume) resume.innerHTML = total
+    ? `<span style="color:var(--amber);font-weight:600">${total} point(s) à corriger</span>`
+    : `<span style="color:var(--green);font-weight:600">✅ Aucune incohérence détectée</span>`;
+}
+
+async function tvaDiagSupprimerOrphelines() {
+  const list = _tvaDiag.orphelines;
+  if (!list.length) return;
+  if (!confirm(`Supprimer définitivement ${list.length} ligne(s) orpheline(s) ?\n\nElles proviennent de relevés supprimés et ne sont plus rattachables à un justificatif.`)) return;
+  for (const x of list) {
+    if (x.kind==='charge')      await deleteChargeDb(x.ref.id);
+    else if (x.kind==='revenu') await deleteRevenuDb(x.ref.id);
+    else {
+      stateDossier.factures = stateDossier.factures.filter(f=>f.id!==x.ref.id);
+      await window._fb.deleteFacture(x.ref.id);
+    }
+  }
+  toast_d(`🗑️ ${list.length} ligne(s) orpheline(s) supprimée(s).`);
+  tvaDiagRafraichir();
+}
+
+async function tvaDiagDedoublonner() {
+  const groupes = _tvaDiag.doublons;
+  if (!groupes.length) return;
+  const aSupprimer = [];
+  groupes.forEach(g => {
+    // On garde la plus récemment modifiée : c'est celle que l'utilisateur a
+    // le plus probablement corrigée à la main.
+    const trie = [...g].sort((a,b)=>(b.ref.updatedAt||'').localeCompare(a.ref.updatedAt||''));
+    aSupprimer.push(...trie.slice(1));
+  });
+  if (!confirm(`Supprimer ${aSupprimer.length} ligne(s) en double ?\n\nPour chaque mouvement bancaire concerné, seule la version la plus récemment modifiée est conservée.`)) return;
+  for (const x of aSupprimer) {
+    if (x.kind==='charge')      await deleteChargeDb(x.ref.id);
+    else if (x.kind==='revenu') await deleteRevenuDb(x.ref.id);
+    else {
+      stateDossier.factures = stateDossier.factures.filter(f=>f.id!==x.ref.id);
+      await window._fb.deleteFacture(x.ref.id);
+    }
+  }
+  toast_d(`🗑️ ${aSupprimer.length} doublon(s) supprimé(s).`);
+  tvaDiagRafraichir();
+}
+
+async function tvaDiagReparerTransferts() {
+  const list = _tvaDiag.transfertsCasses;
+  if (!list.length) return;
+  if (!confirm(`Remettre ${list.length} mouvement(s) à traiter ?\n\nIls redeviendront proposés dans « Envoyer vers Comptabilité ».`)) return;
+  const releves = new Set();
+  list.forEach(x => {
+    x.t.transfereCompta = false; x.t.compteRefId = null; x.t.compteRefType = null;
+    releves.add(x.r);
+  });
+  for (const r of releves) await window._fb.saveTvaReleve(r);
+  toast_d(`🔄 ${list.length} mouvement(s) remis à traiter.`);
+  tvaDiagRafraichir();
+}
+
+async function tvaDiagReparerLiens() {
+  const list = _tvaDiag.liensCasses;
+  if (!list.length) return;
+  if (!confirm(`Détacher ${list.length} lien(s) inter-comptes cassé(s) ?`)) return;
+  const releves = new Set();
+  list.forEach(x => {
+    x.t.lienInterCompte = null; x.t.natureHorsCompta = null; x.t.transfereCompta = false;
+    releves.add(x.r);
+  });
+  for (const r of releves) await window._fb.saveTvaReleve(r);
+  toast_d(`🔓 ${list.length} lien(s) détaché(s).`);
+  tvaDiagRafraichir();
+}
+
+function tvaDiagRafraichir() {
+  _tvaDiag = tvaConstruireDiagnostic();
+  tvaRenderDiagnostic();
+  if (typeof renderComptabilite === 'function') renderComptabilite();
+  if (typeof renderFacturation === 'function') renderFacturation();
+  renderTvaPage();
 }
 
 // ════════════════════════════════════════════════════════════
@@ -8093,7 +8484,10 @@ async function tvaReinitialiserTransferts() {
   const nb = (r.transactions||[]).filter(t => t.transfereCompta).length;
   if (!nb) { toast_d('ℹ️ Aucun mouvement marqué comme transféré sur ce relevé.'); return; }
   if (!confirm(`Marquer les ${nb} mouvement(s) transféré(s) comme non transférés, pour pouvoir relancer l'envoi ?\n\n(Les charges/factures déjà créées ne sont pas supprimées — seul l'indicateur du relevé est réinitialisé.)`)) return;
-  (r.transactions||[]).forEach(t => { t.transfereCompta = false; t.compteRefId = null; t.compteRefType = null; });
+  (r.transactions||[]).forEach(t => {
+    if (t.lienInterCompte) return; // un virement interne lié reste traité
+    t.transfereCompta = false; t.compteRefId = null; t.compteRefType = null; t.natureHorsCompta = null;
+  });
   await window._fb.saveTvaReleve(r);
   renderTvaDetail();
   toast_d('✅ Transferts réinitialisés — vous pouvez relancer "Envoyer vers Comptabilité".');
@@ -8106,8 +8500,8 @@ function tvaOuvrirTransfert() {
   // justificatif restent envoyables, mais seront signalés et confirmés
   // explicitement avant l'envoi (voir tvaConfirmerTransfert). Un mouvement
   // dont la charge/facture a été supprimée entre-temps redevient éligible.
-  const trs = (r.transactions||[]).filter(t => !tvaEstReellementTransfere(t));
-  if (!trs.length) { toast_d('ℹ️ Tous les mouvements sont déjà transférés.'); return; }
+  const trs = (r.transactions||[]).filter(t => !tvaEstReellementTransfere(t) && !t.lienInterCompte);
+  if (!trs.length) { toast_d('ℹ️ Tous les mouvements sont déjà transférés ou liés à l\'autre compte.'); return; }
 
   _tvaTransfertItems = trs.map(t => {
     if (t.sens === 'sortie') {
@@ -8167,7 +8561,7 @@ function tvaOuvrirTransfert() {
 
 function tvaRenderTransfertModal() {
   const body = document.getElementById('tva-transfert-body');
-  const sansJustifCount = _tvaTransfertItems.filter(it => !it.transaction.sansJustificatif && !stateDossier.tvaJustificatifs[it.transaction.id]).length;
+  const sansJustifCount = _tvaTransfertItems.filter(it => !tvaEstJustifie(it.transaction)).length;
   const avertissement = sansJustifCount ? `<div style="background:var(--rbg);border:1.5px solid var(--red);border-radius:var(--r-md);padding:10px 14px;font-size:12.5px;color:var(--red);margin-bottom:1rem"><i class="ti ti-alert-triangle"></i> ${sansJustifCount} mouvement(s) n'ont pas encore de justificatif (repérés ci-dessous). Vous pouvez les envoyer quand même, une confirmation vous sera demandée.</div>` : '';
 
   const projetSelectHtml = (item, i) => {
@@ -8259,7 +8653,7 @@ function tvaRenderTransfertModal() {
     const t = item.transaction;
     const sensLbl = t.sens==='entree' ? 'Rentrée' : 'Sortie';
     const sensColor = t.sens==='entree' ? 'var(--green)' : 'var(--red)';
-    const sansJustif = !t.sansJustificatif && !stateDossier.tvaJustificatifs[t.id];
+    const sansJustif = !tvaEstJustifie(t);
     const justifTag = sansJustif ? `<span style="display:inline-flex;align-items:center;gap:4px;color:var(--red);font-size:11px;font-weight:600;margin-left:8px"><i class="ti ti-alert-circle"></i> sans justificatif</span>` : '';
 
     let blocs;
@@ -8371,7 +8765,7 @@ async function tvaConfirmerTransfert() {
   // Au moins une confirmation explicite avant d'envoyer des mouvements sans
   // justificatif (demandé : possible, mais jamais silencieusement).
   const sansJustifEnvoyes = _tvaTransfertItems.filter(it =>
-    it.choix !== 'ignorer' && !it.transaction.sansJustificatif && !stateDossier.tvaJustificatifs[it.transaction.id]
+    it.choix !== 'ignorer' && !tvaEstJustifie(it.transaction)
   );
   if (sansJustifEnvoyes.length) {
     const liste = sansJustifEnvoyes.map(it => `- ${fmtDate_d(it.transaction.date)} · ${it.transaction.libelle||'—'} · ${fmtEurTva(it.transaction.montant)}`).join('\n');
@@ -8946,6 +9340,10 @@ async function deleteFacture_d(id) {
   stateDossier.factures = stateDossier.factures.filter(f=>f.id!==id);
   await removeFactureDb(id);
   renderFacturation();
+  // La Comptabilité lit les mêmes factures : sans ce rafraîchissement, une
+  // facture supprimée depuis "Mois en cours" restait affichée dans le bloc
+  // Revenus jusqu'au prochain changement de mois.
+  if (typeof renderComptabilite === 'function') renderComptabilite();
   if (document.getElementById('projectModal').classList.contains('open') && currentProjectId) {
     renderProjectFacturation(currentProjectId);
     document.getElementById('projFactCount').textContent = stateDossier.factures.filter(x=>x.projetId==currentProjectId).length;
@@ -10847,14 +11245,68 @@ function renderMoisCompta() {
 
   let html = '';
 
-  // Bloc revenus (factures encaissées + revenus manuels)
-  html += `<div class="card" style="margin-bottom:1rem;border-left:4px solid #4fa8f0;padding:1rem 1.25rem">
-    <div style="display:flex;align-items:center;justify-content:space-between">
+  // Bloc revenus (factures encaissées + revenus manuels), détaillé et actionnable.
+  // Chaque ligne est modifiable/supprimable directement ici : un doublon repéré
+  // au moment de la déclaration se corrige sans passer par Facturation.
+  // Repérage des doublons probables : même montant encaissé dans le mois.
+  const lignesRev = [
+    ...facturesMois.map(f => ({
+      kind:'facture', id:f.id,
+      libelle: (f.numero? f.numero+' · ':'') + (nomProjet(f.projetId) || f.client || f.objet || '—'),
+      date: f.datePaiement||f.dateEmission||'',
+      ht: parseFloat(f.montantPaye)||0,
+      taux: parseFloat(f.tva)||0
+    })),
+    ...revenusMois.map(r => ({
+      kind:'revenu', id:r.id,
+      libelle: (r.libelle||'—') + ' · ' + (CAT_LABELS_REV[r.categorie]||r.categorie||''),
+      date: r.date||'',
+      ht: parseFloat(r.montantHt)||0,
+      taux: parseFloat(r.tvaTaux)||0
+    }))
+  ].sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+
+  const compteMontants = {};
+  lignesRev.forEach(l => { const k = l.ht.toFixed(2); compteMontants[k] = (compteMontants[k]||0)+1; });
+  const nbDoublons = Object.values(compteMontants).filter(n=>n>1).length;
+
+  html += `<div class="card" style="margin-bottom:1rem;border-left:4px solid #4fa8f0;padding:0;overflow:hidden">
+    <div style="padding:1rem 1.25rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
       <div style="font-size:13px;font-weight:600;color:var(--navy)">💰 Revenus encaissés HT — ${MOIS_NOMS[_comptaMois]}</div>
-      <div style="font-family:var(--font-serif);font-size:22px;color:#4fa8f0">${fmtEur_d(caMonthHT)}</div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="btn btn-sm" onclick="openRevenuModal()" style="border-color:#3fbb7d;color:#3fbb7d"><i class="ti ti-plus"></i> Revenu</button>
+        <div style="font-family:var(--font-serif);font-size:22px;color:#4fa8f0">${fmtEur_d(caMonthHT)}</div>
+      </div>
     </div>
-    ${facturesMois.length?`<div style="font-size:12px;color:var(--text2);margin-top:4px">${facturesMois.map(f=>`${nomProjet(f.projetId)} · ${fmtEur_d(f.montantPaye||f.montantHt)}`).join(' — ')}</div>`:''}
-    ${revenusMois.length?`<div style="font-size:12px;color:var(--green);margin-top:4px">${revenusMois.map(r=>`${esc(r.libelle)} · ${fmtEur_d(r.montantHt)}`).join(' — ')} <button class="btn btn-sm" style="margin-left:6px;padding:1px 8px;font-size:11px" onclick="filterComptaTab('revenus', document.getElementById('ctab-revenus'))">voir</button></div>`:''}
+    ${nbDoublons?`<div style="padding:8px 1.25rem;background:var(--abg);border-top:1px solid var(--border);font-size:12px;color:var(--amber)"><i class="ti ti-alert-triangle"></i> ${nbDoublons} montant(s) apparaissent plusieurs fois ce mois-ci (surlignés ci-dessous) — vérifiez qu'il ne s'agit pas d'un doublon d'import.</div>`:''}
+    ${lignesRev.length?`<div class="fact-table-wrap">
+      <table class="fact-table" style="margin:0">
+        <thead style="background:var(--bg2);color:var(--text)"><tr>
+          <th style="padding-left:16px">Date</th>
+          <th>Origine</th>
+          <th>Libellé</th>
+          <th style="text-align:right">Montant HT</th>
+          <th style="text-align:right">TVA</th>
+          <th></th>
+        </tr></thead>
+        <tbody>
+          ${lignesRev.map(l=>{
+            const suspect = compteMontants[l.ht.toFixed(2)] > 1;
+            return `<tr style="${suspect?'background:var(--abg)':''}">
+              <td style="padding-left:16px;white-space:nowrap">${l.date?fmtDateShort(l.date):'—'}</td>
+              <td><span class="badge ${l.kind==='facture'?'badge-purple':'badge-gray'}" style="font-size:10px">${l.kind==='facture'?'Facture':'Revenu'}</span></td>
+              <td style="font-size:12.5px">${esc(l.libelle)}${suspect?' <i class="ti ti-alert-triangle" style="color:var(--amber)" title="Montant présent plusieurs fois ce mois-ci"></i>':''}</td>
+              <td style="text-align:right;font-weight:600;color:var(--green)">${fmtEur_d(l.ht)}</td>
+              <td style="text-align:right;font-size:12px;color:var(--text2)">${fmtEur_d(l.ht*l.taux/100)}</td>
+              <td><div style="display:flex;gap:4px">
+                <button class="btn btn-sm" onclick="${l.kind==='facture'?`openFactureEdit('${l.id}')`:`openEditRevenu('${l.id}')`}" title="Modifier"><i class="ti ti-edit"></i></button>
+                <button class="btn btn-sm btn-danger" onclick="${l.kind==='facture'?`deleteFacture_d('${l.id}')`:`confirmDeleteRevenu('${l.id}')`}" title="Supprimer"><i class="ti ti-trash"></i></button>
+              </div></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`:`<div style="padding:0 1.25rem 1rem;font-size:12px;color:var(--text3)">Aucun encaissement enregistré ce mois-ci.</div>`}
   </div>`;
 
   // Charges par catégorie
