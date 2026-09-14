@@ -552,6 +552,7 @@ if (window.parent !== window) {
           <button class="btn btn-outline" onclick="exportToFinancement()" style="border-color:#2D7A4F;color:#2D7A4F"><i class="ti ti-coin" aria-hidden="true"></i>Envoyer vers Financement</button>
           <button class="btn btn-outline" onclick="exportToChantier()" style="border-color:#4fa8f0;color:#4fa8f0"><i class="ti ti-building-factory-2" aria-hidden="true"></i>Envoyer vers Chantier</button>
           <button class="btn btn-outline" onclick="exportToAppelsOffres()" style="border-color:#1E5FAA;color:#1E5FAA"><i class="ti ti-send" aria-hidden="true"></i>Envoyer vers Appels d'offres</button>
+          <button class="btn btn-outline" onclick="ouvrirModalRaccorderDossier()" id="btn-raccorder-dossier" style="border-color:#e6b95c;color:#e6b95c;display:none"><i class="ti ti-link" aria-hidden="true"></i>Raccorder à Phénix Dossier</button>
           <button class="btn btn-outline" onclick="ouvrirModalOffresArtisans()" id="btn-offres-artisans" style="border-color:#2E7D4F;color:#2E7D4F;display:none"><i class="ti ti-inbox-down" aria-hidden="true"></i>Offres artisans reçues <span id="offres-artisans-badge"></span></button>
           <button class="btn btn-outline" onclick="openChiffrageArchiveModal()" id="btn-chiffrage-archive" style="border-color:#c896e0;color:#c896e0;display:none"><i class="ti ti-archive" aria-hidden="true"></i>Chiffrages enregistrés</button>
       </div>
@@ -1296,6 +1297,21 @@ if (window.parent !== window) {
       <div id="chiffrage-archive-list"></div>
       <div style="display:flex;justify-content:flex-end;margin-top:16px">
         <button class="btn btn-outline" onclick="closeModal('modal-chiffrage-archive')">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal-raccorder-dossier">
+    <div class="modal" style="max-width:560px">
+      <div class="modal-title"><i class="ti ti-link" style="color:#e6b95c;margin-right:8px" aria-hidden="true"></i>Raccorder à Phénix Dossier</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:14px">Ce chantier a été créé directement dans Chiffrage, sans passer par Phénix Dossier. Choisissez le dossier auquel il correspond pour activer les envois (Financement, Chantier, Appels d'offres…).</div>
+      <select id="raccorder-projet-select" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;background:var(--surface2);color:var(--text);margin-bottom:8px">
+        <option value="">— Chargement… —</option>
+      </select>
+      <div id="raccorder-dossier-status" style="font-size:12px;display:none;margin-bottom:10px"></div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px">
+        <button class="btn btn-outline" onclick="closeModal('modal-raccorder-dossier')">Annuler</button>
+        <button class="btn btn-primary" onclick="confirmerRaccordementDossier()" style="background:linear-gradient(135deg,#e6b95c,#c99a3c);border-color:#e6b95c"><i class="ti ti-link" aria-hidden="true"></i>Raccorder</button>
       </div>
     </div>
   </div>
@@ -2442,6 +2458,64 @@ function importFromDossier() {
   status.style.display = '';
   showToast('✅ Projet importé : ' + d.nom);
 }
+// === Raccordement d'un chantier existant vers Phénix Dossier ==============
+// Symétrique de "loadProjetsFromDossier" / "importFromDossier" ci-dessus,
+// mais pour un chantier déjà créé directement dans Chiffrage (sans passer
+// par Dossier au départ) : on lui affecte simplement un projetId a
+// posteriori, sans toucher aux lots ni aux champs déjà saisis.
+async function ouvrirModalRaccorderDossier(){
+  const idx = state.currentChantier;
+  if(idx===null || !state.chantiers[idx]){ showToast('⚠️ Sélectionnez d\'abord un chantier'); return; }
+  const sel = document.getElementById('raccorder-projet-select');
+  const status = document.getElementById('raccorder-dossier-status');
+  status.style.display = 'none';
+  sel.innerHTML = '<option value="">— Chargement… —</option>';
+  document.getElementById('modal-raccorder-dossier').classList.add('open');
+  try {
+    const { db, collection, getDocs } = await _phenixFbRefs();
+    const snap = await getDocs(collection(db, 'phenix_projets'));
+    const projetsExistants = new Set(state.chantiers.map(c=>String(c.projetId||'')).filter(Boolean));
+    const projets = [];
+    snap.forEach(d => projets.push(d.data()));
+    projets.sort((a,b) => (a.nom||'').localeCompare(b.nom||''));
+    sel.innerHTML = '<option value="">— Sélectionner un dossier —</option>'
+      + projets.map(p => {
+          const dejaLie = projetsExistants.has(String(p.id));
+          return `<option value="${p.id}" data-nom="${p.nom||''}" data-budget="${p.budget||''}" data-honoraires="${p.honoraires||''}" ${dejaLie?'disabled':''}>${p.ref ? p.ref+' — ' : ''}${p.nom} · ${p.client}${dejaLie?' (déjà raccordé à un autre chantier)':''}</option>`;
+        }).join('');
+    if(!projets.length){
+      status.style.display='';
+      status.style.color='var(--text3)';
+      status.textContent = 'Aucun projet trouvé dans Phénix Dossier.';
+    }
+  } catch(e){
+    sel.innerHTML = '<option value="">— Erreur de chargement —</option>';
+    status.style.display = '';
+    status.style.color = '#c0392b';
+    status.textContent = '⚠️ ' + (e.code || e.message || 'Erreur inconnue') + ' — vérifiez les règles Firestore / App Check';
+  }
+}
+
+function confirmerRaccordementDossier(){
+  const idx = state.currentChantier;
+  if(idx===null || !state.chantiers[idx]) return;
+  const sel = document.getElementById('raccorder-projet-select');
+  const opt = sel.options[sel.selectedIndex];
+  if(!opt || !opt.value){ showToast('⚠️ Sélectionnez un dossier'); return; }
+  const c = state.chantiers[idx];
+  c.projetId = opt.value;
+  // Ne complète le budget/les honoraires que s'ils sont vides ici — on ne
+  // veut jamais écraser un chiffrage déjà en cours avec des valeurs venues
+  // de Dossier.
+  if(!c.budgetTravaux && opt.dataset.budget) c.budgetTravaux = opt.dataset.budget;
+  if(!c.honoraires && opt.dataset.honoraires) c.honoraires = opt.dataset.honoraires;
+  saveState();
+  renderChantierGrid();
+  renderChiffrage();
+  closeModal('modal-raccorder-dossier');
+  showToast('✅ Chantier raccordé à « '+(opt.dataset.nom||'')+' »');
+}
+
 function saveNewChantier(){
   const nom=document.getElementById('f-nom').value.trim();
   if(!nom){alert('Nom requis');return;}
@@ -2514,6 +2588,11 @@ function renderChiffrage(){
   const nbArchives=(c.chiffrageArchive||[]).length;
   archBtn.style.display=nbArchives?'':'none';
   archBtn.innerHTML=`<i class="ti ti-archive" aria-hidden="true"></i>Chiffrages enregistrés (${nbArchives})`;
+  // Le bouton de raccordement à Phénix Dossier n'a de sens que si ce
+  // chantier n'est pas déjà relié à un projet (sinon les boutons d'envoi
+  // habituels suffisent).
+  const raccorderBtn=document.getElementById('btn-raccorder-dossier');
+  if(raccorderBtn) raccorderBtn.style.display = c.projetId ? 'none' : '';
   if(c._nomChiffrageActif){
     banner.style.display='';
     banner.innerHTML=`<i class="ti ti-git-branch" aria-hidden="true"></i> Chiffrage actif : <strong>${c._nomChiffrageActif}</strong>${nbArchives?` · ${nbArchives} autre${nbArchives>1?'s':''} chiffrage${nbArchives>1?'s':''} enregistré${nbArchives>1?'s':''}` : ''}`;
