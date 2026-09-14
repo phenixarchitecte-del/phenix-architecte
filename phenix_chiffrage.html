@@ -5595,6 +5595,42 @@ window.recalculerLotsAvecReponses = recalculerLotsAvecReponses;
 // Pages extraites du dossier PDF : [{b64, mime, titre, pageNum, thumb}]
 var renoPages = [];
 
+// ── Compression avant envoi à l'IA ──────────────────────────────────
+// Des photos ou des plans à haute résolution, cumulés sur plusieurs pages,
+// peuvent dépasser la taille maximale acceptée en une seule requête par
+// l'API (erreur "Request exceeds the maximum size"). On limite chaque image
+// à une résolution et un poids raisonnables, en réduisant qualité puis
+// dimensions par paliers si besoin, jusqu'à repasser sous le seuil.
+async function comprimerImageDataURL(dataUrl, maxDim, qualiteDepart, maxOctets){
+  maxDim = maxDim || 1800;
+  qualiteDepart = qualiteDepart || 0.82;
+  maxOctets = maxOctets || 1200000; // ~1,2 Mo par image
+  const img = await new Promise((resolve, reject) => {
+    const i = new Image();
+    i.onload = () => resolve(i);
+    i.onerror = reject;
+    i.src = dataUrl;
+  });
+  let w = img.width, h = img.height;
+  if (Math.max(w, h) > maxDim) {
+    const ratio = maxDim / Math.max(w, h);
+    w = Math.round(w * ratio); h = Math.round(h * ratio);
+  }
+  const cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  cv.getContext('2d').drawImage(img, 0, 0, w, h);
+  let quality = qualiteDepart;
+  let out = cv.toDataURL('image/jpeg', quality);
+  let tentatives = 0;
+  while (out.length * 0.75 > maxOctets && tentatives < 6){
+    tentatives++;
+    if (quality > 0.4) { quality -= 0.15; }
+    else { w = Math.round(w * 0.8); h = Math.round(h * 0.8); cv.width = w; cv.height = h; cv.getContext('2d').drawImage(img, 0, 0, w, h); }
+    out = cv.toDataURL('image/jpeg', quality);
+  }
+  return out.split(',')[1];
+}
+
 // ── Drag & drop sur la zone ───────────────────────────────────────
 (function(){
   setTimeout(() => {
@@ -5627,13 +5663,18 @@ async function renoHandleDossier(files) {
       // Image directe
       await new Promise(resolve => {
         const reader = new FileReader();
-        reader.onload = e => {
-          const b64 = e.target.result.split(',')[1];
+        reader.onload = async e => {
+          const b64 = await comprimerImageDataURL(e.target.result, 1800, 0.82);
+          const thumbImg = await new Promise(res => { const i=new Image(); i.onload=()=>res(i); i.src=e.target.result; });
+          const thumbCv = document.createElement('canvas');
+          const ratio = Math.min(1, 300/thumbImg.width);
+          thumbCv.width = thumbImg.width*ratio; thumbCv.height = thumbImg.height*ratio;
+          thumbCv.getContext('2d').drawImage(thumbImg, 0, 0, thumbCv.width, thumbCv.height);
           renoPages.push({
-            b64, mime: file.type||'image/jpeg',
+            b64, mime:'image/jpeg',
             titre: file.name.replace(/\.[^.]+$/,''),
             pageNum: 1, fichier: file.name,
-            thumb: e.target.result
+            thumb: thumbCv.toDataURL('image/jpeg', 0.7)
           });
           resolve();
         };
@@ -5664,8 +5705,11 @@ async function renoExtractPdfPages(file) {
             const textContent = await page.getTextContent();
             const textes = textContent.items.map(i => i.str).filter(s => s.trim().length > 2);
             const titre = renoDetectTitrePage(textes, file.name, p);
-            // Rendre à haute résolution pour que l'IA voie les cotes
-            const viewport = page.getViewport({scale: 2.5});
+            // Rendre à résolution suffisante pour que l'IA voie les cotes,
+            // puis compresser (voir comprimerImageDataURL) pour rester sous
+            // la taille maximale acceptée par requête, même sur un dossier
+            // de plusieurs pages.
+            const viewport = page.getViewport({scale: 2.0});
             const tmp = document.createElement('canvas');
             tmp.width = viewport.width; tmp.height = viewport.height;
             await page.render({canvasContext: tmp.getContext('2d'), viewport}).promise;
@@ -5674,7 +5718,7 @@ async function renoExtractPdfPages(file) {
             const thumbCv = document.createElement('canvas');
             thumbCv.width = thumbVp.width; thumbCv.height = thumbVp.height;
             await page.render({canvasContext: thumbCv.getContext('2d'), viewport: thumbVp}).promise;
-            const b64 = tmp.toDataURL('image/jpeg', 0.88).split(',')[1];
+            const b64 = await comprimerImageDataURL(tmp.toDataURL('image/jpeg', 0.88), 1800, 0.82);
             const thumb = thumbCv.toDataURL('image/jpeg', 0.7);
             renoPages.push({ b64, mime:'image/jpeg', titre, pageNum:p, fichier:file.name, thumb });
           }
@@ -6041,25 +6085,20 @@ async function neufHandleDossier(files) {
     } else {
       await new Promise(resolve => {
         const reader = new FileReader();
-        reader.onload = e => {
-          const img = new Image();
-          img.onload = () => {
-            const cv = document.createElement('canvas');
-            cv.width = img.width; cv.height = img.height;
-            cv.getContext('2d').drawImage(img, 0, 0);
-            const thumbCv = document.createElement('canvas');
-            const ratio = Math.min(1, 300 / img.width);
-            thumbCv.width = img.width*ratio; thumbCv.height = img.height*ratio;
-            thumbCv.getContext('2d').drawImage(img, 0, 0, thumbCv.width, thumbCv.height);
-            neufPages.push({
-              b64: cv.toDataURL('image/jpeg', 0.88).split(',')[1], mime:'image/jpeg',
-              titre: neufDetectTitrePage([], file.name, neufPages.length+1),
-              pageNum: neufPages.length+1, fichier: file.name,
-              thumb: thumbCv.toDataURL('image/jpeg', 0.7)
-            });
-            resolve();
-          };
-          img.src = e.target.result;
+        reader.onload = async e => {
+          const b64 = await comprimerImageDataURL(e.target.result, 1800, 0.82);
+          const thumbImg = await new Promise(res => { const i=new Image(); i.onload=()=>res(i); i.src=e.target.result; });
+          const thumbCv = document.createElement('canvas');
+          const ratio = Math.min(1, 300 / thumbImg.width);
+          thumbCv.width = thumbImg.width*ratio; thumbCv.height = thumbImg.height*ratio;
+          thumbCv.getContext('2d').drawImage(thumbImg, 0, 0, thumbCv.width, thumbCv.height);
+          neufPages.push({
+            b64, mime:'image/jpeg',
+            titre: neufDetectTitrePage([], file.name, neufPages.length+1),
+            pageNum: neufPages.length+1, fichier: file.name,
+            thumb: thumbCv.toDataURL('image/jpeg', 0.7)
+          });
+          resolve();
         };
         reader.readAsDataURL(file);
       });
@@ -6085,7 +6124,7 @@ async function neufExtractPdfPages(file) {
             const textContent = await page.getTextContent();
             const textes = textContent.items.map(i => i.str).filter(s => s.trim().length > 2);
             const titre = neufDetectTitrePage(textes, file.name, p);
-            const viewport = page.getViewport({scale: 2.5});
+            const viewport = page.getViewport({scale: 2.0});
             const tmp = document.createElement('canvas');
             tmp.width = viewport.width; tmp.height = viewport.height;
             await page.render({canvasContext: tmp.getContext('2d'), viewport}).promise;
@@ -6093,7 +6132,7 @@ async function neufExtractPdfPages(file) {
             const thumbCv = document.createElement('canvas');
             thumbCv.width = thumbVp.width; thumbCv.height = thumbVp.height;
             await page.render({canvasContext: thumbCv.getContext('2d'), viewport: thumbVp}).promise;
-            const b64 = tmp.toDataURL('image/jpeg', 0.88).split(',')[1];
+            const b64 = await comprimerImageDataURL(tmp.toDataURL('image/jpeg', 0.88), 1800, 0.82);
             const thumb = thumbCv.toDataURL('image/jpeg', 0.7);
             neufPages.push({ b64, mime:'image/jpeg', titre, pageNum:p, fichier:file.name, thumb });
           }
