@@ -4144,6 +4144,7 @@ window.addEventListener('firebase-ready', async () => {
   _fbDossierInitDone = true;
   firebaseReady = true;
   setSyncStatus('sync', 'Connexion…');
+  applyRoleRestrictions();
 
   // Vérifier si la config a été remplie
   const cfg = document.querySelector('script[type="module"]').textContent;
@@ -5679,7 +5680,7 @@ function renderProjectTable() {
       <td>${typeBadge(p.type)}</td><td style="font-size:12px">${p.mission||'—'}</td>
       <td><strong>${p.phase||'—'}</strong></td>
       <td>${progressHtml(p.avancement)}</td>
-      <td>${p.honoraires?fmtEur_d(p.honoraires):'—'}</td>
+      <td>${isRoleRestreint()?'🔒':(p.honoraires?fmtEur_d(p.honoraires):'—')}</td>
       <td>${statutBadge(p.statut)}</td>
       <td><button class="btn btn-sm" onclick="event.stopPropagation();openProjectModal(${p.id})"><i class="ti ti-eye"></i></button></td>
     </tr>`).join('');
@@ -5800,9 +5801,11 @@ function openProjectModal(id) {
       ${field('Phase actuelle',`<strong>${p.phase||'—'}</strong> <span style="color:var(--text3);font-size:11px">— ${PHASES_LABELS[p.phase]||''}</span>`)}
       ${field('Avancement',`<div style="display:flex;align-items:center;gap:8px">${progressHtml(p.avancement)}<strong>${p.avancement||0}%</strong></div>`)}
       ${field('Budget travaux HT',p.budget?fmtEur_d(p.budget):'—')}
+      ${isRoleRestreint() ? '' : `
       ${field('Honoraires HT',p.honoraires?`<strong>${fmtEur_d(p.honoraires)}</strong>`:'—')}
       ${field('Commissions HT',p.commissions?`<strong style="color:var(--amber)">${fmtEur_d(p.commissions)}</strong>`:'—')}
       ${field('CA total (H+C)',((parseFloat(p.honoraires)||0)+(parseFloat(p.commissions)||0))>0?`<strong style="color:var(--accent)">${fmtEur_d((parseFloat(p.honoraires)||0)+(parseFloat(p.commissions)||0))}</strong>`:'—')}
+      `}
       ${field('Statut',statutBadge(p.statut))}${field('Date démarrage',p.date||'—')}
     </div>
     ${p.adresse?`<div style="background:var(--bg);border-radius:var(--r-sm);padding:10px 14px;margin-bottom:.75rem;color:var(--text)"><div style="font-size:11px;color:var(--text2);margin-bottom:3px">Adresse</div><div style="font-size:13px">${p.adresse}</div></div>`:''}
@@ -5932,7 +5935,7 @@ function renderHistorique(p) {
     const dotCls=histDotClass(entry);
     const icon=histIcon(entry);
     const title=histTitle(entry);
-    const changesHtml=entry.changes.map(c=>`
+    const changesHtml=entry.changes.filter(c=>!isRoleRestreint() || (c.champ!=='Honoraires HT' && c.champ!=='Commissions HT')).map(c=>`
       <div class="hist-change">
         <span class="hist-change-label">${c.champ}</span>
         <span class="hist-change-from">${c.avant||'—'}</span>
@@ -6137,10 +6140,12 @@ function openEditModal(id) {
         <select id="edit-statut">${[['actif','Actif'],['demarrage','Démarrage'],['etude','Étude'],['cloture','Clôturé']].map(([v,l])=>`<option value="${v}" ${p.statut===v?'selected':''}>${l}</option>`).join('')}</select>
       </div>
     </div>
+    ${isRoleRestreint() ? `<input type="hidden" id="edit-honoraires" value="${p.honoraires||''}"><input type="hidden" id="edit-commissions" value="${p.commissions||''}">` : `
     <div class="form-grid">
       <div class="form-group"><label>Honoraires HT (€)</label><input type="number" id="edit-honoraires" value="${p.honoraires||''}"></div>
       <div class="form-group"><label>Commissions HT (€)</label><input type="number" id="edit-commissions" value="${p.commissions||''}"></div>
     </div>
+    `}
     <div class="form-grid">
       <div class="form-group"><label>Avancement (%)</label><input type="number" id="edit-avancement" value="${p.avancement||0}" min="0" max="100"></div>
       <div class="form-group"><label>Budget travaux HT (€)</label><input type="number" id="edit-budget" value="${p.budget||''}"></div>
@@ -10139,9 +10144,41 @@ let _tachePrioSelected = 'normale';
 // ── Collaborateurs assignables aux tâches (visible dans Phénix Suivi) ──
 // ⚠️ L'email doit correspondre EXACTEMENT au compte Firebase Auth utilisé pour se connecter à Phénix Suivi.
 const COLLABORATEURS = [
-  { email: 'contact@phenixarchitecte.fr', nom: 'Maxime' },
-  { email: 'c.gironde@phenixarchitecte.fr', nom: 'C. Gironde' },
+  { email: 'contact@phenixarchitecte.fr', nom: 'Maxime', role: 'admin' },
+  { email: 'c.gironde@phenixarchitecte.fr', nom: 'C. Gironde', role: 'alternante' },
 ];
+// ── Rôles et restrictions d'accès ──────────────────────────
+// Rôle 'alternante' : accès limité à Projets / Checklist / Tâches, sans les
+// montants d'honoraires. C'est une restriction d'AFFICHAGE (l'app est un
+// simple fichier HTML/JS) — pas une barrière serveur infranchissable.
+const PAGES_AUTORISEES_ALTERNANTE = ['projets', 'checklist', 'taches'];
+function getCurrentUserRole() {
+  const email = (window._fb && window._fb.current() && window._fb.current().email) || '';
+  const c = COLLABORATEURS.find(x => x.email === email);
+  return (c && c.role) || 'admin';
+}
+function isRoleRestreint() {
+  return getCurrentUserRole() === 'alternante';
+}
+function applyRoleRestrictions() {
+  if (!isRoleRestreint()) return;
+  document.querySelectorAll('#sidebar_d .nav-item').forEach(el => {
+    const page = (el.getAttribute('onclick')||'').match(/show_d\('(\w+)'/);
+    const keep = page && PAGES_AUTORISEES_ALTERNANTE.includes(page[1]);
+    const utilitaire = el.getAttribute('onclick')==="if(window._auth)window._auth.logout()" || el.getAttribute('onclick')==="openChangePwd()";
+    if (!keep && !utilitaire) el.style.display = 'none';
+  });
+  document.querySelectorAll('#sidebar_d .nav-section').forEach(el => {
+    let sib = el.nextElementSibling, hasVisible = false;
+    while (sib && !sib.classList.contains('nav-section')) {
+      if (sib.style.display !== 'none') hasVisible = true;
+      sib = sib.nextElementSibling;
+    }
+    if (!hasVisible) el.style.display = 'none';
+  });
+  setTimeout(() => show_d('projets', document.querySelector("#sidebar_d .nav-item[onclick*=\"show_d('projets'\"]")), 50);
+}
+
 function fillAssigneSelect(selectedEmail) {
   const sel = document.getElementById('tache-assigne');
   if (!sel) return;
