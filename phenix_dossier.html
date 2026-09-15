@@ -4144,7 +4144,6 @@ window.addEventListener('firebase-ready', async () => {
   _fbDossierInitDone = true;
   firebaseReady = true;
   setSyncStatus('sync', 'Connexion…');
-  applyRoleRestrictions();
 
   // Vérifier si la config a été remplie
   const cfg = document.querySelector('script[type="module"]').textContent;
@@ -4153,6 +4152,15 @@ window.addEventListener('firebase-ready', async () => {
     return; // bannière déjà visible, on garde le localStorage
   }
   document.getElementById('configBanner_d').classList.add('hidden');
+
+  // Restrictions d'accès selon le rôle du compte connecté.
+  // ⚠️ applyRoleRestrictions() est déclarée dans un <script> exécuté APRÈS
+  // celui-ci : on la protège donc par un typeof + try/catch, sinon une
+  // ReferenceError interromprait toute l'initialisation Firestore (bannière
+  // de config bloquée, aucune donnée chargée).
+  try {
+    if (typeof applyRoleRestrictions === 'function') applyRoleRestrictions();
+  } catch (e) { console.warn('Restrictions de rôle non appliquées :', e); }
 
   // Charger le compteur nextId
   stateDossier.nextId = await window._fb.loadNextId();
@@ -10177,6 +10185,13 @@ function applyRoleRestrictions() {
     if (!hasVisible) el.style.display = 'none';
   });
   setTimeout(() => show_d('projets', document.querySelector("#sidebar_d .nav-item[onclick*=\"show_d('projets'\"]")), 50);
+}
+
+// Filet de sécurité : si Firebase a signalé sa connexion AVANT que ce bloc de
+// script soit chargé, l'appel fait plus haut n'a rien pu faire. On réessaie ici,
+// une fois la fonction réellement définie.
+if (typeof firebaseReady !== 'undefined' && firebaseReady) {
+  try { applyRoleRestrictions(); } catch (e) {}
 }
 
 function fillAssigneSelect(selectedEmail) {
