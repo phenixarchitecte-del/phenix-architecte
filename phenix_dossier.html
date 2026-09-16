@@ -10166,7 +10166,11 @@ function getCurrentUserRole() {
   return (c && c.role) || 'admin';
 }
 function isRoleRestreint() {
-  return getCurrentUserRole() === 'alternante';
+  // ⚠️ DÉSACTIVÉ TEMPORAIREMENT (14/09) — soupçonné de bloquer l'accès aux
+  // projets pour tous les utilisateurs. Remettre "return getCurrentUserRole()
+  // === 'alternante';" une fois la vraie cause identifiée (probablement des
+  // règles de sécurité Firestore à vérifier en parallèle, pas ce fichier).
+  return false;
 }
 function applyRoleRestrictions() {
   if (!isRoleRestreint()) return;
