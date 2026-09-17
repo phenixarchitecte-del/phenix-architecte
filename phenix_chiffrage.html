@@ -511,6 +511,9 @@ if (window.parent !== window) {
   <div class="nav-item" onclick="showPage('neuf')" id="nav-neuf">
     <i class="ti ti-building-community" aria-hidden="true"></i> Neuf IA
   </div>
+  <div class="nav-item" onclick="showPage('surface')" id="nav-surface">
+    <i class="ti ti-ruler-2" aria-hidden="true"></i> Chiffrage Surface
+  </div>
   <div class="nav-item" onclick="showPage('export')" id="nav-export">
     <i class="ti ti-file-export" aria-hidden="true"></i> Export
   </div>
@@ -1526,6 +1529,162 @@ if (window.parent !== window) {
 
       <!-- Statut IA -->
       <div class="reno-ia-status" id="neuf-ia-status"></div>
+
+    </div>
+  </div>
+
+  <!-- PAGE CHIFFRAGE SURFACE -->
+  <div class="page" id="page-surface" style="overflow-y:auto">
+    <div class="page-header">
+      <div class="page-title">Chiffrage Surface</div>
+      <div class="page-sub">Sans plan disponible : chiffrage à partir d'une surface et d'un descriptif détaillé — répondez aux questions ci-dessous pour affiner l'estimation</div>
+      <div class="page-actions">
+        <button class="btn btn-primary" onclick="surfaceLancerIA()" id="btn-surface-analyser" style="background:linear-gradient(135deg,#e6b95c,#c99a3c);border-color:#e6b95c"><i class="ti ti-robot"></i>Générer le chiffrage</button>
+      </div>
+    </div>
+    <div style="padding:20px 28px;flex:1;display:flex;flex-direction:column;gap:16px;max-width:900px">
+
+      <!-- Surface & type de projet -->
+      <div class="quest-section" style="margin-top:0">
+        <div class="quest-section-title"><i class="ti ti-ruler-2"></i>1. Le projet en bref</div>
+        <div class="quest-group">
+          <label class="quest-label">Type de projet *</label>
+          <div class="quest-chips" id="qc-surf-type">
+            <button class="quest-chip selected" data-val="neuf" onclick="selectChipSurface(this,'type_projet')">Construction neuve</button>
+            <button class="quest-chip" data-val="renovation" onclick="selectChipSurface(this,'type_projet')">Rénovation complète</button>
+            <button class="quest-chip" data-val="extension" onclick="selectChipSurface(this,'type_projet')">Extension</button>
+          </div>
+        </div>
+        <div class="quest-group">
+          <label class="quest-label">Surface concernée (m²) *</label>
+          <div class="quest-input-row">
+            <input type="number" id="surf-surface" placeholder="ex : 120" min="0" style="width:120px">
+            <label>m² habitables (ou surface de travaux pour une rénovation)</label>
+          </div>
+        </div>
+        <div class="quest-group">
+          <label class="quest-label">Nombre de niveaux</label>
+          <div class="quest-chips" id="qc-surf-niveaux">
+            <button class="quest-chip selected" data-val="plain_pied" onclick="selectChipSurface(this,'niveaux')">Plain-pied</button>
+            <button class="quest-chip" data-val="r1" onclick="selectChipSurface(this,'niveaux')">R+1</button>
+            <button class="quest-chip" data-val="r2plus" onclick="selectChipSurface(this,'niveaux')">R+2 ou plus</button>
+          </div>
+        </div>
+        <div class="quest-group" id="qg-surf-etat" style="display:none">
+          <label class="quest-label">État du bâti existant</label>
+          <div class="quest-chips" id="qc-surf-etat">
+            <button class="quest-chip selected" data-val="bon" onclick="selectChipSurface(this,'etat_existant')">Bon état — rafraîchissement</button>
+            <button class="quest-chip" data-val="moyen" onclick="selectChipSurface(this,'etat_existant')">État moyen — travaux courants</button>
+            <button class="quest-chip warn" data-val="a_rehabiliter" onclick="selectChipSurface(this,'etat_existant')">À réhabiliter entièrement</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Structure & enveloppe -->
+      <div class="quest-section">
+        <div class="quest-section-title"><i class="ti ti-brick"></i>2. Structure & enveloppe</div>
+        <div class="quest-group">
+          <label class="quest-label">Type de mur / structure porteuse</label>
+          <div class="quest-chips" id="qc-surf-mur">
+            <button class="quest-chip selected" data-val="parpaing_enduit" onclick="selectChipSurface(this,'type_mur')">Parpaing enduit</button>
+            <button class="quest-chip" data-val="brique_monomur" onclick="selectChipSurface(this,'type_mur')">Brique monomur</button>
+            <button class="quest-chip" data-val="ossature_bois" onclick="selectChipSurface(this,'type_mur')">Ossature bois</button>
+            <button class="quest-chip" data-val="pierre_existante" onclick="selectChipSurface(this,'type_mur')">Pierre existante (rénovation)</button>
+            <button class="quest-chip" data-val="beton_banche" onclick="selectChipSurface(this,'type_mur')">Béton banché</button>
+          </div>
+        </div>
+        <div class="quest-group">
+          <label class="quest-label">Toiture — forme</label>
+          <div class="quest-chips" id="qc-surf-toitforme">
+            <button class="quest-chip selected" data-val="2pans" onclick="selectChipSurface(this,'toit_forme')">2 pans</button>
+            <button class="quest-chip" data-val="4pans" onclick="selectChipSurface(this,'toit_forme')">4 pans</button>
+            <button class="quest-chip" data-val="plate" onclick="selectChipSurface(this,'toit_forme')">Toit plat</button>
+            <button class="quest-chip" data-val="monopente" onclick="selectChipSurface(this,'toit_forme')">Monopente</button>
+          </div>
+        </div>
+        <div class="quest-group">
+          <label class="quest-label">Toiture — couverture</label>
+          <div class="quest-chips" id="qc-surf-toitcouv">
+            <button class="quest-chip selected" data-val="tuile" onclick="selectChipSurface(this,'toit_couv')">Tuile</button>
+            <button class="quest-chip" data-val="ardoise" onclick="selectChipSurface(this,'toit_couv')">Ardoise</button>
+            <button class="quest-chip" data-val="bac_acier" onclick="selectChipSurface(this,'toit_couv')">Bac acier</button>
+            <button class="quest-chip" data-val="zinc" onclick="selectChipSurface(this,'toit_couv')">Zinc</button>
+            <button class="quest-chip" data-val="membrane" onclick="selectChipSurface(this,'toit_couv')">Membrane étanche (toit plat)</button>
+          </div>
+        </div>
+        <div class="quest-group">
+          <label class="quest-label">Isolation — méthode</label>
+          <div class="quest-chips" id="qc-surf-isomethode">
+            <button class="quest-chip selected" data-val="iti" onclick="selectChipSurface(this,'iso_methode')">Par l'intérieur (ITI)</button>
+            <button class="quest-chip" data-val="ite" onclick="selectChipSurface(this,'iso_methode')">Par l'extérieur (ITE)</button>
+            <button class="quest-chip" data-val="mixte" onclick="selectChipSurface(this,'iso_methode')">Mixte ITI + ITE</button>
+          </div>
+        </div>
+        <div class="quest-group">
+          <label class="quest-label">Isolation — matériau</label>
+          <div class="quest-chips" id="qc-surf-isomateriau">
+            <button class="quest-chip selected" data-val="laine_verre_roche" onclick="selectChipSurface(this,'iso_materiau')">Laine de verre / roche</button>
+            <button class="quest-chip" data-val="ouate_cellulose" onclick="selectChipSurface(this,'iso_materiau')">Ouate de cellulose</button>
+            <button class="quest-chip" data-val="pse_polyurethane" onclick="selectChipSurface(this,'iso_materiau')">PSE / polyuréthane</button>
+            <button class="quest-chip" data-val="fibre_bois" onclick="selectChipSurface(this,'iso_materiau')">Fibre de bois / biosourcée</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Menuiseries & équipements -->
+      <div class="quest-section">
+        <div class="quest-section-title"><i class="ti ti-window"></i>3. Menuiseries & équipements</div>
+        <div class="quest-group">
+          <label class="quest-label">Menuiseries — matériau</label>
+          <div class="quest-chips" id="qc-surf-menumat">
+            <button class="quest-chip selected" data-val="pvc" onclick="selectChipSurface(this,'menu_materiau')">PVC</button>
+            <button class="quest-chip" data-val="alu" onclick="selectChipSurface(this,'menu_materiau')">Aluminium</button>
+            <button class="quest-chip" data-val="bois" onclick="selectChipSurface(this,'menu_materiau')">Bois</button>
+            <button class="quest-chip" data-val="mixte_bois_alu" onclick="selectChipSurface(this,'menu_materiau')">Mixte bois/alu</button>
+          </div>
+        </div>
+        <div class="quest-group">
+          <label class="quest-label">Nombre approximatif de fenêtres</label>
+          <div class="quest-input-row">
+            <input type="number" id="surf-nb-fenetres" placeholder="ex : 10" min="0" style="width:100px">
+            <label>fenêtres et portes-fenêtres au total</label>
+          </div>
+        </div>
+        <div class="quest-group">
+          <label class="quest-label">Chauffage souhaité</label>
+          <div class="quest-chips" id="qc-surf-chauffage">
+            <button class="quest-chip selected" data-val="pac_aireau" onclick="selectChipSurface(this,'chauffage')">PAC air/eau</button>
+            <button class="quest-chip" data-val="pac_airai" onclick="selectChipSurface(this,'chauffage')">PAC air/air</button>
+            <button class="quest-chip" data-val="poele_bois" onclick="selectChipSurface(this,'chauffage')">Poêle à bois</button>
+            <button class="quest-chip" data-val="gaz" onclick="selectChipSurface(this,'chauffage')">Chaudière gaz</button>
+            <button class="quest-chip" data-val="elec" onclick="selectChipSurface(this,'chauffage')">Radiateurs électriques</button>
+          </div>
+        </div>
+        <div class="quest-group">
+          <label class="quest-label">Niveau de finition souhaité</label>
+          <div class="quest-chips" id="qc-surf-standing">
+            <button class="quest-chip" data-val="standard" onclick="selectChipSurface(this,'standing')">Standard</button>
+            <button class="quest-chip selected" data-val="milieu" onclick="selectChipSurface(this,'standing')">Milieu de gamme</button>
+            <button class="quest-chip" data-val="haut" onclick="selectChipSurface(this,'standing')">Haut de gamme</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Descriptif libre -->
+      <div class="reno-prompt-zone" style="display:block">
+        <div class="reno-prompt-label">
+          <i class="ti ti-message-2" style="font-size:16px;color:var(--accent)"></i>
+          Descriptif complémentaire <span style="font-weight:400;color:var(--text3)">(facultatif mais recommandé)</span>
+        </div>
+        <textarea class="reno-prompt-textarea" id="surf-prompt"
+          placeholder="Ex : Terrain plat, accès facile. Extension en simple RDC accolée à l'existant, ouverture d'un mur porteur côté séjour. Salle de bain et cuisine à créer. Pas de sous-sol. Client souhaite une baie vitrée coulissante côté jardin."></textarea>
+        <div class="reno-prompt-hint">
+          💡 Décrivez tout ce qui n'est pas couvert par les questions ci-dessus : nature du terrain, pièces à créer, contraintes d'accès, équipements spécifiques, éléments existants à conserver.
+        </div>
+      </div>
+
+      <!-- Statut IA -->
+      <div class="reno-ia-status" id="surface-ia-status"></div>
 
     </div>
   </div>
@@ -6452,6 +6611,151 @@ window.neufHandleDossier = neufHandleDossier;
 window.neufSupprimerPage = neufSupprimerPage;
 window.neufReset = neufReset;
 window.neufLancerIA = neufLancerIA;
+
+// ════════════════════════════════════════════════════════════
+//  CHIFFRAGE SURFACE — estimation sans plan, à partir d'une surface,
+//  d'un questionnaire de caractéristiques du bâti et d'un descriptif
+//  libre. Utile pour les demandes clients type "chiffrage rapide" sans
+//  dossier de plans disponible. Réutilise le même circuit de résultat
+//  (_ouvrirModalResultats) que Rénovation IA / Neuf IA pour la création
+//  du chantier — mais avec son propre état de questionnaire
+//  (surfaceReponses), indépendant de celui de Neuf IA (questReponses),
+//  pour que les deux outils ne se marchent jamais dessus.
+// ════════════════════════════════════════════════════════════
+var surfaceReponses = {
+  type_projet: 'neuf', niveaux: 'plain_pied', etat_existant: '',
+  type_mur: 'parpaing_enduit', toit_forme: '2pans', toit_couv: 'tuile',
+  iso_methode: 'iti', iso_materiau: 'laine_verre_roche',
+  menu_materiau: 'pvc', chauffage: 'pac_aireau', standing: 'milieu'
+};
+
+function selectChipSurface(el, key) {
+  const container = el.closest('.quest-chips');
+  if(container) container.querySelectorAll('.quest-chip').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  surfaceReponses[key] = el.dataset.val;
+  if(key === 'type_projet'){
+    const zoneEtat = document.getElementById('qg-surf-etat');
+    if(zoneEtat) zoneEtat.style.display = (el.dataset.val === 'renovation') ? '' : 'none';
+  }
+}
+window.selectChipSurface = selectChipSurface;
+
+const SURFACE_LABELS = {
+  type_projet:{neuf:'Construction neuve',renovation:'Rénovation complète',extension:'Extension'},
+  niveaux:{plain_pied:'plain-pied',r1:'R+1',r2plus:'R+2 ou plus'},
+  etat_existant:{bon:'bon état',moyen:'état moyen',a_rehabiliter:'à réhabiliter entièrement'},
+  type_mur:{parpaing_enduit:'parpaing enduit',brique_monomur:'brique monomur',ossature_bois:'ossature bois',pierre_existante:'pierre existante',beton_banche:'béton banché'},
+  toit_forme:{'2pans':'toiture 2 pans','4pans':'toiture 4 pans',plate:'toit plat',monopente:'toiture monopente'},
+  toit_couv:{tuile:'couverture tuile',ardoise:'couverture ardoise',bac_acier:'couverture bac acier',zinc:'couverture zinc',membrane:'membrane étanche'},
+  iso_methode:{iti:'isolation par l\'intérieur (ITI)',ite:'isolation par l\'extérieur (ITE)',mixte:'isolation mixte ITI+ITE'},
+  iso_materiau:{laine_verre_roche:'laine de verre/roche',ouate_cellulose:'ouate de cellulose',pse_polyurethane:'PSE/polyuréthane',fibre_bois:'fibre de bois biosourcée'},
+  menu_materiau:{pvc:'menuiseries PVC',alu:'menuiseries aluminium',bois:'menuiseries bois',mixte_bois_alu:'menuiseries mixtes bois/alu'},
+  chauffage:{pac_aireau:'PAC air/eau',pac_airai:'PAC air/air',poele_bois:'poêle à bois',gaz:'chaudière gaz',elec:'radiateurs électriques'},
+  standing:{standard:'finition standard',milieu:'finition milieu de gamme',haut:'finition haut de gamme'}
+};
+
+async function surfaceLancerIA() {
+  const PROXY = 'https://phenix-proxy.phenixarchitecte.workers.dev';
+  const surface = parseFloat(document.getElementById('surf-surface').value);
+  if(!surface || surface <= 0){ showToast('⚠️ Indiquez la surface concernée'); return; }
+  const nbFenetres = parseFloat(document.getElementById('surf-nb-fenetres').value) || null;
+  const prompt = (document.getElementById('surf-prompt')||{}).value?.trim()||'';
+
+  const caracteristiques = Object.keys(surfaceReponses)
+    .filter(k => surfaceReponses[k] && SURFACE_LABELS[k]?.[surfaceReponses[k]])
+    .map(k => SURFACE_LABELS[k][surfaceReponses[k]]);
+
+  const statusEl = document.getElementById('surface-ia-status');
+  statusEl.className = 'reno-ia-status running';
+  statusEl.style.display = 'flex';
+  statusEl.innerHTML = `<div class="ai-loading"><div class="ai-dot" style="background:#e6b95c"></div><div class="ai-dot" style="background:#e6b95c"></div><div class="ai-dot" style="background:#e6b95c"></div></div><span>Estimation en cours sur ${surface} m²…</span>`;
+
+  const typeProjetLabel = SURFACE_LABELS.type_projet[surfaceReponses.type_projet];
+
+  const systemPrompt = `Tu es un expert en chiffrage BTP français. Le maître d'œuvre n'a PAS de plan disponible — le client demande un chiffrage rapide, uniquement à partir d'une surface et d'un descriptif. Ton estimation doit être la plus juste possible compte tenu de cette contrainte : utilise des ratios au m² ajustés par les caractéristiques fournies (structure, toiture, isolation, menuiseries, chauffage, standing), et non un simple prix au m² unique.
+
+MÉTHODE :
+1. Pars de ratios au m² par lot, cohérents avec le type de projet (neuf / rénovation / extension) et le niveau de finition indiqué.
+2. Ajuste chaque lot concerné selon les caractéristiques précisées (ex : toiture 4 pans plus chère qu'un 2 pans, ITE plus chère qu'ITI, menuiseries bois plus chères que PVC, PAC air/eau plus chère que radiateurs électriques).
+3. Si un nombre de fenêtres est fourni, chiffre le lot menuiseries extérieures sur cette quantité plutôt que sur un ratio de surface.
+4. Une rénovation "à réhabiliter entièrement" doit inclure des postes de démolition/dépose que le "bon état" n'a pas.
+5. Reste réaliste et transparent sur l'incertitude : ce chiffrage est une ESTIMATION de dégrossissage, pas un devis définitif — précise-le dans "projet.description".
+6. Retourne UNIQUEMENT un JSON valide, sans markdown, sans texte avant ou après.
+
+FORMAT JSON ATTENDU (identique aux autres outils de chiffrage IA de l'application) :
+{
+  "projet": {"type":"${surfaceReponses.type_projet}","description":"résumé 1 ligne incluant la mention 'estimation sans plan'","surface_plancher":${surface},"surface_habitable":${surface},"nb_niveaux":${surfaceReponses.niveaux==='plain_pied'?1:(surfaceReponses.niveaux==='r1'?2:3)},"points_cles":[]},
+  "lots":[{"num":"LOT 01","nom":"Nom du lot","postes":[{"n":"libellé du poste","q":0,"u":"m²","pu_artisan":0,"pu_client":0}]}]
+}
+
+LOTS À GÉNÉRER selon le type de projet :
+- Construction neuve / Extension : VRD-Terrassement, Gros œuvre/Fondations/Maçonnerie, Charpente/Couverture, Menuiseries extérieures, Isolation/Cloisons, Électricité, Plomberie/Sanitaire, Chauffage/VMC, Menuiseries intérieures, Carrelage/Revêtements de sol, Peinture/Enduits intérieurs, Façades/Enduit extérieur.
+- Rénovation complète : ajoute en premier un lot Démolitions/Déconstruction proportionné à l'état du bâti déclaré, puis les lots ci-dessus adaptés en quantités de rénovation (poses réno généralement 10 à 20% plus chères que le neuf en main d'œuvre).
+
+TARIFS DE RÉFÉRENCE AUVERGNE 2025 (base "milieu de gamme" — ajuste selon standing) :
+Terrassement 50€/m³, Fondations 260€/ml, Dalle BA 130€/m², Mur parpaing 20 120€/m², Mur ossature bois 180€/m²
+Charpente traditionnelle 85€/m², charpente 4 pans +15%, couverture tuile 90€/m², ardoise 130€/m², bac acier 55€/m², zinc 150€/m²
+Fenêtre PVC DV 950€/u, alu 1300€/u, bois 1600€/u — Porte-fenêtre PVC 1800€/u — Porte d'entrée 2800€/u
+Isolation ITI laine minérale 45€/m², ITE 110€/m², ouate de cellulose +10%, fibre de bois +25%
+Cloison plâtre 52€/m², Doublage isolant 45€/m²
+Tableau élec 1400€/u, Prises+inter 3500€/ff, Luminaires 2800€/ff
+SDB complète 7500€/ff, WC suspendu 1500€/u
+PAC air/eau 9500€/u, PAC air/air 5500€/u, poêle à bois 3500€/u, chaudière gaz 6000€/u, radiateurs élec 350€/u
+Carrelage sol 70€/m², Parquet 48€/m², Peinture murs 20€/m², Enduit façade 38€/m²
+Démolition cloison 25€/m², démolition gros œuvre 45€/m² (rénovation "à réhabiliter" uniquement)
+Standing "standard" : -15% sur les postes de finition. Standing "haut de gamme" : +30% sur les postes de finition.
+Les pu_client = pu_artisan × 1.20 (marge 20% par défaut).`;
+
+  const contentText = `PROJET : ${typeProjetLabel}, ${surface} m², ${SURFACE_LABELS.niveaux[surfaceReponses.niveaux]}${surfaceReponses.etat_existant ? ', existant en ' + SURFACE_LABELS.etat_existant[surfaceReponses.etat_existant] : ''}.
+CARACTÉRISTIQUES : ${caracteristiques.join(', ')}${nbFenetres ? ', ' + nbFenetres + ' fenêtres/portes-fenêtres environ' : ''}.
+${prompt ? 'DESCRIPTIF DU MAÎTRE D\'ŒUVRE : ' + prompt : 'Aucun descriptif complémentaire fourni — base-toi uniquement sur la surface et les caractéristiques ci-dessus.'}
+
+Génère le chiffrage complet pour ce projet, sans plan disponible.`;
+
+  try {
+    const res = await fetchProxyAvecReessai(PROXY, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        model:'claude-sonnet-4-6', max_tokens:16000,
+        system: systemPrompt, messages:[{role:'user', content:[{type:'text', text:contentText}]}]
+      })
+    });
+    if (!res.ok){
+      const errData = await res.json().catch(() => null);
+      throw new Error(errData?.error?.message || `Proxy HTTP ${res.status}`);
+    }
+    const raw = await lireFluxAnthropic(res, (n) => {
+      if (statusEl) statusEl.textContent = `Estimation en cours... (${Math.round(n/4)} mots générés)`;
+    });
+    const clean = raw.replace(/```json|```/g,'').trim();
+    const jsonSlice = clean.slice(clean.indexOf('{'), clean.lastIndexOf('}')+1);
+    const { data: parsed, repaired } = tryRepairTruncatedJSON(jsonSlice);
+
+    statusEl.style.display = 'none';
+    if (repaired){
+      statusEl.style.display = '';
+      statusEl.className = 'reno-ia-status warning';
+      statusEl.textContent = `⚠️ La réponse de l'IA a été coupée en cours de génération. ${parsed.lots?.length||0} lot(s) complet(s) ont été récupérés — vérifiez qu'aucun ne manque.`;
+    }
+
+    iaResultData = parsed;
+    const nomInput = document.getElementById('ia-chantier-nom');
+    if(nomInput && !nomInput.value) nomInput.value = parsed.projet?.description || (typeProjetLabel + ' — ' + surface + ' m²');
+    const surfInput = document.getElementById('ia-chantier-surface');
+    if(surfInput && !surfInput.value) surfInput.value = surface;
+    document.getElementById('ia-chantier-type').value =
+      surfaceReponses.type_projet === 'renovation' ? 'Rénovation' : 'Construction neuve';
+
+    _ouvrirModalResultats(parsed);
+
+  } catch(err) {
+    statusEl.className = 'reno-ia-status error';
+    statusEl.innerHTML = `⚠️ ${err.message}`;
+    showToast('❌ ' + err.message.slice(0,80));
+  }
+}
+window.surfaceLancerIA = surfaceLancerIA;
 </script>
 <script>
 // ════════════════════════════════════════════════════════════
