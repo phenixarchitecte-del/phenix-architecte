@@ -42,7 +42,51 @@ body{font-family:'DM Sans',system-ui,sans-serif;background-color:var(--bg);backg
 .logout-btn:hover{background:rgba(255,255,255,.1)}
 
 /* ── MAIN LAYOUT ── */
-.main{max-width:860px;margin:0 auto;padding:20px 16px 60px}
+/* PC : pleine largeur d'écran. Mobile : colonne unique, cibles tactiles. */
+.main{width:100%;max-width:none;margin:0;padding:20px 24px 60px}
+@media(max-width:700px){.main{padding:14px 12px 70px}}
+
+/* ── BASCULE DE VUE ── */
+.viewtabs{display:flex;gap:6px;margin-bottom:14px;border-bottom:1px solid var(--border)}
+.vtab{background:none;border:none;border-bottom:2px solid transparent;padding:9px 16px;font-size:14px;font-weight:600;
+      color:var(--mute);cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:7px;transition:all .15s}
+.vtab:hover{color:var(--ink)}
+.vtab.active{color:var(--blue);border-bottom-color:var(--blue)}
+.vtab i{font-size:16px}
+@media(max-width:700px){.vtab{flex:1;justify-content:center;padding:12px 8px;font-size:14.5px}}
+
+/* ── VUE À FAIRE : liste de tâches à plat ── */
+.todo-group{margin-bottom:22px}
+.todo-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:8px}
+@media(max-width:700px){.todo-list{grid-template-columns:1fr}}
+.todo-item{display:flex;align-items:flex-start;gap:10px;background:var(--card);border:.5px solid var(--border);
+           border-left:3px solid var(--border);border-radius:var(--r);padding:11px 13px;transition:border-color .15s}
+.todo-item:hover{border-color:var(--blue)}
+.todo-item.late{border-left-color:var(--danger)}
+.todo-item.urgent{border-left-color:var(--danger)}
+.todo-item.haute{border-left-color:var(--warn)}
+.todo-item.mine{background:rgba(79,168,240,.07)}
+.todo-cb{width:19px;height:19px;accent-color:var(--ok);cursor:pointer;margin-top:1px;flex-shrink:0}
+@media(max-width:700px){.todo-cb{width:23px;height:23px}}
+.todo-body{flex:1;min-width:0}
+.todo-titre{font-size:14px;color:var(--ink);line-height:1.35;font-weight:500}
+.todo-dossier{font-size:11.5px;color:var(--blue);margin-top:3px;font-weight:600}
+.todo-meta{display:flex;gap:7px;align-items:center;margin-top:5px;flex-wrap:wrap}
+
+/* ── VUE À FAIRE : où en est chaque dossier ── */
+.phases-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:8px}
+@media(max-width:700px){.phases-grid{grid-template-columns:1fr}}
+.phase-row{background:var(--card);border:.5px solid var(--border);border-radius:var(--r);padding:11px 13px;cursor:pointer;transition:border-color .15s}
+.phase-row:hover{border-color:var(--blue)}
+.phase-row-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:7px}
+.phase-row-nom{font-size:13.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.phase-row-cur{font-size:11px;font-weight:700;color:var(--blue);background:var(--info-bg);padding:2px 9px;border-radius:99px;flex-shrink:0}
+.phase-row-sub{font-size:11px;color:var(--mute);margin-top:5px;display:flex;gap:10px;flex-wrap:wrap}
+
+/* ── CARDS : multi-colonnes sur grand écran ── */
+#cards-container{display:block}
+.cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(440px,1fr));gap:10px;align-items:start}
+@media(max-width:700px){.cards-grid{grid-template-columns:1fr}}
 
 /* ── STATS ── */
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:18px}
@@ -117,7 +161,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background-color:var(--bg);backg
 .progress-fill{height:100%;background:var(--blue);border-radius:99px;transition:width .3s}
 
 /* ── CHECKLIST DE PROCESS ── */
-.process-panel{background:#fff;border:.5px solid var(--border);border-radius:8px;padding:10px 12px;margin-top:10px}
+.process-panel{background:rgba(255,255,255,.04);border:.5px solid var(--border);border-radius:8px;padding:10px 12px;margin-top:10px}
 .process-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;cursor:pointer;user-select:none}
 .process-title{font-size:10px;font-weight:700;color:var(--mute);text-transform:uppercase;letter-spacing:.08em;display:flex;align-items:center;gap:6px}
 .process-title i{font-size:13px}
@@ -200,6 +244,12 @@ if (window.parent !== window) {
     <div class="stat-card"><div class="stat-n n-info" id="st-attente">—</div><div class="stat-l">En attente client</div></div>
   </div>
 
+  <!-- BASCULE DE VUE -->
+  <div class="viewtabs">
+    <button class="vtab active" data-view="todo" onclick="setView('todo',this)"><i class="ti ti-checklist"></i> À faire</button>
+    <button class="vtab" data-view="dossiers" onclick="setView('dossiers',this)"><i class="ti ti-folders"></i> Dossiers</button>
+  </div>
+
   <!-- FILTRES -->
   <div class="filters">
     <button class="fil active" data-filter="all" onclick="setFilter('all',this)">Tous</button>
@@ -210,8 +260,17 @@ if (window.parent !== window) {
     <button class="fil fil-mine" data-filter="mine" onclick="setFilter('mine',this)">⚡ Mes tâches</button>
   </div>
 
-  <!-- LISTE -->
-  <div id="cards-container"></div>
+  <!-- VUE 1 — À FAIRE (liste de tâches à plat) -->
+  <div id="todo-view">
+    <div id="todo-container"></div>
+    <div class="section-sep" style="margin-top:26px">Où en est chaque dossier</div>
+    <div id="phases-container"></div>
+  </div>
+
+  <!-- VUE 2 — DOSSIERS (cartes détaillées) -->
+  <div id="dossiers-view" style="display:none">
+    <div id="cards-container"></div>
+  </div>
 
 </div>
 
@@ -539,9 +598,30 @@ function projetHasRetard(proj) {
 }
 
 // ─── RENDER ─────────────────────────────────────────────────────
+let curView = 'todo';
+window.setView = function(v, btn) {
+  curView = v;
+  document.querySelectorAll('.vtab').forEach(b => b.classList.toggle('active', b === btn));
+  document.getElementById('todo-view').style.display     = v === 'todo' ? '' : 'none';
+  document.getElementById('dossiers-view').style.display = v === 'dossiers' ? '' : 'none';
+  render();
+};
+
+function projetsFiltres() {
+  const actifs = projets.filter(p => p.statut !== 'cloture' && p.statut !== 'archive');
+  if (curFilter === 'mine') {
+    const mesIds = new Set(taches.filter(t => (t.assigneA||'') === me).map(t => String(t.projetId)));
+    return actifs.filter(p => mesIds.has(String(p.id)));
+  }
+  if (curFilter !== 'all') {
+    const phases = curFilter.split(',');
+    return actifs.filter(p => phases.includes(p.phase));
+  }
+  return actifs;
+}
+
 function render() {
-  const today   = new Date();
-  const actifs  = projets.filter(p => p.statut !== 'cloture' && p.statut !== 'archive');
+  const actifs = projets.filter(p => p.statut !== 'cloture' && p.statut !== 'archive');
 
   // stats
   document.getElementById('st-actifs').textContent  = actifs.length;
@@ -549,23 +629,120 @@ function render() {
   document.getElementById('st-todo').textContent    = taches.filter(t => t.statut === 'todo' || t.statut === 'doing').length;
   document.getElementById('st-attente').textContent = actifs.filter(p => p.statut === 'etude' || p.statut === 'demarrage').length;
 
-  // filtrer les projets
-  let filtered = actifs;
-  if (curFilter === 'mine') {
-    const mesIds = new Set(taches.filter(t => (t.assigneA||'') === me).map(t => String(t.projetId)));
-    filtered = actifs.filter(p => mesIds.has(String(p.id)));
-  } else if (curFilter !== 'all') {
-    const phases = curFilter.split(',');
-    filtered = actifs.filter(p => phases.includes(p.phase));
+  if (curView === 'todo') { renderTodoView(); renderPhasesView(); }
+  else                    { renderDossiersView(); }
+}
+
+// ── VUE 1 : toutes les tâches à faire, à plat, l'urgent en premier ──
+function renderTodoView() {
+  const filtered  = projetsFiltres();
+  const projIds   = new Set(filtered.map(p => String(p.id)));
+  const projById  = {};
+  projets.forEach(p => projById[String(p.id)] = p);
+
+  let ouvertes = taches.filter(t => t.statut !== 'done' && projIds.has(String(t.projetId)));
+  if (curFilter === 'mine') ouvertes = ouvertes.filter(t => (t.assigneA||'').toLowerCase() === me);
+
+  const cont = document.getElementById('todo-container');
+  if (!ouvertes.length) {
+    cont.innerHTML = `<div class="empty"><i class="ti ti-mood-check"></i>Rien à faire pour ce filtre. Tout est à jour.</div>`;
+    return;
   }
 
-  // trier : en retard → actif avec tâches → en attente
-  filtered.sort((a,b) => {
-    const ar = projetHasRetard(a) ? 0 : tachesProjet(a.id).length > 0 ? 1 : 2;
-    const br = projetHasRetard(b) ? 0 : tachesProjet(b.id).length > 0 ? 1 : 2;
-    return ar - br;
+  const pmap = { urgent:0, haute:1, normale:2 };
+  const score = t => {
+    if (isLate(t.dateLivraison)) return -1;          // le retard passe devant tout
+    return (pmap[t.priorite] !== undefined ? pmap[t.priorite] : 2);
+  };
+  ouvertes.sort((a,b) => {
+    const s = score(a) - score(b);
+    if (s !== 0) return s;
+    const da = a.dateLivraison || '9999', dbb = b.dateLivraison || '9999';
+    return da.localeCompare(dbb);
   });
 
+  const groupes = [
+    { key:'retard', label:'🔴 En retard',   test: t => isLate(t.dateLivraison) },
+    { key:'urgent', label:'🔴 Urgent',      test: t => !isLate(t.dateLivraison) && t.priorite === 'urgent' },
+    { key:'haute',  label:'🟡 Priorité haute', test: t => !isLate(t.dateLivraison) && t.priorite === 'haute' },
+    { key:'reste',  label:'🔵 À faire',     test: t => !isLate(t.dateLivraison) && t.priorite !== 'urgent' && t.priorite !== 'haute' },
+  ];
+
+  let html = '';
+  groupes.forEach(g => {
+    const lot = ouvertes.filter(g.test);
+    if (!lot.length) return;
+    html += `<div class="todo-group">
+      <div class="section-sep">${g.label} <span style="font-weight:400;text-transform:none;letter-spacing:0">(${lot.length})</span></div>
+      <div class="todo-list">${lot.map(t => todoItemHtml(t, projById[String(t.projetId)])).join('')}</div>
+    </div>`;
+  });
+  cont.innerHTML = html;
+}
+
+function todoItemHtml(t, p) {
+  const late  = isLate(t.dateLivraison);
+  const mine  = (t.assigneA||'').toLowerCase() === me;
+  const cls   = [late ? 'late' : (t.priorite === 'urgent' ? 'urgent' : t.priorite === 'haute' ? 'haute' : ''), mine ? 'mine' : ''].filter(Boolean).join(' ');
+  const prio  = t.priorite === 'urgent' ? '<span class="task-prio urgent">🔴 Urgent</span>'
+              : t.priorite === 'haute'  ? '<span class="task-prio haute">🟡 Haute</span>' : '';
+  const date  = t.dateLivraison ? `<span class="task-deadline ${late?'late':''}">📅 ${fmtDate(t.dateLivraison)}</span>` : '';
+  const qui   = t.assigneA ? `<span class="task-assigne">${esc(t.assigneA.split('@')[0])}</span>` : '';
+  const phase = p && p.phase ? `<span class="task-deadline">${esc(p.phase)}</span>` : '';
+  return `
+    <div class="todo-item ${cls}">
+      <input class="todo-cb" type="checkbox" onchange="toggleTache('${esc(String(t.id))}',this.checked)">
+      <div class="todo-body">
+        <div class="todo-titre">${esc(t.titre)}</div>
+        <div class="todo-dossier">${esc((p && (p.nom||p.ref)) || 'Dossier inconnu')}</div>
+        <div class="todo-meta">${prio}${date}${phase}${qui}</div>
+      </div>
+    </div>`;
+}
+
+// ── VUE 1 (suite) : où en est chaque dossier ──
+function renderPhasesView() {
+  const filtered = projetsFiltres();
+  const cont = document.getElementById('phases-container');
+  if (!filtered.length) { cont.innerHTML = `<div class="empty">Aucun dossier pour ce filtre.</div>`; return; }
+
+  const ordre = p => projetHasRetard(p) ? 0 : tachesProjet(p.id).length ? 1 : 2;
+  const list  = [...filtered].sort((a,b) => ordre(a) - ordre(b));
+
+  cont.innerHTML = `<div class="phases-grid">${list.map(p => {
+    const nb    = tachesProjet(p.id).length;
+    const ret   = projetHasRetard(p);
+    const av    = parseInt(p.avancement) || 0;
+    const steps = processSteps.filter(s => String(s.projetId) === String(p.id));
+    const pct   = steps.length ? Math.round(steps.filter(s=>s.done).length / steps.length * 100) : null;
+    return `
+      <div class="phase-row" onclick="goToDossier('${esc(String(p.id))}')">
+        <div class="phase-row-top">
+          <div class="phase-row-nom">${esc(p.nom||p.ref||'—')}</div>
+          <div class="phase-row-cur">${esc(p.phase||'—')}</div>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${av}%"></div></div>
+        <div class="phase-row-sub">
+          <span>Avancement ${av} %</span>
+          ${pct !== null ? `<span>Process ${pct} %</span>` : ''}
+          <span style="${ret?'color:var(--danger);font-weight:600':''}">${ret ? '⚠ en retard' : nb ? nb+' tâche'+(nb>1?'s':'') : 'à jour'}</span>
+        </div>
+      </div>`;
+  }).join('')}</div>`;
+}
+
+window.goToDossier = function(pid) {
+  const btn = document.querySelector('.vtab[data-view="dossiers"]');
+  setView('dossiers', btn);
+  setTimeout(() => {
+    const el = document.getElementById('card-' + pid);
+    if (el) el.scrollIntoView({behavior:'smooth', block:'center'});
+  }, 80);
+};
+
+// ── VUE 2 : cartes dossier détaillées ──
+function renderDossiersView() {
+  const filtered = projetsFiltres();
   const cont = document.getElementById('cards-container');
 
   if (!filtered.length) {
@@ -573,7 +750,12 @@ function render() {
     return;
   }
 
-  // groupes
+  filtered.sort((a,b) => {
+    const ar = projetHasRetard(a) ? 0 : tachesProjet(a.id).length > 0 ? 1 : 2;
+    const br = projetHasRetard(b) ? 0 : tachesProjet(b.id).length > 0 ? 1 : 2;
+    return ar - br;
+  });
+
   let html = '';
   const groupes = [
     { key:'retard', label:'🔴 En retard',          test: p => projetHasRetard(p) },
@@ -585,7 +767,7 @@ function render() {
     const group = filtered.filter(g.test);
     if (!group.length) return;
     html += `<div class="section-sep">${g.label}</div>`;
-    group.forEach(p => { html += cardHtml(p, g.key); });
+    html += `<div class="cards-grid">${group.map(p => cardHtml(p, g.key)).join('')}</div>`;
   });
 
   cont.innerHTML = html;
@@ -658,7 +840,7 @@ function cardHtml(p, groupe) {
   const cardCls    = hasRetard ? 'card is-danger' : groupe === 'wait' ? 'card is-muted' : 'card';
 
   return `
-  <div class="${cardCls}">
+  <div class="${cardCls}" id="card-${esc(String(p.id))}">
     <div class="card-top">
       <div class="card-left">
         <span class="badge ${badgeCls}">${badge}</span>
