@@ -10160,17 +10160,21 @@ const COLLABORATEURS = [
 // montants d'honoraires. C'est une restriction d'AFFICHAGE (l'app est un
 // simple fichier HTML/JS) — pas une barrière serveur infranchissable.
 const PAGES_AUTORISEES_ALTERNANTE = ['projets', 'checklist', 'taches'];
+// ⚠️ Sécurité : on part du principe qu'un email inconnu ou mal orthographié
+// (casse, espace) doit recevoir l'accès le PLUS restreint, jamais l'accès
+// complet. Seules les adresses listées ici obtiennent le rôle admin — tout
+// le reste (y compris une faute de frappe sur ta propre adresse) tombe en
+// accès restreint plutôt que de s'ouvrir en grand par erreur.
+const ADMIN_EMAILS = ['contact@phenixarchitecte.fr'];
 function getCurrentUserRole() {
-  const email = (window._fb && window._fb.current() && window._fb.current().email) || '';
-  const c = COLLABORATEURS.find(x => x.email === email);
-  return (c && c.role) || 'admin';
+  const raw = (window._fb && window._fb.current() && window._fb.current().email) || '';
+  const email = raw.trim().toLowerCase();
+  if (ADMIN_EMAILS.includes(email)) return 'admin';
+  const c = COLLABORATEURS.find(x => x.email.trim().toLowerCase() === email);
+  return (c && c.role) || 'alternante';
 }
 function isRoleRestreint() {
-  // ⚠️ DÉSACTIVÉ TEMPORAIREMENT (14/09) — soupçonné de bloquer l'accès aux
-  // projets pour tous les utilisateurs. Remettre "return getCurrentUserRole()
-  // === 'alternante';" une fois la vraie cause identifiée (probablement des
-  // règles de sécurité Firestore à vérifier en parallèle, pas ce fichier).
-  return false;
+  return getCurrentUserRole() !== 'admin';
 }
 function applyRoleRestrictions() {
   if (!isRoleRestreint()) return;
