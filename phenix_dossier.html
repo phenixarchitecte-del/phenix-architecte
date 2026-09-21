@@ -1581,6 +1581,57 @@ tr:last-child td{border-bottom:none} tr:hover td{background:var(--accent-bg)}
 #app-dossier .tache-card:hover .tache-card-actions{ opacity:1; }
 #app-dossier .tache-move-btn{ width:22px; height:22px; border-radius:4px; border:1px solid var(--border); background:var(--bg); cursor:pointer; font-size:11px; display:flex; align-items:center; justify-content:center; color:var(--text2); transition:all .15s; }
 #app-dossier .tache-move-btn:hover{ background:var(--accent); color:white; border-color:var(--accent); }
+
+/* ── Tâches façon Phénix Suivi : stats, pilules de filtre, cartes compactes ── */
+#app-dossier .tp-stats{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:1.1rem; }
+@media(max-width:900px){ #app-dossier .tp-stats{ grid-template-columns:repeat(2,1fr); } }
+#app-dossier .tp-stat-card{ background:var(--card); border:1.5px solid var(--border); border-radius:var(--r-lg); padding:14px 16px; text-align:center; }
+#app-dossier .tp-stat-n{ font-size:26px; font-weight:700; line-height:1; color:var(--navy); }
+#app-dossier .tp-stat-n.n-danger{ color:var(--red); }
+#app-dossier .tp-stat-n.n-warn{ color:var(--amber); }
+#app-dossier .tp-stat-n.n-ok{ color:var(--green); }
+#app-dossier .tp-stat-l{ font-size:11px; color:var(--text3); margin-top:4px; }
+#app-dossier .tp-filters{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:.85rem; }
+#app-dossier .tp-fil{ font-size:12px; padding:6px 14px; border-radius:20px; border:1.5px solid var(--border); background:var(--card); cursor:pointer; font-weight:600; color:var(--text2); font-family:inherit; transition:all .15s; display:inline-flex; align-items:center; gap:6px; }
+#app-dossier .tp-fil:hover{ border-color:var(--accent); color:var(--accent); }
+#app-dossier .tp-fil.active{ background:#12233f; color:#fff; border-color:#12233f; }
+#app-dossier .tp-fil .cnt{ font-size:10px; font-weight:700; background:rgba(0,0,0,.15); padding:1px 6px; border-radius:20px; }
+#app-dossier .tp-fil.active .cnt{ background:rgba(255,255,255,.25); }
+#app-dossier .tache-assignee-tab{ font-size:12px; padding:6px 14px; border-radius:20px; border:1.5px solid var(--accent); background:var(--card); cursor:pointer; font-weight:600; color:var(--accent); font-family:inherit; transition:all .15s; display:inline-flex; align-items:center; gap:6px; }
+#app-dossier .tache-assignee-tab:hover{ background:var(--accent-bg); }
+#app-dossier .tache-assignee-tab.active{ background:var(--accent); border-color:var(--accent); color:#fff; }
+#app-dossier .tache-assignee-tab .cnt{ font-size:10px; font-weight:700; background:rgba(0,0,0,.15); padding:1px 6px; border-radius:20px; }
+#app-dossier .tache-assignee-tab.active .cnt{ background:rgba(255,255,255,.25); }
+#app-dossier .tp-group-sep{ font-size:11px; font-weight:700; color:var(--text3); margin:1.1rem 0 .5rem; text-transform:uppercase; letter-spacing:.06em; display:flex; align-items:center; gap:6px; }
+#app-dossier .tp-group-sep:first-child{ margin-top:0; }
+#app-dossier .tp-list{ display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:8px; }
+#app-dossier .tp-item{ display:flex; align-items:flex-start; gap:10px; background:var(--card); border:1px solid var(--border); border-left:3px solid transparent; border-radius:var(--r-md); padding:10px 12px; cursor:pointer; transition:box-shadow .15s,background .12s; }
+#app-dossier .tp-item:hover{ box-shadow:var(--shadow-md); }
+#app-dossier .tp-item.late,#app-dossier .tp-item.urgent{ border-left-color:var(--red); }
+#app-dossier .tp-item.haute{ border-left-color:var(--amber); }
+#app-dossier .tp-item.mine{ background:var(--accent-bg); }
+#app-dossier .tp-item input[type=checkbox]{ width:18px; height:18px; accent-color:var(--green); cursor:pointer; margin-top:1px; flex-shrink:0; }
+#app-dossier .tp-item-body{ flex:1; min-width:0; }
+#app-dossier .tp-item-titre{ font-size:13.5px; color:var(--text); line-height:1.35; font-weight:500; }
+#app-dossier .tp-item-titre.done{ text-decoration:line-through; color:var(--text3); }
+#app-dossier .tp-item-dossier{ font-size:11.5px; color:var(--accent); margin-top:3px; font-weight:600; }
+#app-dossier .tp-item-meta{ display:flex; gap:7px; align-items:center; margin-top:5px; flex-wrap:wrap; }
+#app-dossier .tp-tag{ font-size:10px; padding:1px 7px; border-radius:20px; font-weight:600; }
+#app-dossier .tp-tag.urgent{ background:var(--red-bg); color:var(--red); }
+#app-dossier .tp-tag.haute{ background:var(--amber-bg); color:var(--amber); }
+#app-dossier .tp-tag.date{ background:transparent; color:var(--text3); padding:0; }
+#app-dossier .tp-tag.date.late{ color:var(--red); font-weight:700; }
+#app-dossier .tp-tag.phase{ background:var(--bg2); color:var(--text3); }
+#app-dossier .tp-tag.assignee{ background:var(--accent-bg); color:var(--accent); }
+#app-dossier .tp-no-task{ font-size:12px; color:var(--text3); padding:.75rem 1rem; }
+#app-dossier .tp-phases-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:8px; }
+#app-dossier .tp-phase-row{ background:var(--card); border:1px solid var(--border); border-radius:var(--r-md); padding:11px 13px; cursor:pointer; transition:border-color .15s; }
+#app-dossier .tp-phase-row:hover{ border-color:var(--accent); }
+#app-dossier .tp-phase-row.late{ border-left:3px solid var(--red); }
+#app-dossier .tp-phase-row-top{ display:flex; justify-content:space-between; align-items:baseline; gap:10px; margin-bottom:7px; }
+#app-dossier .tp-phase-row-nom{ font-size:13.5px; font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#app-dossier .tp-phase-row-cur{ font-size:11px; font-weight:700; color:var(--accent); background:var(--accent-bg); padding:2px 9px; border-radius:20px; flex-shrink:0; }
+#app-dossier .tp-phase-row-sub{ font-size:11px; color:var(--text3); margin-top:6px; display:flex; gap:10px; flex-wrap:wrap; }
 #app-dossier .agenda-cal-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; }
 #app-dossier .agenda-cal-nav{ display:flex; align-items:center; gap:10px; }
 #app-dossier .agenda-cal-title{ font-family:var(--font-serif); font-size:20px; color:var(--navy); }
@@ -2911,7 +2962,28 @@ if (window.parent !== window) {
             <button class="btn btn-primary" onclick="openTacheModal()"><i class="ti ti-plus"></i> Nouvelle tâche</button>
           </div>
         </div>
-        <!-- Filtres rapides -->
+
+        <!-- Statistiques -->
+        <div class="tp-stats">
+          <div class="tp-stat-card"><div class="tp-stat-n" id="tp-st-actifs">—</div><div class="tp-stat-l">Dossiers actifs</div></div>
+          <div class="tp-stat-card"><div class="tp-stat-n n-danger" id="tp-st-retard">—</div><div class="tp-stat-l">Tâches en retard</div></div>
+          <div class="tp-stat-card"><div class="tp-stat-n n-warn" id="tp-st-todo">—</div><div class="tp-stat-l">Tâches à faire</div></div>
+          <div class="tp-stat-card"><div class="tp-stat-n n-ok" id="tp-st-done">—</div><div class="tp-stat-l">Tâches achevées</div></div>
+        </div>
+
+        <!-- Filtre par phase du dossier -->
+        <div class="tp-filters" id="tachePhaseFilters">
+          <button type="button" class="tp-fil active" data-filter="all" onclick="setTachePhaseFilter('all',this)">Tous</button>
+          <button type="button" class="tp-fil" data-filter="ESQ,APS,APD" onclick="setTachePhaseFilter('ESQ,APS,APD',this)">Avant-Projet</button>
+          <button type="button" class="tp-fil" data-filter="PC" onclick="setTachePhaseFilter('PC',this)">Permis de construire</button>
+          <button type="button" class="tp-fil" data-filter="DCE,ACT" onclick="setTachePhaseFilter('DCE,ACT',this)">DCE / Contrats</button>
+          <button type="button" class="tp-fil" data-filter="DET,AOR" onclick="setTachePhaseFilter('DET,AOR',this)">Chantier</button>
+        </div>
+
+        <!-- Filtre rapide par personne -->
+        <div id="tacheAssigneTabs" class="tp-filters" style="margin-bottom:1rem"></div>
+
+        <!-- Filtres avancés -->
         <div style="display:flex;gap:8px;margin-bottom:1.25rem;flex-wrap:wrap;align-items:center">
           <div class="search-bar" style="max-width:240px"><i class="ti ti-search"></i><input type="text" placeholder="Rechercher…" oninput="filterTaches(this.value)" id="tacheSearch"></div>
           <select class="btn" id="tacheProjetFilter" onchange="renderTaches()" style="padding:7px 12px;font-size:13px">
@@ -2924,37 +2996,9 @@ if (window.parent !== window) {
             <option value="normale">Normale</option>
           </select>
         </div>
-        <div class="card" style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:1.25rem">
-          <div style="position:relative;width:90px;height:90px;flex-shrink:0"><canvas id="taches-statut-donut"></canvas></div>
-          <div id="taches-statut-legend" style="display:flex;flex-direction:column;gap:6px;font-size:12px;flex:1;min-width:160px"></div>
-        </div>
-        <!-- Kanban 3 colonnes -->
-        <div class="taches-layout" id="kanbanBoard">
-          <!-- Todo -->
-          <div class="kanban-col" id="col-todo">
-            <div class="kanban-col-header">
-              <div class="kanban-col-title"><div class="kanban-dot kd-todo"></div> À faire <span class="kanban-count" id="cnt-todo">0</span></div>
-              <button class="kanban-add" onclick="openTacheModal('todo')" title="Ajouter une tâche">+</button>
-            </div>
-            <div id="cards-todo"></div>
-          </div>
-          <!-- En cours -->
-          <div class="kanban-col" id="col-doing">
-            <div class="kanban-col-header">
-              <div class="kanban-col-title"><div class="kanban-dot kd-doing"></div> En cours <span class="kanban-count" id="cnt-doing">0</span></div>
-              <button class="kanban-add" onclick="openTacheModal('doing')" title="Ajouter une tâche">+</button>
-            </div>
-            <div id="cards-doing"></div>
-          </div>
-          <!-- Achevées -->
-          <div class="kanban-col" id="col-done">
-            <div class="kanban-col-header">
-              <div class="kanban-col-title"><div class="kanban-dot kd-done"></div> Achevées <span class="kanban-count" id="cnt-done">0</span></div>
-              <button class="kanban-add" onclick="openTacheModal('done')" title="Ajouter">+</button>
-            </div>
-            <div id="cards-done"></div>
-          </div>
-        </div>
+
+        <!-- Tâches à faire, groupées par priorité -->
+        <div id="taches-groupes"></div>
       </div>
 
       <!-- ═══ CALENDRIER ═══ -->
@@ -4152,6 +4196,15 @@ window.addEventListener('firebase-ready', async () => {
     return; // bannière déjà visible, on garde le localStorage
   }
   document.getElementById('configBanner_d').classList.add('hidden');
+
+  // Restrictions d'accès selon le rôle du compte connecté.
+  // ⚠️ applyRoleRestrictions() est déclarée dans un <script> exécuté APRÈS
+  // celui-ci : on la protège donc par un typeof + try/catch, sinon une
+  // ReferenceError interromprait toute l'initialisation Firestore (bannière
+  // de config bloquée, aucune donnée chargée).
+  try {
+    if (typeof applyRoleRestrictions === 'function') applyRoleRestrictions();
+  } catch (e) { console.warn('Restrictions de rôle non appliquées :', e); }
 
   // Charger le compteur nextId
   stateDossier.nextId = await window._fb.loadNextId();
@@ -5679,7 +5732,7 @@ function renderProjectTable() {
       <td>${typeBadge(p.type)}</td><td style="font-size:12px">${p.mission||'—'}</td>
       <td><strong>${p.phase||'—'}</strong></td>
       <td>${progressHtml(p.avancement)}</td>
-      <td>${p.honoraires?fmtEur_d(p.honoraires):'—'}</td>
+      <td>${isRoleRestreint()?'🔒':(p.honoraires?fmtEur_d(p.honoraires):'—')}</td>
       <td>${statutBadge(p.statut)}</td>
       <td><button class="btn btn-sm" onclick="event.stopPropagation();openProjectModal(${p.id})"><i class="ti ti-eye"></i></button></td>
     </tr>`).join('');
@@ -5800,9 +5853,11 @@ function openProjectModal(id) {
       ${field('Phase actuelle',`<strong>${p.phase||'—'}</strong> <span style="color:var(--text3);font-size:11px">— ${PHASES_LABELS[p.phase]||''}</span>`)}
       ${field('Avancement',`<div style="display:flex;align-items:center;gap:8px">${progressHtml(p.avancement)}<strong>${p.avancement||0}%</strong></div>`)}
       ${field('Budget travaux HT',p.budget?fmtEur_d(p.budget):'—')}
+      ${isRoleRestreint() ? '' : `
       ${field('Honoraires HT',p.honoraires?`<strong>${fmtEur_d(p.honoraires)}</strong>`:'—')}
       ${field('Commissions HT',p.commissions?`<strong style="color:var(--amber)">${fmtEur_d(p.commissions)}</strong>`:'—')}
       ${field('CA total (H+C)',((parseFloat(p.honoraires)||0)+(parseFloat(p.commissions)||0))>0?`<strong style="color:var(--accent)">${fmtEur_d((parseFloat(p.honoraires)||0)+(parseFloat(p.commissions)||0))}</strong>`:'—')}
+      `}
       ${field('Statut',statutBadge(p.statut))}${field('Date démarrage',p.date||'—')}
     </div>
     ${p.adresse?`<div style="background:var(--bg);border-radius:var(--r-sm);padding:10px 14px;margin-bottom:.75rem;color:var(--text)"><div style="font-size:11px;color:var(--text2);margin-bottom:3px">Adresse</div><div style="font-size:13px">${p.adresse}</div></div>`:''}
@@ -5932,7 +5987,7 @@ function renderHistorique(p) {
     const dotCls=histDotClass(entry);
     const icon=histIcon(entry);
     const title=histTitle(entry);
-    const changesHtml=entry.changes.map(c=>`
+    const changesHtml=entry.changes.filter(c=>!isRoleRestreint() || (c.champ!=='Honoraires HT' && c.champ!=='Commissions HT')).map(c=>`
       <div class="hist-change">
         <span class="hist-change-label">${c.champ}</span>
         <span class="hist-change-from">${c.avant||'—'}</span>
@@ -6137,10 +6192,12 @@ function openEditModal(id) {
         <select id="edit-statut">${[['actif','Actif'],['demarrage','Démarrage'],['etude','Étude'],['cloture','Clôturé']].map(([v,l])=>`<option value="${v}" ${p.statut===v?'selected':''}>${l}</option>`).join('')}</select>
       </div>
     </div>
+    ${isRoleRestreint() ? `<input type="hidden" id="edit-honoraires" value="${p.honoraires||''}"><input type="hidden" id="edit-commissions" value="${p.commissions||''}">` : `
     <div class="form-grid">
       <div class="form-group"><label>Honoraires HT (€)</label><input type="number" id="edit-honoraires" value="${p.honoraires||''}"></div>
       <div class="form-group"><label>Commissions HT (€)</label><input type="number" id="edit-commissions" value="${p.commissions||''}"></div>
     </div>
+    `}
     <div class="form-grid">
       <div class="form-group"><label>Avancement (%)</label><input type="number" id="edit-avancement" value="${p.avancement||0}" min="0" max="100"></div>
       <div class="form-group"><label>Budget travaux HT (€)</label><input type="number" id="edit-budget" value="${p.budget||''}"></div>
@@ -10048,34 +10105,246 @@ function renderTaches() {
     if (cur) sel.value = cur;
   }
 
+  renderTacheAssigneTabs();
+
+  const phaseSet = tachePhaseFilter==='all' ? null : new Set(tachePhaseFilter.split(','));
+
   const all = (stateDossier.taches||[]).filter(t=>{
     if (search && !t.titre.toLowerCase().includes(search) && !(t.desc||'').toLowerCase().includes(search)) return false;
     if (projetF && String(t.projetId)!==String(projetF)) return false;
     if (prioF && t.priorite!==prioF) return false;
+    if (tacheAssigneFilter && (t.assigneA||'')!==tacheAssigneFilter) return false;
+    if (phaseSet) {
+      const proj = t.projetId ? stateDossier.projets.find(p=>String(p.id)===String(t.projetId)) : null;
+      if (!proj || !phaseSet.has(proj.phase)) return false;
+    }
     return true;
   });
 
   const todo  = all.filter(t=>t.statut==='todo');
   const doing = all.filter(t=>t.statut==='doing');
   const done  = all.filter(t=>t.statut==='done');
-
-  document.getElementById('cnt-todo').textContent  = todo.length;
-  document.getElementById('cnt-doing').textContent = doing.length;
-  document.getElementById('cnt-done').textContent  = done.length;
-
   const today = new Date(); today.setHours(0,0,0,0);
+  const enRetardCount = all.filter(t=>tacheEstEnRetard(t, today)).length;
+
   const total = all.length;
   document.getElementById('taches-subtitle').textContent =
     total + ' tâche'+(total!==1?'s':'')+' · '+todo.length+' à faire · '+doing.length+' en cours · '+done.length+' achevée'+(done.length!==1?'s':'');
 
-  ['todo','doing','done'].forEach(st=>{
-    const list = st==='todo'?todo:st==='doing'?doing:done;
-    document.getElementById('cards-'+st).innerHTML = list.length===0
-      ? `<div style="text-align:center;padding:1.5rem .5rem;color:var(--text3);font-size:12px">Aucune tâche</div>`
-      : list.sort((a,b)=>prioOrder(a.priorite)-prioOrder(b.priorite)).map(t=>tacheCardHtml(t,today,st)).join('');
-  });
+  // Statistiques
+  const dossiersActifs = stateDossier.projets.filter(p=>p.statut==='actif').length;
+  document.getElementById('tp-st-actifs').textContent = dossiersActifs;
+  document.getElementById('tp-st-retard').textContent = enRetardCount;
+  document.getElementById('tp-st-todo').textContent   = todo.length + doing.length;
+  document.getElementById('tp-st-done').textContent   = done.length;
+
+  renderTachesGroupes(all, today);
   updateTachesBadge();
-  renderTachesStatutDonut(todo.length, doing.length, done.length);
+}
+
+// ── Filtre par phase du dossier (Avant-Projet / Permis / DCE / Chantier) ──
+let tachePhaseFilter = 'all';
+function setTachePhaseFilter(filter, btn) {
+  tachePhaseFilter = filter;
+  document.querySelectorAll('#tachePhaseFilters .tp-fil').forEach(b=>b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderTaches();
+}
+window.setTachePhaseFilter = setTachePhaseFilter;
+
+// ── Filtre rapide par personne ("mes tâches" / tâches de C. Gironde…) ──
+let tacheAssigneFilter = '';
+function renderTacheAssigneTabs() {
+  const cont = document.getElementById('tacheAssigneTabs');
+  if (!cont) return;
+  const taches = stateDossier.taches||[];
+  const items = [{email:'', nom:'Toutes les tâches'}].concat(COLLABORATEURS);
+  cont.innerHTML = items.map(c=>{
+    const n = c.email
+      ? taches.filter(t=>t.statut!=='done' && (t.assigneA||'')===c.email).length
+      : taches.filter(t=>t.statut!=='done').length;
+    const active = tacheAssigneFilter===c.email;
+    return `<button type="button" class="tache-assignee-tab ${active?'active':''}" onclick="setTacheAssigneFilter('${c.email}')"><i class="ti ${c.email?'ti-user':'ti-list'}" style="font-size:13px"></i> ${esc(c.nom)} <span class="cnt">${n}</span></button>`;
+  }).join('');
+}
+function setTacheAssigneFilter(email) {
+  tacheAssigneFilter = email;
+  renderTaches();
+}
+window.setTacheAssigneFilter = setTacheAssigneFilter;
+
+// ── Cartes compactes groupées par priorité (façon Phénix Suivi) ──
+function tacheEstEnRetard(t, today) {
+  const ds = tacheDateStr(t);
+  if (t.statut === 'done' || !ds) return false;
+  const d = new Date(ds); d.setHours(0,0,0,0);
+  return d < today;
+}
+
+function trierTachesParPrioriteEtDate(list) {
+  return [...list].sort((a,b)=>{
+    const ps = prioOrder(a.priorite)-prioOrder(b.priorite);
+    if (ps !== 0) return ps;
+    const da = tacheDateStr(a) || '9999-99-99', db = tacheDateStr(b) || '9999-99-99';
+    return da < db ? -1 : da > db ? 1 : 0;
+  });
+}
+
+// Normalise une date de tâche quel que soit son format d'origine (texte
+// "AAAA-MM-JJ", Timestamp Firestore, nombre…) — une date dans un format
+// inattendu faisait planter le rendu de toute la liste.
+function tacheDateStr(t) {
+  const v = t && t.date;
+  if (!v) return '';
+  try {
+    if (typeof v === 'string') { const s=v.slice(0,10); return isNaN(new Date(s)) ? '' : s; }
+    if (typeof v.toDate === 'function') return v.toDate().toISOString().slice(0,10);
+    if (typeof v.seconds === 'number') return new Date(v.seconds*1000).toISOString().slice(0,10);
+    const d = new Date(v);
+    return isNaN(d) ? '' : d.toISOString().slice(0,10);
+  } catch(e) { return ''; }
+}
+
+function renderTachesGroupes(all, today) {
+  const cont = document.getElementById('taches-groupes');
+  if (!cont) return;
+  cont.innerHTML = '';
+  try {
+    _renderTachesGroupesInterne(cont, all, today);
+  } catch(e) {
+    console.error('Rendu des tâches :', e);
+    cont.innerHTML = `<div class="empty-state"><div class="empty-title">Erreur d'affichage des tâches</div><div class="empty-desc">${esc(e.message)}</div></div>`;
+  }
+}
+
+function _renderTachesGroupesInterne(cont, all, today) {
+  const ouvertes = all.filter(t => t.statut !== 'done');
+  const terminees = all.filter(t => t.statut === 'done');
+  if (!ouvertes.length && !terminees.length) {
+    cont.innerHTML = `<div class="empty-state"><div class="empty-icon"><i class="ti ti-checklist"></i></div><div class="empty-title">Aucune tâche</div><div class="empty-desc">Créez votre première tâche avec le bouton ci-dessus.</div></div>`;
+    return;
+  }
+  if (!ouvertes.length) {
+    cont.innerHTML = `<div class="empty-state"><div class="empty-icon"><i class="ti ti-mood-check"></i></div><div class="empty-title">Rien à faire pour ce filtre</div><div class="empty-desc">Tout est à jour.</div></div>`;
+  } else {
+    const groupes = [
+      { label:'🔴 En retard',        test: t => tacheEstEnRetard(t, today) },
+      { label:'🔴 Urgent',           test: t => !tacheEstEnRetard(t, today) && t.priorite==='urgent' },
+      { label:'🟡 Priorité haute',   test: t => !tacheEstEnRetard(t, today) && t.priorite==='haute' },
+      { label:'🔵 À faire',          test: t => !tacheEstEnRetard(t, today) && t.priorite!=='urgent' && t.priorite!=='haute' },
+    ];
+    let html = '';
+    groupes.forEach(g => {
+      const lot = trierTachesParPrioriteEtDate(ouvertes.filter(g.test));
+      if (!lot.length) return;
+      html += `<div class="tp-group-sep">${g.label} <span style="font-weight:400;text-transform:none;letter-spacing:0">(${lot.length})</span></div>`;
+      html += `<div class="tp-list">${lot.map(t => tacheItemHtmlSur(t, today)).join('')}</div>`;
+    });
+    cont.innerHTML = html;
+  }
+  // Au lieu de la liste des tâches terminées : l'avancement de chaque
+  // dossier, comme la section "Où en est chaque dossier" de Phénix Suivi.
+  cont.innerHTML += renderProgressionDossiersHtml(today);
+}
+
+function renderProgressionDossiersHtml(today) {
+  let projets = (stateDossier.projets||[]).filter(p => p.statut !== 'cloture' && p.statut !== 'archive');
+  if (tachePhaseFilter !== 'all') {
+    const phases = new Set(tachePhaseFilter.split(','));
+    projets = projets.filter(p => phases.has(p.phase));
+  }
+  if (tacheAssigneFilter) {
+    const ids = new Set((stateDossier.taches||[]).filter(t => (t.assigneA||'') === tacheAssigneFilter).map(t => String(t.projetId)));
+    projets = projets.filter(p => ids.has(String(p.id)));
+  }
+  if (!projets.length) return '';
+
+  const infos = projets.map(p => {
+    const ouvertes = (stateDossier.taches||[]).filter(t => String(t.projetId) === String(p.id) && t.statut !== 'done');
+    const retard = ouvertes.some(t => tacheEstEnRetard(t, today));
+    let processPct = null;
+    try {
+      if (typeof _checklistCounts === 'function') {
+        const cc = _checklistCounts(p);
+        if (cc.total) processPct = Math.round(cc.faits / cc.total * 100);
+      }
+    } catch(e) {}
+    return { p, nb: ouvertes.length, retard, processPct };
+  });
+  const ordre = i => i.retard ? 0 : i.nb ? 1 : 2;
+  infos.sort((a,b) => ordre(a) - ordre(b));
+
+  const cartes = infos.map(({p, nb, retard, processPct}) => {
+    const av = parseInt(p.avancement) || 0;
+    const etat = retard ? '<span style="color:var(--red);font-weight:600">⚠ en retard</span>'
+               : nb ? nb + ' tâche' + (nb>1?'s':'') : 'à jour';
+    return `<div class="tp-phase-row ${retard?'late':''}" onclick="openProjectModal(${p.id})">
+      <div class="tp-phase-row-top">
+        <div class="tp-phase-row-nom">${esc(p.nom||p.ref||'—')}</div>
+        <div class="tp-phase-row-cur">${esc(p.phase||'—')}</div>
+      </div>
+      <div class="progress-bar" style="width:100%"><div class="progress-fill" style="width:${av}%"></div></div>
+      <div class="tp-phase-row-sub">
+        <span>Avancement ${av} %</span>
+        ${processPct !== null ? `<span>Process ${processPct} %</span>` : ''}
+        <span>${etat}</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  return `<div class="tp-group-sep" style="margin-top:1.6rem">Où en est chaque dossier <span style="font-weight:400;text-transform:none;letter-spacing:0">(${infos.length})</span></div>
+    <div class="tp-phases-grid">${cartes}</div>`;
+}
+
+// Une tâche aux données inattendues ne doit jamais empêcher les autres de
+// s'afficher : on l'isole et on la signale en clair.
+function tacheItemHtmlSur(t, today) {
+  try { return tacheItemHtml(t, today); }
+  catch(e) {
+    console.error('Tâche non affichable', t, e);
+    return `<div class="tp-item late"><div class="tp-item-body"><div class="tp-item-titre">${esc((t&&t.titre)||'Tâche')}</div><div class="tp-item-dossier" style="color:var(--red)">Affichage impossible : ${esc(e.message)}</div></div></div>`;
+  }
+}
+
+// Email du compte connecté, en minuscules — la fonction s'appelle
+// window._auth.current() (et non window._fb.current()), d'où l'erreur
+// "window._fb.current is not a function" qui bloquait l'affichage.
+function emailUtilisateurCourant() {
+  try {
+    const u = window._auth && typeof window._auth.current === 'function' ? window._auth.current() : null;
+    return ((u && u.email) || '').toLowerCase();
+  } catch(e) { return ''; }
+}
+
+function tacheItemHtml(t, today) {
+  const isDone = t.statut === 'done';
+  const isLate = tacheEstEnRetard(t, today);
+  const proj = t.projetId ? stateDossier.projets.find(p => String(p.id) === String(t.projetId)) : null;
+  const moi = emailUtilisateurCourant();
+  const mine = !!moi && (t.assigneA||'').toLowerCase() === moi;
+  const cls = [isLate?'late':(t.priorite==='urgent'?'urgent':t.priorite==='haute'?'haute':''), mine?'mine':''].filter(Boolean).join(' ');
+  const prioTag = t.priorite==='urgent' ? '<span class="tp-tag urgent">🔴 Urgent</span>' : t.priorite==='haute' ? '<span class="tp-tag haute">🟡 Haute</span>' : '';
+  const ds = tacheDateStr(t);
+  const dateLabel = ds ? new Date(ds).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'}) : '';
+  const collab = COLLABORATEURS.find(c=>c.email===t.assigneA);
+
+  return `<div class="tp-item ${cls}">
+    <input type="checkbox" ${isDone?'checked':''} onchange="event.stopPropagation();toggleTacheDone('${t.id}',this.checked)">
+    <div class="tp-item-body" onclick="openTacheEdit('${t.id}')">
+      <div class="tp-item-titre ${isDone?'done':''}">${esc(t.titre)}</div>
+      <div class="tp-item-dossier">${proj?esc(proj.nom):'Sans dossier'}</div>
+      <div class="tp-item-meta">
+        ${prioTag}
+        ${dateLabel?`<span class="tp-tag date ${isLate?'late':''}"><i class="ti ti-calendar" style="font-size:10px"></i> ${dateLabel}</span>`:''}
+        ${proj&&proj.phase?`<span class="tp-tag phase">${esc(proj.phase)}</span>`:''}
+        ${collab?`<span class="tp-tag assignee">${esc(collab.nom)}</span>`:''}
+      </div>
+    </div>
+  </div>`;
+}
+
+async function toggleTacheDone(id, checked) {
+  await moveTache(id, checked ? 'done' : 'todo');
 }
 
 let _tachesStatutDonutInstance = null;
@@ -10142,6 +10411,48 @@ const COLLABORATEURS = [
   { email: 'contact@phenixarchitecte.fr', nom: 'Maxime', role: 'admin' },
   { email: 'c.gironde@phenixarchitecte.fr', nom: 'C. Gironde', role: 'alternante' },
 ];
+// ── Rôles et restrictions d'accès ──────────────────────────
+// Rôle 'alternante' : accès limité à Projets / Checklist / Tâches, sans les
+// montants d'honoraires. C'est une restriction d'AFFICHAGE (l'app est un
+// simple fichier HTML/JS) — pas une barrière serveur infranchissable.
+const PAGES_AUTORISEES_ALTERNANTE = ['projets', 'checklist', 'taches'];
+function getCurrentUserRole() {
+  const email = emailUtilisateurCourant();
+  const c = COLLABORATEURS.find(x => x.email === email);
+  return (c && c.role) || 'admin';
+}
+function isRoleRestreint() {
+  // ⚠️ DÉSACTIVÉ TEMPORAIREMENT (14/09) — soupçonné de bloquer l'accès aux
+  // projets pour tous les utilisateurs. Remettre "return getCurrentUserRole()
+  // === 'alternante';" une fois la vraie cause identifiée (probablement des
+  // règles de sécurité Firestore à vérifier en parallèle, pas ce fichier).
+  return false;
+}
+function applyRoleRestrictions() {
+  if (!isRoleRestreint()) return;
+  document.querySelectorAll('#sidebar_d .nav-item').forEach(el => {
+    const page = (el.getAttribute('onclick')||'').match(/show_d\('(\w+)'/);
+    const keep = page && PAGES_AUTORISEES_ALTERNANTE.includes(page[1]);
+    const utilitaire = el.getAttribute('onclick')==="if(window._auth)window._auth.logout()" || el.getAttribute('onclick')==="openChangePwd()";
+    if (!keep && !utilitaire) el.style.display = 'none';
+  });
+  document.querySelectorAll('#sidebar_d .nav-section').forEach(el => {
+    let sib = el.nextElementSibling, hasVisible = false;
+    while (sib && !sib.classList.contains('nav-section')) {
+      if (sib.style.display !== 'none') hasVisible = true;
+      sib = sib.nextElementSibling;
+    }
+    if (!hasVisible) el.style.display = 'none';
+  });
+  setTimeout(() => show_d('projets', document.querySelector("#sidebar_d .nav-item[onclick*=\"show_d('projets'\"]")), 50);
+}
+
+// Filet de sécurité : si Firebase a signalé sa connexion AVANT que ce bloc de
+// script soit chargé, l'appel fait plus haut n'a rien pu faire. On réessaie ici,
+// une fois la fonction réellement définie.
+if (typeof firebaseReady !== 'undefined' && firebaseReady) {
+  try { applyRoleRestrictions(); } catch (e) {}
+}
 
 function fillAssigneSelect(selectedEmail) {
   const sel = document.getElementById('tache-assigne');

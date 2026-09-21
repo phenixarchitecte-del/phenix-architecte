@@ -257,7 +257,8 @@ if (window.parent !== window) {
     <button class="fil" data-filter="PC" onclick="setFilter('PC',this)">Permis de construire</button>
     <button class="fil" data-filter="DCE,ACT" onclick="setFilter('DCE,ACT',this)">DCE / Contrats</button>
     <button class="fil" data-filter="DET,AOR" onclick="setFilter('DET,AOR',this)">Chantier</button>
-    <button class="fil fil-mine" data-filter="mine" onclick="setFilter('mine',this)">⚡ Mes tâches</button>
+    <button class="fil fil-mine" data-filter="contact@phenixarchitecte.fr" onclick="setFilter('contact@phenixarchitecte.fr',this)">👤 Maxime</button>
+    <button class="fil fil-mine" data-filter="c.gironde@phenixarchitecte.fr" onclick="setFilter('c.gironde@phenixarchitecte.fr',this)">👤 C. Gironde</button>
   </div>
 
   <!-- VUE 1 — À FAIRE (liste de tâches à plat) -->
@@ -323,6 +324,15 @@ let taches   = [];
 let processSteps = [];  // docs de phenix_process_steps (checklist du livret, par projet)
 let me       = '';   // email du collaborateur connecté
 let curFilter = 'all';
+// Filtre rapide par personne — remplace l'ancien filtre générique "Mes
+// tâches" par des boutons nommés (même principe que Phénix Dossier), pour
+// voir en un clic les tâches de n'importe quel collaborateur, pas
+// seulement les siennes.
+const COLLABORATEURS = [
+  { email: 'contact@phenixarchitecte.fr', nom: 'Maxime' },
+  { email: 'c.gironde@phenixarchitecte.fr', nom: 'C. Gironde' },
+];
+function estFiltreAssigne(f) { return COLLABORATEURS.some(c => c.email === f); }
 let unsubProjets = null;
 let unsubTaches  = null;
 let unsubProcess = null;
@@ -609,8 +619,8 @@ window.setView = function(v, btn) {
 
 function projetsFiltres() {
   const actifs = projets.filter(p => p.statut !== 'cloture' && p.statut !== 'archive');
-  if (curFilter === 'mine') {
-    const mesIds = new Set(taches.filter(t => (t.assigneA||'') === me).map(t => String(t.projetId)));
+  if (estFiltreAssigne(curFilter)) {
+    const mesIds = new Set(taches.filter(t => (t.assigneA||'') === curFilter).map(t => String(t.projetId)));
     return actifs.filter(p => mesIds.has(String(p.id)));
   }
   if (curFilter !== 'all') {
@@ -641,7 +651,7 @@ function renderTodoView() {
   projets.forEach(p => projById[String(p.id)] = p);
 
   let ouvertes = taches.filter(t => t.statut !== 'done' && projIds.has(String(t.projetId)));
-  if (curFilter === 'mine') ouvertes = ouvertes.filter(t => (t.assigneA||'').toLowerCase() === me);
+  if (estFiltreAssigne(curFilter)) ouvertes = ouvertes.filter(t => (t.assigneA||'') === curFilter);
 
   const cont = document.getElementById('todo-container');
   if (!ouvertes.length) {
