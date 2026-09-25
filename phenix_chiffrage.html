@@ -105,6 +105,19 @@ tr:hover td{background:var(--accent-bg)}
 
 /* DETAIL LOT */
 .lot-detail-header{padding:20px 28px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border);background:var(--surface)}
+.poste-drag-handle{cursor:grab;text-align:center;color:var(--text3);width:22px;touch-action:none}
+.poste-drag-handle:active{cursor:grabbing}
+#postes-tbody tr.sortable-ghost{opacity:.35;background:var(--accent,#4db8e8)}
+#postes-tbody tr.sortable-chosen td{background:var(--surface2)}
+.lot-repartition-zone{margin-top:10px;padding:10px 12px;background:var(--surface);border:1px dashed var(--border);border-radius:10px}
+.lot-repartition-title{font-size:11px;color:var(--text3);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.lot-repartition-chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px}
+.lot-chip{flex:0 0 150px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);overflow:hidden}
+.lot-chip.lot-chip-new{border-style:dashed}
+.lot-chip-label{font-size:11px;font-weight:600;padding:6px 8px;border-bottom:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+.lot-chip-count{font-weight:400;color:var(--text3)}
+.lot-chip-drop{min-height:38px;padding:6px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text3)}
+.lot-chip-drop.sortable-drop-hover,.lot-chip-drop.dragover-active{background:rgba(77,184,232,.15);color:var(--text)}
 .back-btn{cursor:pointer;color:var(--text2);font-size:13px;display:flex;align-items:center;gap:5px;padding:6px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);background:transparent;font-family:var(--font-sans)}
 .back-btn:hover{background:var(--accent-bg);border-color:var(--accent);color:var(--nav)}
 .lot-title-detail{font-family:var(--font-serif);font-size:22px;font-weight:400;color:var(--nav)}
@@ -647,6 +660,7 @@ if (window.parent !== window) {
               <div class="poste-table-wrap"><table class="poste-table">
                 <thead>
                   <tr>
+                    <th style="width:22px"></th>
                     <th style="width:30%">Désignation</th>
                     <th style="width:50px">Qté</th>
                     <th style="width:38px">Unité</th>
@@ -660,12 +674,16 @@ if (window.parent !== window) {
                 <tbody id="postes-tbody"></tbody>
                 <tfoot>
                   <tr class="add-poste-row">
-                    <td colspan="6">
+                    <td colspan="7">
                       <button class="btn btn-sm btn-outline" onclick="addPoste()"><i class="ti ti-plus" aria-hidden="true"></i>Ajouter un poste</button>
                     </td>
                   </tr>
                 </tfoot>
               </table>
+            </div>
+            <div class="lot-repartition-zone" id="lot-repartition-zone">
+              <div class="lot-repartition-title"><i class="ti ti-arrows-right-left" aria-hidden="true"></i>Glissez une ligne (icône ⠿) vers un autre lot pour l'y déplacer</div>
+              <div class="lot-repartition-chips" id="lot-repartition-chips"></div>
             </div>
           </div>
           <div>
@@ -1908,6 +1926,7 @@ if (window.parent !== window) {
 </div>
 
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
 
 <script type="module">
 import { initializeApp }    from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
@@ -3181,7 +3200,9 @@ function renderPostes(){
     const margeEur=q*(client-artisan);
     const margePct=artisan>0?Math.round(((client-artisan)/artisan)*100):0;
     const tr=document.createElement('tr');
+    tr.setAttribute('data-pi',pi);
     tr.innerHTML=`
+      <td class="poste-drag-handle" title="Glisser pour déplacer vers un autre lot"><i class="ti ti-grip-vertical" aria-hidden="true"></i></td>
       <td><input type="text" value="${p.n||''}" onchange="updatePoste(${pi},'n',this.value)" style="width:100%"></td>
       <td><input type="number" value="${q}" min="0" step="0.1" style="width:60px" onchange="updatePoste(${pi},'q',this.value)"></td>
       <td><input type="text" value="${p.u||'u'}" style="width:36px" onchange="updatePoste(${pi},'u',this.value)"></td>
@@ -3202,6 +3223,100 @@ function renderPostes(){
       </td>`;
     tb.appendChild(tr);
   });
+  initPostesSortable();
+  renderRepartitionZone();
+}
+
+// === RÉPARTITION DES LIGNES ENTRE LOTS (glisser-déposer) ===
+function escHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+let _postesSortable=null;
+let _chipSortables=[];
+
+function initPostesSortable(){
+  const tb=document.getElementById('postes-tbody');
+  if(!tb || typeof Sortable==='undefined' || _postesSortable) return;
+  _postesSortable=Sortable.create(tb,{
+    group:{name:'lot-postes', pull:true, put:false},
+    handle:'.poste-drag-handle',
+    animation:150,
+    onEnd:function(evt){
+      // Réordonnancement dans le même lot (comportement équivalent à movePoste)
+      if(evt.to===tb && evt.from===tb && evt.oldIndex!==evt.newIndex){
+        const lot=state.chantiers[state.currentChantier].lots[state.currentLot];
+        const postes=lot.postes||[];
+        const moved=postes.splice(evt.oldIndex,1)[0];
+        postes.splice(evt.newIndex,0,moved);
+        saveLot();
+        renderPostes();
+      }
+    }
+  });
+}
+
+function renderRepartitionZone(){
+  const wrap=document.getElementById('lot-repartition-chips');
+  if(!wrap) return;
+  _chipSortables.forEach(s=>s.destroy());
+  _chipSortables=[];
+  wrap.innerHTML='';
+  const c=state.chantiers[state.currentChantier];
+  const li=state.currentLot;
+  (c.lots||[]).forEach((lot,idx)=>{
+    if(idx===li) return;
+    const chip=document.createElement('div');
+    chip.className='lot-chip';
+    const label=(lot.num?lot.num+' — ':'')+(lot.nom||'Sans nom');
+    const count=(lot.postes||[]).length;
+    chip.innerHTML=`<div class="lot-chip-label">${escHtml(label)} <span class="lot-chip-count">(${count})</span></div><div class="lot-chip-drop" data-lot-idx="${idx}">Déposer ici</div>`;
+    wrap.appendChild(chip);
+  });
+  const newChip=document.createElement('div');
+  newChip.className='lot-chip lot-chip-new';
+  newChip.innerHTML=`<div class="lot-chip-label"><i class="ti ti-plus" aria-hidden="true"></i> Nouveau lot</div><div class="lot-chip-drop" data-lot-idx="new">Déposer ici</div>`;
+  wrap.appendChild(newChip);
+
+  if(typeof Sortable==='undefined') return;
+  wrap.querySelectorAll('.lot-chip-drop').forEach(dropEl=>{
+    const s=Sortable.create(dropEl,{
+      group:{name:'lot-postes', pull:false, put:true},
+      sort:false,
+      animation:150,
+      onAdd:function(evt){
+        const pi=parseInt(evt.item.getAttribute('data-pi'),10);
+        const targetAttr=evt.to.getAttribute('data-lot-idx');
+        evt.item.parentNode && evt.item.parentNode.removeChild(evt.item);
+        movePosteToLot(pi, targetAttr==='new' ? 'new' : parseInt(targetAttr,10));
+      }
+    });
+    _chipSortables.push(s);
+  });
+}
+
+function movePosteToLot(pi, targetLotIdx){
+  const c=state.chantiers[state.currentChantier];
+  const li=state.currentLot;
+  const lot=c.lots[li];
+  if(!lot.postes || !lot.postes[pi]) return;
+  if(targetLotIdx==='new'){
+    const nom=prompt('Nom du nouveau lot :','Nouveau lot');
+    if(nom===null) { renderPostes(); return; } // annulé, aucun changement de données
+    const poste=lot.postes.splice(pi,1)[0];
+    c.lots.push({num:'',nom:nom.trim()||'Nouveau lot',postes:[poste],aleas:5,honoraires:5,marge:20,tva:20,statut:'Chiffrage'});
+    saveState();renderPostes();computeLotTotal();
+    if(typeof renderLotsTableOrCards==="function") renderLotsTableOrCards(); else renderLotsTable();
+    renderChantierGrid();
+    showToast('Ligne déplacée vers le nouveau lot "'+escHtml(nom.trim()||'Nouveau lot')+'"');
+    return;
+  }
+  const target=c.lots[targetLotIdx];
+  if(!target){ renderPostes(); return; }
+  const poste=lot.postes.splice(pi,1)[0];
+  if(!target.postes) target.postes=[];
+  target.postes.push(poste);
+  saveState();renderPostes();computeLotTotal();
+  if(typeof renderLotsTableOrCards==="function") renderLotsTableOrCards(); else renderLotsTable();
+  renderChantierGrid();
+  showToast('Ligne déplacée vers "'+escHtml((target.num?target.num+' — ':'')+(target.nom||'lot'))+'"');
 }
 
 function movePoste(pi, dir){
