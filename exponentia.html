@@ -1,0 +1,1006 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Exponentia — Audit d'entreprise</title>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+  import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut }
+    from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+  import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, serverTimestamp, query, orderBy }
+    from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyAUSMF4s46aCC7Riaaxim99U_fp4FhoG4I",
+    authDomain: "exponentia-53c5c.firebaseapp.com",
+    databaseURL: "https://exponentia-53c5c-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "exponentia-53c5c",
+    storageBucket: "exponentia-53c5c.firebasestorage.app",
+    messagingSenderId: "109779276274",
+    appId: "1:109779276274:web:712b6ec20404ba53245b6b"
+  };
+
+  const fbApp = initializeApp(firebaseConfig);
+  const fbAuth = getAuth(fbApp);
+  const fbDb = getFirestore(fbApp);
+
+  window._fbSignIn = (email, password) => signInWithEmailAndPassword(fbAuth, email, password);
+  window._fbSignOut = () => signOut(fbAuth);
+  window._fbOnAuthChange = (cb) => onAuthStateChanged(fbAuth, cb);
+
+  // Collection "entreprises" : nom, statut, synthese (lisible par Maxime + comptable)
+  window._fbWatchEntreprises = (cb, onError) => {
+    const q = query(collection(fbDb, "entreprises"), orderBy("updatedAt", "desc"));
+    return onSnapshot(q, snap => {
+      const list = [];
+      snap.forEach(d => list.push(Object.assign({ id: d.id }, d.data())));
+      cb(list);
+    }, onError);
+  };
+  window._fbSaveEntreprise = (id, meta) =>
+    setDoc(doc(fbDb, "entreprises", id), Object.assign({}, meta, { updatedAt: serverTimestamp() }));
+  window._fbDeleteEntreprise = (id) => deleteDoc(doc(fbDb, "entreprises", id));
+
+  // Sous-document "private/data" : données brutes de consultation (Maxime uniquement, par règle Firestore)
+  window._fbWatchPrivateData = (entrepriseId, cb, onError) =>
+    onSnapshot(doc(fbDb, "entreprises", entrepriseId, "private", "data"), snap => cb(snap.exists() ? snap.data().value : null), onError);
+  window._fbSavePrivateData = (entrepriseId, dataValue) =>
+    setDoc(doc(fbDb, "entreprises", entrepriseId, "private", "data"), { value: dataValue, updatedAt: serverTimestamp() });
+
+  window._fbReady = true;
+  window.dispatchEvent(new Event('fb-ready'));
+</script>
+<style>
+  :root {
+    --ground: #0E1826;
+    --raised: #16233A;
+    --raised2: #1C2C48;
+    --ink: #F3ECDD;
+    --ink-muted: #9FB0C4;
+    --blue: #2C4A6E;
+    --gold: #C9962C;
+    --ok: #4C86C7;
+    --warn: #D9A441;
+    --alert: #E07A3F;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: 'Work Sans', system-ui, sans-serif; background: var(--ground); color: var(--ink); }
+  header { padding: 20px 24px 0 24px; border-bottom: 1px solid var(--blue); position: relative; }
+  h1 { font-family: Georgia, 'Cormorant Garamond', serif; font-weight: 600; font-size: 26px; margin: 0 0 4px 0; }
+  .sub { color: var(--ink-muted); font-size: 13px; margin-bottom: 16px; }
+  nav { display: flex; gap: 4px; }
+  nav button { background: none; border: none; color: var(--ink-muted); font-size: 14px; font-weight: 600; padding: 10px 16px; cursor: pointer; border-bottom: 3px solid transparent; }
+  nav button.active { color: var(--ink); border-bottom-color: var(--gold); }
+  main { padding: 24px; max-width: 960px; margin: 0 auto; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .group { background: var(--raised); border-radius: 8px; margin-bottom: 16px; overflow: hidden; }
+  .group-head { display: flex; align-items: center; gap: 12px; padding: 16px 18px; cursor: pointer; }
+  .group-head input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--gold); }
+  .group-title { font-weight: 600; font-size: 15px; flex-grow: 1; }
+  .group-badge { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--ink-muted); border: 1px solid var(--blue); border-radius: 3px; padding: 2px 8px; }
+  .group-body { padding: 0 18px 18px 18px; display: none; }
+  .group-body.open { display: block; }
+
+  h4 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--gold); margin: 18px 0 8px 0; }
+  h4:first-child { margin-top: 4px; }
+
+  label { display: block; font-size: 12px; color: var(--ink-muted); margin-bottom: 4px; }
+  input[type=text], input[type=number], select, textarea {
+    background: var(--ground); border: 1px solid var(--blue); color: var(--ink);
+    border-radius: 4px; padding: 8px 10px; font-size: 14px; width: 100%; font-family: inherit;
+  }
+  textarea { resize: vertical; min-height: 50px; }
+  .row { display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+  .row > div { flex: 1; min-width: 140px; }
+
+  .chk-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 14px; }
+  .chk-row input { width: 16px; height: 16px; accent-color: var(--gold); }
+
+  table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px; }
+  th, td { padding: 8px 6px; text-align: left; border-bottom: 1px solid var(--blue); }
+  th { color: var(--ink-muted); font-weight: 600; font-size: 12px; }
+  td input { padding: 6px 8px; font-size: 13px; }
+  .calc-cell { color: var(--gold); font-weight: 600; white-space: nowrap; }
+
+  .btn { background: var(--blue); color: var(--ink); border: none; border-radius: 4px; padding: 8px 14px; font-size: 13px; cursor: pointer; }
+  .btn.gold { background: var(--gold); color: var(--ground); font-weight: 600; }
+  .btn.ghost { background: none; border: 1px solid var(--blue); }
+  .btn.small { padding: 4px 10px; font-size: 12px; }
+  .toprow { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px; }
+
+  .radar-wrap { display: flex; gap: 32px; align-items: center; flex-wrap: wrap; }
+  .score-cards { display: flex; flex-direction: column; gap: 12px; flex: 1; min-width: 260px; }
+  .score-card { background: var(--raised); border-radius: 6px; padding: 14px 16px; display: flex; align-items: center; gap: 14px; cursor: pointer; }
+  .score-card .val { font-family: Georgia, serif; font-size: 24px; font-weight: 600; color: var(--gold); }
+  .score-card .lbl { font-size: 13px; color: var(--ink-muted); }
+  .status-text { font-size: 12px; font-weight: 600; margin-top: 2px; }
+  .status-ok { color: var(--ok); } .status-warn { color: var(--warn); } .status-alert { color: var(--alert); }
+
+  .drill { margin-top: 16px; display: none; }
+  .drill.open { display: block; }
+  .drill-row { display: flex; align-items: center; justify-content: space-between; background: var(--raised); border-radius: 6px; padding: 10px 14px; margin-bottom: 8px; }
+  .drill-row .name { font-size: 13px; }
+
+  .note { background: var(--raised2); border-left: 3px solid var(--gold); padding: 10px 14px; font-size: 13px; color: var(--ink-muted); border-radius: 0 6px 6px 0; margin-bottom: 20px; }
+
+  .login-gate { position: fixed; inset: 0; background: var(--ground); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+  .login-card { background: var(--raised); border-radius: 10px; padding: 36px; width: 300px; }
+  .login-title { font-family: Georgia, 'Cormorant Garamond', serif; font-weight: 600; font-size: 26px; margin-bottom: 4px; text-align: center; }
+  .login-sub { color: var(--ink-muted); font-size: 13px; text-align: center; margin-bottom: 20px; }
+  .login-card label { margin-top: 12px; }
+</style>
+</head>
+<body>
+
+<div id="login-gate" class="login-gate">
+  <div class="login-card">
+    <div class="login-title">EXPONENTIA</div>
+    <div class="login-sub">Connexion requise</div>
+    <label>Email</label>
+    <input type="email" id="login-email" autocomplete="username">
+    <label>Mot de passe</label>
+    <input type="password" id="login-password" autocomplete="current-password">
+    <button class="btn gold" id="btn-login" style="width:100%; margin-top:16px;">Se connecter</button>
+    <div class="note" id="login-error" style="display:none; margin-top:14px;"></div>
+  </div>
+</div>
+
+<div id="app-shell" style="display:none;">
+<header>
+  <h1>EXPONENTIA</h1>
+  <div class="sub">Audit d'entreprise — synchronisé sur Firestore (exponentia-53c5c)</div>
+  <button class="btn ghost small" id="btn-logout" style="position:absolute; top:20px; right:24px;">Déconnexion</button>
+  <nav>
+    <button class="tab-btn active" data-tab="portfolio">Portefeuille</button>
+    <button class="tab-btn" data-tab="consult">Première Consultation</button>
+    <button class="tab-btn" data-tab="synth">Synthèse</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- ===================== PORTEFEUILLE ===================== -->
+  <section id="panel-portfolio" class="panel active">
+    <div class="toprow">
+      <div class="row" style="margin:0;">
+        <div style="min-width:260px;"><label>Nouvelle entreprise</label><input type="text" id="new-entreprise-nom" placeholder="Nom de l'entreprise"></div>
+      </div>
+      <button class="btn gold" id="btn-new-entreprise">+ Créer</button>
+    </div>
+    <div id="portfolio-list"></div>
+  </section>
+
+  <!-- ===================== PREMIERE CONSULTATION ===================== -->
+  <section id="panel-consult" class="panel">
+
+    <div class="toprow" style="margin-bottom:0;">
+      <div id="consult-active-name" style="font-size:14px; color: var(--ink-muted);"></div>
+      <button class="btn ghost small" data-tab="portfolio" onclick="switchTab('portfolio')">← Retour au portefeuille</button>
+    </div>
+    <div id="consult-empty" class="note" style="display:none;">Aucune entreprise sélectionnée. Retournez au Portefeuille pour en créer une ou en ouvrir une.</div>
+
+    <div id="consult-content">
+    <div class="toprow">
+      <div class="row" style="margin:0;">
+        <div><label>Entreprise auditée</label><input type="text" id="f-entreprise" placeholder="Nom de l'entreprise"></div>
+        <div><label>Granularité de pilotage</label>
+          <select id="f-granularite">
+            <option value="heure">Heure</option><option value="jour">Jour</option>
+            <option value="mois" selected>Mois</option><option value="chantier">Chantier</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn gold" id="btn-save">Sauvegarder</button>
+    </div>
+
+    <!-- G1 -->
+    <div class="group" data-group="g1">
+      <div class="group-head"><input type="checkbox" class="g-toggle" data-group="g1"><div class="group-title">Groupe 1 — Prix des tâches par exécutant</div><span class="group-badge">Quantitatif</span></div>
+      <div class="group-body">
+        <label>Seuil — marge horaire minimum acceptée (€/h)</label>
+        <input type="number" id="g1-seuil" style="max-width:160px">
+        <table><thead><tr><th>Tâche</th><th>Exécutant</th><th>Taux h. (€/h)</th><th>Temps (h)</th><th>Prix facturé (€)</th><th>Marge h.</th><th></th></tr></thead><tbody id="tbody-g1"></tbody></table>
+        <button class="btn ghost small" onclick="addRow('g1')">+ Ajouter une tâche</button>
+      </div>
+    </div>
+
+    <!-- G2 -->
+    <div class="group" data-group="g2">
+      <div class="group-head"><input type="checkbox" class="g-toggle" data-group="g2"><div class="group-title">Groupe 2 — Ratio 3x (salarié ou équipe/journée)</div><span class="group-badge">Quantitatif</span></div>
+      <div class="group-body">
+        <div class="row">
+          <div><label>Unité d'analyse</label><select id="g2-unite"><option value="salarie">Par salarié</option><option value="equipe">Par équipe / journée</option></select></div>
+          <div><label>Multiple cible</label><input type="number" id="g2-multiple" style="max-width:120px"></div>
+        </div>
+        <table><thead><tr><th>Nom / type</th><th>Coût (€)</th><th>CA généré / facturé (€)</th><th>Multiple</th><th></th></tr></thead><tbody id="tbody-g2"></tbody></table>
+        <button class="btn ghost small" onclick="addRow('g2')">+ Ajouter une ligne</button>
+      </div>
+    </div>
+
+    <!-- G3 -->
+    <div class="group" data-group="g3">
+      <div class="group-head"><input type="checkbox" class="g-toggle" data-group="g3"><div class="group-title">Groupe 3 — Marge sur promotions</div><span class="group-badge">Quantitatif</span></div>
+      <div class="group-body">
+        <label>Marge minimum non négociable par ligne (€)</label>
+        <input type="number" id="g3-seuil" style="max-width:160px">
+        <table><thead><tr><th>Produit / prestation</th><th>Coût matière + MO (€)</th><th>Prix promo (€)</th><th>Marge promo</th><th></th></tr></thead><tbody id="tbody-g3"></tbody></table>
+        <button class="btn ghost small" onclick="addRow('g3')">+ Ajouter une ligne</button>
+      </div>
+    </div>
+
+    <!-- G5 -->
+    <div class="group" data-group="g5">
+      <div class="group-head"><input type="checkbox" class="g-toggle" data-group="g5"><div class="group-title">Groupe 5 — Vente et relance des devis</div><span class="group-badge">Mixte</span></div>
+      <div class="group-body">
+        <h4>5a. Process de vente suivi</h4>
+        <div class="chk-row"><input type="checkbox" id="g5-decouverte"><label style="margin:0" for="g5-decouverte">Découverte du besoin</label></div>
+        <div class="chk-row"><input type="checkbox" id="g5-presentation"><label style="margin:0" for="g5-presentation">Présentation de l'offre</label></div>
+        <div class="chk-row"><input type="checkbox" id="g5-objections"><label style="margin:0" for="g5-objections">Traitement des objections</label></div>
+        <div class="chk-row"><input type="checkbox" id="g5-closing"><label style="margin:0" for="g5-closing">Closing</label></div>
+        <label>Trame écrite pour ce process ?</label>
+        <select id="g5-trame" style="max-width:160px"><option value="non">Non</option><option value="oui">Oui</option></select>
+
+        <h4>5b. Éléments indispensables du devis</h4>
+        <div class="chk-row"><input type="checkbox" id="g5-prixvaleur"><label style="margin:0" for="g5-prixvaleur">Prix ET valeur justifiée</label></div>
+        <div class="chk-row"><input type="checkbox" id="g5-delai"><label style="margin:0" for="g5-delai">Délai de validité de l'offre</label></div>
+        <div class="chk-row"><input type="checkbox" id="g5-conditions"><label style="margin:0" for="g5-conditions">Conditions de paiement claires</label></div>
+        <div class="chk-row"><input type="checkbox" id="g5-preuve"><label style="margin:0" for="g5-preuve">Preuve sociale incluse</label></div>
+
+        <h4>5c. Relance</h4>
+        <div class="row">
+          <div><label>Délai de relance systématique défini ?</label><select id="g5-relancedef"><option value="non">Non</option><option value="oui">Oui</option></select></div>
+          <div><label>Lequel (ex. J+7)</label><input type="text" id="g5-relancedelai"></div>
+        </div>
+
+        <h4>5d. Pilotage commercial</h4>
+        <div class="row">
+          <div><label>Devis envoyés (période)</label><input type="number" id="g5-devisenvoyes"></div>
+          <div><label>Devis signés (période)</label><input type="number" id="g5-devissignes"></div>
+          <div><label>Seuil de transformation visé (%)</label><input type="number" id="g5-seuiltransfo"></div>
+          <div><label>Panier moyen (€)</label><input type="number" id="g5-panier"></div>
+        </div>
+        <div class="note" id="g5-transfo-result"></div>
+
+        <h4>5e. Origine des leads</h4>
+        <table><thead><tr><th>Canal</th><th>% du total</th><th></th></tr></thead><tbody id="tbody-g5canaux"></tbody></table>
+        <button class="btn ghost small" onclick="addRow('g5canaux')">+ Ajouter un canal</button>
+        <div class="note" id="g5-canal-result" style="margin-top:10px;"></div>
+      </div>
+    </div>
+
+    <!-- G6 -->
+    <div class="group" data-group="g6">
+      <div class="group-head"><input type="checkbox" class="g-toggle" data-group="g6"><div class="group-title">Groupe 6 — Communication et positionnement</div><span class="group-badge">Qualitatif</span></div>
+      <div class="group-body">
+        <h4>6a. Vision et proposition de valeur</h4>
+        <label>« En une phrase, que faites-vous et pour qui ? »</label>
+        <textarea id="g6-vision"></textarea>
+        <label style="margin-top:10px">Cette phrase est-elle écrite quelque part (site, plaquette) ?</label>
+        <select id="g6-visionecrite" style="max-width:200px"><option value="non">Non</option><option value="partiel">Partiellement</option><option value="oui">Oui</option></select>
+
+        <h4>6b. Adaptation à la cible</h4>
+        <div class="row">
+          <div><label>Nombre de segments de clientèle distincts</label><input type="number" id="g6-segments"></div>
+          <div><label>Le discours change-t-il selon le segment ?</label><select id="g6-discours"><option value="non">Non</option><option value="oui">Oui</option></select></div>
+        </div>
+
+        <h4>6c. Répartition des 3 types de contenus (%)</h4>
+        <div class="row">
+          <div><label>Vie quotidienne</label><input type="number" id="g6-vie"></div>
+          <div><label>Pédagogie</label><input type="number" id="g6-pedagogie"></div>
+          <div><label>Résolution de problème</label><input type="number" id="g6-resolution"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- G7 -->
+    <div class="group" data-group="g7">
+      <div class="group-head"><input type="checkbox" class="g-toggle" data-group="g7"><div class="group-title">Groupe 7 — Diversification par gammes</div><span class="group-badge">Mixte</span></div>
+      <div class="group-body">
+        <label>Marge minimum garantie même sur la gamme abordable (€)</label>
+        <input type="number" id="g7-margemin" style="max-width:160px">
+        <table><thead><tr><th>Gamme</th><th>Prix moyen (€)</th><th>Coût moyen (€)</th><th>% du CA</th><th>Marge</th><th></th></tr></thead><tbody id="tbody-g7"></tbody></table>
+        <button class="btn ghost small" onclick="addRow('g7')">+ Ajouter une gamme</button>
+      </div>
+    </div>
+
+    <!-- G8 -->
+    <div class="group" data-group="g8">
+      <div class="group-head"><input type="checkbox" class="g-toggle" data-group="g8"><div class="group-title">Groupe 8 — Identité de marque (branding)</div><span class="group-badge">Qualitatif</span></div>
+      <div class="group-body">
+        <h4>8a. Existence d'une identité visuelle</h4>
+        <div class="row">
+          <div><label>Logo existant ?</label><select id="g8-logo"><option value="non">Non</option><option value="oui">Oui</option></select></div>
+          <div><label>Palette de couleurs définie ?</label><select id="g8-palette"><option value="non">Non</option><option value="oui">Oui</option></select></div>
+          <div><label>Typographie définie ?</label><select id="g8-typo"><option value="non">Non</option><option value="oui">Oui</option></select></div>
+        </div>
+        <label>Appliquée sur :</label>
+        <div class="chk-row"><input type="checkbox" id="g8-sup-site"><label style="margin:0" for="g8-sup-site">Site</label></div>
+        <div class="chk-row"><input type="checkbox" id="g8-sup-devis"><label style="margin:0" for="g8-sup-devis">Devis</label></div>
+        <div class="chk-row"><input type="checkbox" id="g8-sup-vehicules"><label style="margin:0" for="g8-sup-vehicules">Véhicules</label></div>
+        <div class="chk-row"><input type="checkbox" id="g8-sup-reseaux"><label style="margin:0" for="g8-sup-reseaux">Réseaux sociaux</label></div>
+        <div class="chk-row"><input type="checkbox" id="g8-sup-panneaux"><label style="margin:0" for="g8-sup-panneaux">Panneaux de chantier</label></div>
+
+        <h4>8b. Reconnaissabilité</h4>
+        <label>Un client peut-il identifier l'entreprise sans lire le nom ?</label>
+        <select id="g8-reco" style="max-width:200px"><option value="non">Non</option><option value="incertain">Incertain</option><option value="oui">Oui</option></select>
+
+        <h4>8c. Cohérence avec la vision et la clientèle visée</h4>
+        <select id="g8-coherence" style="max-width:200px"><option value="non">Non</option><option value="partiel">Partiellement</option><option value="oui">Oui</option></select>
+
+        <h4>8d. Application dans la communication réseaux</h4>
+        <label>Gabarits de post existants ?</label>
+        <select id="g8-gabarits" style="max-width:160px"><option value="non">Non</option><option value="oui">Oui</option></select>
+      </div>
+    </div>
+
+    <!-- G9 -->
+    <div class="group" data-group="g9">
+      <div class="group-head"><input type="checkbox" class="g-toggle" data-group="g9"><div class="group-title">Groupe 9 — Salariat vs sous-traitance</div><span class="group-badge">Mixte</span></div>
+      <div class="group-body">
+        <h4>9a. Comparatif de coût réel</h4>
+        <label>Écart acceptable max entre coût interne et sous-traitant (%)</label>
+        <input type="number" id="g9-seuilecart" style="max-width:160px">
+        <table><thead><tr><th>Prestation</th><th>Coût interne (€/h)</th><th>Tarif sous-traitant (€/h)</th><th>Écart</th><th></th></tr></thead><tbody id="tbody-g9cout"></tbody></table>
+        <button class="btn ghost small" onclick="addRow('g9cout')">+ Ajouter une prestation</button>
+
+        <h4>9b. Taux d'occupation réel</h4>
+        <label>Taux d'occupation minimum viable (%)</label>
+        <input type="number" id="g9-seuiloccupation" style="max-width:160px">
+        <table><thead><tr><th>Salarié / poste</th><th>Heures payées</th><th>Heures facturables réelles</th><th>Taux</th><th></th></tr></thead><tbody id="tbody-g9occ"></tbody></table>
+        <button class="btn ghost small" onclick="addRow('g9occ')">+ Ajouter un poste</button>
+
+        <h4>9d. Process de gestion différenciés</h4>
+        <div class="row">
+          <div><label>Contrat-cadre sous-traitant existant ?</label><select id="g9-contrat"><option value="non">Non</option><option value="oui">Oui</option></select></div>
+          <div><label>Suivi qualité différent selon le statut ?</label><select id="g9-suivi"><option value="non">Non</option><option value="oui">Oui</option></select></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- G10 -->
+    <div class="group" data-group="g10">
+      <div class="group-head"><input type="checkbox" class="g-toggle" data-group="g10"><div class="group-title">Groupe 10 — Charges (opérationnelles / financement / ponctuelles)</div><span class="group-badge">Mixte</span></div>
+      <div class="group-body">
+        <div class="row">
+          <div><label>CA sur la période (€)</label><input type="number" id="g10-ca"></div>
+          <div><label>Charges opérationnelles (€)</label><input type="number" id="g10-op"></div>
+          <div><label>Charges de financement (€)</label><input type="number" id="g10-fin"></div>
+          <div><label>Charges ponctuelles (€)</label><input type="number" id="g10-ponct"></div>
+        </div>
+        <label>Seuil max acceptable — charges opérationnelles / CA (%)</label>
+        <input type="number" id="g10-seuil" style="max-width:160px">
+        <div class="note" id="g10-result" style="margin-top:12px;"></div>
+      </div>
+    </div>
+
+    </div><!-- /consult-content -->
+
+  </section>
+
+  <!-- ===================== SYNTHESE ===================== -->
+  <section id="panel-synth" class="panel">
+    <div class="toprow" style="margin-bottom:0;">
+      <div id="synth-active-name" style="font-size:14px; color: var(--ink-muted);"></div>
+      <button class="btn ghost small" onclick="switchTab('portfolio')">← Retour au portefeuille</button>
+    </div>
+    <div id="synth-empty" class="note" style="display:none;">Aucune entreprise sélectionnée. Retournez au Portefeuille pour en créer une ou en ouvrir une.</div>
+
+    <div id="synth-content">
+    <div id="synth-no-data" class="note" style="display:none;">Aucune synthèse disponible pour le moment — Maxime doit d'abord renseigner et sauvegarder au moins un groupe dans la Première Consultation.</div>
+    <div class="note">Encodage accessible : chaque statut se lit à la forme et au texte, jamais à la seule couleur. ● conforme · ▲ à surveiller · ✕ sous le seuil. Cliquez une carte pour voir le détail des groupes qui la composent.</div>
+
+    <div class="radar-wrap">
+      <svg width="340" height="320" viewBox="0 0 400 320" id="radar-svg">
+        <line x1="200" y1="200" x2="200" y2="40" stroke="#2C4A6E" stroke-width="1.5" />
+        <line x1="200" y1="200" x2="61" y2="280" stroke="#2C4A6E" stroke-width="1.5" />
+        <line x1="200" y1="200" x2="339" y2="280" stroke="#2C4A6E" stroke-width="1.5" />
+        <polygon points="200,40 61,280 339,280" fill="none" stroke="#2C4A6E" stroke-width="1" opacity="0.6" />
+        <polygon points="200,120 130,240 270,240" fill="none" stroke="#2C4A6E" stroke-width="1" opacity="0.35" />
+        <polygon id="radar-poly" points="200,200 200,200 200,200" fill="#C9962C" fill-opacity="0.28" stroke="#C9962C" stroke-width="2" />
+        <g id="radar-shapes"></g>
+        <text x="200" y="24" text-anchor="middle" font-size="12" fill="#9FB0C4">Rentabilité opérationnelle</text>
+        <text x="30" y="300" text-anchor="start" font-size="12" fill="#9FB0C4">Positionnement marché</text>
+        <text x="370" y="300" text-anchor="end" font-size="12" fill="#9FB0C4">Exécution commerciale</text>
+      </svg>
+      <div class="score-cards" id="score-cards"></div>
+    </div>
+
+    <div class="drill" id="drill-panel">
+      <h4 id="drill-title" style="margin-top:24px"></h4>
+      <div id="drill-body"></div>
+    </div>
+    </div><!-- /synth-content -->
+  </section>
+
+</main>
+</div><!-- /app-shell -->
+
+<script>
+const STATUTS = ['Consultation faite', 'Synthèse générée', 'Revue comptable en cours', 'Plan validé', 'Présenté', 'Client signé', 'Suivi actif'];
+const MAXIME_UID = '4ATO7tTR9SUbH0soVufgRb0uTRk1';
+const COMPTABLE_UID = 'ZpElm3k4OEQmfnK9JesLW5DuXX53';
+
+function emptyState() {
+  return {
+    entreprise: '', granularite: 'mois',
+    groupes: {
+      g1: { actif: false, seuil: 15 },
+      g2: { actif: false, unite: 'salarie', multiple: 3 },
+      g3: { actif: false, seuil: 20 },
+      g5: { actif: false, decouverte: false, presentation: false, objections: false, closing: false, trame: 'non',
+            prixvaleur: false, delai: false, conditions: false, preuve: false,
+            relancedef: 'non', relancedelai: '', devisenvoyes: 0, devissignes: 0, seuiltransfo: 20, panier: 0 },
+      g6: { actif: false, vision: '', visionecrite: 'non', segments: 1, discours: 'non', vie: 0, pedagogie: 0, resolution: 0 },
+      g7: { actif: false, margemin: 0 },
+      g8: { actif: false, logo: 'non', palette: 'non', typo: 'non',
+            supSite: false, supDevis: false, supVehicules: false, supReseaux: false, supPanneaux: false,
+            reco: 'non', coherence: 'non', gabarits: 'non' },
+      g9: { actif: false, seuilecart: 20, seuiloccupation: 75, contrat: 'non', suivi: 'non' },
+      g10: { actif: false, ca: 0, op: 0, fin: 0, ponct: 0, seuil: 55 }
+    },
+    tables: { g1: [], g2: [], g3: [], g5canaux: [], g7: [], g9cout: [], g9occ: [] }
+  };
+}
+
+function mergeWithDefaults(data) {
+  const base = emptyState();
+  data = Object.assign({}, base, data);
+  Object.keys(base.groupes).forEach(g => { data.groupes[g] = Object.assign({}, base.groupes[g], (data.groupes || {})[g] || {}); });
+  Object.keys(base.tables).forEach(t => { if (!data.tables || !data.tables[t]) { data.tables = data.tables || {}; data.tables[t] = []; } });
+  return data;
+}
+
+let portfolio = { entreprises: [], activeId: null };
+let state = emptyState(); // données brutes de l'entreprise actuellement ouverte (Maxime uniquement)
+let unsubscribeEntreprises = null;
+let unsubscribePrivate = null;
+let saveTimer = null;
+let currentRole = null; // 'maxime' | 'comptable'
+let currentSynthese = null; // dernière synthèse affichée (calculée ou reçue de Firestore)
+
+function getActiveEntry() { return portfolio.entreprises.find(e => e.id === portfolio.activeId) || null; }
+function getPortfolioSnapshot() { return JSON.parse(JSON.stringify(portfolio)); }
+
+function numOr(v, d) { const n = parseFloat(v); return isNaN(n) ? d : n; }
+function clamp01(v) { return Math.max(0, Math.min(1, v)); }
+function avg(arr) { return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null; }
+function avgSkipNull(arr) { const v = arr.filter(x => x !== null && x !== undefined); return v.length ? avg(v) : null; }
+function escapeHtml(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+function val(id) { const el = document.getElementById(id); return el ? el.value : ''; }
+function setVal(id, v) { const el = document.getElementById(id); if (el) el.value = v; }
+function checked(id) { const el = document.getElementById(id); return el ? el.checked : false; }
+function setChecked(id, v) { const el = document.getElementById(id); if (el) el.checked = !!v; }
+
+// ---------- Persistance Firestore (source de vérité unique) ----------
+function watchEntreprises() {
+  if (unsubscribeEntreprises) unsubscribeEntreprises();
+  unsubscribeEntreprises = window._fbWatchEntreprises(
+    list => {
+      portfolio.entreprises = list.map(d => ({
+        id: d.id,
+        nom: d.nom || 'Sans nom',
+        statut: d.statut || STATUTS[0],
+        updatedAt: (d.updatedAt && d.updatedAt.toDate) ? d.updatedAt.toDate().toISOString() : new Date().toISOString(),
+        synthese: d.synthese || null,
+        data: null // rempli séparément pour Maxime via le canal privé (voir openEntreprise)
+      }));
+      if (document.getElementById('panel-portfolio').classList.contains('active')) renderPortfolio();
+      if (document.getElementById('panel-synth').classList.contains('active')) renderSynthese();
+    },
+    err => { console.error(err); alert('Erreur de synchronisation Firestore : ' + err.message); }
+  );
+}
+function computeSynthese() {
+  const scores = {};
+  Object.keys(SCORE_FN).forEach(g => { scores[g] = SCORE_FN[g](); });
+  return {
+    scores,
+    familles: {
+      rentabilite: familyScore('rentabilite'),
+      positionnement: familyScore('positionnement'),
+      execution: familyScore('execution')
+    },
+    generatedAt: new Date().toISOString()
+  };
+}
+function scheduleSave() {
+  if (!portfolio.activeId || currentRole !== 'maxime') return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(save, 800);
+}
+function save() {
+  if (!portfolio.activeId || currentRole !== 'maxime') return;
+  state.entreprise = val('f-entreprise');
+  state.granularite = val('f-granularite');
+  const entry = getActiveEntry();
+  const nom = state.entreprise || (entry ? entry.nom : 'Sans nom');
+  const statut = entry ? entry.statut : STATUTS[0];
+  const synthese = computeSynthese();
+  window._fbSavePrivateData(portfolio.activeId, state).catch(e => alert('Sauvegarde des données impossible : ' + e.message));
+  window._fbSaveEntreprise(portfolio.activeId, { nom, statut, synthese }).catch(e => alert('Sauvegarde de la synthèse impossible : ' + e.message));
+}
+
+// ---------- Portefeuille ----------
+function createEntreprise(nom) {
+  if (currentRole !== 'maxime') return null;
+  const id = 'e' + Date.now();
+  const entry = { id, nom: nom || 'Nouvelle entreprise', statut: STATUTS[0], synthese: null, data: emptyState() };
+  entry.data.entreprise = entry.nom;
+  window._fbSaveEntreprise(id, { nom: entry.nom, statut: entry.statut, synthese: null }).catch(e => alert('Création impossible : ' + e.message));
+  window._fbSavePrivateData(id, entry.data).catch(e => alert('Création impossible : ' + e.message));
+  portfolio.activeId = id;
+  state = entry.data;
+  hydrateFormFromState();
+  switchTab('consult');
+  return id;
+}
+function openEntreprise(id) {
+  const entry = portfolio.entreprises.find(e => e.id === id);
+  if (!entry) return;
+  portfolio.activeId = id;
+  if (currentRole === 'maxime') {
+    if (unsubscribePrivate) unsubscribePrivate();
+    unsubscribePrivate = window._fbWatchPrivateData(
+      id,
+      dataValue => {
+        state = mergeWithDefaults(dataValue || {});
+        entry.data = state;
+        hydrateFormFromState();
+        if (document.getElementById('panel-synth').classList.contains('active')) renderSynthese();
+      },
+      err => { console.error(err); alert('Lecture des données impossible : ' + err.message); }
+    );
+    switchTab('consult');
+  } else {
+    switchTab('synth');
+  }
+}
+function deleteEntreprise(id) {
+  if (currentRole !== 'maxime') return;
+  if (!confirm('Supprimer définitivement cette entreprise et toutes ses données ?')) return;
+  window._fbDeleteEntreprise(id).catch(e => alert('Suppression impossible : ' + e.message));
+  if (portfolio.activeId === id) portfolio.activeId = null;
+  refreshActiveVisibility();
+}
+function setStatut(id, statut) {
+  const entry = portfolio.entreprises.find(e => e.id === id);
+  if (!entry) return;
+  entry.statut = statut;
+  window._fbSaveEntreprise(id, { nom: entry.nom, statut, synthese: entry.synthese }).catch(e => alert('Erreur : ' + e.message));
+}
+function renderPortfolio() {
+  const list = document.getElementById('portfolio-list');
+  if (!portfolio.entreprises.length) { list.innerHTML = '<div class="note">Aucune entreprise pour l\'instant.' + (currentRole === 'maxime' ? ' Créez-en une ci-dessus.' : '') + '</div>'; return; }
+  list.innerHTML = '';
+  portfolio.entreprises.forEach(entry => {
+    const row = document.createElement('div');
+    row.className = 'group';
+    const date = new Date(entry.updatedAt).toLocaleDateString('fr-FR');
+    row.innerHTML =
+      '<div class="group-head" style="cursor:default; flex-wrap:wrap;">' +
+        '<div class="group-title" style="min-width:160px;">' + escapeHtml(entry.nom) + '</div>' +
+        '<select style="max-width:220px;" onchange="setStatut(\'' + entry.id + '\',this.value)">' +
+          STATUTS.map(s => '<option value="' + escapeHtml(s) + '"' + (s === entry.statut ? ' selected' : '') + '>' + s + '</option>').join('') +
+        '</select>' +
+        '<span class="group-badge">Maj ' + date + '</span>' +
+        '<button class="btn small" onclick="openEntreprise(\'' + entry.id + '\')">' + (currentRole === 'maxime' ? 'Ouvrir' : 'Voir la synthèse') + '</button>' +
+        (currentRole === 'maxime' ? '<button class="btn ghost small" onclick="deleteEntreprise(\'' + entry.id + '\')">Supprimer</button>' : '') +
+      '</div>';
+    list.appendChild(row);
+  });
+}
+
+// ---------- Onglets ----------
+function switchTab(tab) {
+  if (tab === 'consult' && currentRole !== 'maxime') tab = 'synth';
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + tab).classList.add('active');
+  if (tab === 'portfolio') renderPortfolio();
+  refreshActiveVisibility();
+  if (tab === 'synth' && portfolio.activeId) renderSynthese();
+}
+function applyRoleUI() {
+  const isMaxime = currentRole === 'maxime';
+  const consultTabBtn = document.querySelector('.tab-btn[data-tab="consult"]');
+  if (consultTabBtn) consultTabBtn.style.display = isMaxime ? '' : 'none';
+  const newEntrepriseRow = document.querySelector('#panel-portfolio .toprow');
+  if (newEntrepriseRow) newEntrepriseRow.style.display = isMaxime ? '' : 'none';
+}
+function refreshActiveVisibility() {
+  const has = !!portfolio.activeId;
+  const entry = getActiveEntry();
+  const label = entry ? ('Entreprise en cours : ' + entry.nom) : '';
+  ['consult', 'synth'].forEach(p => {
+    const empty = document.getElementById(p + '-empty');
+    const content = document.getElementById(p + '-content');
+    if (empty) empty.style.display = has ? 'none' : 'block';
+    if (content) content.style.display = has ? 'block' : 'none';
+    const nameEl = document.getElementById(p + '-active-name');
+    if (nameEl) nameEl.textContent = label;
+  });
+}
+document.querySelectorAll('.tab-btn').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
+
+// ---------- Ouverture/fermeture des groupes ----------
+document.querySelectorAll('.g-toggle').forEach(cb => {
+  cb.addEventListener('change', () => {
+    const g = cb.dataset.group;
+    state.groupes[g].actif = cb.checked;
+    document.querySelector('.group[data-group="' + g + '"] .group-body').classList.toggle('open', cb.checked);
+  });
+});
+
+// ================= TABLES GENERIQUES =================
+const TABLES = {
+  g1: { group: 'g1', fields: ['nom', 'executant', 'tauxHoraire', 'tempsPasse', 'prixFacture'], numeric: ['tauxHoraire', 'tempsPasse', 'prixFacture'],
+    calc: row => { const c = numOr(row.tauxHoraire, 0) * numOr(row.tempsPasse, 0); const m = numOr(row.prixFacture, 0) - c; const t = numOr(row.tempsPasse, 0); return t > 0 ? (m / t).toFixed(2) + ' €/h' : '—'; },
+    rowScore: (row, g) => { const c = numOr(row.tauxHoraire, 0) * numOr(row.tempsPasse, 0); const m = numOr(row.prixFacture, 0) - c; const t = numOr(row.tempsPasse, 0); if (t <= 0 || g.seuil <= 0) return null; return clamp01((m / t) / g.seuil); } },
+  g2: { group: 'g2', fields: ['nom', 'cout', 'ca'], numeric: ['cout', 'ca'],
+    calc: row => { const c = numOr(row.cout, 0); return c > 0 ? (numOr(row.ca, 0) / c).toFixed(2) + 'x' : '—'; },
+    rowScore: (row, g) => { const c = numOr(row.cout, 0); if (c <= 0 || g.multiple <= 0) return null; return clamp01((numOr(row.ca, 0) / c) / g.multiple); } },
+  g3: { group: 'g3', fields: ['nom', 'cout', 'prixPromo'], numeric: ['cout', 'prixPromo'],
+    calc: row => (numOr(row.prixPromo, 0) - numOr(row.cout, 0)).toFixed(2) + ' €',
+    rowScore: (row, g) => { if (g.seuil <= 0) return null; return clamp01((numOr(row.prixPromo, 0) - numOr(row.cout, 0)) / g.seuil); } },
+  g5canaux: { group: 'g5', fields: ['canal', 'pct'], numeric: ['pct'], calc: null, rowScore: null },
+  g7: { group: 'g7', fields: ['nom', 'prixMoyen', 'coutMoyen', 'pctCA'], numeric: ['prixMoyen', 'coutMoyen', 'pctCA'],
+    calc: row => (numOr(row.prixMoyen, 0) - numOr(row.coutMoyen, 0)).toFixed(2) + ' €',
+    rowScore: (row, g) => { if (g.margemin <= 0) return null; return clamp01((numOr(row.prixMoyen, 0) - numOr(row.coutMoyen, 0)) / g.margemin); } },
+  g9cout: { group: 'g9', fields: ['prestation', 'coutInterne', 'tarifST'], numeric: ['coutInterne', 'tarifST'],
+    calc: row => { const ci = numOr(row.coutInterne, 0); if (ci <= 0) return '—'; const ecart = ((ci - numOr(row.tarifST, 0)) / ci) * 100; return ecart.toFixed(0) + '%'; },
+    rowScore: (row, g) => { const ci = numOr(row.coutInterne, 0); if (ci <= 0) return null; const ecart = ((ci - numOr(row.tarifST, 0)) / ci) * 100; if (ecart <= 0) return 1; if (g.seuilecart <= 0) return null; return clamp01(1 - ecart / g.seuilecart); } },
+  g9occ: { group: 'g9', fields: ['poste', 'heuresPayees', 'heuresFacturables'], numeric: ['heuresPayees', 'heuresFacturables'],
+    calc: row => { const p = numOr(row.heuresPayees, 0); if (p <= 0) return '—'; return ((numOr(row.heuresFacturables, 0) / p) * 100).toFixed(0) + '%'; },
+    rowScore: (row, g) => { const p = numOr(row.heuresPayees, 0); if (p <= 0 || g.seuiloccupation <= 0) return null; const taux = (numOr(row.heuresFacturables, 0) / p) * 100; return clamp01(taux / g.seuiloccupation); } }
+};
+
+function addRow(key) { state.tables[key].push({}); renderTable(key); }
+function removeRow(key, idx) { state.tables[key].splice(idx, 1); renderTable(key); }
+function updateCell(key, idx, field, value) {
+  const numeric = TABLES[key].numeric.includes(field);
+  state.tables[key][idx][field] = numeric ? numOr(value, 0) : value;
+  renderTable(key);
+}
+function renderTable(key) {
+  const tbody = document.getElementById('tbody-' + key);
+  if (!tbody) return;
+  const def = TABLES[key];
+  tbody.innerHTML = '';
+  state.tables[key].forEach((row, idx) => {
+    const tr = document.createElement('tr');
+    let html = def.fields.map(f => td_input(key, idx, f, row[f], def.numeric.includes(f) ? 'number' : 'text')).join('');
+    if (def.calc) html += '<td class="calc-cell">' + def.calc(row) + '</td>';
+    html += '<td><button class="btn ghost small" onclick="removeRow(\'' + key + '\',' + idx + ')">✕</button></td>';
+    tr.innerHTML = html;
+    tbody.appendChild(tr);
+  });
+  if (key === 'g5canaux') renderCanalResult();
+}
+function td_input(key, idx, field, value, type) {
+  const v = value === undefined || value === null ? '' : value;
+  return '<td><input type="' + type + '" value="' + v + '" oninput="updateCell(\'' + key + '\',' + idx + ',\'' + field + '\',this.value)"></td>';
+}
+function renderCanalResult() {
+  const rows = state.tables.g5canaux;
+  const out = document.getElementById('g5-canal-result');
+  if (!rows.length) { out.textContent = 'Aucun canal renseigné.'; return; }
+  const max = rows.reduce((m, r) => Math.max(m, numOr(r.pct, 0)), 0);
+  const maxRow = rows.find(r => numOr(r.pct, 0) === max);
+  if (max >= 70) {
+    out.innerHTML = '⚠ Dépendance forte : <strong>' + (maxRow.canal || 'un canal') + '</strong> représente ' + max + '% des leads.';
+  } else {
+    out.textContent = 'Aucune dépendance excessive détectée sur un seul canal.';
+  }
+}
+
+// ---------- Groupe 10 (calcul direct) ----------
+['g10-ca', 'g10-op', 'g10-fin', 'g10-ponct', 'g10-seuil'].forEach(id => document.getElementById(id).addEventListener('input', () => { syncScalars('g10'); renderG10(); }));
+function renderG10() {
+  const g = state.groupes.g10;
+  const out = document.getElementById('g10-result');
+  if (g.ca <= 0) { out.textContent = 'Renseignez le CA de la période pour calculer les ratios.'; return; }
+  const ratioOp = (g.op / g.ca) * 100, ratioFin = (g.fin / g.ca) * 100, ratioPonct = (g.ponct / g.ca) * 100;
+  out.innerHTML = 'Charges opérationnelles : <strong>' + ratioOp.toFixed(1) + '% du CA</strong> (seuil ' + g.seuil + '%)<br>' +
+    'Charges de financement : <strong>' + ratioFin.toFixed(1) + '% du CA</strong><br>' +
+    'Charges ponctuelles : <strong>' + ratioPonct.toFixed(1) + '% du CA</strong>';
+}
+
+// ---------- Groupe 5 : taux de transformation ----------
+['g5-devisenvoyes', 'g5-devissignes', 'g5-seuiltransfo'].forEach(id => document.getElementById(id).addEventListener('input', () => { syncScalars('g5'); renderG5Transfo(); }));
+function renderG5Transfo() {
+  const g = state.groupes.g5;
+  const out = document.getElementById('g5-transfo-result');
+  if (g.devisenvoyes <= 0) { out.textContent = 'Renseignez le nombre de devis envoyés pour calculer le taux de transformation.'; return; }
+  const taux = (g.devissignes / g.devisenvoyes) * 100;
+  out.innerHTML = 'Taux de transformation : <strong>' + taux.toFixed(1) + '%</strong> (seuil visé ' + g.seuiltransfo + '%)';
+}
+
+// ---------- Synchronisation champs scalaires -> state ----------
+const SCALAR_FIELDS = {
+  g1: [['g1-seuil', 'seuil', true]],
+  g2: [['g2-unite', 'unite', false], ['g2-multiple', 'multiple', true]],
+  g3: [['g3-seuil', 'seuil', true]],
+  g5: [['g5-trame', 'trame', false], ['g5-relancedef', 'relancedef', false], ['g5-relancedelai', 'relancedelai', false],
+       ['g5-devisenvoyes', 'devisenvoyes', true], ['g5-devissignes', 'devissignes', true], ['g5-seuiltransfo', 'seuiltransfo', true], ['g5-panier', 'panier', true]],
+  g6: [['g6-vision', 'vision', false], ['g6-visionecrite', 'visionecrite', false], ['g6-segments', 'segments', true], ['g6-discours', 'discours', false],
+       ['g6-vie', 'vie', true], ['g6-pedagogie', 'pedagogie', true], ['g6-resolution', 'resolution', true]],
+  g7: [['g7-margemin', 'margemin', true]],
+  g8: [['g8-logo', 'logo', false], ['g8-palette', 'palette', false], ['g8-typo', 'typo', false],
+       ['g8-reco', 'reco', false], ['g8-coherence', 'coherence', false], ['g8-gabarits', 'gabarits', false]],
+  g9: [['g9-seuilecart', 'seuilecart', true], ['g9-seuiloccupation', 'seuiloccupation', true], ['g9-contrat', 'contrat', false], ['g9-suivi', 'suivi', false]],
+  g10: [['g10-ca', 'ca', true], ['g10-op', 'op', true], ['g10-fin', 'fin', true], ['g10-ponct', 'ponct', true], ['g10-seuil', 'seuil', true]]
+};
+const CHECKBOX_FIELDS = {
+  g5: [['g5-decouverte', 'decouverte'], ['g5-presentation', 'presentation'], ['g5-objections', 'objections'], ['g5-closing', 'closing'],
+       ['g5-prixvaleur', 'prixvaleur'], ['g5-delai', 'delai'], ['g5-conditions', 'conditions'], ['g5-preuve', 'preuve']],
+  g8: [['g8-sup-site', 'supSite'], ['g8-sup-devis', 'supDevis'], ['g8-sup-vehicules', 'supVehicules'], ['g8-sup-reseaux', 'supReseaux'], ['g8-sup-panneaux', 'supPanneaux']]
+};
+
+function syncScalars(g) {
+  (SCALAR_FIELDS[g] || []).forEach(([id, field, numeric]) => { state.groupes[g][field] = numeric ? numOr(val(id), 0) : val(id); });
+  (CHECKBOX_FIELDS[g] || []).forEach(([id, field]) => { state.groupes[g][field] = checked(id); });
+}
+function syncAllScalars() { Object.keys(SCALAR_FIELDS).forEach(syncScalars); }
+
+// écoute tous les champs scalaires et checkbox pour resynchroniser en continu
+Object.keys(SCALAR_FIELDS).forEach(g => (SCALAR_FIELDS[g] || []).forEach(([id]) => { const el = document.getElementById(id); if (el) el.addEventListener('input', () => syncScalars(g)); }));
+Object.keys(CHECKBOX_FIELDS).forEach(g => (CHECKBOX_FIELDS[g] || []).forEach(([id]) => { const el = document.getElementById(id); if (el) el.addEventListener('change', () => syncScalars(g)); }));
+
+// ================= SCORES PAR GROUPE (0-100) =================
+function tableRowScores(key) {
+  const def = TABLES[key];
+  const g = state.groupes[def.group];
+  if (!def.rowScore) return [];
+  return state.tables[key].map(r => def.rowScore(r, g)).filter(v => v !== null);
+}
+function scoreG1() { const g = state.groupes.g1; if (!g.actif) return null; const v = tableRowScores('g1'); return v.length ? avg(v) * 100 : null; }
+function scoreG2() { const g = state.groupes.g2; if (!g.actif) return null; const v = tableRowScores('g2'); return v.length ? avg(v) * 100 : null; }
+function scoreG3() { const g = state.groupes.g3; if (!g.actif) return null; const v = tableRowScores('g3'); return v.length ? avg(v) * 100 : null; }
+
+function scoreG5() {
+  const g = state.groupes.g5; if (!g.actif) return null;
+  const process = avg([g.decouverte, g.presentation, g.objections, g.closing].map(b => b ? 1 : 0));
+  const devis = avg([g.prixvaleur, g.delai, g.conditions, g.preuve].map(b => b ? 1 : 0));
+  const relance = g.relancedef === 'oui' ? 1 : 0;
+  const transfo = g.devisenvoyes > 0 && g.seuiltransfo > 0 ? clamp01((g.devissignes / g.devisenvoyes * 100) / g.seuiltransfo) : null;
+  const parts = avgSkipNull([process * 100, devis * 100, relance * 100, transfo === null ? null : transfo * 100]);
+  return parts;
+}
+
+function scoreG6() {
+  const g = state.groupes.g6; if (!g.actif) return null;
+  const vision = g.visionecrite === 'oui' ? 1 : g.visionecrite === 'partiel' ? 0.5 : 0;
+  const cible = g.segments >= 2 ? (g.discours === 'oui' ? 1 : 0) : null;
+  const nbTypes = [g.vie, g.pedagogie, g.resolution].filter(p => numOr(p, 0) > 0).length;
+  const contenu = (g.vie || g.pedagogie || g.resolution) ? nbTypes / 3 : null;
+  const parts = avgSkipNull([vision * 100, cible === null ? null : cible * 100, contenu === null ? null : contenu * 100]);
+  return parts;
+}
+
+function scoreG7() {
+  const g = state.groupes.g7; if (!g.actif) return null;
+  const rows = state.tables.g7;
+  const diversite = rows.length <= 1 ? (rows.length === 1 ? 0 : null) : clamp01((rows.length - 1) / 2);
+  const margeScores = tableRowScores('g7');
+  const marge = margeScores.length ? avg(margeScores) : null;
+  let repartition = null;
+  if (rows.length >= 2) { const nonZero = rows.filter(r => numOr(r.pctCA, 0) > 0).length; repartition = nonZero / rows.length; }
+  const parts = avgSkipNull([diversite === null ? null : diversite * 100, marge === null ? null : marge * 100, repartition === null ? null : repartition * 100]);
+  return parts;
+}
+
+function scoreG8() {
+  const g = state.groupes.g8; if (!g.actif) return null;
+  const supCount = [g.supSite, g.supDevis, g.supVehicules, g.supReseaux, g.supPanneaux].filter(Boolean).length;
+  const fondation = avg([g.logo === 'oui' ? 1 : 0, g.palette === 'oui' ? 1 : 0, g.typo === 'oui' ? 1 : 0, supCount / 5]);
+  const reco = g.reco === 'oui' ? 1 : g.reco === 'incertain' ? 0.5 : 0;
+  const coherence = g.coherence === 'oui' ? 1 : g.coherence === 'partiel' ? 0.5 : 0;
+  const gabarits = g.gabarits === 'oui' ? 1 : 0;
+  return avg([fondation, reco, coherence, gabarits]) * 100;
+}
+
+function scoreG9() {
+  const g = state.groupes.g9; if (!g.actif) return null;
+  const coutScores = tableRowScores('g9cout');
+  const occScores = tableRowScores('g9occ');
+  const process9d = avg([g.contrat === 'oui' ? 1 : 0, g.suivi === 'oui' ? 1 : 0]);
+  const parts = avgSkipNull([coutScores.length ? avg(coutScores) * 100 : null, occScores.length ? avg(occScores) * 100 : null, process9d * 100]);
+  return parts;
+}
+
+function scoreG10() {
+  const g = state.groupes.g10; if (!g.actif || g.ca <= 0 || g.seuil <= 0) return null;
+  const ratioOp = (g.op / g.ca) * 100;
+  return clamp01((g.seuil - ratioOp) / g.seuil) * 100;
+}
+
+const SCORE_FN = { g1: scoreG1, g2: scoreG2, g3: scoreG3, g5: scoreG5, g6: scoreG6, g7: scoreG7, g8: scoreG8, g9: scoreG9, g10: scoreG10 };
+const GROUP_LABELS = {
+  g1: 'Prix des tâches par exécutant', g2: 'Ratio 3x — coût salarié', g3: 'Marge sur promotions',
+  g5: 'Vente et relance', g6: 'Communication', g7: 'Gammes de prestations', g8: 'Branding',
+  g9: 'Salariat vs sous-traitance', g10: 'Charges'
+};
+const FAMILY_MAP = { rentabilite: ['g1', 'g2', 'g3', 'g9', 'g10'], positionnement: ['g6', 'g7', 'g8'], execution: ['g5'] };
+
+function familyScore(fam) {
+  const vals = FAMILY_MAP[fam].map(g => SCORE_FN[g]()).filter(v => v !== null);
+  return vals.length ? avg(vals) : null;
+}
+function statusOf(score) {
+  if (score === null) return { key: 'none', label: 'Non renseigné', shape: 'none' };
+  if (score >= 70) return { key: 'ok', label: 'Conforme', shape: 'circle' };
+  if (score >= 40) return { key: 'warn', label: 'À surveiller', shape: 'triangle' };
+  return { key: 'alert', label: 'Sous le seuil', shape: 'cross' };
+}
+
+// ================= SYNTHESE =================
+const AXES = [
+  { fam: 'rentabilite', label: 'Rentabilité opérationnelle', center: { x: 200, y: 200 }, vertex: { x: 200, y: 40 } },
+  { fam: 'positionnement', label: 'Positionnement marché', center: { x: 200, y: 200 }, vertex: { x: 61, y: 280 } },
+  { fam: 'execution', label: 'Exécution commerciale', center: { x: 200, y: 200 }, vertex: { x: 339, y: 280 } }
+];
+
+function renderSynthese() {
+  const entry = getActiveEntry();
+  if (!entry) { currentSynthese = { scores: {}, familles: {} }; }
+  else if (currentRole === 'maxime' && state && state.groupes && entry.data) {
+    currentSynthese = computeSynthese();
+  } else {
+    currentSynthese = entry.synthese || { scores: {}, familles: {} };
+  }
+
+  const noSyntheseNote = document.getElementById('synth-no-data');
+  const hasAny = Object.values(currentSynthese.familles || {}).some(v => v !== null && v !== undefined);
+  if (noSyntheseNote) noSyntheseNote.style.display = (entry && !hasAny) ? 'block' : 'none';
+
+  const scores = AXES.map(a => currentSynthese.familles ? currentSynthese.familles[a.fam] : null);
+  const pts = AXES.map((a, i) => {
+    const frac = (scores[i] === null || scores[i] === undefined) ? 0 : scores[i] / 100;
+    return (a.center.x + (a.vertex.x - a.center.x) * frac).toFixed(1) + ',' + (a.center.y + (a.vertex.y - a.center.y) * frac).toFixed(1);
+  }).join(' ');
+  document.getElementById('radar-poly').setAttribute('points', pts);
+
+  const shapesG = document.getElementById('radar-shapes');
+  shapesG.innerHTML = '';
+  AXES.forEach((a, i) => {
+    const frac = (scores[i] === null || scores[i] === undefined) ? 0 : scores[i] / 100;
+    const x = a.center.x + (a.vertex.x - a.center.x) * frac, y = a.center.y + (a.vertex.y - a.center.y) * frac;
+    shapesG.innerHTML += shapeSvgInner(statusOf(scores[i]), x, y);
+  });
+
+  const cards = document.getElementById('score-cards');
+  cards.innerHTML = '';
+  AXES.forEach((a, i) => {
+    const st = statusOf(scores[i]);
+    const div = document.createElement('div');
+    div.className = 'score-card';
+    div.onclick = () => toggleDrill(a.fam, a.label);
+    div.innerHTML = '<svg width="28" height="28" viewBox="0 0 28 28">' + shapeSvgInner(st, 14, 14) + '</svg>' +
+      '<div><div class="lbl">' + a.label + '</div><div class="val">' + ((scores[i] === null || scores[i] === undefined) ? '—' : Math.round(scores[i]) + '%') + '</div>' +
+      '<div class="status-text status-' + st.key + '">' + st.label + '</div></div>';
+    cards.appendChild(div);
+  });
+}
+
+let openDrill = null;
+function toggleDrill(fam, label) {
+  const panel = document.getElementById('drill-panel');
+  if (openDrill === fam) { panel.classList.remove('open'); openDrill = null; return; }
+  openDrill = fam;
+  document.getElementById('drill-title').textContent = 'Détail — ' + label;
+  const body = document.getElementById('drill-body');
+  body.innerHTML = '';
+  FAMILY_MAP[fam].forEach(g => {
+    const score = currentSynthese.scores ? currentSynthese.scores[g] : null;
+    const st = statusOf(score === undefined ? null : score);
+    const row = document.createElement('div');
+    row.className = 'drill-row';
+    row.innerHTML = '<div class="name">' + GROUP_LABELS[g] + '</div>' +
+      '<div style="display:flex;align-items:center;gap:8px;"><svg width="18" height="18" viewBox="0 0 28 28">' + shapeSvgInner(st, 14, 14) + '</svg>' +
+      '<span class="status-text status-' + st.key + '">' + (score === null ? st.label : Math.round(score) + '% — ' + st.label) + '</span></div>';
+    body.appendChild(row);
+  });
+  panel.classList.add('open');
+}
+
+function shapeSvgInner(st, x, y) {
+  const color = st.key === 'ok' ? '#4C86C7' : st.key === 'warn' ? '#D9A441' : st.key === 'alert' ? '#E07A3F' : '#9FB0C4';
+  if (st.shape === 'circle') return '<circle cx="' + x + '" cy="' + y + '" r="9" fill="' + color + '" />';
+  if (st.shape === 'triangle') return '<polygon points="' + (x - 9) + ',' + (y + 7) + ' ' + (x + 9) + ',' + (y + 7) + ' ' + x + ',' + (y - 9) + '" fill="' + color + '" />';
+  if (st.shape === 'cross') return '<g stroke="' + color + '" stroke-width="4" stroke-linecap="round"><line x1="' + (x - 7) + '" y1="' + (y - 7) + '" x2="' + (x + 7) + '" y2="' + (y + 7) + '" /><line x1="' + (x - 7) + '" y1="' + (y + 7) + '" x2="' + (x + 7) + '" y2="' + (y - 7) + '" /></g>';
+  return '<circle cx="' + x + '" cy="' + y + '" r="6" fill="' + color + '" opacity="0.4" />';
+}
+
+// ================= HYDRATATION (à chaque ouverture d'entreprise) =================
+function hydrateFormFromState() {
+  setVal('f-entreprise', state.entreprise);
+  setVal('f-granularite', state.granularite || 'mois');
+
+  Object.keys(state.groupes).forEach(g => {
+    const gs = state.groupes[g];
+    const cb = document.querySelector('.g-toggle[data-group="' + g + '"]');
+    if (cb) { cb.checked = !!gs.actif; document.querySelector('.group[data-group="' + g + '"] .group-body').classList.toggle('open', !!gs.actif); }
+  });
+
+  Object.keys(SCALAR_FIELDS).forEach(g => SCALAR_FIELDS[g].forEach(([id, field]) => setVal(id, state.groupes[g][field])));
+  Object.keys(CHECKBOX_FIELDS).forEach(g => CHECKBOX_FIELDS[g].forEach(([id, field]) => setChecked(id, state.groupes[g][field])));
+
+  Object.keys(TABLES).forEach(renderTable);
+  renderG10();
+  renderG5Transfo();
+}
+
+// ================= INIT (une seule fois au chargement) =================
+function wireEvents() {
+  document.getElementById('btn-save').addEventListener('click', () => { save(); alert('Sauvegardé.'); });
+  document.getElementById('btn-new-entreprise').addEventListener('click', () => {
+    const nom = val('new-entreprise-nom');
+    if (!nom.trim()) { alert('Donnez un nom à l\'entreprise avant de la créer.'); return; }
+    createEntreprise(nom.trim());
+    setVal('new-entreprise-nom', '');
+  });
+
+  // auto-sauvegarde : tout changement dans la Première Consultation est planifié pour Firestore
+  const consultContent = document.getElementById('consult-content');
+  consultContent.addEventListener('input', scheduleSave);
+  consultContent.addEventListener('change', scheduleSave);
+  window.addEventListener('beforeunload', save);
+
+  // connexion / déconnexion
+  document.getElementById('btn-login').addEventListener('click', doLogin);
+  document.getElementById('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+  document.getElementById('btn-logout').addEventListener('click', () => window._fbSignOut());
+}
+
+function doLogin() {
+  const email = val('login-email');
+  const password = val('login-password');
+  const errBox = document.getElementById('login-error');
+  errBox.style.display = 'none';
+  window._fbSignIn(email, password).catch(e => {
+    errBox.textContent = 'Connexion refusée : ' + e.message;
+    errBox.style.display = 'block';
+  });
+}
+
+function showLoginGate() {
+  document.getElementById('login-gate').style.display = 'flex';
+  document.getElementById('app-shell').style.display = 'none';
+  if (unsubscribeEntreprises) { unsubscribeEntreprises(); unsubscribeEntreprises = null; }
+  if (unsubscribePrivate) { unsubscribePrivate(); unsubscribePrivate = null; }
+  portfolio = { entreprises: [], activeId: null };
+  currentRole = null;
+}
+function showApp() {
+  document.getElementById('login-gate').style.display = 'none';
+  document.getElementById('app-shell').style.display = 'block';
+  applyRoleUI();
+  renderPortfolio();
+  refreshActiveVisibility();
+  switchTab('portfolio');
+}
+
+function boot() {
+  window._fbOnAuthChange(user => {
+    if (!user) { showLoginGate(); return; }
+    if (user.uid === MAXIME_UID) currentRole = 'maxime';
+    else if (user.uid === COMPTABLE_UID) currentRole = 'comptable';
+    else { alert('Ce compte n\'est pas autorisé à utiliser Exponentia.'); window._fbSignOut(); return; }
+    showApp();
+    watchEntreprises();
+  });
+}
+
+function init() {
+  wireEvents();
+  if (window._fbReady) boot(); else window.addEventListener('fb-ready', boot, { once: true });
+}
+
+init();
+</script>
+</body>
+</html>
