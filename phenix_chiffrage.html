@@ -82,7 +82,7 @@ body{font-family:var(--font-sans);background-color:var(--bg);background-image:li
 .stat-sub{font-size:11px;color:var(--text3);margin-top:2px}
 
 /* TABLE */
-.table-wrap{padding:0 28px 28px}
+.table-wrap{padding:0 28px 28px;overflow-x:auto}
 .table-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r-lg);overflow:hidden;box-shadow:var(--shadow)}
 .table-toolbar{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--surface)}
 .table-toolbar input{flex:1;padding:6px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:var(--font-sans);background:var(--bg);color:var(--text)}
@@ -101,23 +101,10 @@ tr:hover td{background:var(--accent-bg)}
 .s-chiffrage{background:var(--amber-bg,#FDF3DC);color:#8A6020}
 .s-valide{background:var(--success-bg);color:var(--success)}
 .s-revision{background:var(--danger-bg);color:var(--danger)}
-.row-actions{display:flex;gap:6px;justify-content:flex-end}
+.row-actions{display:flex;gap:6px;justify-content:flex-end;align-items:center}
 
 /* DETAIL LOT */
 .lot-detail-header{padding:20px 28px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border);background:var(--surface)}
-.poste-drag-handle{cursor:grab;text-align:center;color:var(--text3);width:22px;touch-action:none}
-.poste-drag-handle:active{cursor:grabbing}
-#postes-tbody tr.sortable-ghost{opacity:.35;background:var(--accent,#4db8e8)}
-#postes-tbody tr.sortable-chosen td{background:var(--surface2)}
-.lot-repartition-zone{margin-top:10px;padding:10px 12px;background:var(--surface);border:1px dashed var(--border);border-radius:10px}
-.lot-repartition-title{font-size:11px;color:var(--text3);margin-bottom:8px;display:flex;align-items:center;gap:6px}
-.lot-repartition-chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px}
-.lot-chip{flex:0 0 150px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);overflow:hidden}
-.lot-chip.lot-chip-new{border-style:dashed}
-.lot-chip-label{font-size:11px;font-weight:600;padding:6px 8px;border-bottom:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
-.lot-chip-count{font-weight:400;color:var(--text3)}
-.lot-chip-drop{min-height:38px;padding:6px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text3)}
-.lot-chip-drop.sortable-drop-hover,.lot-chip-drop.dragover-active{background:rgba(77,184,232,.15);color:var(--text)}
 .back-btn{cursor:pointer;color:var(--text2);font-size:13px;display:flex;align-items:center;gap:5px;padding:6px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);background:transparent;font-family:var(--font-sans)}
 .back-btn:hover{background:var(--accent-bg);border-color:var(--accent);color:var(--nav)}
 .lot-title-detail{font-family:var(--font-serif);font-size:22px;font-weight:400;color:var(--nav)}
@@ -128,15 +115,47 @@ tr:hover td{background:var(--accent-bg)}
 .lot-title-input-num{font-size:22px;width:150px;min-width:90px;flex-shrink:0}
 .lot-title-input-nom{font-size:22px;flex:1;min-width:180px}
 .detail-body{padding:20px 28px;flex:1}
-.detail-grid{display:grid;grid-template-columns:1fr 340px;gap:20px}
+.detail-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:20px}
+/* Une seule colonne : le bloc « Paramètres & Totaux » est placé sous le tableau
+   des postes (il est imbriqué dans la 1re colonne). L'ancienne 2e colonne de
+   340 px restait vide et volait de la largeur au tableau — les prix artisan
+   sortaient de l'écran dès que les boutons ↑↓ ont élargi la colonne d'actions. */
 .detail-section-title{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--text2);font-weight:700;margin-bottom:12px}
+.poste-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 .poste-table{width:100%;border-collapse:collapse;font-size:13px}
+.poste-table th,.poste-table td{padding-left:6px!important;padding-right:6px!important}
+.poste-table th:first-child,.poste-table td:first-child{padding-left:12px!important}
+.poste-table th:last-child,.poste-table td:last-child{padding-right:10px!important}
+.poste-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;white-space:nowrap}
+.poste-move{display:inline-flex;flex-direction:column;gap:2px}
+.poste-move .btn{min-height:0!important;height:16px;padding:0 7px!important;line-height:1;display:inline-flex;align-items:center;justify-content:center}
+/* ── Tablette (Surface Pro…) ─────────────────────────────────────────── */
+/* Écran tactile : cibles de 44 px minimum pour les boutons de ligne et champs plus hauts */
+@media (any-pointer:coarse){
+  .poste-move{gap:4px}
+  .poste-move .btn{height:32px;min-width:44px;padding:0 10px!important}
+  .poste-move .btn i{font-size:16px!important}
+  .poste-actions{gap:8px}
+  .poste-actions .btn-danger{min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center}
+  .poste-table td{padding-top:10px;padding-bottom:10px}
+  .poste-table input[type=text],.poste-table input[type=number]{min-height:40px}
+  .row-actions .btn{min-height:40px}
+}
+/* Fenêtre étroite (tablette en portrait, écran partagé) : menu réduit aux icônes
+   pour rendre ~150 px au tableau (en dessous de 700 px, il devient la barre du bas). */
+@media (min-width:701px) and (max-width:900px){
+  .sidebar{width:64px}
+  .sidebar > div:not(.nav-item){display:none}
+  .nav-item{font-size:0;justify-content:center;padding:14px 0;gap:0;border-left-width:3px}
+  .nav-item i{font-size:20px;width:auto}
+  .table-wrap,.detail-body{padding-left:16px;padding-right:16px}
+}
 .poste-table th{padding:8px 12px;background:var(--surface2);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--nav);border-bottom:2px solid var(--accent)}
 .poste-table td{padding:8px 12px;border-bottom:1px solid var(--surface2);vertical-align:middle}
 .poste-table input[type=number]{width:80px;padding:4px 8px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:13px;font-family:var(--font-sans);background:var(--bg);color:var(--text);text-align:right}
 .poste-table input[type=text]{width:100%;padding:4px 8px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:13px;font-family:var(--font-sans);background:var(--bg);color:var(--text)}
 .poste-table input:focus{outline:none;border-color:var(--accent);background:rgba(6,13,26,.4)}
-.poste-total{font-weight:600;font-family:var(--font-serif);font-size:14px;text-align:right;color:var(--nav)}
+.poste-total{font-weight:600;font-family:var(--font-serif);font-size:14px;text-align:right;color:var(--nav);white-space:nowrap}
 .add-poste-row td{padding:8px 12px}
 .side-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r-lg);padding:20px;box-shadow:var(--shadow)}
 .side-param{margin-bottom:16px}
@@ -660,7 +679,6 @@ if (window.parent !== window) {
               <div class="poste-table-wrap"><table class="poste-table">
                 <thead>
                   <tr>
-                    <th style="width:22px"></th>
                     <th style="width:30%">Désignation</th>
                     <th style="width:50px">Qté</th>
                     <th style="width:38px">Unité</th>
@@ -668,22 +686,18 @@ if (window.parent !== window) {
                     <th style="width:80px">PU client HT</th>
                     <th style="width:55px">Marge</th>
                     <th style="width:90px;text-align:right">Total client HT</th>
-                    <th style="width:36px"></th>
+                    <th style="width:72px"></th>
                   </tr>
                 </thead>
                 <tbody id="postes-tbody"></tbody>
                 <tfoot>
                   <tr class="add-poste-row">
-                    <td colspan="7">
+                    <td colspan="6">
                       <button class="btn btn-sm btn-outline" onclick="addPoste()"><i class="ti ti-plus" aria-hidden="true"></i>Ajouter un poste</button>
                     </td>
                   </tr>
                 </tfoot>
               </table>
-            </div>
-            <div class="lot-repartition-zone" id="lot-repartition-zone">
-              <div class="lot-repartition-title"><i class="ti ti-arrows-right-left" aria-hidden="true"></i>Glissez une ligne (icône ⠿) vers un autre lot pour l'y déplacer</div>
-              <div class="lot-repartition-chips" id="lot-repartition-chips"></div>
             </div>
           </div>
           <div>
@@ -1926,7 +1940,6 @@ if (window.parent !== window) {
 </div>
 
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
 
 <script type="module">
 import { initializeApp }    from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
@@ -2816,8 +2829,10 @@ function renderLotsTable(){
       <td class="ttc-val" style="${styleBarre}">${fmt(ttc)} €</td>
       <td><span class="status-badge ${sc}">${lot.statut||'Chiffrage'}</span>${exclu?'<div style="font-size:10px;color:var(--danger);margin-top:3px;font-weight:600">Exclu du total</div>':''}</td>
       <td class="row-actions">
-        <button class="btn btn-sm btn-icon" onclick="moveLot(${li},-1)" ${ri===0?'disabled style="opacity:.3"':''} title="Monter"><i class="ti ti-arrow-up" aria-hidden="true"></i></button>
-        <button class="btn btn-sm btn-icon" onclick="moveLot(${li},1)" ${ri===filtered.length-1?'disabled style="opacity:.3"':''} title="Descendre"><i class="ti ti-arrow-down" aria-hidden="true"></i></button>
+        <span class="poste-move">
+          <button class="btn btn-sm btn-icon" onclick="moveLot(${li},-1)" ${ri===0?'disabled style="opacity:.3"':''} title="Monter" aria-label="Monter le lot"><i class="ti ti-chevron-up" aria-hidden="true" style="font-size:11px"></i></button>
+          <button class="btn btn-sm btn-icon" onclick="moveLot(${li},1)" ${ri===filtered.length-1?'disabled style="opacity:.3"':''} title="Descendre" aria-label="Descendre le lot"><i class="ti ti-chevron-down" aria-hidden="true" style="font-size:11px"></i></button>
+        </span>
         <button class="btn btn-sm btn-outline" onclick="openLotDetail(${li})"><i class="ti ti-edit" aria-hidden="true"></i>Détail</button>
         <button class="btn btn-sm btn-danger" onclick="deleteLot(${li})"><i class="ti ti-trash" aria-hidden="true"></i></button>
       </td>`;
@@ -3200,123 +3215,31 @@ function renderPostes(){
     const margeEur=q*(client-artisan);
     const margePct=artisan>0?Math.round(((client-artisan)/artisan)*100):0;
     const tr=document.createElement('tr');
-    tr.setAttribute('data-pi',pi);
     tr.innerHTML=`
-      <td class="poste-drag-handle" title="Glisser pour déplacer vers un autre lot"><i class="ti ti-grip-vertical" aria-hidden="true"></i></td>
       <td><input type="text" value="${p.n||''}" onchange="updatePoste(${pi},'n',this.value)" style="width:100%"></td>
-      <td><input type="number" value="${q}" min="0" step="0.1" style="width:60px" onchange="updatePoste(${pi},'q',this.value)"></td>
-      <td><input type="text" value="${p.u||'u'}" style="width:36px" onchange="updatePoste(${pi},'u',this.value)"></td>
+      <td><input type="number" value="${q}" min="0" step="0.1" style="width:54px" onchange="updatePoste(${pi},'q',this.value)"></td>
+      <td><input type="text" value="${p.u||'u'}" style="width:38px" onchange="updatePoste(${pi},'u',this.value)"></td>
       <td style="text-align:right">
-        <input type="number" value="${artisan}" min="0" step="1" style="width:75px;text-align:right;background:var(--surface2);color:var(--text)" onchange="updatePoste(${pi},'puArtisan',this.value)" title="Prix achat artisan HT">
+        <input type="number" value="${artisan}" min="0" step="1" style="width:78px;text-align:right;background:var(--surface2);color:var(--text)" onchange="updatePoste(${pi},'puArtisan',this.value)" title="Prix achat artisan HT">
       </td>
       <td class="pu-client-cell">
-        <input type="number" value="${client}" min="0" step="1" style="width:75px;text-align:right" onchange="updatePoste(${pi},'puClient',this.value)" title="Prix de vente client HT">
+        <input type="number" value="${client}" min="0" step="1" style="width:78px;text-align:right" onchange="updatePoste(${pi},'puClient',this.value)" title="Prix de vente client HT">
       </td>
       <td style="text-align:center">
         <span class="marge-badge${margePct<0?' neg':''}">${margePct>=0?'+':''}${margePct}%</span>
       </td>
       <td class="poste-total">${fmt(totalClient)} €</td>
-      <td style="white-space:nowrap">
-        <button class="btn btn-sm btn-icon" onclick="movePoste(${pi},-1)" ${pi===0?'disabled style="opacity:.3"':''} title="Monter"><i class="ti ti-arrow-up" aria-hidden="true" style="font-size:13px"></i></button>
-        <button class="btn btn-sm btn-icon" onclick="movePoste(${pi},1)" ${pi===nbPostes-1?'disabled style="opacity:.3"':''} title="Descendre"><i class="ti ti-arrow-down" aria-hidden="true" style="font-size:13px"></i></button>
-        <button class="btn btn-sm btn-danger" onclick="deletePoste(${pi})" style="padding:3px 7px"><i class="ti ti-trash" aria-hidden="true" style="font-size:13px"></i></button>
+      <td>
+        <div class="poste-actions">
+          <span class="poste-move">
+            <button class="btn btn-sm btn-icon" onclick="movePoste(${pi},-1)" ${pi===0?'disabled style="opacity:.3"':''} title="Monter" aria-label="Monter le poste"><i class="ti ti-chevron-up" aria-hidden="true" style="font-size:11px"></i></button>
+            <button class="btn btn-sm btn-icon" onclick="movePoste(${pi},1)" ${pi===nbPostes-1?'disabled style="opacity:.3"':''} title="Descendre" aria-label="Descendre le poste"><i class="ti ti-chevron-down" aria-hidden="true" style="font-size:11px"></i></button>
+          </span>
+          <button class="btn btn-sm btn-danger" onclick="deletePoste(${pi})" style="padding:3px 7px" title="Supprimer le poste" aria-label="Supprimer le poste"><i class="ti ti-trash" aria-hidden="true" style="font-size:13px"></i></button>
+        </div>
       </td>`;
     tb.appendChild(tr);
   });
-  initPostesSortable();
-  renderRepartitionZone();
-}
-
-// === RÉPARTITION DES LIGNES ENTRE LOTS (glisser-déposer) ===
-function escHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-let _postesSortable=null;
-let _chipSortables=[];
-
-function initPostesSortable(){
-  const tb=document.getElementById('postes-tbody');
-  if(!tb || typeof Sortable==='undefined' || _postesSortable) return;
-  _postesSortable=Sortable.create(tb,{
-    group:{name:'lot-postes', pull:true, put:false},
-    handle:'.poste-drag-handle',
-    animation:150,
-    onEnd:function(evt){
-      // Réordonnancement dans le même lot (comportement équivalent à movePoste)
-      if(evt.to===tb && evt.from===tb && evt.oldIndex!==evt.newIndex){
-        const lot=state.chantiers[state.currentChantier].lots[state.currentLot];
-        const postes=lot.postes||[];
-        const moved=postes.splice(evt.oldIndex,1)[0];
-        postes.splice(evt.newIndex,0,moved);
-        saveLot();
-        renderPostes();
-      }
-    }
-  });
-}
-
-function renderRepartitionZone(){
-  const wrap=document.getElementById('lot-repartition-chips');
-  if(!wrap) return;
-  _chipSortables.forEach(s=>s.destroy());
-  _chipSortables=[];
-  wrap.innerHTML='';
-  const c=state.chantiers[state.currentChantier];
-  const li=state.currentLot;
-  (c.lots||[]).forEach((lot,idx)=>{
-    if(idx===li) return;
-    const chip=document.createElement('div');
-    chip.className='lot-chip';
-    const label=(lot.num?lot.num+' — ':'')+(lot.nom||'Sans nom');
-    const count=(lot.postes||[]).length;
-    chip.innerHTML=`<div class="lot-chip-label">${escHtml(label)} <span class="lot-chip-count">(${count})</span></div><div class="lot-chip-drop" data-lot-idx="${idx}">Déposer ici</div>`;
-    wrap.appendChild(chip);
-  });
-  const newChip=document.createElement('div');
-  newChip.className='lot-chip lot-chip-new';
-  newChip.innerHTML=`<div class="lot-chip-label"><i class="ti ti-plus" aria-hidden="true"></i> Nouveau lot</div><div class="lot-chip-drop" data-lot-idx="new">Déposer ici</div>`;
-  wrap.appendChild(newChip);
-
-  if(typeof Sortable==='undefined') return;
-  wrap.querySelectorAll('.lot-chip-drop').forEach(dropEl=>{
-    const s=Sortable.create(dropEl,{
-      group:{name:'lot-postes', pull:false, put:true},
-      sort:false,
-      animation:150,
-      onAdd:function(evt){
-        const pi=parseInt(evt.item.getAttribute('data-pi'),10);
-        const targetAttr=evt.to.getAttribute('data-lot-idx');
-        evt.item.parentNode && evt.item.parentNode.removeChild(evt.item);
-        movePosteToLot(pi, targetAttr==='new' ? 'new' : parseInt(targetAttr,10));
-      }
-    });
-    _chipSortables.push(s);
-  });
-}
-
-function movePosteToLot(pi, targetLotIdx){
-  const c=state.chantiers[state.currentChantier];
-  const li=state.currentLot;
-  const lot=c.lots[li];
-  if(!lot.postes || !lot.postes[pi]) return;
-  if(targetLotIdx==='new'){
-    const nom=prompt('Nom du nouveau lot :','Nouveau lot');
-    if(nom===null) { renderPostes(); return; } // annulé, aucun changement de données
-    const poste=lot.postes.splice(pi,1)[0];
-    c.lots.push({num:'',nom:nom.trim()||'Nouveau lot',postes:[poste],aleas:5,honoraires:5,marge:20,tva:20,statut:'Chiffrage'});
-    saveState();renderPostes();computeLotTotal();
-    if(typeof renderLotsTableOrCards==="function") renderLotsTableOrCards(); else renderLotsTable();
-    renderChantierGrid();
-    showToast('Ligne déplacée vers le nouveau lot "'+escHtml(nom.trim()||'Nouveau lot')+'"');
-    return;
-  }
-  const target=c.lots[targetLotIdx];
-  if(!target){ renderPostes(); return; }
-  const poste=lot.postes.splice(pi,1)[0];
-  if(!target.postes) target.postes=[];
-  target.postes.push(poste);
-  saveState();renderPostes();computeLotTotal();
-  if(typeof renderLotsTableOrCards==="function") renderLotsTableOrCards(); else renderLotsTable();
-  renderChantierGrid();
-  showToast('Ligne déplacée vers "'+escHtml((target.num?target.num+' — ':'')+(target.nom||'lot'))+'"');
 }
 
 function movePoste(pi, dir){
@@ -7037,6 +6960,10 @@ window.phenixDoLogin = function(){
       ('Erreur : ' + (c || (e && e.message) || ''));
   }).finally(() => { if(btn) btn.disabled = false; });
 };
+</script>
+<script>
+/* Menu réduit aux icônes sur tablette étroite : on garde le nom en info-bulle */
+document.querySelectorAll('.sidebar .nav-item').forEach(function(n){ if(!n.title) n.title=n.textContent.trim(); });
 </script>
 
 </body>
