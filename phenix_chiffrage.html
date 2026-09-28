@@ -82,7 +82,7 @@ body{font-family:var(--font-sans);background-color:var(--bg);background-image:li
 .stat-sub{font-size:11px;color:var(--text3);margin-top:2px}
 
 /* TABLE */
-.table-wrap{padding:0 28px 28px;overflow-x:auto}
+.table-wrap{padding:0 28px 28px}
 .table-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r-lg);overflow:hidden;box-shadow:var(--shadow)}
 .table-toolbar{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--surface)}
 .table-toolbar input{flex:1;padding:6px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:var(--font-sans);background:var(--bg);color:var(--text)}
@@ -121,7 +121,7 @@ tr:hover td{background:var(--accent-bg)}
    340 px restait vide et volait de la largeur au tableau — les prix artisan
    sortaient de l'écran dès que les boutons ↑↓ ont élargi la colonne d'actions. */
 .detail-section-title{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--text2);font-weight:700;margin-bottom:12px}
-.poste-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.poste-table-wrap{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch}
 .poste-table{width:100%;border-collapse:collapse;font-size:13px}
 .poste-table th,.poste-table td{padding-left:6px!important;padding-right:6px!important}
 .poste-table th:first-child,.poste-table td:first-child{padding-left:12px!important}
