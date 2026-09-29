@@ -215,6 +215,7 @@ tr:hover td{background:var(--accent-bg)}
 .pu-client-cell input{background:rgba(200,150,60,.20);border-color:#e6b95c!important}
 .marge-badge{display:inline-block;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;background:#e3f5ec;color:#2D7A4F}
 .marge-badge.neg{background:#fdeceb;color:#C0392B}
+.marge-badge.low{background:rgba(230,185,92,.20);color:#a9781f}
 .import-zone{border:2px dashed var(--border2);border-radius:var(--r-md);padding:20px;text-align:center;color:var(--text3);font-size:13px;cursor:pointer;transition:all .15s;margin-bottom:12px}
 .import-zone:hover{border-color:var(--accent);background:var(--accent-bg);color:var(--nav)}
 .import-zone.drag{border-color:var(--accent);background:var(--accent-bg)}
@@ -612,6 +613,14 @@ if (window.parent !== window) {
       </select>
       <button class="btn btn-outline" style="padding:6px 14px;font-size:13px" onclick="appliquerTvaGenerale()">Appliquer à tous les lots</button>
       <span style="font-size:12px;color:var(--text3)">Change le taux de TVA de chaque lot existant en une fois — vous pouvez toujours ajuster un lot particulier ensuite dans son détail.</span>
+    </div>
+
+    <!-- Marge générale du chantier -->
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 28px;background:var(--surface2);border-bottom:1px solid var(--border);color:var(--text)">
+      <label style="font-size:13px;font-weight:600;color:var(--nav);white-space:nowrap">Marge générale du chantier (%)</label>
+      <input type="number" id="marge-generale-input" value="20" min="0" max="100" step="1" style="width:80px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface);color:var(--text)">
+      <button class="btn btn-outline" style="padding:6px 14px;font-size:13px" onclick="appliquerMargeGeneraleChantier()">Appliquer à tous les lots</button>
+      <span style="font-size:12px;color:var(--text3)">Recalcule le prix client de tous les postes de tous les lots à partir de leur prix artisan — même mécanisme que « Marge globale » dans un lot, mais pour tout le chantier d'un coup. Vous pouvez toujours ajuster un lot ou un poste particulier ensuite.</span>
     </div>
 
     <!-- Table lots -->
@@ -2672,7 +2681,7 @@ async function ouvrirModalRaccorderDossier(){
     sel.innerHTML = '<option value="">— Sélectionner un dossier —</option>'
       + projets.map(p => {
           const dejaLie = projetsExistants.has(String(p.id));
-          return `<option value="${p.id}" data-nom="${p.nom||''}" data-budget="${p.budget||''}" data-honoraires="${p.honoraires||''}" ${dejaLie?'disabled':''}>${p.ref ? p.ref+' — ' : ''}${p.nom} · ${p.client}${dejaLie?' (déjà raccordé à un autre chantier)':''}</option>`;
+          return `<option value="${p.id}" data-nom="${p.nom||''}" data-client="${p.client||''}" data-adresse="${p.adresse||''}" data-surface="${p.surface||''}" data-type="${p.type||''}" data-phase="${p.phase||''}" data-budget="${p.budget||''}" data-honoraires="${p.honoraires||''}" ${dejaLie?'disabled':''}>${p.ref ? p.ref+' — ' : ''}${p.nom} · ${p.client}${dejaLie?' (déjà raccordé à un autre chantier)':''}</option>`;
         }).join('');
     if(!projets.length){
       status.style.display='';
@@ -2695,9 +2704,17 @@ function confirmerRaccordementDossier(){
   if(!opt || !opt.value){ showToast('⚠️ Sélectionnez un dossier'); return; }
   const c = state.chantiers[idx];
   c.projetId = opt.value;
-  // Ne complète le budget/les honoraires que s'ils sont vides ici — on ne
-  // veut jamais écraser un chiffrage déjà en cours avec des valeurs venues
-  // de Dossier.
+  c._syncDossierTente = true; // déjà à jour, pas besoin du sync automatique
+  // Ne complète que les champs encore vides ici — on ne veut jamais écraser
+  // un chiffrage déjà en cours avec des valeurs venues de Dossier. C'est ce
+  // qui manquait jusqu'ici : seul le lien (projetId) était posé, jamais le
+  // nom du client ni l'adresse, ce qui les laissait vides partout ailleurs
+  // dans l'appli (carte chantier, exports PDF/DPGF, envoi vers Chantier…).
+  if(!c.client && opt.dataset.client) c.client = opt.dataset.client;
+  if(!c.adresse && opt.dataset.adresse) c.adresse = opt.dataset.adresse;
+  if(!c.surface && opt.dataset.surface) c.surface = opt.dataset.surface;
+  if(!c.type && opt.dataset.type) c.type = opt.dataset.type;
+  if(!c.phase && opt.dataset.phase) c.phase = opt.dataset.phase;
   if(!c.budgetTravaux && opt.dataset.budget) c.budgetTravaux = opt.dataset.budget;
   if(!c.honoraires && opt.dataset.honoraires) c.honoraires = opt.dataset.honoraires;
   saveState();
@@ -2706,6 +2723,34 @@ function confirmerRaccordementDossier(){
   closeModal('modal-raccorder-dossier');
   showToast('✅ Chantier raccordé à « '+(opt.dataset.nom||'')+' »');
 }
+
+// Rattrapage pour un chantier déjà raccordé à un projet Dossier avant que le
+// raccordement ne recopie le client/l'adresse/la surface (voir plus haut) —
+// va chercher ces informations dans Phénix Dossier et ne remplit que les
+// champs encore vides, sans jamais écraser une saisie déjà faite ici.
+async function syncChantierDepuisDossier(idx){
+  const c = state.chantiers[idx];
+  if(!c || !c.projetId) return;
+  try{
+    const { db, collection, getDocs } = await _phenixFbRefs();
+    const snap = await getDocs(collection(db, 'phenix_projets'));
+    let projet = null;
+    snap.forEach(d => { const data = d.data(); if(String(data.id) === String(c.projetId)) projet = data; });
+    if(!projet) return;
+    let changed = false;
+    if(!c.client && projet.client){ c.client = projet.client; changed = true; }
+    if(!c.adresse && projet.adresse){ c.adresse = projet.adresse; changed = true; }
+    if(!c.surface && projet.surface){ c.surface = projet.surface; changed = true; }
+    if(!c.type && projet.type){ c.type = projet.type; changed = true; }
+    if(!c.phase && projet.phase){ c.phase = projet.phase; changed = true; }
+    if(changed){
+      saveState();
+      if(state.currentChantier === idx) renderChiffrage();
+      showToast('✓ Fiche client synchronisée depuis Phénix Dossier');
+    }
+  }catch(e){ console.warn('Synchronisation Phénix Dossier impossible :', e); }
+}
+window.syncChantierDepuisDossier = syncChantierDepuisDossier;
 
 function saveNewChantier(){
   const nom=document.getElementById('f-nom').value.trim();
@@ -2769,6 +2814,15 @@ function renderChiffrage(){
   document.getElementById('chantier-select').value=idx;
   if(typeof renderLotsTableOrCards === "function") renderLotsTableOrCards(); else renderLotsTable();
 
+  // Rattrapage pour les chantiers raccordés à Phénix Dossier AVANT ce
+  // correctif : seul le lien (projetId) avait été posé, jamais le nom du
+  // client ni l'adresse. On comble ça une fois, silencieusement, à
+  // l'ouverture du chantier — sans jamais écraser une valeur déjà présente.
+  if(c.projetId && !c._syncDossierTente && (!c.client || !c.adresse)){
+    c._syncDossierTente = true;
+    syncChantierDepuisDossier(idx);
+  }
+
   const tvaSel=document.getElementById('tva-generale-select');
   if(tvaSel){
     const tauxDistincts=[...new Set((c.lots||[]).map(l=>numOr(l.tva,20)))];
@@ -2790,6 +2844,16 @@ function renderChiffrage(){
   } else {
     banner.style.display='none';
   }
+}
+
+// Badge de marge par lot, dans la synthèse : au-delà de la couleur (rouge/
+// ambre/vert), un repère non-couleur (▼ / ! ) est ajouté pour rester lisible
+// en cas de daltonisme — la couleur seule ne doit jamais porter l'info.
+function margeBadgeHtml(margePct, extraStyle){
+  let cls='', icon='';
+  if(margePct<0){ cls=' neg'; icon='▼ '; }
+  else if(margePct<10){ cls=' low'; icon='! '; }
+  return `<span class="marge-badge${cls}"${extraStyle?` style="${extraStyle}"`:''}>${icon}${margePct>=0?'+':''}${margePct}%</span>`;
 }
 
 function renderLotsTable(){
@@ -2825,7 +2889,7 @@ function renderLotsTable(){
       <td style="text-align:center"><input type="checkbox" ${exclu?'':'checked'} title="Décocher pour exclure ce lot des totaux (comparaison entre artisans, par exemple)" onchange="toggleLotExclusion(${li},!this.checked)"></td>
       <td class="lot-num" style="${styleBarre}">${lot.num||''}</td>
       <td style="${styleBarre}"><div class="lot-name">${lot.nom}</div><div style="font-size:10px;color:var(--text3)">Achat artisan : ${fmt(travArtisan)} € HT</div></td>
-      <td class="ht-val" style="${styleBarre}">${fmt(ht)} €<br><span class="marge-badge${margeEur<0?' neg':''}">${margePct>=0?'+':''}${margePct}%</span></td>
+      <td class="ht-val" style="${styleBarre}">${fmt(ht)} €<br>${margeBadgeHtml(margePct)}</td>
       <td class="ttc-val" style="${styleBarre}">${fmt(ttc)} €</td>
       <td><span class="status-badge ${sc}">${lot.statut||'Chiffrage'}</span>${exclu?'<div style="font-size:10px;color:var(--danger);margin-top:3px;font-weight:600">Exclu du total</div>':''}</td>
       <td class="row-actions">
@@ -3107,6 +3171,36 @@ function appliquerTvaGenerale(){
   showToast('✓ TVA '+taux+'% appliquée à '+lots.length+' lot(s)');
 }
 window.appliquerTvaGenerale=appliquerTvaGenerale;
+
+// Applique une marge (%) sur le prix artisan de TOUS les postes de TOUS les
+// lots du chantier, en une seule fois — même calcul que applyMargeGlobale()
+// (utilisée à l'intérieur d'un lot), simplement répété lot par lot pour
+// éviter d'avoir à ouvrir chaque lot un par un.
+function appliquerMargeGeneraleChantier(){
+  const idx=state.currentChantier;
+  if(idx===null||!state.chantiers[idx]){ showToast('Sélectionnez un chantier d\'abord'); return; }
+  const lots=state.chantiers[idx].lots||[];
+  if(!lots.length){ showToast('Aucun lot dans ce chantier'); return; }
+  const marge=parseFloat(document.getElementById('marge-generale-input').value)||0;
+  const coef=1+(marge/100);
+  let nbPostes=0;
+  lots.forEach(lot=>{
+    lot.marge=marge;
+    (lot.postes||[]).forEach(p=>{
+      const artisan=parseFloat(p.puArtisan)||parseFloat(p.pu)||0;
+      p.puArtisan=artisan;
+      p.puClient=Math.round(artisan*coef*100)/100;
+      nbPostes++;
+    });
+  });
+  saveState();
+  renderChiffrage();
+  // Si un lot est actuellement ouvert dans le détail, on rafraîchit aussi ses
+  // lignes pour refléter tout de suite le nouveau prix client.
+  if(state.currentLot!==null){ renderPostes(); computeLotTotal(); }
+  showToast('✓ Marge '+marge+'% appliquée sur '+nbPostes+' poste(s) dans '+lots.length+' lot(s)');
+}
+window.appliquerMargeGeneraleChantier=appliquerMargeGeneraleChantier;
 
 function openNewLotModal(){
   if(state.currentChantier===null){alert('Sélectionnez d\'abord un chantier.');return;}
@@ -4327,7 +4421,8 @@ function renderLotsMobileCards(){
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-        <span class="marge-badge${margeEur<0?' neg':''}" style="font-size:12px">${margePct>=0?'+':''}${margePct}% marge</span>
+        ${margeBadgeHtml(margePct,'font-size:12px')}
+        <span style="font-size:11px;color:var(--text3)">marge</span>
         <span style="font-size:12px;color:var(--text3)">${(lot.postes||[]).length} poste(s)</span>
       </div>
       <div style="display:flex;gap:8px">
