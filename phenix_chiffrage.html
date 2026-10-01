@@ -582,7 +582,8 @@ if (window.parent !== window) {
           <option value="">— Sélectionner un chantier —</option>
         </select>
         <button class="btn btn-primary" onclick="openNewLotModal()"><i class="ti ti-plus" aria-hidden="true"></i>Nouveau lot</button>
-          <button class="btn btn-outline" onclick="exportPDF()" style="border-color:#4A9CC7;color:#4A9CC7"><i class="ti ti-file-type-pdf" aria-hidden="true"></i>Devis client PDF</button>
+          <button class="btn btn-outline" onclick="exportPDF(true)" style="border-color:#4A9CC7;color:#4A9CC7"><i class="ti ti-file-type-pdf" aria-hidden="true"></i>Devis client PDF</button>
+          <button class="btn btn-outline" onclick="exportPDF(false)" style="border-color:#4A9CC7;color:#4A9CC7"><i class="ti ti-list-details" aria-hidden="true"></i>Devis client PDF (synthèse)</button>
           <button class="btn btn-outline" onclick="exportDPGF()" style="border-color:#7DC6E8;color:#7DC6E8"><i class="ti ti-clipboard-list" aria-hidden="true"></i>DPGF consultation</button>
           <button class="btn btn-outline" onclick="openImportArtisanModalGlobal()" style="border-color:#e74c3c;color:#e74c3c"><i class="ti ti-file-import" aria-hidden="true"></i>Importer devis artisan (IA)</button>
           <button class="btn btn-outline" onclick="exportToFinancement()" style="border-color:#2D7A4F;color:#2D7A4F"><i class="ti ti-coin" aria-hidden="true"></i>Envoyer vers Financement</button>
@@ -1773,7 +1774,8 @@ if (window.parent !== window) {
       <div class="export-card">
         <div class="export-title">Récapitulatif PDF — Estimation APS/APD</div>
         <div class="export-desc">Génère un récapitulatif professionnel en-tête Phénix-Architecture avec décomposition par lots, paramètres (aléas, honoraires) et total général TTC.</div>
-        <button class="btn btn-accent" onclick="exportPDF()" style="min-height:48px;font-size:14px"><i class="ti ti-file-type-pdf" aria-hidden="true"></i>Générer le devis client PDF</button>
+        <button class="btn btn-accent" onclick="exportPDF(true)" style="min-height:48px;font-size:14px"><i class="ti ti-file-type-pdf" aria-hidden="true"></i>Générer le devis client PDF</button>
+        <button class="btn btn-outline" onclick="exportPDF(false)" style="min-height:48px;font-size:14px;margin-top:8px"><i class="ti ti-list-details" aria-hidden="true"></i>Générer la synthèse par lot (sans détail des postes)</button>
       </div>
       <div class="export-card">
         <div class="export-title"><i class="ti ti-clipboard-list" style="color:var(--accent);margin-right:6px" aria-hidden="true"></i>DPGF — Consultation des entreprises</div>
@@ -4047,7 +4049,8 @@ function exportCSVForChantier(idx){
   showToast('Export CSV généré');
 }
 
-function exportPDF(){
+function exportPDF(detaille){
+  if(detaille===undefined) detaille=true;
   const idx=state.currentChantier;
   const selIdx=document.getElementById('export-chantier-select').value;
   const ci=idx!==null?idx:(selIdx!==''?parseInt(selIdx):null);
@@ -4077,6 +4080,15 @@ function exportPDF(){
   const ref='DEV-'+new Date().toISOString().slice(0,10).replace(/-/g,'')+'-'+(ci+1).toString().padStart(3,'0');
   function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
+  // Colonnes du tableau : détaillé = Désignation/Qté/PU/Total (4 colonnes,
+  // la ligne d'en-tête de chaque lot et son sous-total HT s'étalent sur les
+  // 3 premières) — synthèse = seulement Lot/Montant (2 colonnes), exactement
+  // ce qu'affiche la page Lots & Chiffrage avant d'ouvrir le détail d'un lot.
+  const nomColspan = detaille ? 3 : 1;
+  const theadHTML = detaille
+    ? `<th style="width:45%">Désignation</th><th style="width:15%;text-align:right">Qté</th><th style="width:15%;text-align:right">PU HT</th><th style="width:25%;text-align:right">Total HT</th>`
+    : `<th style="width:70%">Lot</th><th style="width:30%;text-align:right">Montant</th>`;
+
   let totalHT=0,totalTVA=0,totalTTC=0;
   const lotsHTML=(c.lots||[]).map(lot=>{
     let htClient=0;
@@ -4091,15 +4103,15 @@ function exportPDF(){
     const tvaAmt=ht*(tva/100);
     const ttc=ht+tvaAmt;
     totalHT+=ht; totalTVA+=tvaAmt; totalTTC+=ttc;
-    const rows=(lot.postes||[]).map(p=>{
+    const rows=!detaille?'':(lot.postes||[]).map(p=>{
       const q=parseFloat(p.q)||0;
       const pu=parseFloat(p.puClient)||parseFloat(p.pu)||0;
       return `<tr><td style="padding:5px 8px 5px 22px;font-size:11px;color:#334155">${esc(p.n)}</td><td style="text-align:right;padding:5px 8px;font-size:11px;white-space:nowrap">${q} ${esc(p.u||'u')}</td><td style="text-align:right;padding:5px 8px;font-size:11px">${fmt(pu)} €</td><td style="text-align:right;padding:5px 8px;font-size:11px;font-weight:600">${fmt(q*pu)} €</td></tr>`;
     }).join('');
-    return `<tr><td colspan="3" style="background:#1E3A5F;padding:8px 10px;color:#93C5FD;font-size:11.5px;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact">${esc(lot.num?lot.num+' — ':'')}${esc(lot.nom)}</td><td style="background:#1E3A5F;text-align:right;padding:8px 10px;color:white;font-size:12px;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact">${fmt(ttc)} € TTC</td></tr>${rows}<tr><td colspan="3" style="background:#F1F5F9;padding:4px 8px;font-size:10.5px;color:#64748B;text-align:right;-webkit-print-color-adjust:exact;print-color-adjust:exact">Sous-total HT</td><td style="background:#F1F5F9;text-align:right;padding:4px 8px;font-size:10.5px;color:#1E3A5F;font-weight:600;-webkit-print-color-adjust:exact;print-color-adjust:exact">${fmt(ht)} €</td></tr>`;
+    return `<tr><td colspan="${nomColspan}" style="background:#1E3A5F;padding:8px 10px;color:#93C5FD;font-size:11.5px;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact">${esc(lot.num?lot.num+' — ':'')}${esc(lot.nom)}</td><td style="background:#1E3A5F;text-align:right;padding:8px 10px;color:white;font-size:12px;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact">${fmt(ttc)} € TTC</td></tr>${rows}<tr><td colspan="${nomColspan}" style="background:#F1F5F9;padding:4px 8px;font-size:10.5px;color:#64748B;text-align:right;-webkit-print-color-adjust:exact;print-color-adjust:exact">Sous-total HT</td><td style="background:#F1F5F9;text-align:right;padding:4px 8px;font-size:10.5px;color:#1E3A5F;font-weight:600;-webkit-print-color-adjust:exact;print-color-adjust:exact">${fmt(ht)} €</td></tr>`;
   }).join('');
 
-  const html=`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Devis ${esc(c.nom)}</title>
+  const html=`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Devis ${esc(c.nom)}${detaille?'':' — Synthèse'}</title>
 <style>*{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}body{font-family:'Segoe UI',Arial,sans-serif;color:#1E293B;background:#fff;font-size:13px}
 .devis-page{max-width:800px;margin:0 auto;padding:28px 32px}
 .header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:16px;border-bottom:3px solid #1E3A5F;margin-bottom:20px}
@@ -4141,14 +4153,14 @@ tbody tr:nth-child(even) td{background:#F8FAFC}
 <div class="header">
   <div><div class="brand">Phénix<span>-Architecture</span></div><div class="brand-sub">Maître d'Œuvre · Contractant Général</div>
   <div class="brand-contact">6 lieu-dit l'Étreille — 63780 Saint-Georges-de-Mons<br>04 73 73 00 59 · contact@phenixarchitecte.fr<br>SIRET 987 989 316 00011</div></div>
-  <div><div class="doc-badge">DEVIS</div><div class="doc-ref">Réf : ${ref}<br>Date : ${date}<br>Validité : 3 mois</div></div>
+  <div><div class="doc-badge">DEVIS${detaille?'':' — SYNTHÈSE'}</div><div class="doc-ref">Réf : ${ref}<br>Date : ${date}<br>Validité : 3 mois</div></div>
 </div>
 <div class="parties">
   <div><div class="plabel">Client</div><div class="pname">${esc(c.client||'—')}</div><div class="pdetail">${esc(c.adresse||'')}${c.surface?'<br>Surface : '+c.surface+' m²':''}</div></div>
   <div><div class="plabel">Maître d'œuvre</div><div class="pname">Phénix-Architecture</div><div class="pdetail">Maxime Suchet<br>Contractant Général · MOE</div></div>
 </div>
 <div class="objet"><div class="objet-lbl">Objet</div><div class="objet-val">${esc(c.nom)}</div><div class="objet-det">Phase : ${esc(c.phase||'APS')}${c.type?' · '+esc(c.type):''}</div></div>
-<table><thead><tr><th style="width:45%">Désignation</th><th style="width:15%;text-align:right">Qté</th><th style="width:15%;text-align:right">PU HT</th><th style="width:25%;text-align:right">Total HT</th></tr></thead>
+<table><thead><tr>${theadHTML}</tr></thead>
 <tbody>${lotsHTML}</tbody></table>
 <div class="totaux">
   <div class="trow"><span class="lbl">Total HT</span><span class="val">${fmt(totalHT)} €</span></div>
