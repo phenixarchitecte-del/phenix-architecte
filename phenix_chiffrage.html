@@ -1360,6 +1360,21 @@ if (window.parent !== window) {
     </div>
   </div>
 
+  <div class="modal-overlay" id="modal-deplacer-poste">
+    <div class="modal" style="max-width:480px">
+      <div class="modal-title"><i class="ti ti-transfer" style="color:#4fa8f0;margin-right:8px" aria-hidden="true"></i>Déplacer ce poste vers un autre lot</div>
+      <div id="deplacer-poste-nom" style="font-size:13px;font-weight:600;color:var(--nav);margin-bottom:12px"></div>
+      <select id="deplacer-poste-select" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;background:var(--surface2);color:var(--text)">
+        <option value="">— Choisir le lot de destination —</option>
+      </select>
+      <div style="font-size:12px;color:var(--text3);margin-top:8px">Le poste (quantité, prix artisan et prix client) est déplacé tel quel — il disparaît de ce lot et est ajouté à la fin de celui que vous choisissez.</div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
+        <button class="btn btn-outline" onclick="closeModal('modal-deplacer-poste')">Annuler</button>
+        <button class="btn btn-primary" onclick="confirmerDeplacerPoste()"><i class="ti ti-transfer" aria-hidden="true"></i>Déplacer</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="modal-ia-resultats">
     <div class="modal modal-ia">
       <div class="modal-title"><i class="ti ti-robot" style="color:#c896e0;margin-right:8px" aria-hidden="true"></i>Analyse IA — Résultats</div>
@@ -3329,6 +3344,7 @@ function renderPostes(){
             <button class="btn btn-sm btn-icon" onclick="movePoste(${pi},-1)" ${pi===0?'disabled style="opacity:.3"':''} title="Monter" aria-label="Monter le poste"><i class="ti ti-chevron-up" aria-hidden="true" style="font-size:11px"></i></button>
             <button class="btn btn-sm btn-icon" onclick="movePoste(${pi},1)" ${pi===nbPostes-1?'disabled style="opacity:.3"':''} title="Descendre" aria-label="Descendre le poste"><i class="ti ti-chevron-down" aria-hidden="true" style="font-size:11px"></i></button>
           </span>
+          <button class="btn btn-sm btn-icon" onclick="ouvrirModalDeplacerPoste(${pi})" style="padding:3px 7px" title="Déplacer vers un autre lot" aria-label="Déplacer ce poste vers un autre lot"><i class="ti ti-transfer" aria-hidden="true" style="font-size:13px"></i></button>
           <button class="btn btn-sm btn-danger" onclick="deletePoste(${pi})" style="padding:3px 7px" title="Supprimer le poste" aria-label="Supprimer le poste"><i class="ti ti-trash" aria-hidden="true" style="font-size:13px"></i></button>
         </div>
       </td>`;
@@ -3345,6 +3361,55 @@ function movePoste(pi, dir){
   renderPostes();saveLot();
 }
 window.movePoste = movePoste;
+
+// === Déplacer un poste d'un lot vers un autre ==============================
+let _posteADeplacer = null;
+
+function ouvrirModalDeplacerPoste(pi){
+  const ci=state.currentChantier, li=state.currentLot;
+  const lot=state.chantiers[ci].lots[li];
+  const poste=lot.postes[pi];
+  if(!poste) return;
+  const autresLots = state.chantiers[ci].lots
+    .map((l,i)=>({l,i}))
+    .filter(x=>x.i!==li);
+  if(!autresLots.length){ showToast('⚠️ Ce chantier n\'a pas d\'autre lot'); return; }
+  _posteADeplacer = pi;
+  document.getElementById('deplacer-poste-nom').textContent = poste.n || 'Poste sans nom';
+  const sel=document.getElementById('deplacer-poste-select');
+  sel.innerHTML = '<option value="">— Choisir le lot de destination —</option>'
+    + autresLots.map(x=>`<option value="${x.i}">${esc_dpgf(x.l.num?x.l.num+' — ':'')}${esc_dpgf(x.l.nom)}</option>`).join('');
+  document.getElementById('modal-deplacer-poste').classList.add('open');
+}
+window.ouvrirModalDeplacerPoste = ouvrirModalDeplacerPoste;
+
+function confirmerDeplacerPoste(){
+  const ci=state.currentChantier, li=state.currentLot;
+  if(_posteADeplacer===null) return;
+  const sel=document.getElementById('deplacer-poste-select');
+  if(!sel.value){ showToast('⚠️ Choisissez un lot de destination'); return; }
+  const liCible=parseInt(sel.value);
+  const lotSource=state.chantiers[ci].lots[li];
+  const lotCible=state.chantiers[ci].lots[liCible];
+  const [poste]=lotSource.postes.splice(_posteADeplacer,1);
+  if(!lotCible.postes) lotCible.postes=[];
+  lotCible.postes.push(poste);
+  _posteADeplacer=null;
+  closeModal('modal-deplacer-poste');
+  saveState();
+  renderPostes();
+  computeLotTotal();
+  if(typeof renderLotsTableOrCards === "function") renderLotsTableOrCards(); else renderLotsTable();
+  renderChantierGrid();
+  // On reste sur le détail du lot source : on re-masque la liste des lots
+  // qui vient d'être rafraîchie en arrière-plan (même logique que saveLot()).
+  const tableWrap = document.getElementById('lots-table-wrap');
+  const mobileCards = document.getElementById('lots-cards-mobile');
+  if(tableWrap) tableWrap.style.display = 'none';
+  if(mobileCards) mobileCards.style.display = 'none';
+  showToast('✓ Poste déplacé vers « '+(lotCible.nom||lotCible.num)+' »');
+}
+window.confirmerDeplacerPoste = confirmerDeplacerPoste;
 
 function updatePoste(pi,field,val){
   const lot=state.chantiers[state.currentChantier].lots[state.currentLot];
