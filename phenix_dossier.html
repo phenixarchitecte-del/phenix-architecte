@@ -235,6 +235,16 @@ window._fb = {
     const s = await getDoc(doc(db, 'phenix_meta', 'tva_provision'));
     return s.exists() ? s.data() : { soldeInitial: 0, dateInitial: '' };
   },
+  // ── Règles d'extraction des devis (quelles données l'IA relève, et dans
+  // quel champ de la fiche elles vont) — un seul document partagé entre
+  // tous vos appareils ──
+  async saveDevisRegles(regles) {
+    await setDoc(doc(db, 'phenix_meta', 'devis_extraction_v2'), { regles, maj: new Date().toISOString() });
+  },
+  async loadDevisRegles() {
+    const s = await getDoc(doc(db, 'phenix_meta', 'devis_extraction_v2'));
+    return s.exists() ? (s.data().regles || null) : null;
+  },
   // ── Revenus manuels (Comptabilité) — mêmes principes que les charges,
   // pour les rentrées d'argent qui ne passent pas par une facture ──
   async saveRevenu(r) {
@@ -1632,6 +1642,20 @@ tr:last-child td{border-bottom:none} tr:hover td{background:var(--accent-bg)}
 #app-dossier .tp-phase-row-nom{ font-size:13.5px; font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 #app-dossier .tp-phase-row-cur{ font-size:11px; font-weight:700; color:var(--accent); background:var(--accent-bg); padding:2px 9px; border-radius:20px; flex-shrink:0; }
 #app-dossier .tp-phase-row-sub{ font-size:11px; color:var(--text3); margin-top:6px; display:flex; gap:10px; flex-wrap:wrap; }
+/* ── Règles d'extraction des devis ─────────────────────────────── */
+#app-dossier .dr-banner{ display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; background:var(--accent-bg); border:1.5px solid var(--accent); border-radius:var(--r-md); padding:12px 14px; margin-bottom:1rem; font-size:13px; color:var(--text); }
+#app-dossier .dr-recap{ background:var(--bg2); border:1.5px solid var(--border); border-radius:var(--r-md); padding:11px 14px; margin-bottom:1rem; font-size:12.5px; line-height:1.65; color:var(--text); }
+#app-dossier .dr-group{ font-size:11px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:.06em; margin:1rem 0 .4rem; }
+#app-dossier .dr-group:first-child{ margin-top:0; }
+#app-dossier .dr-row{ border:1px solid var(--border); border-radius:var(--r-md); padding:9px 11px; margin-bottom:7px; background:var(--bg2); }
+#app-dossier .dr-row.off{ opacity:.6; }
+#app-dossier .dr-head{ display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text); cursor:pointer; flex-wrap:wrap; }
+#app-dossier .dr-head input[type=checkbox]{ width:16px; height:16px; accent-color:var(--accent); flex-shrink:0; }
+#app-dossier .dr-dest{ font-size:11px; color:var(--text3); margin-left:auto; }
+#app-dossier .dr-off-tag{ display:none; font-size:10px; font-weight:700; color:var(--text3); border:1px solid var(--border); border-radius:20px; padding:0 7px; }
+#app-dossier .dr-row.off .dr-off-tag{ display:inline-block; }
+#app-dossier .dr-row textarea{ width:100%; margin-top:6px; font-size:12.5px; min-height:46px; resize:vertical; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 8px; font-family:inherit; line-height:1.45; }
+#app-dossier .ia-badge{ display:inline-block; font-size:9px; font-weight:800; letter-spacing:.04em; color:var(--accent); background:var(--accent-bg); border:1px solid var(--accent); border-radius:20px; padding:0 6px; margin-left:4px; vertical-align:middle; }
 #app-dossier .agenda-cal-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; }
 #app-dossier .agenda-cal-nav{ display:flex; align-items:center; gap:10px; }
 #app-dossier .agenda-cal-title{ font-family:var(--font-serif); font-size:20px; color:var(--navy); }
@@ -2292,6 +2316,7 @@ if (window.parent !== window) {
         <div class="form-group"></div>
       </div>
       <div id="fact-paiement-preview" style="display:none;margin-bottom:10px"></div>
+      <div id="fact-lignes-detail" style="display:none"></div>
       <div class="form-group"><label>Notes internes</label><textarea id="fact-notes" rows="2" placeholder="Informations complémentaires, référence PO client…"></textarea></div>
     </div>
     <div class="modal-footer">
@@ -3999,14 +4024,35 @@ if (window.parent !== window) {
             <div id="devis-signe-drop-zone" onclick="document.getElementById('devis-signe-file-input').click()"
                  style="border:2px dashed var(--border);border-radius:var(--r-md);padding:28px 16px;text-align:center;cursor:pointer;background:var(--bg2);color:var(--text)">
               <div style="font-size:28px;color:var(--accent);margin-bottom:8px"><i class="ti ti-file-type-pdf"></i></div>
-              <div style="font-weight:600;color:var(--navy)">Déposer le devis signé (PDF)</div>
+              <div style="font-weight:600;color:var(--navy)">Déposer le devis signé (PDF, photo ou scan)</div>
               <div style="font-size:12px;color:var(--text2);margin-top:4px">ou cliquez pour parcourir</div>
-              <input type="file" id="devis-signe-file-input" accept=".pdf" style="display:none" onchange="handleDevisSignePdf(this.files[0])">
+              <input type="file" id="devis-signe-file-input" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/*" style="display:none" onchange="handleDevisSignePdf(this.files[0])">
             </div>
             <div id="devis-signe-status" style="display:none;margin-top:14px"></div>
             <div style="font-size:11.5px;color:var(--text3);margin-top:12px;line-height:1.6">
-              L'IA lit le client, l'adresse, l'objet et le montant, puis ouvre le formulaire "Nouveau projet" déjà rempli — tu vérifies, tu cliques "Créer le projet", et le devis est automatiquement ajouté à sa facturation, prêt à être converti en facture.
+              L'IA relève dans le devis les données que vous avez choisies et les range dans les champs prévus, puis ouvre le formulaire "Nouveau projet" déjà rempli — vous vérifiez, vous cliquez "Créer le projet", et le devis est automatiquement ajouté à sa facturation, prêt à être converti en facture.
             </div>
+            <button class="btn btn-sm" style="margin-top:10px" onclick="openDevisReglesModal()"><i class="ti ti-settings"></i> Choisir ce que l'IA relève et où elle le range</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-overlay" id="devisReglesModal" onmousedown="this._downOnSelf=(event.target===this)" onmouseup="if(this._downOnSelf&&event.target===this)closeDevisReglesModal();this._downOnSelf=false">
+        <div class="modal" style="max-width:780px">
+          <div class="modal-header">
+            <div class="modal-title">Ce que l'IA relève dans vos devis</div>
+            <button class="btn btn-sm" onclick="closeDevisReglesModal()"><i class="ti ti-x"></i></button>
+          </div>
+          <div class="modal-body" style="max-height:68vh;overflow-y:auto">
+            <div style="font-size:12.5px;color:var(--text2);line-height:1.6;margin-bottom:12px">
+              Chaque ligne = <strong>un champ de votre fiche</strong> (son nom est en gras) + <strong>la consigne donnée à l'IA</strong> pour trouver la bonne information dans le devis. Cochez ce que l'IA doit remplir, et reformulez la consigne comme vous la donneriez à un collaborateur. Ce qui n'est pas coché n'est pas touché.
+              Les lignes « Devis » alimentent le devis créé dans la facturation — décochez-les toutes pour ne pas en créer.
+            </div>
+            <div id="devis-regles-liste"></div>
+          </div>
+          <div class="modal-footer" style="display:flex;justify-content:space-between;gap:8px;padding:12px 16px;border-top:1px solid var(--border)">
+            <button class="btn" onclick="resetDevisRegles()">Revenir aux règles par défaut</button>
+            <div style="display:flex;gap:8px"><button class="btn" onclick="closeDevisReglesModal()">Annuler</button><button class="btn btn-primary" onclick="saveDevisRegles()"><i class="ti ti-check"></i> Enregistrer</button></div>
           </div>
         </div>
       </div>
@@ -4056,6 +4102,14 @@ if (window.parent !== window) {
       <div class="page" id="page-new">
         <div class="page-header"><div><div class="page-title">Nouveau projet</div><div class="page-subtitle">Saisissez les informations pour créer la fiche projet</div></div></div>
         <div class="card" style="max-width:720px">
+          <div class="dr-banner">
+            <div><strong>Vous avez déjà le devis ?</strong><div style="font-size:12px;color:var(--text2);margin-top:2px">Déposez-le (PDF, photo ou scan) : l'IA remplit la fiche en suivant vos règles (ce qu'elle relève dans le devis, et dans quel champ elle le range).</div></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-primary" onclick="openImportDevisSigneModal()"><i class="ti ti-file-import"></i> Importer le devis (PDF ou photo)</button>
+              <button class="btn" onclick="openDevisReglesModal()"><i class="ti ti-settings"></i> Règles d'extraction</button>
+            </div>
+          </div>
+          <div id="devis-ia-recap" class="dr-recap" style="display:none"></div>
           <div class="form-section">Informations générales</div>
           <div class="form-grid">
             <div class="form-group"><label>Nom du projet *</label><input type="text" id="np-nom" placeholder="Ex. Maison Martin"></div>
@@ -4132,7 +4186,7 @@ if (window.parent !== window) {
           <div style="display:flex;gap:10px;align-items:center">
             <button class="btn btn-primary" onclick="createProject()"><i class="ti ti-check"></i> Créer le projet</button>
             <button class="btn" onclick="toggleAI_d();askAI('Aide-moi à rédiger la lettre de mission et l\'offre d\'honoraires pour mon nouveau projet.')">↗ Lettre de mission IA</button>
-            <button class="btn" onclick="show_d('dashboard',document.querySelector('.nav-item'))">Annuler</button>
+            <button class="btn" onclick="_devisSigneEnAttente=null;devisEffacerMarquesIA();show_d('dashboard',document.querySelector('.nav-item'))">Annuler</button>
           </div>
         </div>
       </div>
@@ -6975,6 +7029,7 @@ async function createProject() {
   ['np-nom','np-ref','np-client','np-email','np-tel','np-adresse','np-budget','np-date','np-surface','np-honoraires','np-commissions','np-avancement','np-notes'].forEach(i=>document.getElementById(i).value='');
   document.getElementById('np-type').value='';
   document.getElementById('budgetPreview').style.display='none';
+  devisEffacerMarquesIA();
   await saveProjet(p);
   renderDashboard_d();
 
@@ -6995,9 +7050,13 @@ async function createProject() {
       montantHt: _devisSigneEnAttente.montantHt || parseFloat(p.honoraires)||0,
       tva: _devisSigneEnAttente.tva || 20,
       montantPaye: 0,
+      lignes: _devisSigneEnAttente.lignes || [],
+      montantTvaDevis: _devisSigneEnAttente.montantTva || 0,
+      montantTtcDevis: _devisSigneEnAttente.montantTtc || 0,
       statut: 'accepte', // le devis est déjà signé au moment de l'import
       notes: 'Créé automatiquement depuis l\'import du devis signé.',
     };
+    if (!devisCree.lignes.length) delete devisCree.lignes;
     stateDossier.factures.push(devisCree);
     await saveFactureDb(devisCree);
     _devisSigneEnAttente = null;
@@ -9763,6 +9822,7 @@ function openFactureModal(type='facture', projetId=null) {
   if (!stateDossier.projets.length) sel.innerHTML='<option value="">Aucun projet</option>';
 
   onFactTypeChange();
+  renderFactLignes(null);
   document.getElementById('factureModal').classList.add('open');
 }
 
@@ -9806,7 +9866,18 @@ function openFactureEdit(id) {
     calcFactFromPct();
   }
   calcFactTTC(); calcFactPaiement();
+  renderFactLignes(f);
   document.getElementById('factureModal').classList.add('open');
+}
+
+function renderFactLignes(f) {
+  const el = document.getElementById('fact-lignes-detail');
+  if (!el) return;
+  const L = f && Array.isArray(f.lignes) ? f.lignes : [];
+  if (!L.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = 'block';
+  el.innerHTML = `<div class="fact-modal-section">Détail relevé sur le devis (${L.length} ligne${L.length > 1 ? 's' : ''})</div>${devisLignesTableHtml(L)}
+    <div style="font-size:12px;color:var(--text2);margin:8px 0 14px">${f.montantHt ? 'Total HT <strong>' + fmtEur_d(f.montantHt) + '</strong>' : ''}${f.montantTvaDevis ? ' · TVA <strong>' + fmtEur_d(f.montantTvaDevis) + '</strong>' : ''}${f.montantTtcDevis ? ' · Total TTC <strong>' + fmtEur_d(f.montantTtcDevis) + '</strong>' : ''}</div>`;
 }
 
 function onFactTypeChange() {
@@ -9926,6 +9997,10 @@ async function saveFacture_d() {
     pourcentage: parseFloat(document.getElementById('fact-pct')?.value)||0,
     baseHonoraires: parseFloat(document.getElementById('fact-base-honoraires')?.value)||0,
   };
+  // Le détail relevé sur le devis (lignes, totaux imprimés) ne se modifie pas
+  // dans ce formulaire : on le conserve tel quel à chaque enregistrement.
+  { const ancien = editingFactureId ? stateDossier.factures.find(x=>x.id===editingFactureId) : null;
+    if (ancien) ['lignes','montantTvaDevis','montantTtcDevis'].forEach(k => { if (ancien[k] !== undefined) f[k] = ancien[k]; }); }
 
   // Une facture payée sans date de paiement fausse le rattachement comptable au
   // mois. On retombe sur la date d'émission (bien plus proche de la réalité que
@@ -12590,55 +12665,362 @@ function openImportDevisSigneModal() {
   document.getElementById('devis-signe-status').style.display = 'none';
   document.getElementById('devis-signe-drop-zone').innerHTML = `
     <div style="font-size:28px;color:var(--accent);margin-bottom:8px"><i class="ti ti-file-type-pdf"></i></div>
-    <div style="font-weight:600;color:var(--navy)">Déposer le devis signé (PDF)</div>
+    <div style="font-weight:600;color:var(--navy)">Déposer le devis signé (PDF, photo ou scan)</div>
     <div style="font-size:12px;color:var(--text2);margin-top:4px">ou cliquez pour parcourir</div>
-    <input type="file" id="devis-signe-file-input" accept=".pdf" style="display:none" onchange="handleDevisSignePdf(this.files[0])">`;
+    <input type="file" id="devis-signe-file-input" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/*" style="display:none" onchange="handleDevisSignePdf(this.files[0])">`;
   document.getElementById('devisSigneIaModal').classList.add('open');
 }
 function closeDevisSigneIaModal() {
   document.getElementById('devisSigneIaModal').classList.remove('open');
 }
 
-function handleDevisSignePdf(file) {
+// PDF → envoyé tel quel. Photo/scan → réduit (2200 px max) et recompressé en JPEG :
+// une photo brute de plusieurs Mo dépasserait la taille maximale d'une requête.
+async function devisPreparerFichier(file) {
+  const estPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+  if (estPdf) {
+    const b64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = e => res(e.target.result.split(',')[1]); r.onerror = rej; r.readAsDataURL(file); });
+    return { base64: b64, mediaType: 'application/pdf', pdf: true };
+  }
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('Image illisible (format non pris en charge — utilisez JPG, PNG ou PDF)')); i.src = url; });
+    const k = Math.min(1, 2200 / Math.max(img.naturalWidth, img.naturalHeight));
+    const w = Math.round(img.naturalWidth * k), h = Math.round(img.naturalHeight * k);
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const ctx = cv.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); ctx.drawImage(img, 0, 0, w, h);
+    let q = 0.88, out = cv.toDataURL('image/jpeg', q);
+    while (out.length * 0.75 > 4000000 && q > 0.5) { q -= 0.1; out = cv.toDataURL('image/jpeg', q); }
+    return { base64: out.split(',')[1], mediaType: 'image/jpeg', pdf: false };
+  } finally { URL.revokeObjectURL(url); }
+}
+
+async function handleDevisSignePdf(file) {
   if (!file) return;
   document.getElementById('devis-signe-drop-zone').innerHTML = `
     <div style="font-size:28px;color:var(--red);margin-bottom:6px"><i class="ti ti-file-text"></i></div>
-    <div style="font-weight:600;color:var(--navy)">${file.name}</div>
+    <div style="font-weight:600;color:var(--navy)">${esc(file.name)}</div>
     <div style="font-size:12px;color:var(--text2)">${(file.size/1024).toFixed(0)} Ko</div>`;
-  const reader = new FileReader();
-  reader.onload = e => analyzeDevisSigneIA(e.target.result.split(',')[1]);
-  reader.readAsDataURL(file);
+  try {
+    const prep = await devisPreparerFichier(file);
+    await analyzeDevisSigneIA(prep, file.name);
+  } catch (err) {
+    const status = document.getElementById('devis-signe-status');
+    status.style.display = 'block';
+    status.innerHTML = `<div style="background:var(--red-bg,#fdecea);border:1.5px solid var(--red);border-radius:var(--r-md);padding:12px 14px;font-size:13px;color:var(--red)">⚠️ ${esc(err.message)}</div>`;
+  }
 }
 
-async function analyzeDevisSigneIA(base64) {
+// ════════════════════════════════════════════════════════════════════
+//  RÈGLES D'EXTRACTION DES DEVIS
+//  Vous décidez quelles données l'IA relève dans un devis (consigne en
+//  français, modifiable) et dans quel champ de la fiche elle les range.
+//  Les consignes sont envoyées telles quelles à l'IA ; ce qui est décoché
+//  n'est ni demandé ni écrit dans la fiche.
+// ════════════════════════════════════════════════════════════════════
+const DEVIS_REGLES_LS = 'phenix_devis_regles_v2';
+const DEVIS_CIBLES = [
+  // g = groupe affiché · cible = id du champ (np-…) ou devis.… · type = texte|nombre|date|choix|lignes
+  // Réglage d'origine = devis annoté par vous : ce qui est entouré (client + adresse,
+  // référence dossier, TVA) + les lignes et les montants. Le reste est décoché.
+  {g:'Fiche projet — Client & adresse', cible:'np-client', label:'Client — nom / raison sociale', type:'texte', actif:true,
+   consigne:"Prénom et nom du client, tels qu'écrits sur la première ligne du cadre client (en haut à droite, sous « N° client » et « Devis valable jusqu'au »), SANS la civilité (Madame, Monsieur, Mme, M.). Si le client est une société, une SCI, une collectivité : sa raison sociale."},
+  {g:'Fiche projet — Client & adresse', cible:'np-nom', label:'Nom du projet (nom de la fiche)', type:'texte', actif:true,
+   consigne:"Nom de famille seul du client (sans civilité ni prénom), tel qu'écrit dans le cadre client : il sert de nom à la fiche dossier. Pour une société : sa raison sociale."},
+  {g:'Fiche projet — Client & adresse', cible:'np-adresse', label:'Adresse', type:'texte', actif:true,
+   consigne:"Adresse postale du cadre client, sous le nom : numéro et rue, code postal, commune — sans la ligne « FRANCE »."},
+  {g:'Fiche projet — Client & adresse', cible:'np-email', label:'Email du client', type:'texte', actif:false,
+   consigne:"Adresse e-mail du client, si elle figure sur le devis."},
+  {g:'Fiche projet — Client & adresse', cible:'np-tel', label:'Téléphone du client', type:'texte', actif:false,
+   consigne:"Numéro de téléphone du client, s'il figure sur le devis (mobile de préférence)."},
+  {g:'Fiche projet — Client & adresse', cible:'np-ctype', label:'Type de client', type:'choix', actif:false,
+   consigne:"Particulier si le client est une personne physique ; sinon Société / SCI, Promoteur ou Collectivité selon le cas."},
+  {g:'Fiche projet — Dossier', cible:'np-ref', label:'Référence dossier', type:'texte', actif:true,
+   consigne:"Numéro de référence dossier : sur la ligne « Réf. : » (sous le cadre client, juste avant la description de la mission), un nombre à 10 chiffres du type 0309260033. Ne garder que les 6 derniers chiffres (ici 260033) : les 4 premiers sont le jour et le mois."},
+  {g:'Fiche projet — Dossier', cible:'np-type', label:'Type de projet', type:'choix', actif:false,
+   consigne:"Nature du projet : choisis la valeur la plus proche de ce que décrit le devis."},
+  {g:'Fiche projet — Dossier', cible:'np-mission', label:'Type de mission', type:'choix', actif:false,
+   consigne:"Étendue de la mission confiée : « Complète » si toutes les phases (esquisse à réception) sont chiffrées, « Études seules » si seulement esquisse/APS/APD, « DET » si seulement la direction des travaux."},
+  {g:'Fiche projet — Dossier', cible:'np-surface', label:'Surface (m²)', type:'nombre', actif:false,
+   consigne:"Surface du projet en m², si le devis l'indique clairement pour le projet (et non une surface à démolir ou à traiter partiellement)."},
+  {g:'Fiche projet — Dossier', cible:'np-budget', label:'Budget travaux estimé (€ HT)', type:'nombre', actif:false,
+   consigne:"Montant estimé des travaux HT s'il est indiqué (base de calcul des honoraires). À ne pas confondre avec le montant du devis d'honoraires."},
+  {g:'Fiche projet — Dossier', cible:'np-date', label:'Date de démarrage prévue', type:'date', actif:false,
+   consigne:"Date de démarrage de la mission si elle est indiquée ; sinon la date de signature du devis (bloc « Bon pour accord », en bas)."},
+  {g:'Fiche projet — Dossier', cible:'np-phase', label:'Phase actuelle', type:'choix', actif:false,
+   consigne:"Phase à laquelle la mission démarre (ESQ si elle commence par l'esquisse, APS, PC…). Laisse vide si le devis ne le dit pas."},
+  {g:'Fiche projet — Dossier', cible:'np-statut', label:'Statut', type:'choix', actif:false,
+   consigne:"« demarrage » si le devis est signé, « etude » s'il s'agit d'une simple étude préalable."},
+  {g:'Fiche projet — Dossier', cible:'np-notes', label:'Notes', type:'texte', actif:false,
+   consigne:"Résumé très court du projet (10 mots maximum), pour les notes internes."},
+  {g:'Fiche projet — Honoraires', cible:'np-honoraires', label:'Honoraires HT (€)', type:'nombre', actif:true,
+   consigne:"Total HT du devis : bloc de totaux en bas à droite, ligne « Total HT »."},
+  {g:'Fiche projet — Honoraires', cible:'np-commissions', label:'Commissions HT (€)', type:'nombre', actif:false,
+   consigne:"Montant HT des commissions ou de la marge sur sous-traitance, s'il est identifiable sur le devis."},
+  {g:'Devis créé dans la Facturation', cible:'devis.numero', label:'Devis — numéro', type:'texte', actif:true,
+   consigne:"Numéro du devis, en haut à droite (ligne « N° : », du type DEV00000045)."},
+  {g:'Devis créé dans la Facturation', cible:'devis.date', label:'Devis — date d\'émission', type:'date', actif:true,
+   consigne:"Date d'émission, en haut à droite (ligne « Date d'émission »). Pas la date de signature."},
+  {g:'Devis créé dans la Facturation', cible:'devis.objet', label:'Devis — objet de la mission', type:'texte', actif:true,
+   consigne:"Description de la mission : le texte placé sous la ligne « Réf. », avant le tableau, sans la ou les lignes d'adresse du chantier. 12 mots maximum."},
+  {g:'Devis créé dans la Facturation', cible:'devis.tva', label:'Devis — taux de TVA (%)', type:'nombre', actif:true,
+   consigne:"Taux indiqué dans la colonne « TVA » des lignes du tableau (par exemple 10,00 % → 10). Si les lignes n'ont pas toutes le même taux, retiens celui de la ligne au montant le plus élevé."},
+  {g:'Devis créé dans la Facturation', cible:'devis.lignes', label:'Devis — lignes de détail', type:'lignes', actif:true,
+   consigne:"Toutes les lignes du tableau principal (colonnes Libellé, Qté, Unité, PU HT, Montant HT, TVA), dans l'ordre du document. N'oublie aucune ligne, n'en fusionne aucune, et ne reprends ni les totaux ni le « Détail de la TVA »."},
+  {g:'Devis créé dans la Facturation', cible:'devis.montantHt', label:'Devis — total HT (€)', type:'nombre', actif:true,
+   consigne:"Total HT : bloc de totaux en bas à droite, ligne « Total HT »."},
+  {g:'Devis créé dans la Facturation', cible:'devis.montantTva', label:'Devis — total TVA (€)', type:'nombre', actif:true,
+   consigne:"Montant de la TVA en euros : bloc de totaux en bas à droite, ligne « TVA »."},
+  {g:'Devis créé dans la Facturation', cible:'devis.montantTtc', label:'Devis — total TTC (€)', type:'nombre', actif:true,
+   consigne:"Total TTC : bloc de totaux en bas à droite, ligne « Total TTC »."},
+];
+
+function devisReglesFusion(saved) {
+  const map = new Map((Array.isArray(saved) ? saved : []).map(r => [r.cible, r]));
+  return DEVIS_CIBLES.map(d => {
+    const s = map.get(d.cible);
+    return {
+      cible: d.cible,
+      actif: s && typeof s.actif === 'boolean' ? s.actif : d.actif,
+      consigne: s && typeof s.consigne === 'string' && s.consigne.trim() ? s.consigne.trim() : d.consigne,
+    };
+  });
+}
+function devisReglesLireLocal() {
+  try { return devisReglesFusion(JSON.parse(localStorage.getItem(DEVIS_REGLES_LS) || 'null')); }
+  catch (e) { return devisReglesFusion(null); }
+}
+async function devisReglesCharger() {
+  let regles = devisReglesLireLocal();
+  try {
+    if (window._fb && typeof window._fb.loadDevisRegles === 'function') {
+      const distant = await Promise.race([window._fb.loadDevisRegles(), new Promise(r => setTimeout(() => r('timeout'), 2500))]);
+      if (distant && distant !== 'timeout') {
+        regles = devisReglesFusion(distant);
+        localStorage.setItem(DEVIS_REGLES_LS, JSON.stringify(regles));
+      }
+    }
+  } catch (e) { /* hors-ligne : on garde la copie locale */ }
+  return regles;
+}
+
+async function openDevisReglesModal() {
+  renderDevisReglesListe(await devisReglesCharger());
+  document.getElementById('devisReglesModal').classList.add('open');
+}
+function closeDevisReglesModal() { document.getElementById('devisReglesModal').classList.remove('open'); }
+
+function renderDevisReglesListe(regles) {
+  const cont = document.getElementById('devis-regles-liste');
+  let html = '', groupe = '';
+  DEVIS_CIBLES.forEach(d => {
+    const r = regles.find(x => x.cible === d.cible);
+    if (d.g !== groupe) { groupe = d.g; html += `<div class="dr-group">${esc(groupe)}</div>`; }
+    const dest = d.cible.startsWith('devis.') ? 'Facturation › devis' : 'Nouveau projet › ' + d.label;
+    html += `<div class="dr-row ${r.actif ? '' : 'off'}" data-cible="${d.cible}">
+      <label class="dr-head"><input type="checkbox" ${r.actif ? 'checked' : ''} onchange="this.closest('.dr-row').classList.toggle('off',!this.checked)">
+        <strong>${esc(d.label)}</strong><span class="dr-off-tag">désactivé</span><span class="dr-dest">va dans : ${esc(dest)}</span></label>
+      <textarea rows="2" aria-label="Consigne pour : ${esc(d.label)}">${esc(r.consigne)}</textarea>
+    </div>`;
+  });
+  cont.innerHTML = html;
+}
+function devisReglesCollecter() {
+  return DEVIS_CIBLES.map(d => {
+    const row = document.querySelector(`#devis-regles-liste .dr-row[data-cible="${d.cible}"]`);
+    return {
+      cible: d.cible,
+      actif: row.querySelector('input[type=checkbox]').checked,
+      consigne: row.querySelector('textarea').value.trim() || d.consigne,
+    };
+  });
+}
+async function saveDevisRegles() {
+  const regles = devisReglesCollecter();
+  localStorage.setItem(DEVIS_REGLES_LS, JSON.stringify(regles));
+  let synchro = false;
+  try {
+    if (window._fb && typeof window._fb.saveDevisRegles === 'function') { await window._fb.saveDevisRegles(regles); synchro = true; }
+  } catch (e) { console.warn('Règles non synchronisées :', e); }
+  closeDevisReglesModal();
+  toast_d(synchro ? '✅ Règles enregistrées (partagées avec vos autres appareils)' : '✅ Règles enregistrées sur cet appareil');
+}
+function resetDevisRegles() {
+  if (!confirm('Revenir aux règles par défaut ? Vos consignes personnalisées seront remplacées.')) return;
+  renderDevisReglesListe(devisReglesFusion(null));
+}
+
+function devisCibleOptions(d) {
+  const el = document.getElementById(d.cible);
+  return el && el.options ? [...el.options].map(o => o.value).filter(Boolean) : [];
+}
+function devisConstruirePrompt(regles) {
+  const typeTxt = { texte: 'texte', nombre: 'nombre décimal, sans symbole ni espace', date: 'date AAAA-MM-JJ', choix: 'texte' };
+  const lignes = regles.filter(r => r.actif).map(r => {
+    const d = DEVIS_CIBLES.find(x => x.cible === r.cible);
+    let extra = '';
+    if (d.type === 'choix') {
+      const opts = devisCibleOptions(d);
+      if (opts.length) extra = ` Réponds avec EXACTEMENT l'une de ces valeurs : ${opts.map(o => `"${o}"`).join(', ')}.`;
+    }
+    if (d.type === 'lignes') {
+      return `- "${r.cible}" — ${d.label} (liste) : ${r.consigne} Format : un tableau JSON d'objets {"libelle":"","qte":0,"unite":"","puHt":0,"montantHt":0,"tva":0}, une entrée par ligne du tableau (tva = taux en %, ex. 10).`;
+    }
+    return `- "${r.cible}" — ${d.label} (${typeTxt[d.type]}) : ${r.consigne}${extra}`;
+  }).join('\n');
+  return `Tu lis un devis émis par un maître d'œuvre à destination de son client (signé ou non). Retourne UNIQUEMENT un JSON valide, sans markdown, de la forme {"valeurs":{"<clé>":<valeur>, …}}.
+
+Voici les seules données à relever. Pour chacune : la clé à utiliser, puis la consigne du maître d'œuvre, à suivre à la lettre :
+${lignes}
+
+RÈGLES STRICTES :
+- Ne renseigne que ce qui figure réellement sur le document. Si une donnée est absente ou incertaine, mets "" (texte) ou 0 (nombre) : n'invente jamais et ne déduis rien qui ne soit pas écrit.
+- N'ajoute aucune clé qui ne figure pas dans la liste ci-dessus.
+- Nombres : décimaux avec un point, sans espace ni symbole € (« 2 100,00 € » → 2100). Dates : AAAA-MM-JJ.
+- Le document peut être une photo ou un scan, signé et parfois annoté à la main (cercles, flèches, mots écrits en rouge) : ignore les annotations manuscrites et la signature, ne lis que le texte imprimé du devis.`;
+}
+
+function devisMarquerIA(el) {
+  const g = el.closest('.form-group'), lab = g && g.querySelector('label');
+  if (lab && !lab.querySelector('.ia-badge')) lab.insertAdjacentHTML('beforeend', ' <span class="ia-badge">IA</span>');
+}
+function devisEffacerMarquesIA() {
+  document.querySelectorAll('#page-new .ia-badge').forEach(b => b.remove());
+  const r = document.getElementById('devis-ia-recap'); if (r) { r.style.display = 'none'; r.innerHTML = ''; }
+}
+
+// Écrit chaque valeur trouvée dans le champ désigné par sa règle.
+function devisAppliquerValeurs(valeurs, regles) {
+  const trouves = [], absents = [];
+  const pending = { numero: '', date: '', montantHt: 0, tva: 20, objet: '', lignes: [], montantTva: 0, montantTtc: 0 };
+  let pendingUtilise = false;
+  regles.filter(r => r.actif).forEach(r => {
+    const d = DEVIS_CIBLES.find(x => x.cible === r.cible);
+    const v = valeurs ? valeurs[r.cible] : undefined;
+    const vide = v === undefined || v === null || String(v).trim() === '' || (d.type === 'nombre' && !(parseFloat(v) > 0));
+    if (vide) { absents.push(d); return; }
+    if (d.cible.startsWith('devis.')) {
+      const k = d.cible.slice(6);
+      if (k === 'lignes') {
+        const L = devisNettoyerLignes(v);
+        if (!L.length) { absents.push(d); return; }
+        pending.lignes = L;
+      }
+      else if (k === 'montantTva') pending.montantTva = parseFloat(v) || 0;
+      else if (k === 'montantTtc') pending.montantTtc = parseFloat(v) || 0;
+      else if (k === 'montantHt') pending.montantHt = parseFloat(v) || 0;
+      else if (k === 'tva') pending.tva = parseFloat(v) || 20;
+      else if (k === 'date') pending.date = normaliserDateAAAAMMJJ(String(v)) || '';
+      else pending[k] = String(v).trim();
+      pendingUtilise = true; trouves.push(d); return;
+    }
+    const el = document.getElementById(d.cible);
+    if (!el) { absents.push(d); return; }
+    let ok = true;
+    if (d.type === 'date') { const n = normaliserDateAAAAMMJJ(String(v)); if (n) el.value = n; else ok = false; }
+    else if (d.type === 'choix') {
+      const txt = String(v).trim().toLowerCase();
+      const opt = [...el.options].find(o => o.value.toLowerCase() === txt);
+      if (opt) el.value = opt.value; else ok = false;
+    }
+    else if (d.type === 'nombre') el.value = String(parseFloat(v));
+    else el.value = String(v).trim();
+    if (ok) { devisMarquerIA(el); trouves.push(d); } else absents.push(d);
+  });
+  if (pendingUtilise && pending.lignes.length && !pending.montantHt) {
+    pending.montantHt = Math.round(pending.lignes.reduce((s, l) => s + (l.montantHt || 0), 0) * 100) / 100;
+  }
+  return { trouves, absents, pending: pendingUtilise ? pending : null };
+}
+
+// Une ligne de devis lue par l'IA : on ne garde que des valeurs saines.
+function devisNettoyerLignes(v) {
+  if (!Array.isArray(v)) return [];
+  const n = x => { const f = parseFloat(String(x).replace(',', '.')); return isFinite(f) ? f : 0; };
+  return v.map(l => {
+    if (!l || typeof l !== 'object') return null;
+    const qte = n(l.qte), puHt = n(l.puHt);
+    let montantHt = n(l.montantHt);
+    if (!montantHt && qte && puHt) montantHt = Math.round(qte * puHt * 100) / 100;
+    return { libelle: String(l.libelle || '').trim(), qte, unite: String(l.unite || '').trim(), puHt, montantHt, tva: n(l.tva) };
+  }).filter(l => l && (l.libelle || l.montantHt));
+}
+
+// Contrôles de cohérence : un chiffre mal lu sur un scan se voit tout de suite.
+function devisVerifierCoherence(d) {
+  const al = [], eq = (a, b) => Math.abs(a - b) <= 0.05;
+  const L = d.lignes || [];
+  L.forEach((l, i) => {
+    if (l.qte && l.puHt && !eq(l.qte * l.puHt, l.montantHt)) al.push(`ligne ${i + 1} : ${l.qte} × ${fmtEur_d(l.puHt)} ≠ ${fmtEur_d(l.montantHt)}`);
+  });
+  if (L.length && d.montantHt > 0) {
+    const somme = L.reduce((s, l) => s + (l.montantHt || 0), 0);
+    if (!eq(somme, d.montantHt)) al.push(`la somme des lignes (${fmtEur_d(somme)}) ne correspond pas au total HT (${fmtEur_d(d.montantHt)})`);
+  }
+  if (d.montantHt > 0 && d.montantTva > 0 && d.montantTtc > 0 && !eq(d.montantHt + d.montantTva, d.montantTtc)) {
+    al.push(`HT + TVA (${fmtEur_d(d.montantHt + d.montantTva)}) ≠ total TTC (${fmtEur_d(d.montantTtc)})`);
+  }
+  return al;
+}
+
+function devisLignesTableHtml(L) {
+  return `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px">
+    <thead><tr style="text-align:left;color:var(--text3);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em"><th style="padding:3px 6px">Libellé</th><th style="padding:3px 6px;text-align:right">Qté</th><th style="padding:3px 6px">Unité</th><th style="padding:3px 6px;text-align:right">PU HT</th><th style="padding:3px 6px;text-align:right">Montant HT</th><th style="padding:3px 6px;text-align:right">TVA</th></tr></thead>
+    <tbody>${L.map(l => `<tr style="border-top:1px solid var(--border)"><td style="padding:4px 6px">${esc(l.libelle)}</td><td style="padding:4px 6px;text-align:right">${l.qte || ''}</td><td style="padding:4px 6px">${esc(l.unite)}</td><td style="padding:4px 6px;text-align:right">${l.puHt ? fmtEur_d(l.puHt) : ''}</td><td style="padding:4px 6px;text-align:right;font-weight:600">${fmtEur_d(l.montantHt)}</td><td style="padding:4px 6px;text-align:right">${l.tva ? l.tva + ' %' : ''}</td></tr>`).join('')}</tbody></table></div>`;
+}
+
+let _devisRecapDernier = null;
+function devisAfficherRecap(nomFichier, res) {
+  _devisRecapDernier = { nomFichier, res };
+  const el = document.getElementById('devis-ia-recap');
+  if (!el) return;
+  let h = `<div><strong>✨ Devis « ${esc(nomFichier || 'devis')} » analysé</strong> — ${res.trouves.length} donnée(s) rangée(s) selon vos règles (repérées par le badge <span class="ia-badge">IA</span>).</div>`;
+  if (res.absents.length) h += `<div>Introuvable dans le devis : ${res.absents.map(d => esc(d.label)).join(', ')} — à compléter à la main si besoin.</div>`;
+  if (_devisSigneEnAttente) {
+    const D = _devisSigneEnAttente;
+    h += `<div>Un devis ${D.numero ? 'n° ' + esc(D.numero) + ' ' : ''}de ${fmtEur_d(D.montantHt || 0)} HT sera ajouté à la facturation du projet à sa création. <button class="btn btn-sm" onclick="devisRetirerEnAttente()">Ne pas créer ce devis</button></div>`;
+    if (D.lignes && D.lignes.length) {
+      h += `<div style="margin-top:6px"><strong>${D.lignes.length} ligne${D.lignes.length > 1 ? 's' : ''} relevée${D.lignes.length > 1 ? 's' : ''}</strong> :</div>${devisLignesTableHtml(D.lignes)}`;
+    }
+    if (D.montantHt || D.montantTva || D.montantTtc) {
+      h += `<div style="margin-top:6px">Total HT <strong>${fmtEur_d(D.montantHt || 0)}</strong>${D.montantTva ? ' · TVA <strong>' + fmtEur_d(D.montantTva) + '</strong>' : ''}${D.montantTtc ? ' · Total TTC <strong>' + fmtEur_d(D.montantTtc) + '</strong>' : ''}</div>`;
+    }
+    const al = devisVerifierCoherence(D);
+    h += al.length
+      ? `<div style="margin-top:6px;border:1.5px solid var(--amber);border-radius:var(--r-md);padding:7px 10px"><strong>⚠ À vérifier avant de créer le projet :</strong> ${al.map(esc).join(' ; ')}.</div>`
+      : ((D.lignes && D.lignes.length) || D.montantTtc ? `<div style="margin-top:6px">✔ Lignes et totaux cohérents entre eux.</div>` : '');
+  }
+  h += `<div style="margin-top:6px"><button class="btn btn-sm" onclick="openDevisReglesModal()"><i class="ti ti-settings"></i> Ajuster les règles</button></div>`;
+  el.innerHTML = h; el.style.display = 'block';
+}
+function devisRetirerEnAttente() {
+  _devisSigneEnAttente = null;
+  if (_devisRecapDernier) devisAfficherRecap(_devisRecapDernier.nomFichier, _devisRecapDernier.res);
+  toast_d('Le devis ne sera pas créé dans la facturation.');
+}
+
+async function analyzeDevisSigneIA(prep, nomFichier) {
+  if (typeof prep === 'string') prep = { base64: prep, mediaType: 'application/pdf', pdf: true }; // appel historique
   const status = document.getElementById('devis-signe-status');
   status.style.display = 'block';
   status.innerHTML = `<div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--accent2);background:var(--accent-bg);border:1.5px solid var(--accent);border-radius:var(--r-md);padding:12px 14px"><div class="ai-loading"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div></div> Lecture du devis en cours…</div>`;
   try {
+    const regles = await devisReglesCharger();
+    if (!regles.some(r => r.actif)) throw new Error('Aucune donnée n\'est cochée dans vos règles d\'extraction');
     const res = await fetch('https://phenix-proxy.phenixarchitecte.workers.dev', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 1200,
-        system: `Analyse ce devis destiné à un client (signé ou non) et retourne UNIQUEMENT ce JSON valide, sans markdown :
-{"client":{"nom":"","prenom":"","raisonSociale":"","email":"","telephone":""},"projet":{"adresse":"","typeProjet":"","description":"","surface":0},"devis":{"numero":"","date":"","montantHt":0,"tva":20,"objet":""}}
-
-RÈGLES STRICTES :
-- "client.nom"/"prenom" : nom et prénom du client SIGNATAIRE (personne physique). Si c'est une société/collectivité/copropriété, laisser nom/prenom vides et remplir "raisonSociale" à la place.
-- "projet.adresse" : adresse du bien/chantier concerné (PAS l'adresse de correspondance du client si elle diffère)
-- "projet.typeProjet" : choisis la valeur la plus proche parmi EXACTEMENT : "Logement individuel neuf", "Rénovation / Réhabilitation", "Extension / Surélévation", "Bureau / Local professionnel", "Logement collectif", "ERP", "Industriel / Agricole"
-- "projet.description" : résumé très court du projet (10 mots maximum), à usage de notes internes
-- "devis.montantHt" : montant total HT du devis (nombre décimal) — c'est ce que le client doit payer au total (honoraires + éventuelle sous-traitance si contractant général)
-- "devis.objet" : résumé très court de la mission (8 mots maximum)
-- "devis.date" : date du devis ou de signature si visible, format AAAA-MM-JJ
-- "devis.tva" : taux de TVA principal (nombre, ex 20, 10, 5.5)
-- Si une information n'est pas présente sur le document, laisse le champ vide ou à 0 plutôt que d'inventer.`,
+        max_tokens: 4000,
+        system: devisConstruirePrompt(regles),
         messages: [{
           role: 'user',
           content: [
-            { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
-            { type: 'text', text: 'Analyse ce devis et extrais les informations du client et du projet.' }
+            prep.pdf
+              ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: prep.base64 } }
+              : { type: 'image', source: { type: 'base64', media_type: prep.mediaType, data: prep.base64 } },
+            { type: 'text', text: 'Relève dans ce devis les données demandées.' }
           ]
         }]
       })
@@ -12647,42 +13029,28 @@ RÈGLES STRICTES :
     const data = await _phenixParseProxyResponse(res);
     if (data.error) throw new Error(data.error.message||JSON.stringify(data.error));
     const text = (data.content||[]).map(b=>b.text||'').join('');
-    const parsed = JSON.parse(text.replace(/```json|```/g,'').trim());
+    const debut = text.indexOf('{'), fin = text.lastIndexOf('}');
+    if (debut < 0 || fin < debut) throw new Error('Réponse de l\'IA illisible');
+    const parsed = JSON.parse(text.slice(debut, fin + 1));
+    const valeurs = parsed.valeurs || parsed;
 
     closeDevisSigneIaModal();
-
-    // Pré-remplissage du formulaire "Nouveau projet"
     show_d('new', document.querySelectorAll('.nav-item')[6]);
-    const nomClient = parsed.client?.raisonSociale || [parsed.client?.prenom, parsed.client?.nom].filter(Boolean).join(' ');
-    document.getElementById('np-nom').value = (parsed.client?.nom || nomClient || 'Projet').trim();
-    document.getElementById('np-client').value = nomClient || '';
-    document.getElementById('np-email').value = parsed.client?.email || '';
-    document.getElementById('np-tel').value = parsed.client?.telephone || '';
-    document.getElementById('np-adresse').value = parsed.projet?.adresse || '';
-    document.getElementById('np-surface').value = parsed.projet?.surface || '';
-    document.getElementById('np-notes').value = parsed.projet?.description || '';
-    document.getElementById('np-honoraires').value = parsed.devis?.montantHt || '';
-    const typeSel = document.getElementById('np-type');
-    if (parsed.projet?.typeProjet && [...typeSel.options].some(o=>o.value===parsed.projet.typeProjet)) {
-      typeSel.value = parsed.projet.typeProjet;
-    }
-    if (parsed.devis?.date) {
-      const dateNorm = normaliserDateAAAAMMJJ(parsed.devis.date);
-      if (dateNorm) document.getElementById('np-date').value = dateNorm;
-    }
+    devisEffacerMarquesIA();
+    _devisSigneEnAttente = null;
+    // Les champs texte/nombre/date que l'IA doit remplir repartent à zéro,
+    // pour ne jamais mélanger l'ancien contenu avec le nouveau devis.
+    regles.filter(r => r.actif && !r.cible.startsWith('devis.')).forEach(r => {
+      const el = document.getElementById(r.cible);
+      if (el && el.tagName !== 'SELECT') el.value = '';
+    });
+    const r = devisAppliquerValeurs(valeurs, regles);
+    _devisSigneEnAttente = r.pending;
     previewCA();
-
-    // Le devis lui-même sera créé automatiquement juste après la création du projet
-    _devisSigneEnAttente = {
-      numero: parsed.devis?.numero || '',
-      date: parsed.devis?.date ? (normaliserDateAAAAMMJJ(parsed.devis.date)||'') : '',
-      montantHt: parseFloat(parsed.devis?.montantHt)||0,
-      tva: parseFloat(parsed.devis?.tva)||20,
-      objet: parsed.devis?.objet || '',
-    };
-    toast_d('✅ Devis analysé — vérifiez les informations ci-dessous puis cliquez sur "Créer le projet".');
+    devisAfficherRecap(nomFichier, r);
+    toast_d('✅ Devis analysé — vérifiez la fiche puis cliquez sur "Créer le projet".');
   } catch(err) {
-    status.innerHTML = `<div style="background:var(--red-bg,#fdecea);border:1.5px solid var(--red);border-radius:var(--r-md);padding:12px 14px;font-size:13px;color:var(--red)">⚠️ ${err.message} — vous pouvez créer le projet manuellement à la place.</div>`;
+    status.innerHTML = `<div style="background:var(--red-bg,#fdecea);border:1.5px solid var(--red);border-radius:var(--r-md);padding:12px 14px;font-size:13px;color:var(--red)">⚠️ ${esc(err.message)} — vous pouvez créer le projet manuellement à la place.</div>`;
   }
 }
 
