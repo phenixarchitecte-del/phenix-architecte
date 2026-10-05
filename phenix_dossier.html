@@ -1687,6 +1687,9 @@ tr:last-child td{border-bottom:none} tr:hover td{background:var(--accent-bg)}
 #app-dossier .prio-btn.active-normale{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
 #app-dossier .prio-btn.active-haute{background:rgba(200,150,60,.20);border-color:#F5A623;color:#e6b95c}
 #app-dossier .prio-btn.active-urgent{background:var(--red-bg);border-color:var(--red);color:var(--red)}
+#app-dossier .prio-btn.active-gestion{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
+#app-dossier .tp-tag.gestion{ background:var(--accent-bg); color:var(--accent); }
+#app-dossier .tp-tag.recur{ background:var(--bg2); color:var(--text2); }
 
 /* Couleurs échéances */
 #app-dossier .color-swatch{ width:24px; height:24px; border-radius:50%; border:2px solid transparent; cursor:pointer; transition:all .15s; flex-shrink:0; }
@@ -2358,7 +2361,15 @@ if (window.parent !== window) {
         <label>Description / Notes</label>
         <textarea id="tache-desc" rows="2" placeholder="Détails, contexte, pièces jointes…"></textarea>
       </div>
-      <div class="form-grid">
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Rattachement</label>
+        <div class="tache-modal-prio">
+          <button type="button" class="prio-btn" id="tache-type-dossier" onclick="setTacheType('dossier')">📁 Dossier</button>
+          <button type="button" class="prio-btn" id="tache-type-gestion" onclick="setTacheType('gestion')">🗂️ Gestion</button>
+        </div>
+        <input type="hidden" id="tache-type" value="dossier">
+      </div>
+      <div class="form-grid" id="tache-bloc-dossier">
         <div class="form-group">
           <label>Projet associé</label>
           <select id="tache-projet"></select>
@@ -2371,6 +2382,10 @@ if (window.parent !== window) {
             <option>DCE</option><option>ACT</option><option>DET</option><option>AOR</option>
           </select>
         </div>
+      </div>
+      <div class="form-group" id="tache-bloc-gestion" style="margin-bottom:12px;display:none">
+        <label>Catégorie de gestion *</label>
+        <select id="tache-categorie" onchange="onTacheCategorieChange(this)"></select>
       </div>
       <div class="form-group" style="margin-bottom:12px">
         <label>Assigné à</label>
@@ -2385,6 +2400,18 @@ if (window.parent !== window) {
           <label>Heure</label>
           <input type="time" id="tache-heure" value="09:00" min="08:00" max="19:00">
         </div>
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="tache-recur" onchange="onTacheRecurChange()" style="width:auto;margin:0"> 🔁 Tâche récurrente
+        </label>
+        <select id="tache-recur-freq" style="display:none;margin-top:8px">
+          <option value="weekly">Chaque semaine</option>
+          <option value="monthly" selected>Chaque mois</option>
+          <option value="quarterly">Chaque trimestre</option>
+          <option value="yearly">Chaque année</option>
+        </select>
+        <div id="tache-recur-hint" style="display:none;font-size:11px;color:var(--text3);margin-top:6px">Quand vous cochez cette tâche comme faite, la suivante est créée automatiquement (sans date prévue : à partir d'aujourd'hui).</div>
       </div>
       <div class="form-group" style="margin-bottom:12px">
         <label>Durée estimée</label>
@@ -3003,6 +3030,7 @@ if (window.parent !== window) {
           <button type="button" class="tp-fil" data-filter="PC" onclick="setTachePhaseFilter('PC',this)">Permis de construire</button>
           <button type="button" class="tp-fil" data-filter="DCE,ACT" onclick="setTachePhaseFilter('DCE,ACT',this)">DCE / Contrats</button>
           <button type="button" class="tp-fil" data-filter="DET,AOR" onclick="setTachePhaseFilter('DET,AOR',this)">Chantier</button>
+          <button type="button" class="tp-fil" data-filter="GESTION" onclick="setTachePhaseFilter('GESTION',this)">🗂️ Gestion</button>
         </div>
 
         <!-- Filtre rapide par personne -->
@@ -10182,10 +10210,12 @@ function renderTaches() {
 
   renderTacheAssigneTabs();
 
-  const phaseSet = tachePhaseFilter==='all' ? null : new Set(tachePhaseFilter.split(','));
+  const filtreGestion = tachePhaseFilter==='GESTION';
+  const phaseSet = (tachePhaseFilter==='all' || filtreGestion) ? null : new Set(tachePhaseFilter.split(','));
 
   const all = (stateDossier.taches||[]).filter(t=>{
     if (search && !t.titre.toLowerCase().includes(search) && !(t.desc||'').toLowerCase().includes(search)) return false;
+    if (filtreGestion && t.type!=='gestion') return false;
     if (projetF && String(t.projetId)!==String(projetF)) return false;
     if (prioF && t.priorite!==prioF) return false;
     if (tacheAssigneFilter && (t.assigneA||'')!==tacheAssigneFilter) return false;
@@ -10407,12 +10437,13 @@ function tacheItemHtml(t, today) {
     <input type="checkbox" ${isDone?'checked':''} onchange="event.stopPropagation();toggleTacheDone('${t.id}',this.checked)">
     <div class="tp-item-body" onclick="openTacheEdit('${t.id}')">
       <div class="tp-item-titre ${isDone?'done':''}">${esc(t.titre)}</div>
-      <div class="tp-item-dossier">${proj?esc(proj.nom):'Sans dossier'}</div>
+      <div class="tp-item-dossier">${t.type==='gestion' ? '🗂️ Gestion' + (t.categorie ? ' · ' + esc(t.categorie) : '') : (proj?esc(proj.nom):'Sans dossier')}</div>
       <div class="tp-item-meta">
         ${prioTag}
         ${dateLabel?`<span class="tp-tag date ${isLate?'late':''}"><i class="ti ti-calendar" style="font-size:10px"></i> ${dateLabel}</span>`:''}
         ${proj&&proj.phase?`<span class="tp-tag phase">${esc(proj.phase)}</span>`:''}
         ${collab?`<span class="tp-tag assignee">${esc(collab.nom)}</span>`:''}
+        ${t.recurrence&&t.recurrence.freq?`<span class="tp-tag recur">🔁 ${esc(TACHE_FREQ_LABELS[t.recurrence.freq]||'Récurrente')}</span>`:''}
       </div>
     </div>
   </div>`;
@@ -10469,7 +10500,7 @@ function tacheCardHtml(t, today, st) {
       ${prioBadge}
       ${d?`<span class="tache-date ${isLate?'late':''}"><i class="ti ti-calendar" style="font-size:10px"></i> ${d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short'})}</span>`:''}
       ${t.heure?`<span class="tache-date"><i class="ti ti-clock" style="font-size:10px"></i> ${t.heure}</span>`:''}
-      ${proj?`<span class="tache-proj">${proj.nom}</span>`:''}
+      ${t.type==='gestion'?`<span class="tache-proj">🗂️ Gestion${t.categorie?' · '+esc(t.categorie):''}</span>`:(proj?`<span class="tache-proj">${proj.nom}</span>`:'')}
     </div>
   </div>`;
 }
@@ -10555,6 +10586,7 @@ function openTacheModal(defaultStatut='todo') {
     stateDossier.projets.map(p=>`<option value="${p.id}">${p.nom}</option>`).join('');
   fillAssigneSelect('');
   setPrio('normale');
+  initTacheRattachement(tachePhaseFilter==='GESTION' ? 'gestion' : 'dossier', '', null);
   document.getElementById('tacheModal').classList.add('open');
 }
 
@@ -10578,8 +10610,118 @@ function openTacheEdit(id) {
     stateDossier.projets.map(p=>`<option value="${p.id}" ${p.id==t.projetId?'selected':''}>${p.nom}</option>`).join('');
   fillAssigneSelect(t.assigneA||'');
   setPrio(t.priorite||'normale');
+  initTacheRattachement(t.type==='gestion' ? 'gestion' : 'dossier', t.categorie||'', t.recurrence||null);
   document.getElementById('tacheModal').classList.add('open');
 }
+
+// ── Rattachement Dossier / Gestion + récurrence ──────────
+// Catégories proposées pour les tâches de gestion. On peut en ajouter via
+// « Autre catégorie… » : elle est alors retenue grâce aux tâches existantes.
+const TACHE_CATEGORIES_GESTION = [
+  'Administratif / compta',
+  'Commercial / marketing',
+  'RH / équipe',
+  'Outils & logiciels',
+  'Patrimoine / holding',
+];
+const TACHE_FREQ_LABELS = { weekly:'Chaque semaine', monthly:'Chaque mois', quarterly:'Chaque trimestre', yearly:'Chaque année' };
+
+function tacheCategoriesGestion() {
+  const set = new Set(TACHE_CATEGORIES_GESTION);
+  (stateDossier.taches||[]).forEach(t => { if (t.type==='gestion' && t.categorie) set.add(t.categorie); });
+  return [...set];
+}
+function remplirCategoriesGestion(selected) {
+  const sel = document.getElementById('tache-categorie');
+  if (!sel) return;
+  const cats = tacheCategoriesGestion();
+  if (selected && !cats.includes(selected)) cats.push(selected);
+  sel.innerHTML = '<option value="">— Choisir —</option>' +
+    cats.map(c => `<option value="${esc(c)}" ${c===selected?'selected':''}>${esc(c)}</option>`).join('') +
+    '<option value="__autre__">➕ Autre catégorie…</option>';
+}
+function onTacheCategorieChange(sel) {
+  if (sel.value !== '__autre__') return;
+  const nom = (prompt('Nom de la nouvelle catégorie :') || '').trim();
+  if (!nom) { sel.value = ''; return; }
+  remplirCategoriesGestion(nom);
+}
+function setTacheType(type) {
+  const t = type === 'gestion' ? 'gestion' : 'dossier';
+  document.getElementById('tache-type').value = t;
+  const bd = document.getElementById('tache-type-dossier');
+  const bg = document.getElementById('tache-type-gestion');
+  if (bd) bd.className = 'prio-btn' + (t==='dossier' ? ' active-gestion' : '');
+  if (bg) bg.className = 'prio-btn' + (t==='gestion' ? ' active-gestion' : '');
+  document.getElementById('tache-bloc-dossier').style.display = t==='dossier' ? '' : 'none';
+  document.getElementById('tache-bloc-gestion').style.display = t==='gestion' ? '' : 'none';
+  // Nouvelle tâche de gestion : assignée par défaut à l'admin, pour qu'elle
+  // n'apparaisse pas chez la collaboratrice sans que vous le décidiez.
+  if (t==='gestion' && !_tacheEditId) {
+    const a = document.getElementById('tache-assigne');
+    const admin = COLLABORATEURS.find(c => c.role === 'admin');
+    if (a && !a.value && admin) a.value = admin.email;
+  }
+}
+function onTacheRecurChange() {
+  const on = document.getElementById('tache-recur').checked;
+  document.getElementById('tache-recur-freq').style.display = on ? '' : 'none';
+  document.getElementById('tache-recur-hint').style.display = on ? '' : 'none';
+}
+function initTacheRattachement(type, categorie, recurrence) {
+  remplirCategoriesGestion(categorie);
+  document.getElementById('tache-recur').checked = !!(recurrence && recurrence.freq);
+  document.getElementById('tache-recur-freq').value = (recurrence && recurrence.freq) || 'monthly';
+  onTacheRecurChange();
+  setTacheType(type);
+}
+window.setTacheType = setTacheType;
+window.onTacheCategorieChange = onTacheCategorieChange;
+window.onTacheRecurChange = onTacheRecurChange;
+
+// Date de la prochaine occurrence : on part de la date prévue de la tâche
+// (pour garder le même rythme, ex. toujours le 10) et on saute les
+// échéances déjà passées si la tâche a été faite très en retard.
+function _ajouterIntervalle(d, freq, n) {
+  const r = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  if (freq === 'weekly') { r.setDate(r.getDate() + 7*n); return r; }
+  const mois = freq==='monthly' ? n : freq==='quarterly' ? 3*n : 12*n;
+  const jour = d.getDate();
+  r.setDate(1);
+  r.setMonth(r.getMonth() + mois);
+  const dernier = new Date(r.getFullYear(), r.getMonth()+1, 0).getDate();
+  r.setDate(Math.min(jour, dernier));
+  return r;
+}
+function _isoLocal(d) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function prochaineEcheanceRecurrence(dateStr, freq) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  let base = today;
+  if (dateStr) { const p = dateStr.split('-').map(Number); base = new Date(p[0], p[1]-1, p[2]); }
+  let n = 1;
+  let next = _ajouterIntervalle(base, freq, n);
+  while (dateStr && next < today && n < 400) { n++; next = _ajouterIntervalle(base, freq, n); }
+  return _isoLocal(next);
+}
+// Crée (en mémoire) la tâche suivante d'une tâche récurrente qui vient d'être
+// achevée. Une seule fois par tâche (drapeau recurrenceGeneree) : décocher puis
+// recocher ne crée pas de doublon. L'appelant enregistre les deux tâches.
+function creerTacheSuivante(t) {
+  if (!t || !t.recurrence || !t.recurrence.freq || t.recurrenceGeneree) return null;
+  t.recurrenceGeneree = true;
+  const date = prochaineEcheanceRecurrence(tacheDateStr(t), t.recurrence.freq);
+  const now = new Date().toISOString();
+  const n = Object.assign({}, t, {
+    id: 't-' + Date.now() + '-' + Math.floor(Math.random()*1000),
+    statut: 'todo', date, dateLivraison: date,
+    recurrenceGeneree: false, createdAt: now, updatedAt: now,
+  });
+  stateDossier.taches.push(n);
+  return n;
+}
+function _dateFr(iso) { return new Date(iso + 'T00:00:00').toLocaleDateString('fr-FR'); }
 
 function setPrio(p) {
   _tachePrioSelected = p;
@@ -10592,6 +10734,11 @@ function setPrio(p) {
 async function saveTache() {
   const titre = document.getElementById('tache-titre').value.trim();
   if (!titre) { toast_d('⚠️ Veuillez saisir un titre.'); return; }
+  const typeT = document.getElementById('tache-type').value === 'gestion' ? 'gestion' : 'dossier';
+  const categorieT = document.getElementById('tache-categorie').value;
+  if (typeT === 'gestion' && (!categorieT || categorieT === '__autre__')) { toast_d('⚠️ Choisissez une catégorie de gestion.'); return; }
+  const recurT = document.getElementById('tache-recur').checked ? { freq: document.getElementById('tache-recur-freq').value } : null;
+  const avant = _tacheEditId ? stateDossier.taches.find(x=>x.id===_tacheEditId) : null;
   const t = {
     id: _tacheEditId || ('t-'+Date.now()),
     titre,
@@ -10601,8 +10748,12 @@ async function saveTache() {
     duree:    parseInt(document.getElementById('tache-duree').value)||60,
     statut:   document.getElementById('tache-statut').value,
     priorite: _tachePrioSelected,
-    projetId: document.getElementById('tache-projet').value,
-    phase:    document.getElementById('tache-phase').value,
+    type:     typeT,
+    categorie: typeT==='gestion' ? categorieT : '',
+    recurrence: recurT,
+    recurrenceGeneree: !!(avant && avant.recurrenceGeneree),
+    projetId: typeT==='gestion' ? '' : document.getElementById('tache-projet').value,
+    phase:    typeT==='gestion' ? '' : document.getElementById('tache-phase').value,
     assigneA: document.getElementById('tache-assigne').value,
     dateLivraison: document.getElementById('tache-date').value,
     createdAt: _tacheEditId ? (stateDossier.taches.find(x=>x.id===_tacheEditId)||{}).createdAt : new Date().toISOString(),
@@ -10614,11 +10765,14 @@ async function saveTache() {
   } else {
     stateDossier.taches.push(t);
   }
+  let suivante = null;
+  if (t.statut === 'done' && (!avant || avant.statut !== 'done')) suivante = creerTacheSuivante(t);
   closeModal_d('tacheModal');
   await saveTacheDb(t);
+  if (suivante) await saveTacheDb(suivante);
   renderTaches();
   if (document.getElementById('page-calendrier').classList.contains('active')) renderCalendrier();
-  toast_d('✅ Tâche enregistrée.');
+  toast_d(suivante ? '✅ Tâche enregistrée — prochaine échéance le ' + _dateFr(suivante.date) + '.' : '✅ Tâche enregistrée.');
 }
 
 async function moveTache(id, newStatut) {
@@ -10626,9 +10780,11 @@ async function moveTache(id, newStatut) {
   if (idx<0) return;
   stateDossier.taches[idx].statut = newStatut;
   stateDossier.taches[idx].updatedAt = new Date().toISOString();
+  const suivante = newStatut === 'done' ? creerTacheSuivante(stateDossier.taches[idx]) : null;
   await saveTacheDb(stateDossier.taches[idx]);
+  if (suivante) await saveTacheDb(suivante);
   renderTaches();
-  toast_d(newStatut==='done'?'✅ Tâche achevée !':newStatut==='doing'?'▶ Tâche en cours.':'↩ Tâche remise à faire.');
+  toast_d(suivante ? '✅ Tâche achevée — prochaine échéance le ' + _dateFr(suivante.date) + '.' : newStatut==='done'?'✅ Tâche achevée !':newStatut==='doing'?'▶ Tâche en cours.':'↩ Tâche remise à faire.');
 }
 
 async function confirmDeleteTache(id) {
