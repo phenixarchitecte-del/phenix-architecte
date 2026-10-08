@@ -4262,7 +4262,7 @@ tbody.tot tr.tot-row td{background:#fff !important;border:0;padding:14px 0 0}
 .footer{text-align:center;font-size:9px;color:#94A3B8;border-top:1px solid #E2E8F0;padding-top:8px;margin-top:10px;line-height:1.8}
 .no-print{text-align:right;margin-bottom:14px}
 .no-print button{background:#1E3A5F;color:white;border:none;padding:8px 18px;border-radius:6px;font-size:12px;cursor:pointer}
-@media print{.no-print{display:none}body{print-color-adjust:exact;-webkit-print-color-adjust:exact}.devis-page{padding:12px 16px}}
+@media print{.no-print{display:none}body{print-color-adjust:exact;-webkit-print-color-adjust:exact}@page{size:A4;margin:0}.devis-page{padding:10mm 13mm 10mm;max-width:none}tr.sp td,tfoot.sp td{height:9mm;padding:0 !important;border:0 !important;background:#fff !important}tr.sp-top td{height:0}}
 <\/style></head><body><div class="devis-page">
 <div class="no-print"><button onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF</button></div>
 <div class="header">
@@ -4275,7 +4275,7 @@ tbody.tot tr.tot-row td{background:#fff !important;border:0;padding:14px 0 0}
   <div><div class="plabel">Maître d'œuvre</div><div class="pname">Phénix-Architecture</div><div class="pdetail">Maxime Suchet<br>Contractant Général · MOE</div></div>
 </div>
 <div class="objet"><div class="objet-lbl">Objet</div><div class="objet-val">${esc(c.nom)}</div><div class="objet-det">Phase : ${esc(c.phase||'APS')}${c.type?' · '+esc(c.type):''}</div></div>
-<table><thead><tr>${theadHTML}</tr></thead>
+<table><thead><tr class="sp"><td colspan="${detaille?4:2}"></td></tr><tr>${theadHTML}</tr></thead><tfoot class="sp"><tr><td colspan="${detaille?4:2}"></td></tr></tfoot>
 ${lotsHTML}<tbody class="tot"><tr class="tot-row"><td colspan="${detaille?4:2}"><div class="totaux">
   <div class="trow"><span class="lbl">Total HT</span><span class="val">${fmt(totalHT)} €</span></div>
   <div class="trow"><span class="lbl">TVA</span><span class="val">${fmt(totalTVA)} €</span></div>
@@ -4388,7 +4388,7 @@ tbody tr:nth-child(even) td{background:#F8FAFC}
 .footer{text-align:center;font-size:9px;color:#94A3B8;border-top:1px solid #E2E8F0;padding-top:8px;margin-top:10px;line-height:1.8}
 .no-print{margin:16px 0;text-align:center}
 .no-print button{background:#1E3A5F;color:white;border:none;padding:8px 18px;border-radius:6px;font-size:12px;cursor:pointer}
-@media print{.no-print{display:none}}
+@media print{.no-print{display:none}@page{size:A4;margin:0}.devis-page{padding:10mm 13mm;max-width:none}tr.sp td,tfoot.sp td{height:9mm;padding:0 !important;border:0 !important;background:#fff !important}}
 </style></head><body>
 <div class="devis-page">
   <div class="header">
@@ -4408,7 +4408,7 @@ tbody tr:nth-child(even) td{background:#F8FAFC}
   </div>
   ${contexte ? `<div class="contexte"><div class="contexte-lbl">Contexte et conception du projet</div><div class="contexte-txt">${esc_dpgf(contexte)}</div></div>` : ''}
   <table>
-    <thead><tr><th>Désignation</th><th>Quantitatif</th><th>PU HT proposé</th><th>Total HT proposé</th></tr></thead>
+    <thead><tr class="sp"><td colspan="4"></td></tr><tr><th>Désignation</th><th>Quantitatif</th><th>PU HT proposé</th><th>Total HT proposé</th></tr></thead><tfoot class="sp"><tr><td colspan="4"></td></tr></tfoot>
     <tbody>${lotsHTML}</tbody>
   </table>
   <div class="reponse">
@@ -4499,7 +4499,7 @@ tbody.tot tr.tot-row td{background:#fff !important;border:0;padding:14px 0 0}
 .footer{text-align:center;font-size:9px;color:#94A3B8;border-top:1px solid #E2E8F0;padding-top:8px;margin-top:10px;line-height:1.8}
 .no-print{text-align:right;margin-bottom:14px}
 .no-print button{background:#1E3A5F;color:white;border:none;padding:8px 18px;border-radius:6px;font-size:12px;cursor:pointer}
-@media print{.no-print{display:none}body{print-color-adjust:exact;-webkit-print-color-adjust:exact}.devis-page{padding:12px 16px}}
+@media print{.no-print{display:none}body{print-color-adjust:exact;-webkit-print-color-adjust:exact}@page{size:A4;margin:0}.devis-page{padding:10mm 13mm 10mm;max-width:none}tr.sp td,tfoot.sp td{height:9mm;padding:0 !important;border:0 !important;background:#fff !important}tr.sp-top td{height:0}}
 <\/style></head><body><div class="devis-page">
 <div class="no-print"><button onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF</button></div>
 <div class="header">
@@ -4512,7 +4512,7 @@ tbody.tot tr.tot-row td{background:#fff !important;border:0;padding:14px 0 0}
   <div><div class="plabel">Entreprise</div><div class="pname">________________________</div><div class="pdetail">À compléter par vos soins</div></div>
 </div>
 <div class="objet"><div class="objet-lbl">Lot concerné</div><div class="objet-val">${esc(lot.num?lot.num+' — ':'')}${esc(lot.nom)}</div><div class="objet-det">Merci de vérifier les quantités et prix ci-dessous, et de nous retourner ce document signé ou annoté de vos corrections.</div></div>
-<table><thead><tr><th style="width:45%">Désignation</th><th style="width:15%;text-align:right">Qté</th><th style="width:15%;text-align:right">PU HT</th><th style="width:25%;text-align:right">Total HT</th></tr></thead>
+<table><thead><tr class="sp"><td colspan="4"></td></tr><tr><th style="width:45%">Désignation</th><th style="width:15%;text-align:right">Qté</th><th style="width:15%;text-align:right">PU HT</th><th style="width:25%;text-align:right">Total HT</th></tr></thead><tfoot class="sp"><tr><td colspan="4"></td></tr></tfoot>
 <tbody>${rows}</tbody></table>
 <div class="totaux">
   <div class="trow main"><span class="lbl">TOTAL HT</span><span class="val">${fmt(totalHT)} €</span></div>
