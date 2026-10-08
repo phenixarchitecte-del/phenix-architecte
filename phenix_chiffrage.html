@@ -515,6 +515,8 @@ if (window.parent !== window) {
 <div class="topbar">
   <div class="topbar-sep"></div>
   <div class="topbar-actions">
+    <button class="topbar-btn" id="undo-btn" onclick="undoAction()" title="Rien à annuler" style="opacity:.4;pointer-events:none"><i class="ti ti-arrow-back-up" aria-hidden="true"></i></button>
+    <button class="topbar-btn" id="redo-btn" onclick="redoAction()" title="Rien à rétablir" style="opacity:.4;pointer-events:none"><i class="ti ti-arrow-forward-up" aria-hidden="true"></i></button>
     <button class="topbar-btn" onclick="exportData()" title="Exporter les données (sauvegarde)"><i class="ti ti-cloud-upload" aria-hidden="true"></i>Sauvegarder</button>
     <label class="topbar-btn" title="Importer des données depuis un autre appareil" style="cursor:pointer"><i class="ti ti-cloud-download" aria-hidden="true"></i>Importer<input type="file" accept=".json" onchange="importData(event)" style="display:none"></label>
         <button class="topbar-btn" id="btn-push-cloud" onclick="pushToCloud()" title="Pousser les données locales vers le cloud" style="background:linear-gradient(135deg,#4A9CC7,#2A5298);color:white;border:none"><i class="ti ti-cloud-arrow-up" aria-hidden="true"></i><span class="push-label">&nbsp;Cloud</span></button>
@@ -2183,7 +2185,113 @@ function loadState(){
   updateSyncStatus('ok');
 }
 
+
+// ═══════════════════════════════════════════════════════════
+//  ANNULER / RÉTABLIR (Ctrl+Z / Ctrl+Y) — les 10 dernières actions
+//  Principe : à chaque saveState(), on compare l'état à l'instantané précédent ;
+//  s'il a changé, l'ancien état est mis de côté (modifications rapprochées d'un
+//  même élément = une seule action, pour ne pas annuler lettre par lettre).
+// ═══════════════════════════════════════════════════════════
+const UNDO_MAX=10, UNDO_KEY='phenix-chiffrage-undo';
+let _undoStack=[], _redoStack=[], _undoLast=null, _undoApplying=false, _undoT=0, _undoH=null;
+function _hash(s){ let h=5381; for(let i=0;i<s.length;i++) h=((h<<5)+h+s.charCodeAt(i))|0; return h; }
+function _undoSnap(){ return JSON.stringify(state.chantiers); }
+function _undoBase(){
+  if(_undoApplying) return;
+  _undoLast=_undoSnap();
+  // historique rechargé : on ne le garde que si les données n'ont pas changé depuis (ex. modifiées depuis un autre appareil)
+  if(_undoH!==null){ if(_hash(_undoLast)!==_undoH){ _undoStack=[]; _redoStack=[]; } _undoH=null; }
+}
+function _undoDescribe(prevStr, cur){
+  try{
+    const prev=JSON.parse(prevStr), nm=x=>'« '+String((x&&x.nom)||'sans nom').slice(0,40)+' »';
+    if(cur.length>prev.length){ const n=cur.find((x,i)=>!prev.some(p=>JSON.stringify(p)===JSON.stringify(x))); return ['création du chantier '+nm(n),'new:'+cur.length]; }
+    if(cur.length<prev.length){ const d=prev.find(p=>!cur.some(x=>JSON.stringify(p)===JSON.stringify(x))); return ['suppression du chantier '+nm(d),'del:'+prev.length]; }
+    for(let i=0;i<cur.length;i++){
+      if(JSON.stringify(prev[i])===JSON.stringify(cur[i])) continue;
+      const a=prev[i].lots||[], b=cur[i].lots||[];
+      if(b.length>a.length) return ['ajout d\'un lot dans '+nm(cur[i]),'addlot:'+i+':'+b.length];
+      if(b.length<a.length) return ['suppression d\'un lot dans '+nm(cur[i]),'dellot:'+i+':'+a.length];
+      for(let j=0;j<b.length;j++) if(JSON.stringify(a[j])!==JSON.stringify(b[j])) return ['modification du lot '+nm(b[j])+' ('+String(cur[i].nom||'').slice(0,30)+')','lot:'+i+':'+j];
+      return ['modification du chantier '+nm(cur[i]),'ch:'+i];
+    }
+  }catch(e){}
+  return ['modification','?'];
+}
+function _undoPersist(){
+  try{
+    let d={undo:_undoStack,redo:_redoStack,h:_undoLast===null?null:_hash(_undoLast)}, js=JSON.stringify(d);
+    while(js.length>2500000 && d.undo.length>0){ d.undo.shift(); js=JSON.stringify(d); }
+    localStorage.setItem(UNDO_KEY,js);
+  }catch(e){}
+}
+function _undoRecord(){
+  if(_undoApplying) return;
+  const cur=_undoSnap();
+  if(_undoLast===null){ _undoLast=cur; return; }
+  if(cur===_undoLast) return;
+  const _dd=_undoDescribe(_undoLast, state.chantiers), label=_dd[0], key=_dd[1], now=Date.now(), top=_undoStack[_undoStack.length-1];
+  if(top && top.key===key && now-_undoT<1500){ _undoT=now; top.label=label; }       // même élément, frappes rapprochées : on garde l'état d'origine
+  else{
+    _undoStack.push({snap:_undoLast, label:label, key:key, cur:state.currentChantier, at:new Date().toISOString()});
+    if(_undoStack.length>UNDO_MAX) _undoStack.shift();
+    _undoT=now;
+    if(label.indexOf('suppression')===0) showToast('🗑️ Supprimé — Ctrl+Z pour annuler');
+  }
+  _redoStack=[]; _undoLast=cur;
+  _undoPersist(); _undoUpdateUI();
+}
+function _undoUpdateUI(){
+  const u=_undoStack[_undoStack.length-1], r=_redoStack[_redoStack.length-1];
+  [['undo-btn',u,'Annuler : ','Rien à annuler'],['redo-btn',r,'Rétablir : ','Rien à rétablir']].forEach(a=>{
+    const el=document.getElementById(a[0]); if(!el) return;
+    el.style.opacity=a[1]?'1':'.4'; el.style.pointerEvents=a[1]?'':'none';
+    el.title=a[1]?a[2]+a[1].label:a[3];
+  });
+}
+function _undoRestore(rec){
+  _undoApplying=true;
+  try{
+    state.chantiers=JSON.parse(rec.snap);
+    if(rec.cur!==null && rec.cur!==undefined && state.chantiers[rec.cur]) state.currentChantier=rec.cur;
+    else if(state.currentChantier!==null && !state.chantiers[state.currentChantier]) state.currentChantier=null;
+    state.currentLot=null;
+    saveState();
+    _undoLast=rec.snap;
+  } finally { _undoApplying=false; }
+  try{
+    const act=document.querySelector('.page.active'), id=act?act.id.replace('page-',''):'chantiers';
+    renderChantierGrid(); renderChantierSelects();
+    const sel=document.getElementById('chantier-select'); if(sel && state.currentChantier!==null) sel.value=state.currentChantier;
+    showPage(id);
+  }catch(e){ console.error('Restauration :',e); }
+}
+function undoAction(){
+  if(!_undoStack.length){ showToast('Rien à annuler'); return; }
+  const rec=_undoStack.pop();
+  _redoStack.push({snap:_undoSnap(), label:rec.label, cur:state.currentChantier, at:rec.at});
+  _undoRestore(rec); _undoPersist(); _undoUpdateUI(); showToast('↩️ Annulé : '+rec.label);
+}
+function redoAction(){
+  if(!_redoStack.length){ showToast('Rien à rétablir'); return; }
+  const rec=_redoStack.pop();
+  _undoStack.push({snap:_undoSnap(), label:rec.label, cur:state.currentChantier, at:rec.at});
+  _undoRestore(rec); _undoPersist(); _undoUpdateUI(); showToast('↪️ Rétabli : '+rec.label);
+}
+try{ const _d=JSON.parse(localStorage.getItem(UNDO_KEY)||'null'); if(_d){ _undoStack=_d.undo||[]; _redoStack=_d.redo||[]; _undoH=(_d.h===undefined?null:_d.h); } }catch(e){}
+document.addEventListener('keydown',function(ev){
+  if(!(ev.ctrlKey||ev.metaKey)) return;
+  const k=String(ev.key).toLowerCase();
+  if(k!=='z'&&k!=='y') return;
+  const t=ev.target;
+  if(t&&(t.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;   // annulation de saisie native du navigateur
+  if(document.querySelector('.modal-overlay.open')) return;
+  ev.preventDefault();
+  if(k==='y'||(k==='z'&&ev.shiftKey)) redoAction(); else undoAction();
+});
+
 function saveState(){
+  _undoRecord();
   // localStorage (toujours, même hors connexion)
   try{ localStorage.setItem(STORAGE_KEY,JSON.stringify({chantiers:state.chantiers})); }catch(e){}
   // Firestore (sync multi-appareils, si connecté)
@@ -2279,6 +2387,7 @@ function showPage(page){
 }
 
 function initUI(){
+  _undoBase(); _undoUpdateUI();
   renderChantierGrid();
   renderChantierSelects();
   if(typeof checkShowPushBtn==='function') checkShowPushBtn();
@@ -4090,7 +4199,7 @@ function exportPDF(detaille){
     : `<th style="width:70%">Lot</th><th style="width:30%;text-align:right">Montant</th>`;
 
   let totalHT=0,totalTVA=0,totalTTC=0;
-  const lotsHTML=(c.lots||[]).map(lot=>{
+  const lotsHTML=(c.lots||[]).map((lot,_li,_la)=>{const _isLastLot=_li===_la.length-1;
     let htClient=0;
     (lot.postes||[]).forEach(p=>{
       const q=parseFloat(p.q)||0;
@@ -4103,12 +4212,12 @@ function exportPDF(detaille){
     const tvaAmt=ht*(tva/100);
     const ttc=ht+tvaAmt;
     totalHT+=ht; totalTVA+=tvaAmt; totalTTC+=ttc;
-    const rows=!detaille?'':(lot.postes||[]).map(p=>{
+    const rows=!detaille?'':(lot.postes||[]).map((p,_pi,_pa)=>{
       const q=parseFloat(p.q)||0;
       const pu=parseFloat(p.puClient)||parseFloat(p.pu)||0;
-      return `<tr><td style="padding:5px 8px 5px 22px;font-size:11px;color:#334155">${esc(p.n)}</td><td style="text-align:right;padding:5px 8px;font-size:11px;white-space:nowrap">${q} ${esc(p.u||'u')}</td><td style="text-align:right;padding:5px 8px;font-size:11px">${fmt(pu)} €</td><td style="text-align:right;padding:5px 8px;font-size:11px;font-weight:600">${fmt(q*pu)} €</td></tr>`;
+      return `<tr${_isLastLot&&_pi===_pa.length-1?' class="keep-next"':''}><td style="padding:5px 8px 5px 22px;font-size:11px;color:#334155">${esc(p.n)}</td><td style="text-align:right;padding:5px 8px;font-size:11px;white-space:nowrap">${q} ${esc(p.u||'u')}</td><td style="text-align:right;padding:5px 8px;font-size:11px">${fmt(pu)} €</td><td style="text-align:right;padding:5px 8px;font-size:11px;font-weight:600">${fmt(q*pu)} €</td></tr>`;
     }).join('');
-    return `<tr><td colspan="${nomColspan}" style="background:#1E3A5F;padding:8px 10px;color:#93C5FD;font-size:11.5px;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact">${esc(lot.num?lot.num+' — ':'')}${esc(lot.nom)}</td><td style="background:#1E3A5F;text-align:right;padding:8px 10px;color:white;font-size:12px;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact">${fmt(ttc)} € TTC</td></tr>${rows}<tr><td colspan="${nomColspan}" style="background:#F1F5F9;padding:4px 8px;font-size:10.5px;color:#64748B;text-align:right;-webkit-print-color-adjust:exact;print-color-adjust:exact">Sous-total HT</td><td style="background:#F1F5F9;text-align:right;padding:4px 8px;font-size:10.5px;color:#1E3A5F;font-weight:600;-webkit-print-color-adjust:exact;print-color-adjust:exact">${fmt(ht)} €</td></tr>`;
+    return `<tr><td colspan="${nomColspan}" style="background:#1E3A5F;padding:8px 10px;color:#93C5FD;font-size:11.5px;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact">${esc(lot.num?lot.num+' — ':'')}${esc(lot.nom)}</td><td style="background:#1E3A5F;text-align:right;padding:8px 10px;color:white;font-size:12px;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact">${fmt(ttc)} € TTC</td></tr>${rows}<tr${_isLastLot?' class="keep-next"':''}><td colspan="${nomColspan}" style="background:#F1F5F9;padding:4px 8px;font-size:10.5px;color:#64748B;text-align:right;-webkit-print-color-adjust:exact;print-color-adjust:exact">Sous-total HT</td><td style="background:#F1F5F9;text-align:right;padding:4px 8px;font-size:10.5px;color:#1E3A5F;font-weight:600;-webkit-print-color-adjust:exact;print-color-adjust:exact">${fmt(ht)} €</td></tr>`;
   }).join('');
 
   const html=`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Devis ${esc(c.nom)}${detaille?'':' — Synthèse'}</title>
@@ -4133,7 +4242,11 @@ thead tr{background:#1E3A5F}
 thead th{padding:8px 10px;color:#93C5FD;font-size:10px;font-weight:700;letter-spacing:.06em;text-align:left}
 thead th:not(:first-child){text-align:right}
 tbody tr:nth-child(even) td{background:#F8FAFC}
-.totaux{margin-left:auto;width:260px;border:1.5px solid #E2E8F0;border-radius:8px;overflow:hidden;margin-bottom:20px}
+.totaux{margin-left:auto;width:260px;border:1.5px solid #E2E8F0;border-radius:8px;overflow:hidden;margin-bottom:20px;break-inside:avoid;page-break-inside:avoid}
+tr{break-inside:avoid;page-break-inside:avoid}
+tr.keep-next{break-after:avoid;page-break-after:avoid}
+tbody tr.tot-row td{background:#fff !important;border:0;padding:14px 0 0}
+.header,.parties,.objet,.fin-devis,.sig{break-inside:avoid;page-break-inside:avoid}
 .trow{display:flex;justify-content:space-between;padding:7px 12px;font-size:12px}
 .trow:not(:last-child){border-bottom:1px solid #E2E8F0}
 .trow.main{background:#1E3A5F;color:white;font-size:13.5px;font-weight:700}
@@ -4161,18 +4274,17 @@ tbody tr:nth-child(even) td{background:#F8FAFC}
 </div>
 <div class="objet"><div class="objet-lbl">Objet</div><div class="objet-val">${esc(c.nom)}</div><div class="objet-det">Phase : ${esc(c.phase||'APS')}${c.type?' · '+esc(c.type):''}</div></div>
 <table><thead><tr>${theadHTML}</tr></thead>
-<tbody>${lotsHTML}</tbody></table>
-<div class="totaux">
+<tbody>${lotsHTML}<tr class="tot-row"><td colspan="${detaille?4:2}"><div class="totaux">
   <div class="trow"><span class="lbl">Total HT</span><span class="val">${fmt(totalHT)} €</span></div>
   <div class="trow"><span class="lbl">TVA</span><span class="val">${fmt(totalTVA)} €</span></div>
   <div class="trow main"><span class="lbl">TOTAL TTC</span><span class="val">${fmt(totalTTC)} €</span></div>
-</div>
-<div class="conditions"><strong>Conditions :</strong> 30% à la commande · 40% en cours de travaux · 30% à réception.<br>
+</div></td></tr></tbody></table>
+<div class="fin-devis"><div class="conditions"><strong>Conditions :</strong> 30% à la commande · 40% en cours de travaux · 30% à réception.<br>
 <strong>Validité :</strong> 3 mois. <strong>Acceptation :</strong> retourner signé avec mention "Bon pour accord".</div>
 <div class="sigs">
   <div class="sig"><div class="sig-lbl">Établi par</div><div class="sig-name">Maxime Suchet — Phénix-Architecture</div></div>
   <div class="sig"><div class="sig-lbl">Bon pour accord — Client</div><div class="sig-name">${esc(c.client||'')}</div><div style="font-size:9.5px;color:#94A3B8">Signature précédée de "Lu et approuvé"</div></div>
-</div>
+</div></div>
 <div class="footer">Phénix-Architecture · SIRET 987 989 316 00011 · 6 lieu-dit l'Étreille, 63780 Saint-Georges-de-Mons<br>contact@phenixarchitecte.fr · 04 73 73 00 59 · Document confidentiel</div>
 </div><\/body><\/html>`;
 
@@ -4364,7 +4476,11 @@ thead tr{background:#1E3A5F}
 thead th{padding:8px 10px;color:#93C5FD;font-size:10px;font-weight:700;letter-spacing:.06em;text-align:left}
 thead th:not(:first-child){text-align:right}
 tbody tr:nth-child(even) td{background:#F8FAFC}
-.totaux{margin-left:auto;width:260px;border:1.5px solid #E2E8F0;border-radius:8px;overflow:hidden;margin-bottom:20px}
+.totaux{margin-left:auto;width:260px;border:1.5px solid #E2E8F0;border-radius:8px;overflow:hidden;margin-bottom:20px;break-inside:avoid;page-break-inside:avoid}
+tr{break-inside:avoid;page-break-inside:avoid}
+tr.keep-next{break-after:avoid;page-break-after:avoid}
+tbody tr.tot-row td{background:#fff !important;border:0;padding:14px 0 0}
+.header,.parties,.objet,.fin-devis,.sig{break-inside:avoid;page-break-inside:avoid}
 .trow{display:flex;justify-content:space-between;padding:7px 12px;font-size:12px}
 .trow.main{background:#e67e22;color:white;font-size:13.5px;font-weight:700}
 .trow .lbl{color:#64748B}.trow .val{font-weight:600;color:#1E3A5F}
