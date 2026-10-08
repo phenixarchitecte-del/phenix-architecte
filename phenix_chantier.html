@@ -10,17 +10,14 @@
 <title>Phénix-Architecture · Gestion de Chantier</title>
 <script type="module">
 import { initializeApp }       from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-import { getFirestore,
+import { getFirestore, initializeFirestore,
+         persistentLocalCache, persistentMultipleTabManager,
          collection, doc,
-         onSnapshot,
+         onSnapshot, query, where, orderBy, limit,
          setDoc, deleteDoc,
-         getDoc }              from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+         getDoc, getDocs }     from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 import { getAuth, signInWithEmailAndPassword, signOut,
          onAuthStateChanged }  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-import { getStorage, ref,
-         uploadString,
-         getDownloadURL,
-         deleteObject }        from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js';
 
 // ════════════════════════════════════════════════════════════
 //  ▼▼▼  REMPLACEZ CES VALEURS PAR LES VÔTRES  ▼▼▼
@@ -46,8 +43,15 @@ try {
   initializeAppCheck(app, { provider: new ReCaptchaV3Provider(RECAPTCHA_SITE_KEY), isTokenAutoRefreshEnabled: true });
 } catch (e) { console.warn('App Check non initialisé :', e); }
 
-const db      = getFirestore(app);
-const storage = getStorage(app);
+// Cache hors-ligne (IndexedDB) : sur chantier, sans réseau, on consulte et on saisit ;
+// tout est envoyé automatiquement au retour de la connexion.
+let db;
+try {
+  db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+} catch (e) {
+  console.warn('Cache hors-ligne indisponible, mode standard :', e);
+  db = getFirestore(app);
+}
 
 // ── Collections Firestore ──────────────────────────────────
 const PROJETS_COL    = collection(db, 'phenix_projets');
@@ -234,189 +238,156 @@ window._fb = {
     } catch(e) { console.error('Phénix média lecture:', e.message || e); return null; }
   }
 
+  // ── Médias d'une entité (compte rendu, réserve) ──────────────
   // Écrit les nouveaux médias dans phenix_media et pose un mediaId stable
   // sur l'objet réel (conservé en local), tout en gardant le dataUrl en mémoire.
-  async function ensureMediaStored(stateObj){
-    if (!stateObj || !stateObj.comptes_rendus) return;
-    for (const cr of stateObj.comptes_rendus) {
-      for (const key of ['photos','plans']) {
-        if (!Array.isArray(cr[key])) continue;
-        for (const item of cr[key]) {
-          const du = item.dataUrl || item.storageUrl;
-          if (du && typeof du === 'string' && du.startsWith('data:')) {
-            if (!item.mediaId) item.mediaId = _genMediaId();
-            if (!_mediaCache[item.mediaId]) {
-              await _putMedia(item.mediaId, du, { kind: key === 'plans' ? 'plan' : 'photo', name: item.name || '' });
-            }
+  const MEDIA_ITEM_KEYS = ['photos', 'plans'];
+  async function ensureMediaStoredEntity(ent){
+    if (!ent) return;
+    for (const key of MEDIA_ITEM_KEYS) {
+      if (!Array.isArray(ent[key])) continue;
+      for (const item of ent[key]) {
+        const du = item.dataUrl || item.storageUrl;
+        if (du && typeof du === 'string' && du.startsWith('data:')) {
+          if (!item.mediaId) item.mediaId = _genMediaId();
+          if (!_mediaCache[item.mediaId]) {
+            await _putMedia(item.mediaId, du, { kind: key === 'plans' ? 'plan' : 'photo', name: item.name || '' });
           }
         }
       }
     }
   }
 
-  // Réassemble les médias (mediaId -> dataUrl) pour l'affichage après chargement.
-  async function rehydrateMedia(stateObj){
-    if (!stateObj || !stateObj.comptes_rendus) return stateObj;
-    for (const cr of stateObj.comptes_rendus) {
-      for (const key of ['photos','plans']) {
-        if (!Array.isArray(cr[key])) continue;
-        for (const item of cr[key]) {
-          if (item.mediaId && !item.dataUrl) {
-            const du = await _getMedia(item.mediaId);
-            if (du) { item.dataUrl = du; item.storageUrl = du; }
-          }
+  // Remet immédiatement les médias déjà en cache mémoire (synchrone, sans réseau).
+  function hydrateEntityFromCache(ent){
+    if (!ent) return ent;
+    for (const key of MEDIA_ITEM_KEYS) {
+      if (!Array.isArray(ent[key])) continue;
+      for (const item of ent[key]) {
+        if (item.mediaId && !item.dataUrl && _mediaCache[item.mediaId]) {
+          item.dataUrl = _mediaCache[item.mediaId]; item.storageUrl = _mediaCache[item.mediaId];
         }
       }
     }
-    return stateObj;
+    return ent;
   }
+
+  // Réassemble les médias manquants depuis phenix_media (asynchrone).
+  async function rehydrateEntity(ent){
+    if (!ent) return ent;
+    for (const key of MEDIA_ITEM_KEYS) {
+      if (!Array.isArray(ent[key])) continue;
+      for (const item of ent[key]) {
+        if (item.mediaId && !item.dataUrl) {
+          const du = await _getMedia(item.mediaId);
+          if (du) { item.dataUrl = du; item.storageUrl = du; }
+        }
+      }
+    }
+    return ent;
+  }
+
+  // ════════════════════════════════════════════════════════════
+  //  MODÈLE MULTI-UTILISATEUR
+  //  Chaque chantier / lot / intervenant / situation / compte rendu /
+  //  mission / réserve est UNE fiche Firestore indépendante.
+  //  Deux personnes peuvent donc travailler en même temps sans
+  //  s'écraser (seule la même fiche modifiée au même instant est en
+  //  conflit, et l'appli prévient avant d'écraser).
+  // ════════════════════════════════════════════════════════════
+  const CH_COLS = {
+    chantiers:      'phenix_ch_chantiers',
+    lots:           'phenix_ch_lots',
+    intervenants:   'phenix_ch_intervenants',
+    factures:       'phenix_ch_factures',
+    comptes_rendus: 'phenix_ch_crs',
+    missions:       'phenix_ch_missions',
+    reserves:       'phenix_ch_reserves'
+  };
+  const CH_PRIVE_COL = 'phenix_ch_prive';   // honoraires / commissions : réservé à l'agence
+  const CH_USERS_COL = 'phenix_users';      // rôles et chantiers accessibles
+  const CH_META_COL  = 'phenix_ch_meta';    // drapeau de migration
 
   window._fbChantier = {
+    COLS: CH_COLS,
 
-    // ── Storage : upload un fichier base64 ──────────────────────
-    async uploadFile(path, dataUrl) {
+    // ── Utilisateurs / rôles ────────────────────────────────────
+    async getUser(emailLower) {
+      if (!emailLower) return null;
+      const s = await getDoc(doc(db, CH_USERS_COL, emailLower));
+      return s.exists() ? s.data() : null;
+    },
+    listenUsers(callback, onErr) {
+      return onSnapshot(collection(db, CH_USERS_COL), snap => {
+        const list = []; snap.forEach(d => list.push(Object.assign({ _id: d.id }, d.data())));
+        callback(list);
+      }, err => (onErr || console.error)(err));
+    },
+    async saveUser(emailLower, data) { await setDoc(doc(db, CH_USERS_COL, emailLower), data); },
+    async deleteUser(emailLower) { await deleteDoc(doc(db, CH_USERS_COL, emailLower)); },
+
+    // ── Fiches : écoute temps réel (toute la collection, ou un seul chantier) ──
+    listenEntity(key, chantierId, onChange, onErr) {
+      const base = collection(db, CH_COLS[key]);
+      const q = (chantierId === null || chantierId === undefined) ? base : query(base, where('chantierId', '==', chantierId));
+      return onSnapshot(q, { includeMetadataChanges: true }, snap => {
+        const changes = snap.docChanges().map(c => ({ type: c.type, id: c.doc.id, data: c.doc.data() }));
+        onChange(changes, { fromCache: snap.metadata.fromCache, key: key, chantierId: chantierId });
+      }, err => (onErr || console.error)(err, key, chantierId));
+    },
+    listenPrive(onChange, onErr, chantierId) {
+      const base = collection(db, CH_PRIVE_COL);
+      const q = (chantierId === null || chantierId === undefined) ? base : query(base, where('chantierId', '==', chantierId));
+      return onSnapshot(q, snap => {
+        onChange(snap.docChanges().map(c => ({ type: c.type, id: c.doc.id, data: c.doc.data() })), { fromCache: snap.metadata.fromCache });
+      }, err => (onErr || console.error)(err));
+    },
+
+    // ── Fiches : écriture ───────────────────────────────────────
+    saveEntity(key, obj) { return setDoc(doc(db, CH_COLS[key], String(obj.id)), obj); },
+    deleteEntity(key, id) { return deleteDoc(doc(db, CH_COLS[key], String(id))); },
+    async getEntity(key, id) {
+      const s = await getDoc(doc(db, CH_COLS[key], String(id)));
+      return s.exists() ? s.data() : null;
+    },
+    savePrive(id, data) { return setDoc(doc(db, CH_PRIVE_COL, String(id)), data); },
+    deletePrive(id) { return deleteDoc(doc(db, CH_PRIVE_COL, String(id))); },
+
+    // ── Médias ──────────────────────────────────────────────────
+    ensureMedia: ensureMediaStoredEntity,
+    hydrateFromCache: hydrateEntityFromCache,
+    rehydrate: rehydrateEntity,
+    async getMediaById(mediaId) { return await _getMedia(mediaId); },
+
+    // ── Journal d'activité (sous-collection de chaque chantier) ─
+    async logActivity(chantierId, entry) {
+      await setDoc(doc(db, CH_COLS.chantiers, String(chantierId), 'activity',
+        'a_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7)), entry);
+    },
+    async loadActivity(chantierIds, perChantier) {
+      const out = [];
+      for (const cid of chantierIds) {
+        try {
+          const snap = await getDocs(query(collection(db, CH_COLS.chantiers, String(cid), 'activity'), orderBy('at', 'desc'), limit(perChantier || 40)));
+          snap.forEach(d => out.push(Object.assign({ chantierId: cid }, d.data())));
+        } catch (e) { console.warn('activité', cid, e && e.message); }
+      }
+      out.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+      return out;
+    },
+
+    // ── Migration depuis l'ancien format (1 seul gros document) ─
+    async loadLegacyState() {
       try {
-        const fileRef = ref(storage, path);
-        // Extraire le type MIME et les données
-        const [header, data] = dataUrl.split(',');
-        const mimeType = header.match(/data:([^;]+)/)[1];
-        await uploadString(fileRef, data, 'base64', { contentType: mimeType });
-        const url = await getDownloadURL(fileRef);
-        return url;
-      } catch(e) {
-        console.error('Storage upload error:', e.message || e);
-        return null;
-      }
+        const s = await getDoc(doc(db, 'phenix_chantier_state', 'main'));
+        if (!s.exists()) return null;
+        return JSON.parse(s.data().data || '{}');
+      } catch (e) { console.warn('Lecture ancien format impossible :', e && e.message); return null; }
     },
-
-    // ── Storage : supprimer un fichier ──────────────────────────
-    async deleteFile(path) {
-      try {
-        await deleteObject(ref(storage, path));
-      } catch(e) {
-        // Ignore si déjà supprimé
-      }
+    async getMigrationFlag() {
+      try { const s = await getDoc(doc(db, CH_META_COL, 'migration')); return s.exists(); } catch (e) { return true; }
     },
-
-    // ── Upload toutes les photos + plans d'un CR ────────────────
-    async uploadCRFiles(cr) {
-      const crId = String(cr.id);
-      const updated = JSON.parse(JSON.stringify(cr));
-
-      // Photos
-      if (updated.photos && updated.photos.length) {
-        for (let i = 0; i < updated.photos.length; i++) {
-          const p = updated.photos[i];
-          if (p.dataUrl && p.dataUrl.startsWith('data:')) {
-            // Pas encore uploadé → uploader
-            const path = `chantier/cr_${crId}/photos/photo_${i}`;
-            const url = await this.uploadFile(path, p.dataUrl);
-            if (url) {
-              updated.photos[i] = { storageUrl: url, storagePath: path, caption: p.caption || '' };
-            }
-          }
-          // Déjà une URL Storage → garder tel quel
-        }
-      }
-
-      // Plans
-      if (updated.plans && updated.plans.length) {
-        for (let i = 0; i < updated.plans.length; i++) {
-          const pl = updated.plans[i];
-          if (pl.dataUrl && pl.dataUrl.startsWith('data:')) {
-            const path = `chantier/cr_${crId}/plans/plan_${i}`;
-            const url = await this.uploadFile(path, pl.dataUrl);
-            if (url) {
-              updated.plans[i] = {
-                storageUrl: url,
-                storagePath: path,
-                name: pl.name || '',
-                annotations: pl.annotations || []
-              };
-            }
-          }
-        }
-      }
-
-      return updated;
-    },
-
-    // ── Créer une version syncable (références légères, sans base64) ──
-    makeSyncable(stateObj) {
-      const s = JSON.parse(JSON.stringify(stateObj));
-      if (s.comptes_rendus) {
-        s.comptes_rendus = s.comptes_rendus.map(cr => {
-          ['photos','plans'].forEach(key => {
-            if (Array.isArray(cr[key])) {
-              cr[key] = cr[key].map(it => {
-                const o = { ...it };
-                delete o.dataUrl;        // base64 sorti dans phenix_media
-                delete o.storageUrl;
-                delete o.storagePath;
-                delete o.renderedPages;  // pages PDF rendues (recalculables)
-                return o;                // garde mediaId, caption, name, annotations
-              });
-            }
-          });
-          return cr;
-        });
-      }
-      return s;
-    },
-
-    // ── restoreBinary : réassemble les médias depuis phenix_media ──
-    async restoreBinary(remoteState) {
-      await rehydrateMedia(remoteState);
-      return remoteState;
-    },
-
-    // ── Récupération à la demande d'un média par son id (filet de sécurité) ──
-    async getMediaById(mediaId) {
-      return await _getMedia(mediaId);
-    },
-
-    // ── Sauvegarder : médias dans phenix_media, fiche principale légère ──
-    async saveState(stateObj) {
-      try {
-        await ensureMediaStored(stateObj);          // sort les photos/plans + pose les mediaId
-        const syncable = this.makeSyncable(stateObj); // version sans base64
-        const json = JSON.stringify(syncable);
-        await setDoc(doc(db, 'phenix_chantier_state', 'main'), {
-          data: json,
-          updatedAt: new Date().toISOString(),
-          size: json.length
-        });
-      } catch(e) {
-        console.error('Firebase chantier save error:', e.message || e);
-      }
-    },
-
-    // ── Écouter les changements en temps réel ───────────────────
-    listenState(callback) {
-      return onSnapshot(
-        doc(db, 'phenix_chantier_state', 'main'),
-        async snap => {
-          if (snap.exists()) {
-            try {
-              const parsed = JSON.parse(snap.data().data || '{}');
-              const updatedAt = snap.data().updatedAt || null;
-              // Réassembler les médias (photos/plans) depuis phenix_media
-              const restored = await this.restoreBinary(parsed);
-              callback(restored, updatedAt);
-            } catch(e) {
-              console.error('Firebase chantier parse error:', e);
-              callback(null, null);
-            }
-          } else {
-            callback(null, null);
-          }
-        },
-        err => {
-          console.error('Firebase chantier listener error:', err.message || err);
-          callback(null, null);
-        }
-      );
-    }
+    async setMigrationFlag(info) { await setDoc(doc(db, CH_META_COL, 'migration'), info); }
   };
 
 // ════════════════════════════════════════════════════════════
@@ -1799,6 +1770,12 @@ tr:last-child td{border-bottom:none} tr:hover td{background:var(--accent-bg)}
 button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
 #chantierSidebar, #sidebar_d { will-change: transform; -webkit-backface-visibility: hidden; }
 
+
+/* ── Rôles (v2 multi-utilisateur) ── */
+body.role-pending .staff-only, body.role-pending .admin-only { display:none !important; }
+body.role-chantier .staff-only, body.role-chantier .admin-only { display:none !important; }
+body.role-equipe .admin-only { display:none !important; }
+#chUserChip { font-size:11px; color:rgba(255,255,255,.7); margin-top:6px; display:flex; align-items:center; gap:5px; }
 </style>
 <style id="px-iframe-hide"></style>
 <script>
@@ -1812,7 +1789,7 @@ if (window.parent !== window) {
 }
 </script>
 </head>
-<body>
+<body class="role-pending">
 <div id="phenix-login" style="display:flex;position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#0F1E3D,#1B2D5B,#2A5298);align-items:center;justify-content:center;padding:20px;font-family:'DM Sans',system-ui,sans-serif">
   <div style="background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.18);border-radius:16px;padding:34px 28px;max-width:360px;width:100%;text-align:center">
     <div style="font-family:'DM Serif Display',Georgia,serif;font-size:30px;color:#fff;margin-bottom:4px">Phénix<span style="color:#7DC6E8">-Architecture</span></div>
@@ -1861,7 +1838,7 @@ if (window.parent !== window) {
       <div class="form-grid">
         <div class="form-group"><label>Nom du chantier *</label><input id="ch-nom" placeholder="Ex: Villa Dupont"></div>
         <div class="form-group"><label>Référence dossier</label><input id="ch-ref" placeholder="Ex: 2025-001"></div>
-        <div class="form-group" style="grid-column:1/-1"><label>Lier au projet Phénix Dossier (optionnel)</label>
+        <div class="form-group staff-only" style="grid-column:1/-1"><label>Lier au projet Phénix Dossier (optionnel)</label>
           <select id="ch-projetid"><option value="">— Aucun lien —</option></select>
           <div style="font-size:11px;color:var(--text3);margin-top:3px">Permet d'importer directement les lots validés depuis Phénix Chiffrage.</div>
         </div>
@@ -1876,8 +1853,8 @@ if (window.parent !== window) {
         <div class="form-group"><label>Statut</label>
           <select id="ch-statut"><option value="preparation">En préparation</option><option value="actif">En cours</option><option value="pause">En pause</option><option value="reception">Réceptionné</option><option value="cloture">Clôturé</option></select>
         </div>
-        <div class="form-group"><label>Honoraires MOE HT (€)</label><input id="ch-honoraires" type="number" placeholder="0" oninput="previewChCA()"></div>
-        <div class="form-group"><label>Commissions HT (€)</label><input id="ch-commissions" type="number" placeholder="0" oninput="previewChCA()"></div>
+        <div class="form-group staff-only"><label>Honoraires MOE HT (€)</label><input id="ch-honoraires" type="number" placeholder="0" oninput="previewChCA()"></div>
+        <div class="form-group staff-only"><label>Commissions HT (€)</label><input id="ch-commissions" type="number" placeholder="0" oninput="previewChCA()"></div>
         <div id="ch-ca-preview" style="display:none;grid-column:1/-1;background:var(--accent-bg);border:1px solid var(--accent);border-radius:var(--r-sm);padding:8px 12px;font-size:12px;color:var(--accent)"></div>
         <div class="form-group" style="grid-column:1/-1"><label>Notes</label><textarea id="ch-notes" rows="3" placeholder="Description, particularités du chantier…"></textarea></div>
       </div>
@@ -2323,6 +2300,79 @@ if (window.parent !== window) {
   </div>
 </div>
 
+<!-- ══ MODAL RÉSERVE ══════════════════════════════════════════ -->
+<div class="modal-overlay" id="modalReserve">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="mReserveTitle">Nouvelle réserve</div>
+      <button class="btn btn-sm btn-icon" onclick="closeModal('modalReserve')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group"><label>Chantier *</label><select id="res-chantier" onchange="updateResLots()"></select></div>
+        <div class="form-group"><label>Réf.</label><input id="res-ref" placeholder="R-001"></div>
+        <div class="form-group" style="grid-column:1/-1"><label>Réserve / action *</label><input id="res-titre" placeholder="Ex : Reprendre l'enduit du mur Nord"></div>
+        <div class="form-group" style="grid-column:1/-1"><label>Détail</label><textarea id="res-desc" rows="3" placeholder="Description, consigne de reprise…"></textarea></div>
+        <div class="form-group"><label>Lieu / zone</label><input id="res-lieu" placeholder="Ex : Cuisine, façade Nord"></div>
+        <div class="form-group"><label>Lot concerné</label><select id="res-lot"></select></div>
+        <div class="form-group"><label>Entreprise responsable</label><select id="res-interv"></select></div>
+        <div class="form-group"><label>Priorité</label>
+          <select id="res-prio"><option value="normale">Normale</option><option value="haute">Haute</option><option value="urgente">Urgente</option></select></div>
+        <div class="form-group"><label>Origine</label>
+          <select id="res-origine"><option>Visite de chantier</option><option>Compte rendu</option><option>OPR / réception</option><option>Autre</option></select></div>
+        <div class="form-group"><label>Échéance de levée</label><input id="res-echeance" type="date"></div>
+        <div class="form-group"><label>Statut</label>
+          <select id="res-statut"><option value="ouverte">Ouverte</option><option value="en_cours">En cours</option><option value="levee">Levée (à vérifier)</option><option value="verifiee">Vérifiée / close</option></select></div>
+        <div class="form-group"><label>Date de levée</label><input id="res-datelevee" type="date"></div>
+      </div>
+      <div class="form-sep">Photos</div>
+      <div id="res-photos-container" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"></div>
+      <label class="btn btn-sm" style="cursor:pointer"><i class="ti ti-camera"></i> Ajouter des photos
+        <input type="file" id="res-photos-input" accept="image/*" multiple style="display:none" onchange="resAddPhotos(event)">
+      </label>
+      <input type="hidden" id="res-edit-id">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-sm" id="res-del-btn" style="display:none;margin-right:auto" onclick="deleteReserve()"><i class="ti ti-trash"></i> Supprimer</button>
+      <button class="btn" onclick="closeModal('modalReserve')">Annuler</button>
+      <button class="btn btn-primary" onclick="saveReserve()"><i class="ti ti-check"></i> Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL ACCÈS UTILISATEUR ════════════════════════════════ -->
+<div class="modal-overlay" id="modalUser">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="mUserTitle">Ajouter une personne</div>
+      <button class="btn btn-sm btn-icon" onclick="closeModal('modalUser')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group" style="grid-column:1/-1"><label>E-mail de connexion *</label><input id="usr-email" type="email" placeholder="prenom@exemple.fr"></div>
+        <div class="form-group"><label>Nom affiché</label><input id="usr-nom" placeholder="Prénom Nom"></div>
+        <div class="form-group"><label>Rôle</label>
+          <select id="usr-role" onchange="usrRoleChanged()">
+            <option value="chantier">Suivi de chantier (externe, chantiers choisis)</option>
+            <option value="equipe">Équipe agence (accès complet)</option>
+            <option value="admin">Administrateur</option>
+          </select></div>
+        <div class="form-group" style="grid-column:1/-1" id="usr-chantiers-wrap"><label>Chantiers accessibles</label>
+          <div id="usr-chantiers" style="display:flex;flex-direction:column;gap:6px;max-height:200px;overflow:auto;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px"></div></div>
+        <div class="form-group" style="grid-column:1/-1"><label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0"><input id="usr-actif" type="checkbox" checked style="width:auto"> Accès actif (décocher pour suspendre sans supprimer)</label></div>
+      </div>
+      <div style="font-size:12px;color:var(--text3);line-height:1.6;margin-top:8px">
+        Un <strong>Suivi de chantier</strong> voit uniquement les chantiers cochés : lots et montants, honoraires, situations, comptes rendus, réserves, intervenants. Il peut créer/modifier les lots et attribuer les entreprises, mais ne peut pas marquer une situation « payée » ni accéder à la compta ou aux autres dossiers.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-sm" id="usr-del-btn" style="display:none;margin-right:auto" onclick="deleteUserAccess()"><i class="ti ti-trash"></i> Retirer</button>
+      <button class="btn" onclick="closeModal('modalUser')">Annuler</button>
+      <button class="btn btn-primary" onclick="saveUserAccess()"><i class="ti ti-check"></i> Enregistrer</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ APPLICATION ════════════════════════════════════════════ -->
 
 <div class="app">
@@ -2348,12 +2398,18 @@ if (window.parent !== window) {
     <div class="nav-item" onclick="show('planning',this)"><i class="ti ti-calendar-stats"></i> Planning Gantt</div>
     <div class="nav-item" onclick="show('financier',this)"><i class="ti ti-report-money"></i> Suivi Financier</div>
     <div class="nav-item" onclick="show('comptes_rendus',this)"><i class="ti ti-file-description"></i> Comptes Rendus <span class="nav-badge" id="nb-cr">0</span></div>
+    <div class="nav-item" onclick="show('reserves',this)"><i class="ti ti-alert-octagon"></i> Réserves &amp; actions <span class="nav-badge" id="nb-res">0</span></div>
+    <div class="nav-item" onclick="show('activite',this)"><i class="ti ti-history"></i> Journal d'activité</div>
+    <div class="nav-item admin-only" onclick="show('equipe',this)"><i class="ti ti-user-shield"></i> Équipe &amp; accès</div>
 
+    <div class="nav-section">Historique</div>
+    <div class="nav-item" id="undoBtn" onclick="undoAction()" style="opacity:.4;pointer-events:none"><i class="ti ti-arrow-back-up"></i> Annuler <span class="nav-badge" id="undoCount"></span></div>
+    <div class="nav-item" id="redoBtn" onclick="redoAction()" style="opacity:.4;pointer-events:none"><i class="ti ti-arrow-forward-up"></i> Rétablir</div>
     <div class="nav-section">Export</div>
     <div class="nav-item" onclick="exportSynthesePDF()"><i class="ti ti-file-export"></i> Synthèse PDF chantier</div>
     <div class="nav-section">Sauvegarde</div>
     <div class="nav-item" onclick="exportJSON()" title="Télécharger une copie complète de toutes vos données (photos comprises)"><i class="ti ti-database-export"></i> Sauvegarde complète</div>
-    <div class="nav-item" onclick="importJSON()" title="Restaurer vos données depuis un fichier de sauvegarde"><i class="ti ti-database-import"></i> Restaurer une sauvegarde</div>
+    <div class="nav-item staff-only" onclick="importJSON()" title="Restaurer vos données depuis un fichier de sauvegarde"><i class="ti ti-database-import"></i> Restaurer une sauvegarde</div>
     <input type="file" id="importInput" accept=".json" style="display:none" onchange="handleImport(event)">
     <div class="nav-section">Compte</div>
     <div class="nav-item" onclick="if(window._auth)window._auth.logout()"><i class="ti ti-logout"></i> Déconnexion</div>
@@ -2363,6 +2419,7 @@ if (window.parent !== window) {
         <span class="sync-dot ok" id="syncDot"></span>
         <span id="syncLabel">Données locales</span>
       </div>
+      <div id="chUserChip"></div>
       <div style="font-size:12px;color:rgba(255,255,255,.55);margin-top:4px">Phénix-Architecture © 2025</div>
     </div>
   </aside>
@@ -2373,7 +2430,9 @@ if (window.parent !== window) {
       <button class="btn-hamburger" id="chanHamburger" onclick="openChanSidebar()" aria-label="Menu"><i class="ti ti-menu-2"></i></button>
       <div class="topbar-title" id="topbarTitle">Tableau de bord</div>
       <div class="topbar-actions" id="topbarActions">
-        <button class="btn btn-primary" onclick="openModalChantier()"><i class="ti ti-plus"></i> Nouveau chantier</button>
+        <button class="btn btn-icon" id="undoTop" onclick="undoAction()" title="Annuler (Ctrl+Z)" style="opacity:.4;pointer-events:none"><i class="ti ti-arrow-back-up"></i></button>
+        <button class="btn btn-icon" id="redoTop" onclick="redoAction()" title="Rétablir (Ctrl+Y)" style="opacity:.4;pointer-events:none"><i class="ti ti-arrow-forward-up"></i></button>
+        <button class="btn btn-primary staff-only" onclick="openModalChantier()"><i class="ti ti-plus"></i> Nouveau chantier</button>
       </div>
     </div>
 
@@ -2387,7 +2446,7 @@ if (window.parent !== window) {
             <div class="page-subtitle" id="db-subtitle">Synthèse générale de vos chantiers</div>
             <div class="page-title-line"></div>
           </div>
-          <button class="btn btn-primary" onclick="openModalChantier()"><i class="ti ti-plus"></i> Nouveau chantier</button>
+          <button class="btn btn-primary staff-only" onclick="openModalChantier()"><i class="ti ti-plus"></i> Nouveau chantier</button>
         </div>
 
         <div class="metrics" id="db-metrics">
@@ -2416,6 +2475,10 @@ if (window.parent !== window) {
           </div>
           <div>
             <div class="card">
+              <div class="card-header"><div class="card-title">Réserves à traiter</div><button class="btn btn-sm" onclick="show('reserves',document.querySelectorAll('.nav-item')[7])">Voir tout <i class="ti ti-arrow-right"></i></button></div>
+              <div id="db-reserves"><div style="color:var(--text3);font-size:13px;padding:.5rem 0">Aucune réserve à traiter.</div></div>
+            </div>
+            <div class="card">
               <div class="card-header"><div class="card-title">Lots en retard / à risque</div></div>
               <div id="db-alertes"><div style="color:var(--text3);font-size:13px;padding:.5rem 0">Aucune alerte.</div></div>
             </div>
@@ -2431,7 +2494,7 @@ if (window.parent !== window) {
       <div class="page" id="page-chantiers">
         <div class="page-header">
           <div><div class="page-title">Chantiers</div><div class="page-subtitle" id="ch-subtitle">—</div><div class="page-title-line"></div></div>
-          <button class="btn btn-primary" onclick="openModalChantier()"><i class="ti ti-plus"></i> Nouveau chantier</button>
+          <button class="btn btn-primary staff-only" onclick="openModalChantier()"><i class="ti ti-plus"></i> Nouveau chantier</button>
         </div>
         <div id="chantiers-list">
           <div class="empty-state"><div class="empty-icon"><i class="ti ti-building-factory-2"></i></div><div class="empty-title">Aucun chantier créé</div><div class="empty-sub">Créez votre premier chantier pour commencer</div></div>
@@ -2447,7 +2510,7 @@ if (window.parent !== window) {
               <option value="">Tous les chantiers</option>
             </select>
             <button class="btn btn-primary" onclick="openModalLot()"><i class="ti ti-plus"></i> Nouveau lot</button>
-            <button class="btn" onclick="importFromChiffrage()" style="border-color:#4A9CC7;color:#4A9CC7"><i class="ti ti-download"></i> Importer depuis Chiffrage</button>
+            <button class="btn staff-only" onclick="importFromChiffrage()" style="border-color:#4A9CC7;color:#4A9CC7"><i class="ti ti-download"></i> Importer depuis Chiffrage</button>
             <button class="btn" onclick="exportLotsPDF()" style="border-color:#1B2D5B;color:#1B2D5B"><i class="ti ti-file-type-pdf"></i> Export PDF</button>
           </div>
         </div>
@@ -2520,7 +2583,7 @@ if (window.parent !== window) {
         <div class="card" id="fin-honoraires-card" style="margin-bottom:1rem;background:linear-gradient(135deg,#f8f0ff,#fff);border-color:#c4a8e0">
           <div class="card-header" style="margin-bottom:.75rem">
             <div><div class="card-title" style="color:#8e44ad">Honoraires & Commissions MOE</div><div class="card-subtitle">Votre CA architectural sur ce chantier</div></div>
-            <button class="btn btn-sm" onclick="openModalChantier(activeChantier || undefined)" style="border-color:#8e44ad;color:#8e44ad"><i class="ti ti-edit"></i> Modifier</button>
+            <button class="btn btn-sm staff-only" onclick="openModalChantier(activeChantier || undefined)" style="border-color:#8e44ad;color:#8e44ad"><i class="ti ti-edit"></i> Modifier</button>
           </div>
           <div id="fin-honoraires-content" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px"></div>
         </div>
@@ -2595,6 +2658,75 @@ if (window.parent !== window) {
         </div>
       </div>
 
+      <!-- ═══ RÉSERVES & ACTIONS ═══ -->
+      <div class="page" id="page-reserves">
+        <div class="page-header">
+          <div><div class="page-title">Réserves &amp; actions</div><div class="page-subtitle" id="res-subtitle">Points à lever, suivi par entreprise</div><div class="page-title-line"></div></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <select class="btn" id="res-filter-ch" onchange="renderReserves()" style="padding:7px 12px;font-size:13px"><option value="">Tous les chantiers</option></select>
+            <select class="btn" id="res-filter-statut" onchange="renderReserves()" style="padding:7px 12px;font-size:13px">
+              <option value="">Tous statuts</option><option value="ouvertes">À traiter (ouvertes + en cours)</option>
+              <option value="ouverte">Ouverte</option><option value="en_cours">En cours</option><option value="levee">Levée (à vérifier)</option><option value="verifiee">Vérifiée</option>
+            </select>
+            <select class="btn" id="res-filter-interv" onchange="renderReserves()" style="padding:7px 12px;font-size:13px"><option value="">Toutes entreprises</option></select>
+            <div class="search-bar"><i class="ti ti-search"></i><input id="res-search" placeholder="Rechercher…" oninput="renderReserves()"></div>
+            <button class="btn btn-success" onclick="exportReservesPDF()"><i class="ti ti-file-export"></i> Liste PDF par entreprise</button>
+            <button class="btn btn-primary" onclick="openModalReserve()"><i class="ti ti-plus"></i> Nouvelle réserve</button>
+          </div>
+        </div>
+        <div class="metrics" id="res-metrics"></div>
+        <div class="card" style="padding:0;overflow:auto">
+          <table>
+            <thead style="background:var(--bg);color:var(--text)"><tr>
+              <th style="padding-left:16px">Réf.</th><th>Réserve</th><th>Chantier</th><th>Entreprise</th><th>Priorité</th><th>Échéance</th><th>Statut</th><th></th>
+            </tr></thead>
+            <tbody id="res-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ═══ JOURNAL D'ACTIVITÉ ═══ -->
+      <div class="page" id="page-activite">
+        <div class="page-header">
+          <div><div class="page-title">Journal d'activité</div><div class="page-subtitle">Qui a modifié quoi, et quand</div><div class="page-title-line"></div></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <select class="btn" id="act-filter-ch" onchange="renderActivite()" style="padding:7px 12px;font-size:13px"><option value="">Tous les chantiers</option></select>
+            <button class="btn" onclick="renderActivite()"><i class="ti ti-refresh"></i> Actualiser</button>
+          </div>
+        </div>
+        <div class="card" style="padding:0;overflow:auto">
+          <table>
+            <thead style="background:var(--bg);color:var(--text)"><tr><th style="padding-left:16px">Date</th><th>Utilisateur</th><th>Action</th><th>Élément</th><th>Chantier</th></tr></thead>
+            <tbody id="act-tbody"><tr><td colspan="5" style="padding:1.5rem;text-align:center;color:var(--text3)">Chargement…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ═══ ÉQUIPE & ACCÈS (administrateur) ═══ -->
+      <div class="page" id="page-equipe">
+        <div class="page-header">
+          <div><div class="page-title">Équipe &amp; accès</div><div class="page-subtitle">Qui peut ouvrir ce logiciel, et sur quels chantiers</div><div class="page-title-line"></div></div>
+          <button class="btn btn-primary" onclick="openModalUser()"><i class="ti ti-user-plus"></i> Ajouter une personne</button>
+        </div>
+        <div class="card" id="eq-alert" style="display:none;border-left:4px solid var(--amber);margin-bottom:1rem">
+          <div style="font-size:13px;line-height:1.6"><strong>⚠️ Sécurité à finaliser.</strong> Renseignez votre e-mail de connexion dans la constante <code>ADMIN_EMAILS</code> (en haut du script) et dans <code>firestore.rules</code>, puis publiez les règles. <strong>Ne créez pas de compte pour une personne externe avant.</strong></div>
+        </div>
+        <div class="card" style="margin-bottom:1rem">
+          <div class="card-title" style="margin-bottom:6px">Ajouter un intervenant externe — 3 étapes</div>
+          <div style="font-size:13px;line-height:1.7;color:var(--text2)">
+            <strong>1.</strong> Cliquez « Ajouter une personne », saisissez son e-mail, choisissez le rôle <em>Suivi de chantier</em> et cochez ses chantiers.<br>
+            <strong>2.</strong> Dans la console Firebase → Authentication → Ajouter un utilisateur : créez le compte avec <u>le même e-mail</u> et un mot de passe.<br>
+            <strong>3.</strong> Transmettez-lui l'adresse <strong>chantier.phenix-architecte.fr</strong> (pas le logiciel complet) et son mot de passe.
+          </div>
+        </div>
+        <div class="card" style="padding:0;overflow:auto">
+          <table>
+            <thead style="background:var(--bg);color:var(--text)"><tr><th style="padding-left:16px">Nom</th><th>E-mail</th><th>Rôle</th><th>Chantiers</th><th>Statut</th><th></th></tr></thead>
+            <tbody id="eq-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- ═══ COMPTES RENDUS ═══ -->
       <div class="page" id="page-comptes_rendus">
         <div class="page-header">
@@ -2627,37 +2759,322 @@ if (window.parent !== window) {
 // ═══════════════════════════════════════════════════════════
 //  ÉTAT LOCAL
 // ═══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+//  ÉTAT LOCAL + SYNCHRONISATION MULTI-UTILISATEUR
+//  1 fiche Firestore par élément (chantier, lot, CR, réserve…)
+//  → plusieurs personnes peuvent travailler en même temps.
+// ═══════════════════════════════════════════════════════════
+function safeColor(c) { return (typeof c === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(c)) ? c : ''; }
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+// ▼▼▼ À CONFIGURER : e-mail(s) de connexion Firebase des administrateurs (vous).
+//     Doit être identique à la liste placée dans les règles Firestore (firestore.rules).
+const ADMIN_EMAILS = ['contact@phenixarchitecte.fr'];
+// ▲▲▲
+
+const ENTITY_KEYS = ['chantiers', 'lots', 'intervenants', 'factures', 'comptes_rendus', 'missions', 'reserves'];
+const ENTITY_LABELS = { chantiers: 'chantier', lots: 'lot', intervenants: 'intervenant', factures: 'situation',
+                        comptes_rendus: 'compte rendu', missions: 'mission', reserves: 'réserve' };
+
 let state = {
-  chantiers: [],
-  lots: [],
-  intervenants: [],
-  factures: [],
-  comptes_rendus: [],
-  missions: [],
-  nextId: 1
+  chantiers: [], lots: [], intervenants: [], factures: [],
+  comptes_rendus: [], missions: [], reserves: [], nextId: 1
 };
 let activeChantier = ''; // '' = tous
 
-function uid() { return state.nextId++; }
-function saveLocal() {
-  try {
-    localStorage.setItem('phenix-chantier', JSON.stringify(state));
-    localStorage.setItem('phenix-chantier-ts', String(Date.now()));
-  } catch(e) {}
-  // Sync to Firebase if available
-  if (window._fbChantier) {
-    window._fbChantier.saveState(state).catch(()=>{});
-  }
-}
-function loadLocal() {
-  try {
-    const d = JSON.parse(localStorage.getItem('phenix-chantier') || 'null');
-    if (d) { Object.assign(state, d); }
-  } catch(e){}
+// ── Rôle de l'utilisateur connecté ─────────────────────────
+//  admin   : tout (vous)
+//  equipe  : collaborateur de l'agence (même accès qu'avant)
+//  chantier: intervenant externe — uniquement les chantiers qui lui sont attribués
+let CH_ROLE = null;
+const CH_ME = { email: '', nom: '', chantierIds: [] };
+let _legacyMode = false;
+function IS_EXT()   { return CH_ROLE === 'chantier'; }
+function IS_STAFF() { return CH_ROLE !== 'chantier'; }
+function IS_ADMIN() { return CH_ROLE === 'admin'; }
+
+// Identifiants uniques sans collision, même si 2 personnes créent un élément au même instant
+let _uidLast = 0;
+function uid() {
+  let n = Date.now() * 1000 + Math.floor(Math.random() * 1000);
+  if (n <= _uidLast) n = _uidLast + 1;
+  _uidLast = n;
+  return n;
 }
 
-// ── Synchronisation honoraires ↔ module Gestion de dossier ──
+// ── Structures de synchronisation ──────────────────────────
+const _shadow = {};      // key -> { id -> sérialisation de la dernière version synchronisée }
+const _meta = {};        // key -> { id -> { createdAt, createdBy, updatedAt, updatedBy, label, chantierId } }
+ENTITY_KEYS.forEach(k => { _shadow[k] = {}; _meta[k] = {}; });
+const _prive = {};       // chantierId -> { honoraires, commissions } (réservé agence)
+const _shadowPrive = {}; // chantierId -> sérialisation
+const _META_KEYS = ['updatedAt', 'updatedBy', 'createdAt', 'createdBy'];
+const _MEDIA_VOLATILE = ['dataUrl', 'storageUrl', 'storagePath', 'renderedPages'];
+const _ZERO_PRIVE = '{"c":0,"h":0}';
+let _booted = false, _expected = 0, _inflight = 0, _migTried = false, _skipNext = false, _noUndo = false;
+const _srv = {}, _unsubs = [];
+
+function _stable(v) {
+  if (v === null || typeof v !== 'object') return JSON.stringify(v);
+  if (Array.isArray(v)) return '[' + v.map(_stable).join(',') + ']';
+  return '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + _stable(v[k])).join(',') + '}';
+}
+function _stripItem(it) { const c = Object.assign({}, it); _MEDIA_VOLATILE.forEach(k => delete c[k]); return c; }
+// Version "persistable" d'un élément : sans média lourd, sans métadonnées, sans champs agence
+function _toDoc(key, o) {
+  const s = Object.assign({}, o);
+  if (Array.isArray(s.photos)) s.photos = s.photos.map(_stripItem);
+  if (Array.isArray(s.plans)) s.plans = s.plans.map(_stripItem);
+  const d = JSON.parse(JSON.stringify(s));
+  _META_KEYS.forEach(k => delete d[k]);
+  if (key === 'chantiers') { delete d.honoraires; delete d.commissions; d.chantierId = o.id; }
+  return d;
+}
+function _stripMeta(data) { const d = Object.assign({}, data); _META_KEYS.forEach(k => delete d[k]); return d; }
+function _label(key, o) { return String(o.nom || o.titre || o.num || o.libelle || ('#' + o.id)).slice(0, 80); }
+function _chantierOf(key, o) { return key === 'chantiers' ? o.id : (o.chantierId == null ? null : o.chantierId); }
+function _isDirty(key, o) { return _stable(_toDoc(key, o)) !== _shadow[key][String(o.id)]; }
+
+// ── Écriture : on compare l'état courant à la dernière version synchronisée
+//    et on n'envoie QUE les fiches qui ont changé. Les 20 appels saveLocal()
+//    existants fonctionnent donc sans modification.
+let _syncChain = Promise.resolve();
+function saveLocal() {
+  _syncChain = _syncChain.then(_syncOnce).catch(e => console.error('Synchronisation :', e));
+  _updateSyncLabel();
+}
+function _computeChanges() {
+  const changed = [], removed = [];
+  ENTITY_KEYS.forEach(key => {
+    const seen = {};
+    (state[key] || []).forEach(o => {
+      const id = String(o.id); seen[id] = 1;
+      if (_shadow[key][id] !== _stable(_toDoc(key, o))) changed.push({ key, o, id, priveOnly: false });
+      else if (key === 'chantiers' && !IS_EXT()) {
+        const ps = _stable({ h: parseFloat(o.honoraires) || 0, c: parseFloat(o.commissions) || 0 });
+        if ((_shadowPrive[id] || _ZERO_PRIVE) !== ps) changed.push({ key, o, id, priveOnly: true });
+      }
+    });
+    Object.keys(_shadow[key]).forEach(id => { if (!seen[id]) removed.push({ key, id }); });
+  });
+  return { changed, removed };
+}
+async function _syncOnce() {
+  if (!window._fbChantier || !CH_ROLE || CH_ROLE === 'bloque') return;
+  const { changed, removed } = _computeChanges();
+  const items = [];
+  for (const c of changed) {
+    const prev = _shadow[c.key][c.id];
+    const pBefore = c.key === 'chantiers' ? Object.assign({ honoraires: 0, commissions: 0 }, _prive[c.id] || {}) : null;
+    await _pushEntity(c);
+    const it = { key: c.key, id: c.id, chantierId: _chantierOf(c.key, c.o) };
+    if (!c.priveOnly) {
+      if (_shadow[c.key][c.id] === prev) continue;          // rien n'a été envoyé (échec)
+      it.before = prev === undefined ? null : JSON.parse(prev);
+      it.after = _toDoc(c.key, c.o);
+    }
+    if (pBefore && !IS_EXT()) { it.priveBefore = pBefore; it.priveAfter = { honoraires: parseFloat(c.o.honoraires) || 0, commissions: parseFloat(c.o.commissions) || 0 }; }
+    items.push(it);
+  }
+  for (const r of removed) {
+    const prev = _shadow[r.key][r.id], m = _meta[r.key][r.id] || {};
+    const pB = (r.key === 'chantiers' && _prive[r.id]) ? Object.assign({}, _prive[r.id]) : null;
+    _pushDelete(r);
+    if (prev !== undefined) items.push({ key: r.key, id: r.id, chantierId: m.chantierId, before: JSON.parse(prev), after: null, priveBefore: pB, priveAfter: null });
+  }
+  if (items.length) {
+    if (_skipNext) _skipNext = false; else if (!_noUndo) _pushUndo(items);
+  }
+}
+async function _pushEntity(c) {
+  const fb = window._fbChantier, key = c.key, o = c.o, id = c.id;
+  const now = new Date().toISOString();
+  if (!c.priveOnly) {
+    try { await fb.ensureMedia(o); }               // photos/plans → phenix_media, pose les mediaId
+    catch (e) { console.error('Médias :', e); toast('⚠️ Photos/plans non envoyés (' + ((e && e.code) || (e && e.message) || 'erreur') + ') — nouvelle tentative à la prochaine modification.'); return; }
+    const d = _toDoc(key, o);
+    const ser = _stable(d);
+    const prevSer = _shadow[key][id];
+    const m = _meta[key][id] || {};
+    d.updatedAt = now; d.updatedBy = CH_ME.email || '';
+    d.createdAt = m.createdAt || o.createdAt || now; d.createdBy = m.createdBy || CH_ME.email || '';
+    _shadow[key][id] = ser;                        // optimiste
+    _meta[key][id] = { createdAt: d.createdAt, createdBy: d.createdBy, updatedAt: now, updatedBy: d.updatedBy,
+                       label: _label(key, o), chantierId: _chantierOf(key, o) };
+    o.updatedAt = now; o.updatedBy = d.updatedBy;
+    if (_editBase[key] && String(_editBase[key].id) === id) _editBase[key].ts = now;
+    _track(fb.saveEntity(key, d), key, id, prevSer === undefined ? 'create' : 'update', o, prevSer);
+  }
+  if (key === 'chantiers' && !IS_EXT()) {
+    const pv = { honoraires: parseFloat(o.honoraires) || 0, commissions: parseFloat(o.commissions) || 0 };
+    const ps = _stable({ h: pv.honoraires, c: pv.commissions });
+    if ((_shadowPrive[id] || _ZERO_PRIVE) !== ps) {
+      _shadowPrive[id] = ps; _prive[id] = pv;
+      _track(fb.savePrive(id, { honoraires: pv.honoraires, commissions: pv.commissions, chantierId: o.id, updatedAt: now, updatedBy: CH_ME.email || '' }), 'prive', id, null, o);
+    }
+  }
+}
+function _pushDelete(r) {
+  const fb = window._fbChantier, m = _meta[r.key][r.id] || {};
+  const prevSer = _shadow[r.key][r.id];
+  delete _shadow[r.key][r.id];
+  _track(fb.deleteEntity(r.key, r.id), r.key, r.id, 'delete', { id: r.id, chantierId: m.chantierId, _label: m.label }, prevSer);
+  if (r.key === 'chantiers') { delete _prive[r.id]; delete _shadowPrive[r.id]; if (IS_STAFF()) _track(fb.deletePrive(r.id), 'prive', r.id, null, null); }
+}
+function _track(p, key, id, action, o, prevSer) {
+  _inflight++; _updateSyncLabel();
+  p.then(() => { if (action && key !== 'prive') _logActivity(key, id, action, o); })
+   .catch(err => _onWriteError(err, key, id, prevSer))
+   .finally(() => { _inflight--; _updateSyncLabel(); });
+}
+const _actLast = {};
+function _logActivity(key, id, action, o) {
+  try {
+    const cid = action === 'delete' ? o.chantierId : _chantierOf(key, o);
+    if (cid == null || !window._fbChantier) return;
+    const k = key + ':' + id + ':' + action, t = Date.now();
+    if (action === 'update' && _actLast[k] && t - _actLast[k] < 45000) return;   // évite le bruit
+    _actLast[k] = t;
+    window._fbChantier.logActivity(cid, {
+      at: new Date().toISOString(), by: CH_ME.email || '', byNom: CH_ME.nom || '',
+      kind: ENTITY_LABELS[key] || key, action: action, entityId: String(id),
+      label: action === 'delete' ? (o._label || '') : _label(key, o)
+    }).catch(() => {});
+  } catch (e) {}
+}
+function _onWriteError(err, key, id, prevSer) {
+  console.error('Écriture refusée/échouée', key, id, err);
+  if (key === 'prive') return;
+  if (err && err.code === 'permission-denied') {
+    toast('⛔ Action refusée (droits insuffisants) — elle a été annulée.');
+    _dropUndoFor(key, id);
+    _reloadEntity(key, id);                        // on revient à l'état serveur
+  } else {
+    toast('⚠️ Enregistrement impossible : ' + ((err && err.message) || err) + ' — nouvelle tentative à la prochaine modification.');
+    if (prevSer === undefined) delete _shadow[key][id]; else _shadow[key][id] = prevSer;   // sera retenté
+  }
+}
+async function _reloadEntity(key, id) {
+  try {
+    const data = await window._fbChantier.getEntity(key, id);
+    delete _shadow[key][id];
+    const arr = state[key], idx = arr.findIndex(x => String(x.id) === String(id));
+    if (!data) { if (idx >= 0) arr.splice(idx, 1); }
+    else { const ent = _fromDoc(key, data); if (idx >= 0) arr[idx] = ent; else arr.push(ent); _shadow[key][id] = _stable(_stripMeta(data)); }
+    _scheduleRefresh();
+  } catch (e) { console.warn('reload', e); }
+}
+
+// ── Lecture : application des changements reçus du serveur ──
+function _fromDoc(key, data) {
+  const e = Object.assign({}, data);
+  if (key === 'chantiers' && _prive[e.id]) Object.assign(e, _prive[e.id]);
+  if (window._fbChantier && (key === 'comptes_rendus' || key === 'reserves')) window._fbChantier.hydrateFromCache(e);
+  return e;
+}
+function _applyChanges(key, changes) {
+  let touched = false;
+  const arr = state[key];
+  changes.forEach(ch => {
+    const id = ch.id, idx = arr.findIndex(x => String(x.id) === id);
+    if (ch.type === 'removed') {
+      if (idx >= 0 && !_isDirty(key, arr[idx])) { arr.splice(idx, 1); touched = true; }
+      delete _shadow[key][id]; delete _meta[key][id];
+      return;
+    }
+    const data = ch.data, incoming = _stable(_stripMeta(data));
+    _meta[key][id] = { createdAt: data.createdAt, createdBy: data.createdBy, updatedAt: data.updatedAt, updatedBy: data.updatedBy,
+                       label: _label(key, data), chantierId: _chantierOf(key, data) };
+    if (idx >= 0) {
+      if (_isDirty(key, arr[idx])) return;                 // modification locale en attente : elle prime
+      if (_shadow[key][id] === incoming) {                 // écho de notre propre écriture
+        arr[idx].updatedAt = data.updatedAt; arr[idx].updatedBy = data.updatedBy; return;
+      }
+    }
+    const ent = _fromDoc(key, data);
+    ent.updatedAt = data.updatedAt; ent.updatedBy = data.updatedBy;
+    if (idx >= 0) arr[idx] = ent; else arr.push(ent);
+    _shadow[key][id] = incoming;
+    touched = true;
+    if (key === 'comptes_rendus' || key === 'reserves') {
+      window._fbChantier.rehydrate(ent).then(() => _scheduleRefresh()).catch(() => {});
+    }
+  });
+  if (touched) _scheduleRefresh();
+  if (key === 'factures' && IS_STAFF() && touched) _reconcileCharges(false);
+}
+// Le gestionnaire externe n'a pas accès à la compta : quand il marque une situation « payée »,
+// c'est le poste de l'agence qui crée (ou retire) la charge « sous-traitance » dans Phénix Dossier.
+function _reconcileCharges(all) {
+  if (typeof syncChargeSousTraitance !== 'function' || !window._fb) return;
+  state.factures.forEach(f => {
+    if (_isDirty('factures', f)) return;
+    if (f.statut === 'payee' || (all === false && f.updatedBy && f.updatedBy !== CH_ME.email)) syncChargeSousTraitance(f);
+  });
+}
+function _applyPrive(changes) {
+  let touched = false;
+  changes.forEach(ch => {
+    const id = ch.id;
+    if (ch.type === 'removed') { delete _prive[id]; delete _shadowPrive[id]; return; }
+    const pv = { honoraires: parseFloat(ch.data.honoraires) || 0, commissions: parseFloat(ch.data.commissions) || 0 };
+    _prive[id] = pv; _shadowPrive[id] = _stable({ h: pv.honoraires, c: pv.commissions });
+    const e = state.chantiers.find(x => String(x.id) === id);
+    if (e) { e.honoraires = pv.honoraires; e.commissions = pv.commissions; touched = true; }
+  });
+  if (touched) _scheduleRefresh();
+}
+let _refreshTimer = null;
+function _scheduleRefresh() {
+  clearTimeout(_refreshTimer);
+  _refreshTimer = setTimeout(() => { try { refreshAll(); } catch (e) { console.error(e); } }, 120);
+}
+
+// ── Indicateur de synchronisation ──────────────────────────
+function setSync(type, txt) {
+  const dot = document.getElementById('syncDot'), lbl = document.getElementById('syncLabel');
+  if (dot) dot.className = 'sync-dot ' + type;
+  if (lbl) lbl.textContent = txt;
+}
+function _updateSyncLabel() {
+  if (!navigator.onLine) setSync('sync', 'Hors ligne' + (_inflight ? ' · ' + _inflight + ' en attente' : ''));
+  else if (_inflight > 0) setSync('sync', 'Envoi…');
+  else if (!_booted) setSync('sync', 'Synchronisation…');
+  else setSync('ok', 'Synchronisé ✓');
+}
+window.addEventListener('online', _updateSyncLabel);
+window.addEventListener('offline', _updateSyncLabel);
+window.addEventListener('beforeunload', function (e) {
+  if (_inflight > 0 && navigator.onLine) { e.preventDefault(); e.returnValue = ''; }
+});
+function _whenIdle(maxMs) {
+  const t0 = Date.now();
+  return new Promise(res => { (function chk() { if (_inflight === 0 || Date.now() - t0 > maxMs) res(); else setTimeout(chk, 200); })(); });
+}
+
+// ── Conflit d'édition : on prévient avant d'écraser le travail d'un autre ──
+const _editBase = {};
+function _setBase(key, id) {
+  if (!id) { _editBase[key] = null; return; }
+  const cur = state[key].find(x => String(x.id) === String(id));
+  _editBase[key] = { id: id, ts: (cur && cur.updatedAt) || '' };
+}
+function _checkBase(key, id) {
+  const b = _editBase[key];
+  if (!id || !b || String(b.id) !== String(id)) return true;
+  const cur = state[key].find(x => String(x.id) === String(id));
+  if (!cur || (cur.updatedAt || '') === b.ts) return true;
+  const who = cur.updatedBy ? ' (' + cur.updatedBy + ')' : '';
+  return confirm('⚠️ Cet élément a été modifié par quelqu\'un d\'autre' + who + ' pendant que vous l\'éditiez.\n\nÉcraser ses modifications avec les vôtres ?');
+}
+
+// ── Honoraires partagés avec Phénix Dossier (réservé à l'agence) ──
 function syncSharedHonoraires() {
+  if (IS_EXT()) return;
   try {
     const data = state.chantiers.map(c => ({
       id: c.id, nom: c.nom, client: c.client || '',
@@ -2665,90 +3082,640 @@ function syncSharedHonoraires() {
       commissions: parseFloat(c.commissions) || 0
     }));
     localStorage.setItem('phenix-shared-honoraires', JSON.stringify(data));
-  } catch(e){}
+  } catch (e) {}
 }
 function loadSharedHonoraires() {
-  // Charger depuis le module dossier si chantiers ont 0 honoraires
+  if (IS_EXT()) return false;
+  let changed = false;
   try {
     const ext = JSON.parse(localStorage.getItem('phenix-shared-honoraires') || '[]');
     ext.forEach(sh => {
       const ch = state.chantiers.find(c => c.id == sh.id || c.nom === sh.nom);
-      if (ch && !ch.honoraires && !ch.commissions) {
-        ch.honoraires = sh.honoraires;
-        ch.commissions = sh.commissions;
+      if (ch && !ch.honoraires && !ch.commissions && (sh.honoraires || sh.commissions)) {
+        ch.honoraires = sh.honoraires; ch.commissions = sh.commissions; changed = true;
       }
     });
-  } catch(e){}
+  } catch (e) {}
+  return changed;
 }
-loadLocal();
-loadSharedHonoraires();
-refreshAll();
 
-// ── Sync Firebase temps réel pour module Chantier ──────────
-// ── Firebase chantier : sync temps réel avec timestamp ───────
-function initChantierFirebase() {
-  if (!window._fbChantier) return false;
+// ── Rôles ───────────────────────────────────────────────────
+async function _resolveRole() {
+  const u = window._auth && window._auth.current && window._auth.current();
+  const email = ((u && u.email) || '').toLowerCase();
+  CH_ME.email = email;
+  let udoc = null;
+  let denied = false;
+  try { udoc = await window._fbChantier.getUser(email); } catch (e) { console.warn('Lecture du rôle :', e && e.message); denied = !!(e && e.code === 'permission-denied'); }
+  const admins = ADMIN_EMAILS.map(x => String(x).toLowerCase());
+  const configured = admins.some(x => x && x.indexOf('remplacer') < 0);
+  if (denied || (udoc && udoc.actif === false)) CH_ROLE = 'bloque';   // lecture refusée = compte non autorisé
+  else if (udoc && ['admin', 'equipe', 'chantier'].indexOf(udoc.role) >= 0) CH_ROLE = udoc.role;
+  else if (admins.indexOf(email) >= 0) CH_ROLE = 'admin';
+  else CH_ROLE = configured ? 'equipe' : 'admin';
+  _legacyMode = !configured;
+  CH_ME.nom = (udoc && udoc.nom) || email.split('@')[0] || 'Utilisateur';
+  CH_ME.chantierIds = ((udoc && udoc.chantierIds) || []).map(Number).filter(n => !isNaN(n));
+}
+function _roleLabel() { return { admin: 'Administrateur', equipe: 'Équipe agence', chantier: 'Suivi de chantier', bloque: 'Accès désactivé' }[CH_ROLE] || ''; }
+function _applyRoleUI() {
+  const b = document.body;
+  b.classList.remove('role-pending', 'role-admin', 'role-equipe', 'role-chantier');
+  b.classList.add('role-' + (CH_ROLE === 'bloque' ? 'chantier' : CH_ROLE));
+  const chip = document.getElementById('chUserChip');
+  if (chip) chip.innerHTML = '<i class="ti ti-user-circle"></i> ' + esc(CH_ME.nom) + ' · ' + esc(_roleLabel());
+}
+function _showBlocked() {
+  const c = document.querySelector('.content');
+  if (c) c.innerHTML = '<div class="empty-state" style="padding:3rem 1rem"><div class="empty-title">Accès désactivé</div><div class="empty-sub">Votre accès à ce logiciel a été suspendu. Contactez Phénix-Architecture.</div></div>';
+  setSync('sync', 'Accès désactivé');
+}
 
-  const setSync = (type, txt) => {
-    const dot = document.getElementById('syncDot');
-    const lbl = document.getElementById('syncLabel');
-    if (dot) dot.className = 'sync-dot ' + type;
-    if (lbl) lbl.textContent = txt;
-  };
+// ── Démarrage de la synchronisation ────────────────────────
+async function initChantierFirebase() {
+  const fb = window._fbChantier;
   setSync('sync', 'Connexion…');
+  await _resolveRole();
+  _applyRoleUI();
+  _loadUndo();
+  if (CH_ROLE === 'bloque') { _showBlocked(); return; }
+  if (IS_STAFF() && window._fb && typeof window._fb.listenProjets === 'function') {
+    window._fb.listenProjets(list => { dossierProjets = list || []; });
+  }
+  const scope = IS_EXT() ? CH_ME.chantierIds : null;
+  if (IS_EXT() && !scope.length) { _booted = true; _updateSyncLabel(); refreshAll(); return; }
+  _expected = 0;
+  const onErr = (tag) => (err) => {
+    console.error('Écoute', tag, err);
+    if (err && err.code === 'permission-denied') toast('⛔ Accès refusé à certaines données (' + tag + ').');
+    _srvOk(tag);
+  };
+  const start = (key, cid) => {
+    const tag = key + '|' + (cid == null ? '*' : cid);
+    _expected++;
+    _unsubs.push(fb.listenEntity(key, cid,
+      (chg, info) => { _applyChanges(key, chg); if (info.fromCache === false) _srvOk(tag); },
+      onErr(tag)));
+  };
+  ENTITY_KEYS.forEach(key => {
+    if (key === 'intervenants' || scope === null) start(key, null);
+    else scope.forEach(cid => start(key, cid));
+  });
+  // Honoraires / commissions : agence (tout) et gestionnaire de chantier (ses chantiers uniquement)
+  const startPrive = (cid) => {
+    const tag = 'prive|' + (cid == null ? '*' : cid);
+    _expected++;
+    _unsubs.push(fb.listenPrive((chg, info) => { _applyPrive(chg); if (info.fromCache === false) _srvOk(tag); }, onErr(tag), cid));
+  };
+  if (scope === null) startPrive(null); else scope.forEach(startPrive);
+  _updateSyncLabel();
+}
+function _srvOk(tag) {
+  _srv[tag] = true;
+  if (!_booted && Object.keys(_srv).length >= _expected) { _booted = true; _onBoot(); }
+}
+function _onBoot() {
+  _updateSyncLabel();
+  if (IS_STAFF()) { _noUndo = true; if (loadSharedHonoraires()) { saveLocal(); _syncChain.then(() => { _noUndo = false; }); } else _noUndo = false; }
+  refreshAll();
+  if (IS_STAFF()) _reconcileCharges(true);
+  _maybeMigrate();
+  if (_legacyMode && IS_ADMIN()) toast('⚠️ Sécurité multi-utilisateur non configurée (voir page « Équipe & accès »).');
+}
 
-  window._fbChantier.listenState((remoteState, remoteUpdatedAt) => {
-    // Cas 1 : Firebase vide → pousser les données locales si on en a
-    if (!remoteState || !remoteState.chantiers) {
-      const hasLocalData = state.chantiers.length > 0 || state.lots.length > 0;
-      if (hasLocalData) {
-        saveLocal();
-        setSync('ok', 'Données envoyées ✓');
-      } else {
-        setSync('ok', 'En attente de données');
-      }
+// ── Migration depuis l'ancien format (un seul gros document) ──
+async function _maybeMigrate() {
+  if (_migTried || CH_ROLE !== 'admin') return;
+  _migTried = true;
+  try {
+    const total = ENTITY_KEYS.reduce((n, k) => n + state[k].length, 0);
+    if (total > 0) return;
+    const fb = window._fbChantier;
+    if (await fb.getMigrationFlag()) return;
+    const legacy = await fb.loadLegacyState();
+    if (!legacy || !Array.isArray(legacy.chantiers) || !legacy.chantiers.length) {
+      await fb.setMigrationFlag({ at: new Date().toISOString(), by: CH_ME.email, note: 'aucune donnée à migrer' });
       return;
     }
+    toast('⏳ Migration de vos données vers le mode multi-utilisateur…');
+    ENTITY_KEYS.forEach(k => { if (Array.isArray(legacy[k])) state[k] = legacy[k]; });
+    _noUndo = true;
+    saveLocal();
+    await _syncChain;
+    _noUndo = false;
+    await _whenIdle(120000);
+    await fb.setMigrationFlag({ at: new Date().toISOString(), by: CH_ME.email,
+      chantiers: state.chantiers.length, lots: state.lots.length, comptes_rendus: state.comptes_rendus.length });
+    toast('✅ Migration terminée : ' + state.chantiers.length + ' chantier(s), ' + state.lots.length + ' lot(s), ' + state.comptes_rendus.length + ' CR. L\'ancienne sauvegarde reste intacte.');
+    refreshAll();
+  } catch (e) { console.error('Migration :', e); toast('⚠️ Migration interrompue : ' + (e && e.message || e)); _migTried = false; }
+}
 
-    const localTs  = parseInt(localStorage.getItem('phenix-chantier-ts') || '0');
-    const remoteTs = remoteUpdatedAt ? new Date(remoteUpdatedAt).getTime() : 0;
-
-    if (remoteTs > localTs) {
-      // Cas 2 : Firebase plus récent → charger
-      Object.assign(state, remoteState);
-      try {
-        localStorage.setItem('phenix-chantier', JSON.stringify(state));
-        localStorage.setItem('phenix-chantier-ts', String(remoteTs));
-      } catch(e) {}
-      refreshAll();
-      setSync('ok', 'Synchronisé ✓');
-    } else if (localTs > remoteTs) {
-      // Cas 3 : Local plus récent → pousser vers Firebase
-      saveLocal();
-      setSync('ok', 'Envoyé ✓');
-    } else {
-      setSync('ok', 'Synchronisé ✓');
+// ═══════════════════════════════════════════════════════════
+//  ANNULER / RÉTABLIR (Ctrl+Z / Ctrl+Y) — les 10 dernières actions
+//  Une « action » = un enregistrement (ex. supprimer un chantier retire aussi ses
+//  lots, CR, situations… : un seul Ctrl+Z restaure l'ensemble).
+// ═══════════════════════════════════════════════════════════
+const UNDO_MAX = 10;
+let _undoStack = [], _redoStack = [];
+function _undoKey() { return 'phenix-chantier-undo-' + (CH_ME.email || 'anon'); }
+function _saveUndo() {
+  try {
+    let data = { undo: _undoStack, redo: _redoStack }, js = JSON.stringify(data);
+    while (js.length > 3000000 && data.undo.length > 1) { data.undo.shift(); js = JSON.stringify(data); }
+    localStorage.setItem(_undoKey(), js);
+  } catch (e) {}
+}
+function _loadUndo() {
+  try {
+    const d = JSON.parse(localStorage.getItem(_undoKey()) || 'null');
+    if (d) { _undoStack = d.undo || []; _redoStack = d.redo || []; }
+  } catch (e) {}
+  _updateUndoUI();
+}
+function _recLabel(rec) {
+  const its = rec.items, f = its[0], doc = f.after || f.before || {};
+  const act = (it) => it.before === undefined ? 'honoraires' : (it.before === null ? 'création' : (it.after === null ? 'suppression' : 'modification'));
+  if (its.length === 1) return act(f) + ' ' + (f.before === undefined ? 'des honoraires' : ((ENTITY_LABELS[f.key] || f.key) + ' « ' + _label(f.key, doc) + ' »'));
+  const main = its.find(x => x.key === 'chantiers') || f;
+  return act(main) + ' ' + (ENTITY_LABELS[main.key] || main.key) + ' « ' + _label(main.key, main.after || main.before || {}) + ' » et ' + (its.length - 1) + ' élément(s) lié(s)';
+}
+function _pushUndo(items) {
+  const rec = { at: new Date().toISOString(), items: items };
+  _undoStack.push(rec);
+  if (_undoStack.length > UNDO_MAX) _undoStack.shift();
+  _redoStack = [];
+  _saveUndo(); _updateUndoUI();
+  if (items.some(i => i.after === null)) toast('🗑️ Supprimé — Ctrl+Z (ou bouton ↩ en haut) pour annuler.');
+}
+function _dropUndoFor(key, id) {
+  const keep = r => { r.items = r.items.filter(i => !(i.key === key && String(i.id) === String(id))); return r.items.length > 0; };
+  _undoStack = _undoStack.filter(keep); _redoStack = _redoStack.filter(keep);
+  _saveUndo(); _updateUndoUI();
+}
+function _updateUndoUI() {
+  const u = _undoStack[_undoStack.length - 1], r = _redoStack[_redoStack.length - 1];
+  [['undoBtn', u, 'Annuler : ', 'Rien à annuler'], ['undoTop', u, 'Annuler : ', 'Rien à annuler'], ['redoBtn', r, 'Rétablir : ', 'Rien à rétablir'], ['redoTop', r, 'Rétablir : ', 'Rien à rétablir']].forEach(a => {
+    const el = document.getElementById(a[0]); if (!el) return;
+    el.style.opacity = a[1] ? '1' : '.4'; el.style.pointerEvents = a[1] ? '' : 'none';
+    el.title = a[1] ? a[2] + _recLabel(a[1]) : a[3];
+  });
+  const c = document.getElementById('undoCount'); if (c) c.textContent = _undoStack.length ? _undoStack.length : '';
+}
+async function _applyRecord(rec, dir) {
+  const items = rec.items;
+  // l'élément a-t-il changé depuis (par quelqu'un d'autre, ou par vous) ?
+  const stale = items.filter(it => {
+    if (it.before === undefined) return false;
+    const cur = state[it.key].find(x => String(x.id) === String(it.id));
+    const curSer = cur ? _stable(_toDoc(it.key, cur)) : null;
+    const exp = dir === 'undo' ? it.after : it.before;
+    return curSer !== (exp ? _stable(exp) : null);
+  });
+  if (stale.length && !confirm('⚠️ ' + stale.length + ' élément(s) ont été modifiés depuis cette action (par vous ou par quelqu\'un d\'autre).\n\nContinuer et les remplacer par l\'ancienne version ?')) return false;
+  items.forEach(it => {
+    const arr = state[it.key], idx = arr.findIndex(x => String(x.id) === String(it.id));
+    if (it.before !== undefined) {
+      const target = dir === 'undo' ? it.before : it.after;
+      if (target === null) { if (idx >= 0) arr.splice(idx, 1); }
+      else {
+        const ent = _fromDoc(it.key, JSON.parse(JSON.stringify(target)));
+        const m = _meta[it.key][it.id]; if (m) { ent.updatedAt = m.updatedAt; ent.updatedBy = m.updatedBy; }
+        if (idx >= 0) arr[idx] = ent; else arr.push(ent);
+        if (window._fbChantier && (it.key === 'comptes_rendus' || it.key === 'reserves')) window._fbChantier.rehydrate(ent).then(_scheduleRefresh).catch(() => {});
+      }
+    }
+    const pv = dir === 'undo' ? it.priveBefore : it.priveAfter;
+    if (it.key === 'chantiers' && pv && !IS_EXT()) {
+      const ent = arr.find(x => String(x.id) === String(it.id));
+      if (ent) { ent.honoraires = pv.honoraires; ent.commissions = pv.commissions; }
     }
   });
-
+  _skipNext = true;
+  saveLocal();
+  await _syncChain;
+  _skipNext = false;
+  // cohérence comptable : une situation « payée » annulée/rétablie doit aussi retirer/recréer la charge dans Dossier
+  if (IS_STAFF() && typeof syncChargeSousTraitance === 'function') {
+    items.filter(it => it.key === 'factures').forEach(it => {
+      const f = state.factures.find(x => String(x.id) === String(it.id));
+      if (f) syncChargeSousTraitance(f);
+      else if (window._fb && window._fb.deleteCharge) window._fb.deleteCharge('charge-auto-chantier-' + it.id).catch(() => {});
+    });
+  }
   return true;
 }
-// Un seul listener Firebase — gardé en mémoire pour éviter les doublons
+async function undoAction() {
+  if (!_undoStack.length) { toast('Rien à annuler.'); return; }
+  const rec = _undoStack[_undoStack.length - 1];
+  if (!(await _applyRecord(rec, 'undo'))) return;
+  _undoStack.pop(); _redoStack.push(rec);
+  _saveUndo(); _updateUndoUI(); refreshAll();
+  toast('↩️ Annulé : ' + _recLabel(rec));
+}
+async function redoAction() {
+  if (!_redoStack.length) { toast('Rien à rétablir.'); return; }
+  const rec = _redoStack[_redoStack.length - 1];
+  if (!(await _applyRecord(rec, 'redo'))) return;
+  _redoStack.pop(); _undoStack.push(rec);
+  _saveUndo(); _updateUndoUI(); refreshAll();
+  toast('↪️ Rétabli : ' + _recLabel(rec));
+}
+document.addEventListener('keydown', function (ev) {
+  if (!(ev.ctrlKey || ev.metaKey)) return;
+  const k = String(ev.key).toLowerCase();
+  if (k !== 'z' && k !== 'y') return;
+  const t = ev.target;
+  if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;   // annulation de saisie native
+  if (document.querySelector('.modal-overlay.open')) return;
+  ev.preventDefault();
+  if (k === 'y' || (k === 'z' && ev.shiftKey)) redoAction(); else undoAction();
+});
+
 let _fbChantierInitDone = false;
 function _tryInitChantierFirebase() {
   if (_fbChantierInitDone) return;
-  if (!initChantierFirebase()) return;
+  if (!window._fbChantier || !(window._auth && window._auth.current && window._auth.current())) return;
   _fbChantierInitDone = true;
-  if (window._fb && typeof window._fb.listenProjets === 'function') {
-    window._fb.listenProjets(list => { dossierProjets = list || []; });
-  }
+  initChantierFirebase().catch(e => { console.error('Init chantier :', e); _fbChantierInitDone = false; });
 }
+window.addEventListener('firebase-ready', _tryInitChantierFirebase);
 _tryInitChantierFirebase();
-window.addEventListener('firebase-ready', function onFBR() {
-  _tryInitChantierFirebase();
-  window.removeEventListener('firebase-ready', onFBR);
-});
-setTimeout(function() { _tryInitChantierFirebase(); }, 3000);
+setTimeout(_tryInitChantierFirebase, 3000);
+refreshAll();
+
+// ═══════════════════════════════════════════════════════════
+//  RÉSERVES & ACTIONS — suivi des points à lever par entreprise
+// ═══════════════════════════════════════════════════════════
+let resPhotos = [];
+const RES_STATUTS = { ouverte: ['Ouverte', 'badge-red'], en_cours: ['En cours', 'badge-amber'],
+                      levee: ['Levée — à vérifier', 'badge-blue'], verifiee: ['Vérifiée', 'badge-green'] };
+const RES_PRIO = { normale: ['Normale', 'badge-gray'], haute: ['Haute', 'badge-amber'], urgente: ['Urgente', 'badge-red'] };
+function _todayISO() { return new Date().toISOString().slice(0, 10); }
+function resIsOpen(r) { return r.statut === 'ouverte' || r.statut === 'en_cours'; }
+function resIsLate(r) { return resIsOpen(r) && r.echeance && r.echeance < _todayISO(); }
+function resBadge(statut) { const s = RES_STATUTS[statut] || [statut, 'badge-gray']; return '<span class="badge ' + s[1] + '">' + esc(s[0]) + '</span>'; }
+function resPrioBadge(p) { const s = RES_PRIO[p] || RES_PRIO.normale; return '<span class="badge ' + s[1] + '">' + esc(s[0]) + '</span>'; }
+
+function nextReserveRef(chantierId) {
+  let max = 0;
+  (state.reserves || []).forEach(r => {
+    if (r.chantierId != chantierId) return;
+    const m = String(r.ref || '').match(/(\d+)/);
+    if (m) { const n = parseInt(m[1], 10); if (n > max) max = n; }
+  });
+  return 'R-' + String(max + 1).padStart(3, '0');
+}
+
+function updateResLots(selected) {
+  const cid = document.getElementById('res-chantier').value;
+  const lots = sortLotsInPlace(state.lots.filter(l => l.chantierId == cid));
+  document.getElementById('res-lot').innerHTML = '<option value="">— Aucun —</option>' +
+    lots.map(l => '<option value="' + esc(l.id) + '">' + esc(l.nom) + '</option>').join('');
+  if (selected) document.getElementById('res-lot').value = selected;
+  if (!document.getElementById('res-edit-id').value) document.getElementById('res-ref').value = nextReserveRef(cid);
+}
+
+function openModalReserve(id) {
+  const selC = document.getElementById('res-chantier');
+  selC.innerHTML = state.chantiers.map(c => '<option value="' + esc(c.id) + '">' + esc(c.nom) + '</option>').join('') || '<option value="">—</option>';
+  if (activeChantier) selC.value = activeChantier;
+  document.getElementById('res-interv').innerHTML = '<option value="">— Non attribuée —</option>' +
+    state.intervenants.map(i => '<option value="' + esc(i.id) + '">' + esc(i.nom) + '</option>').join('');
+  _setBase('reserves', id || null);
+  resPhotos = [];
+  if (id) {
+    const r = state.reserves.find(x => x.id == id);
+    if (!r) return;
+    document.getElementById('mReserveTitle').textContent = 'Réserve ' + (r.ref || '');
+    selC.value = r.chantierId;
+    document.getElementById('res-edit-id').value = id;
+    updateResLots(r.lotId || '');
+    document.getElementById('res-ref').value = r.ref || '';
+    document.getElementById('res-titre').value = r.titre || '';
+    document.getElementById('res-desc').value = r.description || '';
+    document.getElementById('res-lieu').value = r.lieu || '';
+    document.getElementById('res-interv').value = r.intervId || '';
+    document.getElementById('res-prio').value = r.priorite || 'normale';
+    document.getElementById('res-origine').value = r.origine || 'Visite de chantier';
+    document.getElementById('res-echeance').value = r.echeance || '';
+    document.getElementById('res-statut').value = r.statut || 'ouverte';
+    document.getElementById('res-datelevee').value = r.dateLevee || '';
+    resPhotos = (r.photos || []).map(p => Object.assign({}, p));
+    document.getElementById('res-del-btn').style.display = '';
+  } else {
+    document.getElementById('mReserveTitle').textContent = 'Nouvelle réserve';
+    document.getElementById('res-edit-id').value = '';
+    updateResLots('');
+    ['res-titre', 'res-desc', 'res-lieu', 'res-echeance', 'res-datelevee'].forEach(f => document.getElementById(f).value = '');
+    document.getElementById('res-interv').value = '';
+    document.getElementById('res-prio').value = 'normale';
+    document.getElementById('res-origine').value = 'Visite de chantier';
+    document.getElementById('res-statut').value = 'ouverte';
+    document.getElementById('res-del-btn').style.display = 'none';
+  }
+  renderResPhotos();
+  openModal('modalReserve');
+}
+
+function saveReserve() {
+  const titre = document.getElementById('res-titre').value.trim();
+  const chantierId = parseInt(document.getElementById('res-chantier').value);
+  if (!titre || !chantierId) { toast('⚠️ Chantier et intitulé requis.'); return; }
+  const editId = document.getElementById('res-edit-id').value;
+  if (editId && !_checkBase('reserves', editId)) return;
+  const statut = document.getElementById('res-statut').value;
+  let dateLevee = document.getElementById('res-datelevee').value;
+  if ((statut === 'levee' || statut === 'verifiee') && !dateLevee) dateLevee = _todayISO();
+  if (resIsOpen({ statut })) dateLevee = '';
+  const old = editId ? (state.reserves.find(x => x.id == editId) || {}) : {};
+  const r = Object.assign({}, old, {
+    id: editId ? parseInt(editId) : uid(), chantierId: chantierId,
+    ref: document.getElementById('res-ref').value.trim() || nextReserveRef(chantierId),
+    titre: titre, description: document.getElementById('res-desc').value,
+    lieu: document.getElementById('res-lieu').value,
+    lotId: parseInt(document.getElementById('res-lot').value) || null,
+    intervId: parseInt(document.getElementById('res-interv').value) || null,
+    priorite: document.getElementById('res-prio').value, origine: document.getElementById('res-origine').value,
+    echeance: document.getElementById('res-echeance').value, statut: statut, dateLevee: dateLevee,
+    photos: resPhotos.map(p => ({ dataUrl: p.dataUrl || null, mediaId: p.mediaId || null, caption: p.caption || '' }))
+  });
+  if (editId) { const i = state.reserves.findIndex(x => x.id == editId); if (i >= 0) state.reserves[i] = r; else state.reserves.push(r); }
+  else state.reserves.push(r);
+  saveLocal(); closeModal('modalReserve'); toast('✅ Réserve enregistrée.'); renderReserves(); updateBadges();
+}
+
+function deleteReserve() {
+  const id = document.getElementById('res-edit-id').value;
+  if (!id || !confirm('Supprimer cette réserve ?')) return;
+  state.reserves = state.reserves.filter(r => r.id != id);
+  saveLocal(); closeModal('modalReserve'); toast('🗑️ Réserve supprimée.'); renderReserves(); updateBadges();
+}
+
+function reserveSetStatut(id, statut) {
+  const r = state.reserves.find(x => x.id == id);
+  if (!r) return;
+  r.statut = statut;
+  if (statut === 'levee' || statut === 'verifiee') { if (!r.dateLevee) r.dateLevee = _todayISO(); } else r.dateLevee = '';
+  saveLocal(); renderReserves();
+}
+
+// ── Photos de réserve (compression identique aux photos de CR) ──
+function resAddPhotos(e) {
+  const files = Array.from(e.target.files);
+  files.forEach(file => {
+    if (resPhotos.length >= 8) { toast('⚠️ 8 photos maximum par réserve.'); return; }
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 1200; let w = img.width, h = img.height;
+        if (w > MAX || h > MAX) { if (w > h) { h = Math.round(h * MAX / w); w = MAX; } else { w = Math.round(w * MAX / h); h = MAX; } }
+        const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+        cv.getContext('2d').drawImage(img, 0, 0, w, h);
+        resPhotos.push({ dataUrl: cv.toDataURL('image/jpeg', 0.75), caption: '' });
+        cv.width = 0; cv.height = 0;
+        renderResPhotos();
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+  e.target.value = '';
+}
+async function renderResPhotos() {
+  const box = document.getElementById('res-photos-container');
+  const missing = resPhotos.filter(p => !p.dataUrl && p.mediaId);
+  if (missing.length && window._fbChantier) {
+    for (const p of missing) { try { const du = await window._fbChantier.getMediaById(p.mediaId); if (du) p.dataUrl = du; } catch (e) {} }
+  }
+  box.innerHTML = resPhotos.map((p, i) => p.dataUrl
+    ? '<div style="position:relative"><img src="' + esc(p.dataUrl) + '" style="width:84px;height:84px;object-fit:cover;border-radius:8px;border:1px solid var(--border)">' +
+      '<button class="cr-photo-del" onclick="resDeletePhoto(' + i + ')" title="Supprimer">×</button></div>'
+    : '').join('');
+}
+function resDeletePhoto(i) { resPhotos.splice(i, 1); renderResPhotos(); }
+
+// ── Liste ──
+function _resFiltered() {
+  const ch = document.getElementById('res-filter-ch')?.value || activeChantier;
+  const st = document.getElementById('res-filter-statut')?.value || '';
+  const iv = document.getElementById('res-filter-interv')?.value || '';
+  const q = (document.getElementById('res-search')?.value || '').toLowerCase().trim();
+  return state.reserves.filter(r => {
+    if (ch && r.chantierId != ch) return false;
+    if (iv && r.intervId != iv) return false;
+    if (st === 'ouvertes' ? !resIsOpen(r) : (st && r.statut !== st)) return false;
+    if (q && !((r.titre || '') + ' ' + (r.description || '') + ' ' + (r.lieu || '') + ' ' + (r.ref || '')).toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
+function renderReserves() {
+  const ivSel = document.getElementById('res-filter-interv');
+  if (ivSel) {
+    const v = ivSel.value;
+    ivSel.innerHTML = '<option value="">Toutes entreprises</option>' + state.intervenants.map(i => '<option value="' + esc(i.id) + '">' + esc(i.nom) + '</option>').join('');
+    ivSel.value = v;
+  }
+  const ch = document.getElementById('res-filter-ch')?.value || activeChantier;
+  const scope = ch ? state.reserves.filter(r => r.chantierId == ch) : state.reserves;
+  const ouv = scope.filter(resIsOpen).length, late = scope.filter(resIsLate).length;
+  const levees = scope.filter(r => r.statut === 'levee').length, verif = scope.filter(r => r.statut === 'verifiee').length;
+  const taux = scope.length ? Math.round((levees + verif) / scope.length * 100) : 0;
+  document.getElementById('res-metrics').innerHTML =
+    '<div class="metric ' + (ouv ? 'm-amber' : '') + '"><div class="metric-icon a"><i class="ti ti-list-details"></i></div><div class="metric-label">À traiter</div><div class="metric-value">' + ouv + '</div><div class="metric-sub">ouvertes + en cours</div></div>' +
+    '<div class="metric ' + (late ? 'm-red' : '') + '"><div class="metric-icon ' + (late ? 'r' : '') + '"><i class="ti ti-alarm"></i></div><div class="metric-label">En retard</div><div class="metric-value">' + late + '</div><div class="metric-sub">échéance dépassée</div></div>' +
+    '<div class="metric"><div class="metric-icon"><i class="ti ti-eye-check"></i></div><div class="metric-label">À vérifier</div><div class="metric-value">' + levees + '</div><div class="metric-sub">levées par l\'entreprise</div></div>' +
+    '<div class="metric m-green"><div class="metric-icon g"><i class="ti ti-circle-check"></i></div><div class="metric-label">Taux de levée</div><div class="metric-value">' + taux + '%</div><div class="metric-sub">' + (levees + verif) + ' / ' + scope.length + '</div></div>';
+  document.getElementById('res-subtitle').textContent = scope.length + ' réserve(s) · ' + ouv + ' à traiter';
+
+  const prioW = { urgente: 0, haute: 1, normale: 2 };
+  const list = _resFiltered().sort((a, b) =>
+    (resIsLate(b) ? 1 : 0) - (resIsLate(a) ? 1 : 0) ||
+    (resIsOpen(b) ? 1 : 0) - (resIsOpen(a) ? 1 : 0) ||
+    (prioW[a.priorite] ?? 2) - (prioW[b.priorite] ?? 2) ||
+    String(a.echeance || '9999').localeCompare(String(b.echeance || '9999')));
+  const tb = document.getElementById('res-tbody');
+  if (!list.length) {
+    tb.innerHTML = '<tr><td colspan="8"><div class="empty-state" style="padding:1.5rem"><div class="empty-title">Aucune réserve</div><div class="empty-sub">Ajoutez les points à lever relevés en visite : ils seront suivis par entreprise.</div></div></td></tr>';
+    return;
+  }
+  tb.innerHTML = list.map(r => {
+    const c = state.chantiers.find(x => x.id == r.chantierId);
+    const iv = state.intervenants.find(x => x.id == r.intervId);
+    const late = resIsLate(r);
+    const opts = Object.keys(RES_STATUTS).map(k => '<option value="' + k + '"' + (k === r.statut ? ' selected' : '') + '>' + esc(RES_STATUTS[k][0]) + '</option>').join('');
+    return '<tr style="' + (late ? 'background:var(--red-bg)' : '') + '">' +
+      '<td style="padding-left:16px;font-weight:700;white-space:nowrap">' + esc( esc(r.ref) || '') + '</td>' +
+      '<td style="cursor:pointer;min-width:200px" onclick="openModalReserve(' + Number(r.id) + ')"><div style="font-weight:600">' + esc(r.titre) + (r.photos && r.photos.length ? ' <i class="ti ti-camera" style="color:var(--text3);font-size:12px"></i>' : '') + '</div>' +
+        '<div style="font-size:11px;color:var(--text3)">' + esc( esc(r.lieu) || '') + (r.origine ? ( esc(r.lieu) ? ' · ' : '') + esc(r.origine) : '') + '</div></td>' +
+      '<td style="font-size:12px">' + esc(c ? esc(c.nom) : '—') + '</td>' +
+      '<td>' + (iv ? '<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px"><span style="width:10px;height:10px;border-radius:50%;background:' + esc(safeColor(iv.color) || '#4A9CC7') + '"></span>' + esc(iv.nom) + '</span>' : '<span style="color:var(--text3);font-size:12px">—</span>') + '</td>' +
+      '<td>' + resPrioBadge(r.priorite) + '</td>' +
+      '<td style="white-space:nowrap;' + (late ? 'color:var(--red);font-weight:700' : '') + '">' + (r.echeance ? esc(fmtDate(r.echeance)) : '—') + (late ? ' ⚠️' : '') + '</td>' +
+      '<td><select onchange="reserveSetStatut(' + Number(r.id) + ',this.value)" style="font-size:12px;padding:4px 6px;border:1.5px solid var(--border);border-radius:var(--r-sm);background:var(--bg);color:var(--text)">' + opts + '</select></td>' +
+      '<td><button class="btn btn-sm btn-icon" title="Modifier" onclick="openModalReserve(' + Number(r.id) + ')"><i class="ti ti-pencil"></i></button></td></tr>';
+  }).join('');
+}
+
+function renderDashboardReserves() {
+  const el = document.getElementById('db-reserves');
+  if (!el) return;
+  const scope = (activeChantier ? state.reserves.filter(r => r.chantierId == activeChantier) : state.reserves).filter(resIsOpen);
+  if (!scope.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:.5rem 0">Aucune réserve à traiter.</div>'; return; }
+  const top = scope.slice().sort((a, b) => (resIsLate(b) ? 1 : 0) - (resIsLate(a) ? 1 : 0) || String(a.echeance || '9999').localeCompare(String(b.echeance || '9999'))).slice(0, 5);
+  el.innerHTML = '<div style="font-size:12px;color:var(--text2);margin-bottom:6px"><strong>' + scope.length + '</strong> à traiter · <strong style="color:var(--red)">' + scope.filter(resIsLate).length + '</strong> en retard</div>' +
+    top.map(r => {
+      const iv = state.intervenants.find(x => x.id == r.intervId);
+      return '<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--border);font-size:12px;cursor:pointer" onclick="openModalReserve(' + Number(r.id) + ')">' +
+        '<span><strong>' + esc( esc(r.ref) || '') + '</strong> ' + esc(r.titre) + (iv ? ' <span style="color:var(--text3)">· ' + esc(iv.nom) + '</span>' : '') + '</span>' +
+        '<span style="white-space:nowrap;' + (resIsLate(r) ? 'color:var(--red);font-weight:700' : 'color:var(--text3)') + '">' + (r.echeance ? esc(fmtDate(r.echeance)) : '') + '</span></div>';
+    }).join('');
+}
+
+// ── Liste PDF par entreprise (à envoyer à chaque artisan) ──
+function exportReservesPDF() {
+  const chId = document.getElementById('res-filter-ch')?.value || activeChantier;
+  const ch = chId ? state.chantiers.find(c => c.id == chId) : null;
+  const list = _resFiltered().filter(r => r.statut !== 'verifiee');
+  if (!list.length) { toast('Aucune réserve à exporter avec ces filtres.'); return; }
+  const groups = {};
+  list.forEach(r => { const k = r.intervId || 0; (groups[k] = groups[k] || []).push(r); });
+  let body = '';
+  Object.keys(groups).forEach(k => {
+    const iv = state.intervenants.find(x => x.id == k);
+    body += '<h3>' + esc(iv ? esc(iv.nom) : 'Entreprise non attribuée') + (iv && iv.metier ? ' <small>· ' + esc(iv.metier) + '</small>' : '') + '</h3>' +
+      '<table><thead><tr><th>Réf.</th><th>Réserve</th><th>Lieu</th><th>Priorité</th><th>Échéance</th><th>Statut</th></tr></thead><tbody>' +
+      groups[k].sort((a, b) => String(a.echeance || '9999').localeCompare(String(b.echeance || '9999'))).map(r =>
+        '<tr><td><b>' + esc( esc(r.ref) || '') + '</b></td><td><b>' + esc(r.titre) + '</b>' + ( esc(r.description) ? '<div class="d">' + esc(r.description) + '</div>' : '') +
+        (r.photos && r.photos.length ? '<div class="ph">' + r.photos.filter(p => p.dataUrl).slice(0, 4).map(p => '<img src="' + esc(p.dataUrl) + '">').join('') + '</div>' : '') + '</td>' +
+        '<td>' + esc( esc(r.lieu) || '—') + '</td><td>' + esc((RES_PRIO[r.priorite] || RES_PRIO.normale)[0]) + '</td>' +
+        '<td>' + (r.echeance ? esc(fmtDate(r.echeance)) : '—') + (resIsLate(r) ? ' ⚠️' : '') + '</td><td>' + esc((RES_STATUTS[r.statut] || [r.statut])[0]) + '</td></tr>').join('') +
+      '</tbody></table>';
+  });
+  const html = '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Réserves</title><style>' +
+    '*{box-sizing:border-box}body{font-family:"DM Sans",Arial,sans-serif;color:#0F1E3D;margin:0;padding:24px 28px;font-size:12px}' +
+    'h1{font-size:20px;margin:0 0 2px;color:#1B2D5B}.sub{color:#4A6080;margin-bottom:16px}h3{margin:18px 0 6px;color:#1B2D5B;border-bottom:2px solid #4A9CC7;padding-bottom:3px}h3 small{color:#4A6080;font-weight:400}' +
+    'table{width:100%;border-collapse:collapse}th{background:#EEF4F9;text-align:left;padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.05em}td{padding:6px 8px;border-bottom:1px solid #E4ECF3;vertical-align:top}' +
+    '.d{color:#4A6080;margin-top:2px}.ph img{width:70px;height:70px;object-fit:cover;border-radius:4px;margin:4px 4px 0 0}' +
+    '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.np{display:none}}</style></head><body>' +
+    '<div class="np" style="text-align:right;margin-bottom:10px"><button onclick="window.print()" style="padding:8px 16px;border:0;border-radius:6px;background:#1B2D5B;color:#fff;cursor:pointer">Imprimer / PDF</button></div>' +
+    '<h1>Liste des réserves à lever</h1><div class="sub">' + esc(ch ? esc(ch.nom) : 'Tous les chantiers') + (ch && ch.adresse ? ' · ' + esc(ch.adresse) : '') + ' · édité le ' + new Date().toLocaleDateString('fr-FR') + ' · Phénix-Architecture</div>' +
+    body + '</body></html>';
+  const win = window.open('', '_blank', 'width=900,height=700');
+  if (!win) { toast('⚠️ Autorisez les fenêtres pop-up pour exporter.'); return; }
+  win.document.write(html); win.document.close();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  JOURNAL D'ACTIVITÉ
+// ═══════════════════════════════════════════════════════════
+async function renderActivite() {
+  const tb = document.getElementById('act-tbody');
+  if (!tb || !window._fbChantier) return;
+  const sel = document.getElementById('act-filter-ch');
+  const ids = sel && sel.value ? [Number(sel.value)] : state.chantiers.map(c => c.id);
+  if (!ids.length) { tb.innerHTML = '<tr><td colspan="5" style="padding:1.5rem;text-align:center;color:var(--text3)">Aucun chantier.</td></tr>'; return; }
+  tb.innerHTML = '<tr><td colspan="5" style="padding:1.5rem;text-align:center;color:var(--text3)">Chargement…</td></tr>';
+  const list = (await window._fbChantier.loadActivity(ids, 40)).slice(0, 200);
+  if (!list.length) { tb.innerHTML = '<tr><td colspan="5" style="padding:1.5rem;text-align:center;color:var(--text3)">Aucune activité enregistrée pour le moment.</td></tr>'; return; }
+  const act = { create: 'Création', update: 'Modification', delete: 'Suppression' };
+  tb.innerHTML = list.map(a => {
+    const c = state.chantiers.find(x => x.id == a.chantierId);
+    const d = new Date(a.at);
+    return '<tr><td style="padding-left:16px;white-space:nowrap">' + esc(isNaN(d) ? '' : d.toLocaleDateString('fr-FR') + ' ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })) + '</td>' +
+      '<td>' + esc(a.byNom || a.by || '—') + '</td><td>' + esc(act[a.action] || a.action) + '</td>' +
+      '<td><span style="color:var(--text3)">' + esc(a.kind || '') + '</span> ' + esc( esc(a.label) || '') + '</td><td style="font-size:12px">' + esc(c ? esc(c.nom) : '—') + '</td></tr>';
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  ÉQUIPE & ACCÈS (administrateur)
+// ═══════════════════════════════════════════════════════════
+let _users = [], _usersListening = false;
+const ROLE_LABELS = { admin: 'Administrateur', equipe: 'Équipe agence', chantier: 'Suivi de chantier' };
+function renderEquipe() {
+  const al = document.getElementById('eq-alert');
+  if (al) al.style.display = _legacyMode ? '' : 'none';
+  if (!IS_ADMIN() || !window._fbChantier) return;
+  if (!_usersListening) {
+    _usersListening = true;
+    window._fbChantier.listenUsers(list => { _users = list; _renderEquipeTable(); }, err => { console.error(err); toast('⛔ Lecture des accès impossible.'); });
+  }
+  _renderEquipeTable();
+}
+function _renderEquipeTable() {
+  const tb = document.getElementById('eq-tbody');
+  if (!tb) return;
+  if (!_users.length) { tb.innerHTML = '<tr><td colspan="6" style="padding:1.5rem;text-align:center;color:var(--text3)">Aucun accès enregistré. Vous (administrateur) êtes reconnu automatiquement.</td></tr>'; return; }
+  tb.innerHTML = _users.slice().sort((a, b) => String(a.nom || a._id).localeCompare(String(b.nom || b._id))).map(u => {
+    const names = (u.role === 'chantier')
+      ? (u.chantierIds || []).map(id => { const c = state.chantiers.find(x => x.id == id); return c ? esc(c.nom) : ('#' + id); }).join(', ') || '<aucun>'
+      : 'Tous';
+    return '<tr><td style="padding-left:16px;font-weight:600">' + esc( esc(u.nom) || '—') + '</td><td style="font-size:12px">' + esc(u._id) + '</td>' +
+      '<td>' + esc(ROLE_LABELS[u.role] || u.role) + '</td><td style="font-size:12px;max-width:260px">' + esc(names) + '</td>' +
+      '<td>' + (u.actif === false ? '<span class="badge badge-red">Suspendu</span>' : '<span class="badge badge-green">Actif</span>') + '</td>' +
+      '<td><button class="btn btn-sm btn-icon" title="Modifier" onclick="openModalUser(\'' + esc(u._id).replace(/'/g, '') + '\')"><i class="ti ti-pencil"></i></button></td></tr>';
+  }).join('');
+}
+function usrRoleChanged() {
+  document.getElementById('usr-chantiers-wrap').style.display = document.getElementById('usr-role').value === 'chantier' ? '' : 'none';
+}
+function openModalUser(emailId) {
+  const u = emailId ? _users.find(x => x._id === emailId) : null;
+  const sel = (u && u.chantierIds || []).map(String);
+  document.getElementById('usr-chantiers').innerHTML = state.chantiers.map(c =>
+    '<label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-weight:500;font-size:13px"><input type="checkbox" class="usr-ch" value="' + esc(c.id) + '"' + (sel.indexOf(String(c.id)) >= 0 ? ' checked' : '') + ' style="width:auto"> ' + esc(c.nom) + '</label>'
+  ).join('') || '<span style="color:var(--text3);font-size:12px">Aucun chantier pour le moment.</span>';
+  document.getElementById('mUserTitle').textContent = u ? 'Modifier un accès' : 'Ajouter une personne';
+  document.getElementById('usr-email').value = u ? u._id : '';
+  document.getElementById('usr-email').disabled = !!u;
+  document.getElementById('usr-nom').value = u ? (u.nom || '') : '';
+  document.getElementById('usr-role').value = u ? u.role : 'chantier';
+  document.getElementById('usr-actif').checked = u ? u.actif !== false : true;
+  document.getElementById('usr-del-btn').style.display = u ? '' : 'none';
+  document.getElementById('usr-del-btn').innerHTML = u && u.actif === false ? '<i class="ti ti-trash"></i> Supprimer la fiche' : '<i class="ti ti-player-pause"></i> Suspendre l\'accès';
+  usrRoleChanged();
+  openModal('modalUser');
+}
+async function saveUserAccess() {
+  const email = document.getElementById('usr-email').value.trim().toLowerCase();
+  if (!email || email.indexOf('@') < 1) { toast('⚠️ E-mail invalide.'); return; }
+  const role = document.getElementById('usr-role').value;
+  const actif = document.getElementById('usr-actif').checked;
+  if (email === CH_ME.email && (role !== 'admin' || !actif)) { toast('⚠️ Vous ne pouvez pas retirer vos propres droits d\'administrateur.'); return; }
+  const ids = Array.prototype.slice.call(document.querySelectorAll('.usr-ch:checked')).map(x => Number(x.value));
+  if (role === 'chantier' && !ids.length && !confirm('Aucun chantier coché : cette personne ne verra rien. Continuer ?')) return;
+  const prev = _users.find(x => x._id === email);
+  try {
+    await window._fbChantier.saveUser(email, {
+      email: email, nom: document.getElementById('usr-nom').value.trim(), role: role, actif: actif,
+      chantierIds: role === 'chantier' ? ids : [], createdAt: (prev && prev.createdAt) || new Date().toISOString(),
+      updatedAt: new Date().toISOString(), updatedBy: CH_ME.email
+    });
+    closeModal('modalUser'); toast('✅ Accès enregistré.');
+  } catch (e) { console.error(e); toast('⛔ Enregistrement impossible : ' + ((e && e.message) || e)); }
+}
+async function deleteUserAccess() {
+  // IMPORTANT : on suspend d'abord (actif=false) au lieu de supprimer — une fiche supprimée
+  // ferait redevenir "équipe" (accès large) un compte externe encore actif dans Firebase.
+  const email = document.getElementById('usr-email').value.trim().toLowerCase();
+  if (!email || email === CH_ME.email) { toast('⚠️ Impossible de retirer votre propre accès.'); return; }
+  const u = _users.find(x => x._id === email);
+  if (!u) return;
+  try {
+    if (u.actif !== false) {
+      if (!confirm('Suspendre immédiatement l\'accès de ' + email + ' ?\n(Vous pourrez le réactiver plus tard.)')) return;
+      const d = Object.assign({}, u); delete d._id; d.actif = false; d.updatedAt = new Date().toISOString(); d.updatedBy = CH_ME.email;
+      await window._fbChantier.saveUser(email, d);
+      closeModal('modalUser'); toast('⏸️ Accès suspendu.');
+    } else {
+      if (!confirm('Supprimer définitivement la fiche de ' + email + ' ?\n\n⚠️ Ne le faites qu\'APRÈS avoir supprimé son compte dans Firebase → Authentication, sinon ce compte retrouverait un accès large.')) return;
+      await window._fbChantier.deleteUser(email); closeModal('modalUser'); toast('🗑️ Fiche supprimée.');
+    }
+  } catch (e) { console.error(e); toast('⛔ Action impossible : ' + ((e && e.message) || e)); }
+}
+
 // ── Navigation ─────────────────────────────────────────────
 function show(id, el) {
   // Scoper UNIQUEMENT au module Chantier pour ne pas toucher le module Dossier
@@ -2758,16 +3725,19 @@ function show(id, el) {
   const pageEl = _chRoot.querySelector('#page-' + id);
   if (pageEl) pageEl.classList.add('active');
   if (el) el.classList.add('active');
-  const titles = { dashboard:'Tableau de bord', chantiers:'Chantiers', lots:'Lots & Chiffrage', intervenants:'Intervenants', planning:'Planning Gantt', financier:'Suivi Financier', comptes_rendus:'Comptes Rendus de Chantier', comptabilite:'Comptabilité' };
+  const titles = { dashboard:'Tableau de bord', chantiers:'Chantiers', lots:'Lots & Chiffrage', intervenants:'Intervenants', planning:'Planning Gantt', financier:'Suivi Financier', comptes_rendus:'Comptes Rendus de Chantier', reserves:'Réserves & actions', activite:'Journal d\'activité', equipe:'Équipe & accès', comptabilite:'Comptabilité' };
   const titleEl = document.getElementById('topbarTitle');
   if (titleEl) titleEl.textContent = titles[id] || '';
-  if (id === 'dashboard') renderDashboard();
+  if (id === 'dashboard') { renderDashboard(); renderDashboardReserves(); }
   if (id === 'chantiers') renderChantiers();
   if (id === 'lots') renderLots();
   if (id === 'intervenants') renderIntervenants();
   if (id === 'planning') renderPlanning();
   if (id === 'financier') renderFinancier();
   if (id === 'comptes_rendus') renderCR();
+  if (id === 'reserves') renderReserves();
+  if (id === 'activite') renderActivite();
+  if (id === 'equipe') renderEquipe();
   if (id === 'comptabilite') renderComptabilite();
   updateFilters();
 }
@@ -2882,24 +3852,24 @@ function renderMissionList() {
       const sc = statutCfg[m.statut] || statutCfg.planifiee;
       const prioriteIcon = m.priorite === 'urgente' ? '🔴 ' : m.priorite === 'haute' ? '🟡 ' : '';
 
-      html += `<div style="background:var(--card);border:1.5px solid var(--border);border-left:4px solid ${isLate?'#C0392B':inv?inv.color||'#4A9CC7':'#4A9CC7'};border-radius:var(--r-md);padding:12px 14px;cursor:pointer;color:var(--text)" onclick="editMissionFiche(${m.id})">
+      html += `<div style="background:var(--card);border:1.5px solid var(--border);border-left:4px solid ${isLate?'#C0392B':inv?safeColor(inv.color) || '#4A9CC7':'#4A9CC7'};border-radius:var(--r-md);padding:12px 14px;cursor:pointer;color:var(--text)" onclick="editMissionFiche(${m.id})">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
-          <div style="font-weight:700;font-size:14px;color:var(--navy);flex:1">${prioriteIcon}${m.libelle || '—'}</div>
+          <div style="font-weight:700;font-size:14px;color:var(--navy);flex:1">${prioriteIcon}${esc(m.libelle) || '—'}</div>
           <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;margin-left:8px">
             <span style="background:${sc.bg};color:${sc.col};padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700">${sc.lbl}</span>
             <button class="btn btn-sm btn-icon" onclick="event.stopPropagation();editMissionFiche(${m.id})" title="Modifier"><i class="ti ti-edit"></i></button>
           </div>
         </div>
         <div style="font-size:12px;color:var(--text2);display:flex;flex-wrap:wrap;gap:10px;margin-bottom:6px">
-          ${ch ? `<span>🏗 ${ch.nom}</span>` : ''}
-          ${lot ? `<span>🔧 ${lot.nom}</span>` : ''}
+          ${ch ? `<span>🏗 ${esc(ch.nom)}</span>` : ''}
+          ${lot ? `<span>🔧 ${esc(lot.nom)}</span>` : ''}
           ${m.montant > 0 ? `<span>💰 ${fmtEur(m.montant)} HT</span>` : ''}
         </div>
         <div style="font-size:12px;color:${isLate?'#C0392B':'var(--text2)'}">
           ${debutD ? `📅 ${debutD.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short',year:'numeric'})}${m.heure?' à '+m.heure:''}` : '📅 Date non définie'}
           ${finD ? ` → ${finD.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'})}${isLate?' ⚠️':''}` : ''}
         </div>
-        ${m.description ? `<div style="font-size:11px;color:var(--text3);margin-top:5px;font-style:italic">${m.description.slice(0,80)}${m.description.length>80?'…':''}</div>` : ''}
+        ${m.description ? `<div style="font-size:11px;color:var(--text3);margin-top:5px;font-style:italic">${esc(m.description.slice(0,80))}${m.description.length>80?'…':''}</div>` : ''}
       </div>`;
     });
   }
@@ -2908,6 +3878,7 @@ function renderMissionList() {
 
 // ── Nouvelle fiche ──────────────────────────────────────────
 function newMissionFiche() {
+  _setBase('missions', null);
   _missionEditId = null;
   const inv = state.intervenants.find(i => i.id == _missionIntervId);
   switchMissionTab('edit');
@@ -2916,6 +3887,7 @@ function newMissionFiche() {
 
 // ── Éditer une fiche existante ──────────────────────────────
 function editMissionFiche(missionId) {
+  _setBase('missions', missionId);
   const m = state.missions.find(x => x.id == missionId);
   if (!m) return;
   _missionEditId = missionId;
@@ -2930,7 +3902,7 @@ function _initMissionForm(inv, preLotId, existingMission) {
   if (!inv) return;
 
   // Info intervenant
-  document.getElementById('mf-avatar').style.background = inv.color || '#4A9CC7';
+  document.getElementById('mf-avatar').style.background = safeColor(inv.color) || '#4A9CC7';
   document.getElementById('mf-avatar').textContent = initiales(inv.nom);
   document.getElementById('mf-interv-name').textContent = inv.nom;
   document.getElementById('mf-interv-meta').textContent = inv.metier + (inv.tel ? ' · ' + inv.tel : '');
@@ -2941,7 +3913,7 @@ function _initMissionForm(inv, preLotId, existingMission) {
   // Remplir les chantiers
   const chSel = document.getElementById('mf-chantier');
   chSel.innerHTML = '<option value="">— Sélectionner un chantier —</option>' +
-    state.chantiers.map(c => `<option value="${c.id}">${c.nom}</option>`).join('');
+    state.chantiers.map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join('');
 
   if (existingMission) {
     // Mode édition : charger toutes les valeurs
@@ -2998,7 +3970,7 @@ function updateMfLots() {
     : state.lots;
   const currentLot = lotSel.value;
   lotSel.innerHTML = '<option value="">— Sélectionner un lot —</option>' +
-    lots.map(l => `<option value="${l.id}">${l.nom}${l.cat?' ('+l.cat+')':''}</option>`).join('');
+    lots.map(l => `<option value="${l.id}">${esc(l.nom)}${l.cat?' ('+ esc(l.cat)+')':''}</option>`).join('');
   if (currentLot) lotSel.value = currentLot;
 }
 
@@ -3026,6 +3998,8 @@ function saveMissionFiche() {
   if (!libelle) { toast('⚠️ Le libellé de la mission est requis.'); return; }
   if (!debut)   { toast('⚠️ La date de début est requise.');         return; }
 
+  if (IS_EXT() && !parseInt(document.getElementById('mf-chantier').value)) { toast('⚠️ Choisissez un chantier pour cette mission.'); return; }
+  if (_missionEditId && !_checkBase('missions', _missionEditId)) return;
   const fiche = {
     id:          _missionEditId || uid(),
     intervId:    parseInt(document.getElementById('mf-interv-id').value),
@@ -3048,7 +4022,7 @@ function saveMissionFiche() {
   if (!state.missions) state.missions = [];
   if (_missionEditId) {
     const idx = state.missions.findIndex(m => m.id == _missionEditId);
-    if (idx >= 0) state.missions[idx] = fiche;
+    if (idx >= 0) state.missions[idx] = Object.assign({}, state.missions[idx], fiche);
     else state.missions.push(fiche);
   } else {
     state.missions.push(fiche);
@@ -3102,26 +4076,26 @@ function _buildMissionHTML(m) {
 
     ${prioriteTag ? `<div style="text-align:center;margin-bottom:12px">${prioriteTag}</div>` : ''}
 
-    <div style="background:linear-gradient(135deg,${inv?inv.color||'#4A9CC7':'#4A9CC7'}22,${inv?inv.color||'#4A9CC7':'#4A9CC7'}08);border:2px solid ${inv?inv.color||'#4A9CC7':'#4A9CC7'};border-radius:12px;padding:14px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px">
-      <div style="width:46px;height:46px;border-radius:50%;background:${inv?inv.color||'#4A9CC7':'#4A9CC7'};color:#fff;font-size:17px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${inv?initiales(inv.nom):'?'}</div>
+    <div style="background:linear-gradient(135deg,${inv?safeColor(inv.color) || '#4A9CC7':'#4A9CC7'}22,${inv?safeColor(inv.color) || '#4A9CC7':'#4A9CC7'}08);border:2px solid ${inv?safeColor(inv.color) || '#4A9CC7':'#4A9CC7'};border-radius:12px;padding:14px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px">
+      <div style="width:46px;height:46px;border-radius:50%;background:${inv?safeColor(inv.color) || '#4A9CC7':'#4A9CC7'};color:#fff;font-size:17px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${inv?esc(initiales(inv.nom)):'?'}</div>
       <div>
-        <div style="font-size:11px;color:${inv?inv.color||'#4A9CC7':'#4A9CC7'};font-weight:700;text-transform:uppercase;letter-spacing:.07em">À l'attention de</div>
-        <div style="font-size:20px;font-weight:700;color:#0F1E3D">${inv?inv.nom:'—'}</div>
-        <div style="font-size:12px;color:#4A6080">${inv?inv.metier:''}${inv&&inv.tel?' · '+inv.tel:''}</div>
+        <div style="font-size:11px;color:${inv?safeColor(inv.color) || '#4A9CC7':'#4A9CC7'};font-weight:700;text-transform:uppercase;letter-spacing:.07em">À l'attention de</div>
+        <div style="font-size:20px;font-weight:700;color:#0F1E3D">${inv?esc(inv.nom):'—'}</div>
+        <div style="font-size:12px;color:#4A6080">${inv?esc(inv.metier):''}${inv&&inv.tel?' · '+esc(inv.tel):''}</div>
       </div>
     </div>
 
     ${ch ? `<div style="background:#fff;border:1.5px solid #E4ECF3;border-radius:10px;padding:12px 14px;margin-bottom:12px">
       <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#4A6080;margin-bottom:6px">📍 Chantier</div>
-      <div style="font-size:15px;font-weight:700;color:#1B2D5B;margin-bottom:3px">${ch.nom}</div>
-      ${ch.adresse ? `<a href="https://maps.google.com/?q=${encodeURIComponent(ch.adresse)}" target="_blank" style="font-size:12px;color:#4A9CC7;text-decoration:none">🗺 ${ch.adresse} →</a>` : ''}
-      ${ch.client ? `<div style="font-size:12px;color:#4A6080;margin-top:3px">👤 M.O. : ${ch.client}</div>` : ''}
+      <div style="font-size:15px;font-weight:700;color:#1B2D5B;margin-bottom:3px">${esc(ch.nom)}</div>
+      ${ch.adresse ? `<a href="https://maps.google.com/?q=${encodeURIComponent(ch.adresse)}" target="_blank" style="font-size:12px;color:#4A9CC7;text-decoration:none">🗺 ${esc(ch.adresse)} →</a>` : ''}
+      ${ch.client ? `<div style="font-size:12px;color:#4A6080;margin-top:3px">👤 M.O. : ${esc(ch.client)}</div>` : ''}
     </div>` : ''}
 
     <div style="background:#fff;border:1.5px solid #E4ECF3;border-radius:10px;padding:12px 14px;margin-bottom:12px">
       <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#4A6080;margin-bottom:6px">🔧 Mission</div>
-      <div style="font-size:16px;font-weight:700;color:#1B2D5B;margin-bottom:6px">${m.libelle}</div>
-      ${m.description ? `<div style="font-size:12px;color:#4A6080;background:#F8FAFC;padding:8px 10px;border-radius:6px;border-left:3px solid #4A9CC7;margin-top:6px">${m.description}</div>` : ''}
+      <div style="font-size:16px;font-weight:700;color:#1B2D5B;margin-bottom:6px">${esc(m.libelle)}</div>
+      ${m.description ? `<div style="font-size:12px;color:#4A6080;background:#F8FAFC;padding:8px 10px;border-radius:6px;border-left:3px solid #4A9CC7;margin-top:6px">${esc(m.description)}</div>` : ''}
     </div>
 
     <div style="border:3px solid ${debutFmt?'#1B2D5B':'#E4ECF3'};border-radius:12px;overflow:hidden;margin-bottom:12px">
@@ -3406,8 +4380,8 @@ function _crvRenderRecap() {
   ];
 
   recap.innerHTML = rows.map(r => `
-    <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:9px 12px;display:flex;gap:10px;align-items:flex-start;cursor:pointer;color:var(--text)" onclick="_crvEditField('${r.label}')">
-      <div style="font-size:11px;font-weight:700;color:var(--text3);width:130px;flex-shrink:0;margin-top:2px">${r.label}</div>
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:9px 12px;display:flex;gap:10px;align-items:flex-start;cursor:pointer;color:var(--text)" onclick="_crvEditField('${esc(r.label)}')">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);width:130px;flex-shrink:0;margin-top:2px">${esc(r.label)}</div>
       <div style="font-size:13px;color:var(--text);flex:1;white-space:pre-wrap">${r.val === '—' || r.val === 'Aucune' ? `<span style="color:var(--text3);font-style:italic">${r.val}</span>` : r.val}</div>
     </div>`).join('');
   recap.style.display = 'flex';
@@ -3890,6 +4864,7 @@ function updateBadges() {
   document.getElementById('nb-lots').textContent = state.lots.length;
   document.getElementById('nb-interv').textContent = state.intervenants.length;
   document.getElementById('nb-cr').textContent = state.comptes_rendus.length;
+  const _nbr = document.getElementById('nb-res'); if (_nbr) _nbr.textContent = state.reserves.filter(resIsOpen).length;
 }
 
 function onChantierChange() {
@@ -3900,13 +4875,13 @@ function onChantierChange() {
 function updateSidebarSelect() {
   const s = document.getElementById('sidebarChantierSelect');
   const v = s.value;
-  s.innerHTML = '<option value="">— Tous les chantiers —</option>' + state.chantiers.map(c => `<option value="${c.id}">${c.nom}</option>`).join('');
+  s.innerHTML = '<option value="">— Tous les chantiers —</option>' + state.chantiers.map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join('');
   s.value = v;
 }
 
 function updateFilters() {
-  const opts = '<option value="">Tous les chantiers</option>' + state.chantiers.map(c => `<option value="${c.id}">${c.nom}</option>`).join('');
-  ['lots-filter-ch','planning-filter-ch','fin-filter-ch','cr-filter-ch','interv-filter-ch'].forEach(id => {
+  const opts = '<option value="">Tous les chantiers</option>' + state.chantiers.map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join('');
+  ['lots-filter-ch','planning-filter-ch','fin-filter-ch','cr-filter-ch','interv-filter-ch','res-filter-ch','act-filter-ch'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     const v = el.value;
@@ -3950,7 +4925,7 @@ function statFacBadge(s) {
 const AVATAR_COLORS = ['#1B2D5B','#4A9CC7','#2D7A4F','#C0392B','#8A6020','#2A5298','#16a085','#8e44ad'];
 const AVATAR_COLORS_EXT = ['#1B2D5B','#4A9CC7','#2D7A4F','#C0392B','#8A6020','#2A5298','#16a085','#8e44ad','#d35400','#27ae60','#2980b9','#8e44ad','#c0392b','#1abc9c','#f39c12','#7f8c8d','#6c3483','#1a5276','#0e6655','#784212'];
 function avatarColor(nom, intervObj) {
-  if (intervObj && intervObj.color) return intervObj.color;
+  if (intervObj && safeColor(intervObj.color)) return intervObj.color;
   let h = 0; for(let c of nom) h += c.charCodeAt(0); return AVATAR_COLORS[h % AVATAR_COLORS.length];
 }
 function initiales(nom) { return nom.split(' ').filter(Boolean).map(w => w[0].toUpperCase()).slice(0, 2).join(''); }
@@ -3963,11 +4938,13 @@ function populateProjetSelect(selectedId) {
   const sel = document.getElementById('ch-projetid');
   if (!sel) return;
   sel.innerHTML = '<option value="">— Aucun lien —</option>' +
-    dossierProjets.map(p => `<option value="${p.id}">${p.nom || p.client || ('Projet ' + p.id)}${p.client ? ' — ' + p.client : ''}</option>`).join('');
+    dossierProjets.map(p => `<option value="${p.id}">${esc(p.nom) || p.client || ('Projet ' + p.id)}${p.client ? ' — ' + esc(p.client) : ''}</option>`).join('');
   sel.value = selectedId || '';
 }
 
 function openModalChantier(id) {
+  if (IS_EXT()) return;
+  _setBase('chantiers', id || null);
   const fields = ['ch-nom','ch-ref','ch-client','ch-adresse','ch-budget','ch-notes'];
   if (id) {
     const c = state.chantiers.find(x => x.id == id);
@@ -4015,6 +4992,7 @@ function saveChantier() {
   const nom = document.getElementById('ch-nom').value.trim();
   if (!nom) { toast('⚠️ Le nom du chantier est requis.'); return; }
   const editId = document.getElementById('ch-nom').dataset.editId;
+  if (editId && !_checkBase('chantiers', editId)) return;
   const ch = {
     id: editId ? parseInt(editId) : uid(),
     nom, ref: document.getElementById('ch-ref').value,
@@ -4032,7 +5010,7 @@ function saveChantier() {
   };
   if (editId) {
     const i = state.chantiers.findIndex(x => x.id == editId);
-    state.chantiers[i] = ch;
+    if (i >= 0) state.chantiers[i] = Object.assign({}, state.chantiers[i], ch); else state.chantiers.push(ch);
   } else {
     state.chantiers.push(ch);
   }
@@ -4044,11 +5022,14 @@ function saveChantier() {
 }
 
 function deleteChantier(id) {
+  if (IS_EXT()) { toast('⛔ Suppression réservée à l\'agence.'); return; }
   if (!confirm('Supprimer ce chantier et tous ses lots / CR ?')) return;
   state.chantiers = state.chantiers.filter(c => c.id != id);
   state.lots = state.lots.filter(l => l.chantierId != id);
   state.factures = state.factures.filter(f => f.chantierId != id);
   state.comptes_rendus = state.comptes_rendus.filter(c => c.chantierId != id);
+  state.reserves = state.reserves.filter(r => r.chantierId != id);
+  state.missions = state.missions.filter(m => m.chantierId != id);
   saveLocal(); refreshAll(); toast('🗑️ Chantier supprimé.');
 }
 
@@ -4056,7 +5037,7 @@ function renderChantiers() {
   document.getElementById('ch-subtitle').textContent = state.chantiers.length + ' chantier(s) au total';
   const list = document.getElementById('chantiers-list');
   if (!state.chantiers.length) {
-    list.innerHTML = '<div class="empty-state"><div class="empty-icon"><i class="ti ti-building-factory-2"></i></div><div class="empty-title">Aucun chantier créé</div><div class="empty-sub"><button class="btn btn-primary" onclick="openModalChantier()" style="margin-top:12px"><i class="ti ti-plus"></i> Créer le premier chantier</button></div></div>';
+    list.innerHTML = '<div class="empty-state"><div class="empty-icon"><i class="ti ti-building-factory-2"></i></div><div class="empty-title">Aucun chantier créé</div><div class="empty-sub"><button class="btn btn-primary staff-only" onclick="openModalChantier()" style="margin-top:12px"><i class="ti ti-plus"></i> Créer le premier chantier</button></div></div>';
     return;
   }
   list.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem">' +
@@ -4067,13 +5048,13 @@ function renderChantiers() {
       return `<div class="card" style="margin:0;border-top:3px solid #4A9CC7">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
           <div>
-            <div style="font-family:var(--font-serif);font-size:17px;color:var(--navy)">${c.nom}</div>
-            <div style="font-size:12px;color:var(--text2);margin-top:2px">${c.ref ? `<strong>${c.ref}</strong> · ` : ''}${c.type || ''}</div>
+            <div style="font-family:var(--font-serif);font-size:17px;color:var(--navy)">${esc(c.nom)}</div>
+            <div style="font-size:12px;color:var(--text2);margin-top:2px">${c.ref ? `<strong>${esc(c.ref)}</strong> · ` : ''}${esc(c.type) || ''}</div>
           </div>
           ${statChantierBadge(c.statut)}
         </div>
-        <div style="font-size:12px;color:var(--text2);margin-bottom:4px"><i class="ti ti-user" style="font-size:13px"></i> ${c.client || '—'}</div>
-        ${c.adresse ? `<div style="font-size:12px;color:var(--text2);margin-bottom:4px"><i class="ti ti-map-pin" style="font-size:13px"></i> ${c.adresse}</div>` : ''}
+        <div style="font-size:12px;color:var(--text2);margin-bottom:4px"><i class="ti ti-user" style="font-size:13px"></i> ${esc(c.client) || '—'}</div>
+        ${c.adresse ? `<div style="font-size:12px;color:var(--text2);margin-bottom:4px"><i class="ti ti-map-pin" style="font-size:13px"></i> ${esc(c.adresse)}</div>` : ''}
         <div style="font-size:12px;color:var(--text2);margin-bottom:12px"><i class="ti ti-calendar" style="font-size:13px"></i> ${fmtDate(c.debut)} → ${fmtDate(c.fin)}</div>
         <div style="margin-bottom:8px">
           <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-bottom:4px"><span>Avancement lots</span><strong>${av} %</strong></div>
@@ -4089,9 +5070,9 @@ function renderChantiers() {
           <span style="color:#16a085;font-weight:700">CA ${fmtEur((parseFloat(c.honoraires)||0)+(parseFloat(c.commissions)||0))}</span>
         </div>` : ''}
         <div style="display:flex;gap:6px;margin-top:10px">
-          <button class="btn btn-sm" onclick="openModalChantier(${c.id})"><i class="ti ti-edit"></i> Modifier</button>
+          <button class="btn btn-sm staff-only" onclick="openModalChantier(${c.id})"><i class="ti ti-edit"></i> Modifier</button>
           <button class="btn btn-sm" onclick="show('lots',document.querySelectorAll('.nav-item')[2]);document.getElementById('lots-filter-ch').value='${c.id}';renderLots()"><i class="ti ti-list-check"></i> Lots</button>
-          <button class="btn btn-sm btn-danger" onclick="deleteChantier(${c.id})"><i class="ti ti-trash"></i></button>
+          <button class="btn btn-sm btn-danger staff-only" onclick="deleteChantier(${c.id})"><i class="ti ti-trash"></i></button>
         </div>
       </div>`;
     }).join('') + '</div>';
@@ -4107,11 +5088,12 @@ function calcLotTTC() {
 }
 
 function openModalLot(id) {
+  _setBase('lots', id || null);
   const selectC = document.getElementById('lot-chantier');
-  selectC.innerHTML = state.chantiers.map(c => `<option value="${c.id}">${c.nom}</option>`).join('') || '<option value="">Aucun chantier</option>';
+  selectC.innerHTML = state.chantiers.map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join('') || '<option value="">Aucun chantier</option>';
   if (activeChantier) selectC.value = activeChantier;
   const selectI = document.getElementById('lot-interv');
-  selectI.innerHTML = '<option value="">— Non attribué —</option>' + state.intervenants.map(i => `<option value="${i.id}">${i.nom}</option>`).join('');
+  selectI.innerHTML = '<option value="">— Non attribué —</option>' + state.intervenants.map(i => `<option value="${i.id}">${esc(i.nom)}</option>`).join('');
 
   if (id) {
     const l = state.lots.find(x => x.id == id);
@@ -4140,6 +5122,7 @@ function openModalLot(id) {
     document.getElementById('lot-edit-id').value = '';
     document.getElementById('lot-del-btn').style.display = 'none';
   }
+  if (IS_EXT()) document.getElementById('lot-del-btn').style.display = 'none';
   openModal('modalLot');
 }
 
@@ -4149,7 +5132,8 @@ function saveLot() {
   const chantierId = parseInt(document.getElementById('lot-chantier').value);
   if (!nom || !chantierId) { toast('⚠️ Nom et chantier requis.'); return; }
   const editId = document.getElementById('lot-edit-id').value;
-  const lot = {
+  if (editId && !_checkBase('lots', editId)) return;
+  let lot = {
     id: editId ? parseInt(editId) : uid(),
     chantierId, nom, cat: document.getElementById('lot-cat').value,
     interv: document.getElementById('lot-interv').value || null,
@@ -4160,7 +5144,7 @@ function saveLot() {
     fin: document.getElementById('lot-fin').value,
     notes: document.getElementById('lot-notes').value
   };
-  if (editId) { const i = state.lots.findIndex(x => x.id == editId); state.lots[i] = lot; }
+  if (editId) { const i = state.lots.findIndex(x => x.id == editId); if (i >= 0) state.lots[i] = Object.assign({}, state.lots[i], lot); else state.lots.push(lot); }
   else state.lots.push(lot);
   saveLocal(); closeModal('modalLot'); toast('✅ Lot enregistré.'); renderLots(); updateBadges();
 }
@@ -4180,6 +5164,7 @@ function mapStatutChiffrage(s) {
 }
 
 async function importFromChiffrage() {
+  if (IS_EXT()) return;
   const filter = document.getElementById('lots-filter-ch')?.value || activeChantier;
   if (!filter) { toast('⚠️ Sélectionnez un chantier dans le filtre avant d\'importer.'); return; }
   const chantier = state.chantiers.find(c => c.id == filter);
@@ -4279,10 +5264,10 @@ function exportLotsPDF() {
     const av   = lots.length ? Math.round(lots.reduce((s,l)=>s+(parseFloat(l.av)||0),0)/lots.length) : 0;
 
     let o = '<div class="ch-section">';
-    o += '<div class="ch-header"><h2>'+c.nom+'</h2><div class="ch-meta">';
-    if(c.client) o += '<span>👤 '+c.client+'</span>';
-    if(c.adresse) o += '<span>📍 '+c.adresse+'</span>';
-    if(c.ref) o += '<span>📁 '+c.ref+'</span>';
+    o += '<div class="ch-header"><h2>'+ esc(c.nom)+'</h2><div class="ch-meta">';
+    if( esc(c.client)) o += '<span>👤 '+ esc(c.client)+'</span>';
+    if( esc(c.adresse)) o += '<span>📍 '+ esc(c.adresse)+'</span>';
+    if( esc(c.ref)) o += '<span>📁 '+ esc(c.ref)+'</span>';
     o += '</div></div>';
 
     o += '<div class="kpi-row">';
@@ -4295,14 +5280,14 @@ function exportLotsPDF() {
       o += '<div class="sec"><table><thead><tr><th>Lot</th><th>Catégorie</th><th>Intervenant</th><th style="text-align:right">HT</th><th style="text-align:right">TTC</th><th>Av.</th><th>Dates</th><th>Statut</th></tr></thead><tbody>';
       lots.forEach(l => {
         const inv = l.interv ? state.intervenants.find(i=>i.id==l.interv) : null;
-        o += '<tr><td style="font-weight:600">'+(l.nom||'—')+'</td>';
-        o += '<td style="color:#4A6080">'+(l.cat||'—')+'</td>';
-        o += '<td>'+(inv?inv.nom:'<span style="color:#ccc">—</span>')+'</td>';
+        o += '<tr><td style="font-weight:600">'+( esc(l.nom)||'—')+'</td>';
+        o += '<td style="color:#4A6080">'+( esc(l.cat)||'—')+'</td>';
+        o += '<td>'+(inv? esc(inv.nom) :'<span style="color:#ccc">—</span>')+'</td>';
         o += '<td style="text-align:right;font-weight:700">'+fE(l.ht)+'</td>';
         o += '<td style="text-align:right;color:#4A6080">'+fE(l.ht*(1+l.tva/100))+'</td>';
         o += '<td>'+(l.av||0)+'%</td>';
         o += '<td style="font-size:10px;color:#4A6080">'+(l.debut?fD(l.debut):'—')+' → '+(l.fin?fD(l.fin):'—')+'</td>';
-        o += '<td>'+statLot(l.statut)+'</td></tr>';
+        o += '<td>'+statLot( esc(l.statut))+'</td></tr>';
       });
       o += '<tr style="background:#F0F4F8"><td style="font-weight:700;color:#1B2D5B" colspan="3">TOTAUX</td>';
       o += '<td style="text-align:right;font-weight:700;color:#1B2D5B">'+fE(tHT)+'</td>';
@@ -4334,7 +5319,7 @@ function exportLotsPDF() {
 </div>
 <div class="cover">
   <div class="cover-brand">🏛 Phénix-Architecture · Maître d'Œuvre</div>
-  <div class="cover-title">Lots & Chiffrage ${chantiersList.length>1?'— '+chantiersList.length+' chantiers':'— '+chantiersList[0].nom}</div>
+  <div class="cover-title">Lots & Chiffrage ${chantiersList.length>1?'— '+chantiersList.length+' chantiers':'— '+esc(chantiersList[0].nom)}</div>
   <div class="cover-date">Généré le ${today}</div>
   <div class="cover-stats">
     <div class="cstat"><label>Lots</label><span>${allLots.length}</span></div>
@@ -4405,9 +5390,9 @@ function renderLots() {
       const now = new Date(); const fin = l.fin ? new Date(l.fin) : null;
       const isLate = fin && fin < now && l.statut !== 'termine';
       return `<tr>
-        <td style="padding-left:16px"><div style="font-weight:600;color:var(--navy)">${l.nom}</div><div class="td-muted">${l.cat}</div></td>
-        <td class="td-muted">${ch ? ch.nom : '—'}</td>
-        <td>${inv ? `<div style="display:flex;align-items:center;gap:6px"><div style="width:22px;height:22px;border-radius:50%;background:${inv.color || avatarColor(inv.nom)};color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center">${initiales(inv.nom)}</div>${inv.nom}</div>` : '<span class="td-muted">—</span>'}</td>
+        <td style="padding-left:16px"><div style="font-weight:600;color:var(--navy)">${esc(l.nom)}</div><div class="td-muted">${esc(l.cat)}</div></td>
+        <td class="td-muted">${ch ? esc(ch.nom) : '—'}</td>
+        <td>${inv ? `<div style="display:flex;align-items:center;gap:6px"><div style="width:22px;height:22px;border-radius:50%;background:${safeColor(inv.color) || avatarColor(inv.nom)};color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center">${esc(initiales(inv.nom))}</div>${esc(inv.nom)}</div>` : '<span class="td-muted">—</span>'}</td>
         <td style="text-align:right;font-weight:600">${fmtEur(l.ht)}</td>
         <td class="td-muted">${l.tva}%</td>
         <td style="text-align:right;font-weight:700;color:var(--navy)">${fmtEur(ttc)}</td>
@@ -4441,6 +5426,7 @@ function renderLots() {
 //  INTERVENANTS
 // ═══════════════════════════════════════════════════════════
 function openModalInterv(id) {
+  _setBase('intervenants', id || null);
   if (id) {
     const i = state.intervenants.find(x => x.id == id);
     if (!i) return;
@@ -4455,7 +5441,7 @@ function openModalInterv(id) {
     document.getElementById('int-assurance-date').value = i.assuranceDate || '';
     document.getElementById('int-note').value = i.note || '';
     document.getElementById('int-notes').value = i.notes || '';
-    const col = i.color || '#4A9CC7';
+    const col = safeColor(i.color) || '#4A9CC7';
     setIntervColor(col);
     document.getElementById('int-edit-id').value = id;
     document.getElementById('int-del-btn').style.display = '';
@@ -4477,6 +5463,7 @@ function saveInterv() {
   const nom = document.getElementById('int-nom').value.trim();
   if (!nom) { toast('⚠️ La raison sociale est requise.'); return; }
   const editId = document.getElementById('int-edit-id').value;
+  if (editId && !_checkBase('intervenants', editId)) return;
   const interv = {
     id: editId ? parseInt(editId) : uid(),
     nom, metier: document.getElementById('int-metier').value,
@@ -4490,7 +5477,7 @@ function saveInterv() {
     notes: document.getElementById('int-notes').value,
     color: document.getElementById('int-color').value || '#4A9CC7'
   };
-  if (editId) { const i = state.intervenants.findIndex(x => x.id == editId); state.intervenants[i] = interv; }
+  if (editId) { const i = state.intervenants.findIndex(x => x.id == editId); if (i >= 0) state.intervenants[i] = Object.assign({}, state.intervenants[i], interv); else state.intervenants.push(interv); }
   else state.intervenants.push(interv);
   saveLocal(); closeModal('modalInterv'); toast('✅ Intervenant enregistré.'); renderIntervenants(); updateBadges();
 }
@@ -4523,7 +5510,7 @@ function renderIntervenants() {
   // Mise à jour du sous-titre
   const ch = chFilter ? state.chantiers.find(c => c.id == chFilter) : null;
   const subtitle = document.getElementById('interv-subtitle');
-  if (subtitle) subtitle.textContent = ch ? `Intervenants du chantier : ${ch.nom}` : 'Entreprises et sous-traitants';
+  if (subtitle) subtitle.textContent = ch ? `Intervenants du chantier : ${esc(ch.nom)}` : 'Entreprises et sous-traitants';
 
   const grid = document.getElementById('interv-grid');
   if (!list.length) {
@@ -4543,19 +5530,19 @@ function renderIntervenants() {
     const chantierIds = [...new Set(chantierLots.map(l => l.chantierId))];
     return `<div class="interv-card" onclick="openModalInterv(${i.id})">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-        <div class="interv-avatar" style="background:${i.color || avatarColor(i.nom)}">${initiales(i.nom)}</div>
+        <div class="interv-avatar" style="background:${safeColor(i.color) || avatarColor(i.nom)}">${esc(initiales(i.nom))}</div>
         <div class="interv-info">
-          <div class="interv-name">${i.nom}</div>
-          <div class="interv-metier">${i.metier}</div>
+          <div class="interv-name">${esc(i.nom)}</div>
+          <div class="interv-metier">${esc(i.metier)}</div>
         </div>
       </div>
-      ${i.contact ? `<div class="interv-row"><i class="ti ti-user"></i>${i.contact}</div>` : ''}
-      ${i.tel ? `<div class="interv-row"><i class="ti ti-phone"></i>${i.tel}</div>` : ''}
-      ${i.email ? `<div class="interv-row"><i class="ti ti-mail"></i><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${i.email}</span></div>` : ''}
-      ${!chFilter && chantierIds.length > 0 ? `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">${chantierIds.map(cid => { const ch = state.chantiers.find(c => c.id == cid); return ch ? `<span class="badge badge-blue" style="font-size:10px">${ch.nom}</span>` : ''; }).join('')}</div>` : ''}
+      ${i.contact ? `<div class="interv-row"><i class="ti ti-user"></i>${esc(i.contact)}</div>` : ''}
+      ${i.tel ? `<div class="interv-row"><i class="ti ti-phone"></i>${esc(i.tel)}</div>` : ''}
+      ${i.email ? `<div class="interv-row"><i class="ti ti-mail"></i><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(i.email)}</span></div>` : ''}
+      ${!chFilter && chantierIds.length > 0 ? `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">${chantierIds.map(cid => { const ch = state.chantiers.find(c => c.id == cid); return ch ? `<span class="badge badge-blue" style="font-size:10px">${esc(ch.nom)}</span>` : ''; }).join('')}</div>` : ''}
       <div style="border-top:1px solid var(--border);padding-top:10px;margin-top:10px;display:flex;justify-content:space-between;font-size:12px">
         <span style="color:var(--text2)">${lotsCount} lot(s) · <strong>${fmtEur(totalEngage)}</strong></span>
-        ${i.note ? `<span style="color:var(--amber);font-weight:700">★ ${i.note}/10</span>` : ''}
+        ${i.note ? `<span style="color:var(--amber);font-weight:700">★ ${esc(i.note)}/10</span>` : ''}
       </div>
       ${i.assurance ? `<div style="margin-top:6px"><span class="badge ${assOk?'badge-green':'badge-red'}" style="font-size:10px"><i class="ti ti-shield"></i> Décennale ${assOk?'valide':'expirée'}</span></div>` : ''}
       <div style="margin-top:10px;display:flex;gap:6px">
@@ -4638,7 +5625,7 @@ function renderPlanning() {
   // ── Ligne mois ──
   html += `<div style="display:flex;margin-left:${ROW_LABEL_W}px;border-bottom:1px solid var(--border)">`;
   monthSpans.forEach(m => {
-    html += `<div style="flex:0 0 ${m.pct}%;text-align:center;font-size:10px;font-weight:700;color:var(--accent2);text-transform:uppercase;letter-spacing:.07em;padding:4px 2px;background:var(--bg);border-left:1px solid var(--border);overflow:hidden;white-space:nowrap">${m.label}</div>`;
+    html += `<div style="flex:0 0 ${m.pct}%;text-align:center;font-size:10px;font-weight:700;color:var(--accent2);text-transform:uppercase;letter-spacing:.07em;padding:4px 2px;background:var(--bg);border-left:1px solid var(--border);overflow:hidden;white-space:nowrap">${esc(m.label)}</div>`;
   });
   html += '</div>';
 
@@ -4663,12 +5650,12 @@ function renderPlanning() {
     const widthPct = Math.max(0.5, ((new Date(l.fin) - new Date(l.debut)) / 86400000) / totalDays * 100);
     const isLate = new Date(l.fin) < now && l.statut !== 'termine';
     const barClass = l.statut === 'termine' ? 'done' : isLate ? 'late' : '';
-    const invColor = inv ? (inv.color || avatarColor(inv.nom)) : '#4A9CC7';
+    const invColor = inv ? (safeColor(inv.color) || avatarColor(inv.nom)) : '#4A9CC7';
 
     return `<div class="gantt-row" style="position:relative">
       <div class="gantt-row-label" style="width:${ROW_LABEL_W}px;flex-shrink:0;display:flex;flex-direction:column;justify-content:center;padding:6px 8px 6px 0;border-right:2px solid var(--border)">
-        <div class="gantt-row-name" style="font-size:12px">${l.nom}</div>
-        <div class="gantt-row-sub" style="font-size:10px">${inv ? inv.nom : (ch ? ch.nom : '—')}</div>
+        <div class="gantt-row-name" style="font-size:12px">${esc(l.nom)}</div>
+        <div class="gantt-row-sub" style="font-size:10px">${inv ? esc(inv.nom) : (ch ? esc(ch.nom) : '—')}</div>
       </div>
       <div style="flex:1;position:relative;height:32px;display:flex;align-items:center">
         <!-- Bandes semaines alternées -->
@@ -4702,12 +5689,13 @@ function renderPlanning() {
 function updateFacLots() {
   const cid = document.getElementById('fac-chantier').value;
   const lots = sortLotsInPlace(state.lots.filter(l => l.chantierId == cid));
-  document.getElementById('fac-lot').innerHTML = lots.map(l => `<option value="${l.id}">${l.nom}</option>`).join('') || '<option value="">Aucun lot</option>';
+  document.getElementById('fac-lot').innerHTML = lots.map(l => `<option value="${l.id}">${esc(l.nom)}</option>`).join('') || '<option value="">Aucun lot</option>';
 }
 
 function openModalFacture(id) {
+  _setBase('factures', id || null);
   const selC = document.getElementById('fac-chantier');
-  selC.innerHTML = state.chantiers.map(c => `<option value="${c.id}">${c.nom}</option>`).join('') || '<option value="">—</option>';
+  selC.innerHTML = state.chantiers.map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join('') || '<option value="">—</option>';
   if (activeChantier) selC.value = activeChantier;
   updateFacLots();
   document.getElementById('fac-date').value = new Date().toISOString().split('T')[0];
@@ -4738,6 +5726,7 @@ function saveFacture() {
   const ht = parseFloat(document.getElementById('fac-ht').value) || 0;
   if (!ht) { toast('⚠️ Montant HT requis.'); return; }
   const editId = document.getElementById('fac-edit-id').value;
+  if (editId && !_checkBase('factures', editId)) return;
   const fac = {
     id: editId ? parseInt(editId) : uid(),
     chantierId: parseInt(document.getElementById('fac-chantier').value),
@@ -4747,10 +5736,10 @@ function saveFacture() {
     ht, statut: document.getElementById('fac-statut').value,
     notes: document.getElementById('fac-notes').value
   };
-  if (editId) { const i = state.factures.findIndex(x => x.id == editId); state.factures[i] = fac; }
+  if (editId) { const i = state.factures.findIndex(x => x.id == editId); if (i >= 0) state.factures[i] = Object.assign({}, state.factures[i], fac); else state.factures.push(fac); }
   else state.factures.push(fac);
   saveLocal(); closeModal('modalFacture'); toast('✅ Situation enregistrée.'); renderFinancier();
-  syncChargeSousTraitance(fac);
+  if (IS_STAFF()) syncChargeSousTraitance(fac);
 }
 
 // ── Solution C : synchronise automatiquement une charge "sous-traitance" dans
@@ -4795,7 +5784,7 @@ function deleteFacture() {
   if (!confirm('Supprimer cette facture ?')) return;
   state.factures = state.factures.filter(f => f.id != id);
   saveLocal(); closeModal('modalFacture'); toast('🗑️ Supprimé.'); renderFinancier();
-  if (window._fb && window._fb.deleteCharge) {
+  if (IS_STAFF() && window._fb && window._fb.deleteCharge) {
     window._fb.deleteCharge('charge-auto-chantier-' + id).catch(()=>{});
   }
 }
@@ -4841,7 +5830,7 @@ function renderFinancier() {
           <div style="font-size:11px;color:#5fd4bb;margin-top:3px">Hon. + Com.</div>
         </div>
         ${filter ? chansForH.map(c => `<div style="grid-column:1/-1;font-size:12px;color:var(--text2);border-top:1px solid var(--border);padding-top:8px;margin-top:4px">
-          <strong>${c.nom}</strong> · Hon. <strong>${fmtEur(c.honoraires||0)}</strong> · Com. <strong>${fmtEur(c.commissions||0)}</strong> · CA <strong style="color:#16a085">${fmtEur((parseFloat(c.honoraires)||0)+(parseFloat(c.commissions)||0))}</strong>
+          <strong>${esc(c.nom)}</strong> · Hon. <strong>${fmtEur(c.honoraires||0)}</strong> · Com. <strong>${fmtEur(c.commissions||0)}</strong> · CA <strong style="color:#16a085">${fmtEur((parseFloat(c.honoraires)||0)+(parseFloat(c.commissions)||0))}</strong>
         </div>`).join('') : ''}`;
     } else {
       document.getElementById('fin-honoraires-card').style.display = 'none';
@@ -4892,15 +5881,15 @@ function renderFinancier() {
         <td style="padding-left:16px;white-space:nowrap">
           <div style="font-weight:600;font-size:12px;color:var(--navy)">${fmtDate(f.date)}</div>
         </td>
-        <td><div style="font-weight:700;font-size:13px;color:var(--accent2)">${f.num || '—'}</div></td>
-        <td><div style="font-size:12px;font-weight:500;color:var(--navy)">${lot ? lot.nom : '—'}</div>${lot ? `<div class="td-muted" style="font-size:10px">${lot.cat || ''}</div>` : ''}</td>
-        <td><div class="td-muted" style="font-size:12px">${ch ? ch.nom : '—'}</div></td>
+        <td><div style="font-weight:700;font-size:13px;color:var(--accent2)">${esc(f.num) || '—'}</div></td>
+        <td><div style="font-size:12px;font-weight:500;color:var(--navy)">${lot ? esc(lot.nom) : '—'}</div>${lot ? `<div class="td-muted" style="font-size:10px">${esc(lot.cat) || ''}</div>` : ''}</td>
+        <td><div class="td-muted" style="font-size:12px">${ch ? esc(ch.nom) : '—'}</div></td>
         <td style="text-align:right"><div style="font-weight:700;font-size:13px">${fmtEur(f.ht)}</div><div class="td-muted" style="font-size:10px">HT</div></td>
         <td style="text-align:right"><div style="font-size:12px;color:var(--text2)">${fmtEur(ttcEst)}</div><div class="td-muted" style="font-size:10px">TTC est.</div></td>
         <td>${statFacBadge(f.statut)}</td>
         <td>${delaiHtml}</td>
         <td><button class="btn btn-sm btn-icon" onclick="openModalFacture(${f.id})" title="Modifier"><i class="ti ti-edit"></i></button></td>
-      </tr>${f.notes ? `<tr style="${rowBg}"><td colspan="9" style="padding:0 16px 8px;font-size:11px;color:var(--text2);font-style:italic">💬 ${f.notes}</td></tr>` : ''}`;
+      </tr>${f.notes ? `<tr style="${rowBg}"><td colspan="9" style="padding:0 16px 8px;font-size:11px;color:var(--text2);font-style:italic">💬 ${esc(f.notes)}</td></tr>` : ''}`;
     }).join('');
   }
 
@@ -4916,10 +5905,10 @@ function renderFinancier() {
       const pctP = l.ht ? Math.min(100, Math.round(payeHT / l.ht * 100)) : 0;
       const over = factureHT > l.ht;
       const inv = l.interv ? state.intervenants.find(i => i.id == l.interv) : null;
-      const barColor = over ? 'var(--red)' : inv ? (inv.color || '#4A9CC7') : '#4A9CC7';
+      const barColor = over ? 'var(--red)' : inv ? (safeColor(inv.color) || '#4A9CC7') : '#4A9CC7';
       return `<div style="margin-bottom:14px">
         <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
-          <span style="font-weight:600;color:var(--navy);max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${l.nom}">${l.nom}</span>
+          <span style="font-weight:600;color:var(--navy);max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(l.nom)}">${esc(l.nom)}</span>
           <span style="color:var(--text2);font-size:11px">${fmtEur(factureHT)} / ${fmtEur(l.ht)} HT · <strong style="color:${over?'var(--red)':'var(--navy)'}">${pct}%</strong></span>
         </div>
         <div style="height:10px;background:var(--bg2);border-radius:5px;overflow:hidden;position:relative;color:var(--text)">
@@ -4948,7 +5937,7 @@ function renderFinancier() {
     const total = items.reduce((a, f) => a + f.ht, 0);
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--bg2)">
       <div style="display:flex;align-items:center;gap:8px">
-        <span class="badge ${s.cls}">${s.label}</span>
+        <span class="badge ${s.cls}">${esc(s.label)}</span>
         <span style="font-size:12px;color:var(--text2)">${items.length} fact.</span>
       </div>
       <span style="font-weight:700;font-size:13px;color:var(--navy)">${fmtEur(total)}</span>
@@ -4971,8 +5960,8 @@ function renderFinancier() {
       const isUrgent = f.statut === 'retard' || f.statut === 'litige' || age > 45;
       return `<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:7px 0;border-bottom:1px solid var(--bg2);gap:6px">
         <div>
-          <div style="font-weight:600;font-size:12px;color:${isUrgent ? 'var(--red)' : 'var(--amber)'}"><i class="ti ti-alert-triangle"></i> ${f.num || '—'}</div>
-          <div style="font-size:11px;color:var(--text2)">${lot ? lot.nom : '—'} · ${fmtDate(f.date)} · ${age}j</div>
+          <div style="font-weight:600;font-size:12px;color:${isUrgent ? 'var(--red)' : 'var(--amber)'}"><i class="ti ti-alert-triangle"></i> ${esc(f.num) || '—'}</div>
+          <div style="font-size:11px;color:var(--text2)">${lot ? esc(lot.nom) : '—'} · ${fmtDate(f.date)} · ${age}j</div>
         </div>
         <div style="text-align:right;flex-shrink:0">
           <div style="font-weight:700;font-size:12px">${fmtEur(f.ht)}</div>
@@ -5069,9 +6058,9 @@ async function renderCRPhotos() {
     if (!src) return '';
     const isUploading = p.dataUrl && !p.storageUrl;
     return `<div class="cr-photo-wrap">
-      <img src="${src}" class="cr-photo-thumb" onclick="crPhotoCaption(${idx})" title="${p.caption || 'Cliquer pour annoter'}">
+      <img src="${src}" class="cr-photo-thumb" onclick="crPhotoCaption(${idx})" title="${esc(p.caption) || 'Cliquer pour annoter'}">
       ${isUploading ? '<div style="position:absolute;bottom:2px;left:2px;background:rgba(0,0,0,.6);color:#fff;font-size:9px;padding:1px 4px;border-radius:3px">⏳</div>' : '<div style="position:absolute;bottom:2px;left:2px;background:rgba(0,128,0,.7);color:#fff;font-size:9px;padding:1px 4px;border-radius:3px" title="Synchronisé">☁️</div>'}
-      ${p.caption ? `<div style="font-size:9px;color:var(--text2);text-align:center;max-width:90px;word-wrap:break-word;margin-top:2px">${p.caption.slice(0,30)}</div>` : ''}
+      ${p.caption ? `<div style="font-size:9px;color:var(--text2);text-align:center;max-width:90px;word-wrap:break-word;margin-top:2px">${esc(p.caption.slice(0,30))}</div>` : ''}
       <button class="cr-photo-del" onclick="crDeletePhoto(${idx})" title="Supprimer">×</button>
     </div>`;
   }).join('');
@@ -5142,7 +6131,7 @@ async function renderCRPlans() {
     return `<div class="plan-wrap" id="plan-outer-${planIdx}">
       <!-- Toolbar -->
       <div class="plan-toolbar">
-        <span style="font-weight:600;font-size:12px;color:var(--navy);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${plan.name}</span>
+        <span style="font-weight:600;font-size:12px;color:var(--navy);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(plan.name)}</span>
         <span style="font-size:11px;color:var(--text2)">Couleur :</span>
         ${PASTILLE_COLORS.map(c =>
           `<span onclick="crPlanSetColor(${planIdx},'${c}')" style="width:18px;height:18px;border-radius:50%;background:${c};cursor:pointer;display:inline-block;flex-shrink:0;border:2.5px solid ${crPlanNextColor===c&&crPlanAnnotMode===planIdx?'var(--navy)':'transparent'};transition:border .1s"></span>`
@@ -5160,7 +6149,7 @@ async function renderCRPlans() {
           : `<div style="position:relative" id="plan-page-${planIdx}-0">
                <img src="${plan.dataUrl}" style="width:100%;display:block;border-radius:4px;box-shadow:0 2px 12px rgba(0,0,0,.4)">
                <div id="plan-annotations-${planIdx}-0" style="position:absolute;inset:0;pointer-events:none">
-                 ${(byPage[0]||[]).map(a => `<div class="plan-annotation" style="left:${a.x}%;top:${a.y}%;background:${a.color||'#C0392B'};pointer-events:all" onclick="event.stopPropagation();crEditAnnotation(${planIdx},${a.globalIdx})" title="${a.label}">${a.globalIdx+1}</div>`).join('')}
+                 ${(byPage[0]||[]).map(a => `<div class="plan-annotation" style="left:${a.x}%;top:${a.y}%;background:${safeColor(a.color) || '#C0392B'};pointer-events:all" onclick="event.stopPropagation();crEditAnnotation(${planIdx},${a.globalIdx})" title="${esc(a.label)}">${a.globalIdx+1}</div>`).join('')}
                </div>
                <div class="plan-click-overlay ${crPlanAnnotMode===planIdx ? 'annot-active' : ''}" id="plan-overlay-${planIdx}-0" onclick="crPlanClickPage(event,${planIdx},0)" style="position:absolute;inset:0;cursor:${crPlanAnnotMode===planIdx?'crosshair':'default'};pointer-events:${crPlanAnnotMode===planIdx?'all':'none'}"></div>
              </div>`
@@ -5174,8 +6163,8 @@ async function renderCRPlans() {
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px">
           ${annotations.map((a, aIdx) => `
             <div style="display:flex;align-items:flex-start;gap:8px;font-size:12px;cursor:pointer" onclick="crEditAnnotation(${planIdx},${aIdx})">
-              <span style="width:20px;height:20px;border-radius:50%;background:${a.color||'#C0392B'};color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${aIdx+1}</span>
-              <span style="color:var(--text)">${a.label||'(sans légende)'} ${a.page!==undefined&&a.page>0?`<em style="color:var(--text3)">p.${a.page+1}</em>`:''}</span>
+              <span style="width:20px;height:20px;border-radius:50%;background:${safeColor(a.color) || '#C0392B'};color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${aIdx+1}</span>
+              <span style="color:var(--text)">${esc(a.label) ||'(sans légende)'} ${a.page!==undefined&&a.page>0?`<em style="color:var(--text3)">p.${a.page+1}</em>`:''}</span>
             </div>`).join('')}
         </div>
       </div>` : '<div style="padding:8px 14px;font-size:11px;color:var(--text3);border-top:1px solid var(--border)">' + (crPlanAnnotMode===planIdx ? '👆 Cliquez sur le plan pour placer une pastille' : 'Aucune pastille — activez le mode annotation ci-dessus') + '</div>'}
@@ -5255,7 +6244,7 @@ async function renderPdfPlan(planIdx, plan) {
       (byPage[pageIdx] || []).forEach(a => {
         const dot = document.createElement('div');
         dot.className = 'plan-annotation';
-        dot.style.cssText = `left:${a.x}%;top:${a.y}%;background:${a.color||'#C0392B'};pointer-events:all;position:absolute;transform:translate(-50%,-50%)`;
+        dot.style.cssText = `left:${a.x}%;top:${a.y}%;background:${safeColor(a.color) || '#C0392B'};pointer-events:all;position:absolute;transform:translate(-50%,-50%)`;
         dot.title = a.label;
         dot.textContent = a.globalIdx + 1;
         dot.onclick = (e) => { e.stopPropagation(); crEditAnnotation(planIdx, a.globalIdx); };
@@ -5316,7 +6305,7 @@ function crPlanClick(e, planIdx) {
 
 function crEditAnnotation(planIdx, aIdx) {
   const a = crPlans[planIdx].annotations[aIdx];
-  const action = prompt(`Pastille ${aIdx+1}: "${a.label}"\n\nSaisissez une nouvelle légende, ou laissez vide pour supprimer :`, a.label);
+  const action = prompt(`Pastille ${aIdx+1}: "${esc(a.label)}"\n\nSaisissez une nouvelle légende, ou laissez vide pour supprimer :`, a.label);
   if (action === null) return;
   if (action === '') { crPlans[planIdx].annotations.splice(aIdx, 1); }
   else { crPlans[planIdx].annotations[aIdx].label = action; }
@@ -5335,9 +6324,9 @@ function crRefreshChips() {
   const container = document.getElementById('cr-presents-chips');
   container.innerHTML = crPresentsSet.map((p, idx) => {
     const inv = state.intervenants.find(i => i.nom === p);
-    const bg = inv ? (inv.color || avatarColor(inv.nom)) : '#8BA5C0';
+    const bg = inv ? (safeColor(inv.color) || avatarColor(inv.nom)) : '#8BA5C0';
     return `<span style="display:inline-flex;align-items:center;gap:5px;background:${bg};color:#fff;padding:3px 10px 3px 8px;border-radius:20px;font-size:12px;font-weight:600">
-      ${p}
+      ${esc(p)}
       <span onclick="crRemovePresent(${idx})" style="cursor:pointer;opacity:.8;font-size:14px;line-height:1">&times;</span>
     </span>`;
   }).join('');
@@ -5367,13 +6356,14 @@ function crRemovePresent(idx) {
 
 let crCounter = 1;
 function openModalCR(id) {
+  _setBase('comptes_rendus', id || null);
   const selC = document.getElementById('cr-chantier');
-  selC.innerHTML = state.chantiers.map(c => `<option value="${c.id}">${c.nom}</option>`).join('') || '<option value="">—</option>';
+  selC.innerHTML = state.chantiers.map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join('') || '<option value="">—</option>';
   if (activeChantier) selC.value = activeChantier;
 
   // Peupler le select intervenants
   const selI = document.getElementById('cr-presents-select');
-  selI.innerHTML = '<option value="">— Sélectionner un intervenant —</option>' + state.intervenants.map(i => `<option value="${i.id}">${i.nom} (${i.metier})</option>`).join('');
+  selI.innerHTML = '<option value="">— Sélectionner un intervenant —</option>' + state.intervenants.map(i => `<option value="${i.id}">${esc(i.nom)} (${esc(i.metier)})</option>`).join('');
 
   if (id) {
     const cr = state.comptes_rendus.find(x => x.id == id);
@@ -5444,6 +6434,7 @@ function saveCR() {
   const date = document.getElementById('cr-date').value;
   if (!chantierId || !date) { toast('⚠️ Chantier et date requis.'); return; }
   const editId = document.getElementById('cr-edit-id').value;
+  if (editId && !_checkBase('comptes_rendus', editId)) return;
   const numSaisi = (document.getElementById('cr-num').value || '').trim();
   if (!numSaisi) { toast('⚠️ Le numéro de CR est requis.'); return; }
   const doublon = state.comptes_rendus.find(x => x.num === numSaisi && String(x.id) !== String(editId));
@@ -5477,7 +6468,7 @@ function saveCR() {
       annotations: pl.annotations || []
     }))
   };
-  if (editId) { const i = state.comptes_rendus.findIndex(x => x.id == editId); state.comptes_rendus[i] = cr; }
+  if (editId) { const i = state.comptes_rendus.findIndex(x => x.id == editId); if (i >= 0) state.comptes_rendus[i] = Object.assign({}, state.comptes_rendus[i], cr); else state.comptes_rendus.push(cr); }
   else state.comptes_rendus.push(cr);
   // Sauvegarde locale immédiate
   saveLocal();
@@ -5513,19 +6504,19 @@ function renderCR() {
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div>
           <div style="display:flex;align-items:center;gap:10px">
-            <div class="cr-num">${cr.num}</div>
-            ${cr.meteo ? `<span style="font-size:16px">${cr.meteo.split(' ')[0]}</span>` : ''}
+            <div class="cr-num">${esc(cr.num)}</div>
+            ${cr.meteo ? `<span style="font-size:16px">${esc(cr.meteo.split(' ')[0])}</span>` : ''}
             ${reserves ? '<span class="badge badge-amber"><i class="ti ti-alert-triangle"></i> Réserves</span>' : '<span class="badge badge-green"><i class="ti ti-check"></i> RAS</span>'}
           </div>
-          <div class="cr-meta">${fmtDate(cr.date)} · ${ch ? ch.nom : '—'} · Rédigé par ${cr.auteur}</div>
-          ${cr.presents ? `<div style="font-size:12px;color:var(--text2);margin-top:4px"><i class="ti ti-users" style="font-size:12px"></i> ${cr.presents}</div>` : ''}
+          <div class="cr-meta">${fmtDate(cr.date)} · ${ch ? esc(ch.nom) : '—'} · Rédigé par ${esc(cr.auteur)}</div>
+          ${cr.presents ? `<div style="font-size:12px;color:var(--text2);margin-top:4px"><i class="ti ti-users" style="font-size:12px"></i> ${esc(cr.presents)}</div>` : ''}
         </div>
         <div style="display:flex;gap:6px">
           <button class="btn btn-sm" onclick="event.stopPropagation();exportCRPdfById(${cr.id})"><i class="ti ti-file-export"></i> PDF</button>
           <button class="btn btn-sm btn-icon" onclick="event.stopPropagation();openModalCR(${cr.id})"><i class="ti ti-edit"></i></button>
         </div>
       </div>
-      ${cr.avancement ? `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:12px;color:var(--text2)"><strong style="color:var(--navy)">Avancement :</strong> ${cr.avancement.substring(0,200)}${cr.avancement.length>200?'…':''}</div>` : ''}
+      ${cr.avancement ? `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:12px;color:var(--text2)"><strong style="color:var(--navy)">Avancement :</strong> ${esc(cr.avancement.substring(0,200))}${cr.avancement.length>200?'…':''}</div>` : ''}
     </div>`;
   }).join('');
 }
@@ -5547,7 +6538,7 @@ function renderDashboard() {
   // Titre dynamique selon filtre
   const chActif = activeChantier ? state.chantiers.find(c => c.id == activeChantier) : null;
   document.getElementById('db-subtitle').textContent = chActif
-    ? `Chantier : ${chActif.nom} · ${filterLots.length} lot(s) définis`
+    ? `Chantier : ${esc(chActif.nom)} · ${filterLots.length} lot(s) définis`
     : actifs.length + ' chantier(s) en cours · ' + filterLots.length + ' lot(s) définis';
 
   document.getElementById('db-nb-chantiers').textContent = actifs.length;
@@ -5585,7 +6576,7 @@ function renderDashboard() {
       const avColor = av < 30 ? 'var(--red)' : av < 70 ? '#F5A623' : 'var(--green)';
       return `<div style="margin-bottom:10px">
         <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
-          <span style="font-weight:600;color:var(--navy)">${c.nom}</span>
+          <span style="font-weight:600;color:var(--navy)">${esc(c.nom)}</span>
           <span style="color:var(--text2)">${av}% · ${lots.length} lot(s)</span>
         </div>
         <div class="prog-bar"><div class="prog-fill" style="width:${av}%;background:${avColor}"></div></div>
@@ -5604,7 +6595,7 @@ function renderDashboard() {
     repDiv.innerHTML = sorted.map(([cat, val]) => {
       const pct = Math.round(val / total * 100);
       return `<div class="horiz-bar">
-        <div class="horiz-label" title="${cat}">${cat}</div>
+        <div class="horiz-label" title="${esc(cat)}">${esc(cat)}</div>
         <div class="horiz-track"><div class="horiz-fill" style="width:${pct}%"></div></div>
         <div class="horiz-val">${pct}%</div>
       </div>`;
@@ -5621,7 +6612,7 @@ function renderDashboard() {
       const ch = state.chantiers.find(c => c.id == l.chantierId);
       return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--bg2);font-size:12px">
         <i class="ti ti-alert-triangle" style="color:var(--red);font-size:16px;flex-shrink:0"></i>
-        <div><div style="font-weight:600;color:var(--navy)">${l.nom}</div><div style="color:var(--text2)">${ch?ch.nom:'—'} · Fin prévue ${fmtDate(l.fin)}</div></div>
+        <div><div style="font-weight:600;color:var(--navy)">${esc(l.nom)}</div><div style="color:var(--text2)">${ch? esc(ch.nom) :'—'} · Fin prévue ${fmtDate(l.fin)}</div></div>
       </div>`;
     }).join('');
   }
@@ -5634,7 +6625,7 @@ function renderDashboard() {
     crDiv.innerHTML = recents.map(cr => {
       const ch = state.chantiers.find(c => c.id == cr.chantierId);
       return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--bg2);font-size:12px">
-        <div><div style="font-weight:600;color:var(--navy)">${cr.num}</div><div style="color:var(--text2)">${ch?ch.nom:'—'}</div></div>
+        <div><div style="font-weight:600;color:var(--navy)">${esc(cr.num)}</div><div style="color:var(--text2)">${ch? esc(ch.nom) :'—'}</div></div>
         <div style="text-align:right;color:var(--text3)">${fmtDate(cr.date)}</div>
       </div>`;
     }).join('');
@@ -5649,6 +6640,7 @@ async function exportCRPdfById(id) {
   if (!cr) return;
   const ch = state.chantiers.find(c => c.id == cr.chantierId);
   toast('⏳ Préparation de l\'export…');
+  try { if (window._fbChantier) await window._fbChantier.rehydrate(cr); } catch (e) {}
   // Rendre les pages PDF à la volée si besoin
   if (cr.plans && cr.plans.length && typeof pdfjsLib !== 'undefined') {
     for (const plan of cr.plans) {
@@ -5704,7 +6696,7 @@ function printCRHtml(cr, ch) {
       pages = plan.storageUrl ? ['__PDF_STORAGE__'] : null;
     }
     var out = '<div class="section" style="page-break-before:always">';
-    out += '<div class="section-title" style="font-size:14px">📐 Plan annoté : ' + plan.name + '</div>';
+    out += '<div class="section-title" style="font-size:14px">📐 Plan annoté : ' + esc(plan.name) + '</div>';
     pages.forEach(function(pageImg, pgIdx) {
       var pageAnnots = (plan.annotations||[]).filter(function(a){ return (a.page||0)===pgIdx; });
       out += '<div style="position:relative;border:1px solid #C8D8E8;border-radius:8px;overflow:hidden;margin-top:8px;margin-bottom:12px">';
@@ -5721,7 +6713,7 @@ function printCRHtml(cr, ch) {
       pageAnnots.forEach(function(a) {
         var gIdx = (plan.annotations||[]).indexOf(a);
         var top = pages.length>1 ? 'calc('+a.y+'% - 12px + 28px)' : 'calc('+a.y+'% - 12px)';
-        out += '<div style="position:absolute;left:calc('+a.x+'% - 12px);top:'+top+';width:24px;height:24px;border-radius:50%;background:'+(a.color||'#C0392B')+';color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3)">'+(gIdx+1)+'</div>';
+        out += '<div style="position:absolute;left:calc('+a.x+'% - 12px);top:'+top+';width:24px;height:24px;border-radius:50%;background:'+(safeColor(a.color) || '#C0392B')+';color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3)">'+(gIdx+1)+'</div>';
       });
       out += '</div>';
     });
@@ -5730,8 +6722,8 @@ function printCRHtml(cr, ch) {
       out += '<div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#2A5298;font-weight:700;margin-bottom:8px">Légende</div>';
       plan.annotations.forEach(function(a, aIdx) {
         out += '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:5px">';
-        out += '<span style="width:20px;height:20px;border-radius:50%;background:'+(a.color||'#C0392B')+';color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">'+(aIdx+1)+'</span>';
-        out += '<span style="font-size:11px;color:#0F1E3D">'+(a.label||'(sans légende)')+(a.page&&a.page>0?' <em style="color:#8BA5C0">p.'+(a.page+1)+'</em>':'')+'</span>';
+        out += '<span style="width:20px;height:20px;border-radius:50%;background:'+(safeColor(a.color) || '#C0392B')+';color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">'+(aIdx+1)+'</span>';
+        out += '<span style="font-size:11px;color:#0F1E3D">'+esc( esc(a.label)||'(sans légende)')+(a.page&&a.page>0?' <em style="color:#8BA5C0">p.'+(a.page+1)+'</em>':'')+'</span>';
         out += '</div>';
       });
       out += '</div>';
@@ -5748,7 +6740,7 @@ function printCRHtml(cr, ch) {
     photos.forEach(function(p, idx) {
       out += '<div style="text-align:center">';
       out += '<img src="'+p.dataUrl+'" style="width:180px;height:140px;object-fit:cover;border-radius:8px;border:1px solid #C8D8E8;display:block">';
-      if (p.caption) out += '<div style="font-size:10px;color:#4A6080;margin-top:4px;max-width:180px;word-wrap:break-word">'+p.caption+'</div>';
+      if ( esc(p.caption)) out += '<div style="font-size:10px;color:#4A6080;margin-top:4px;max-width:180px;word-wrap:break-word">'+ esc(p.caption)+'</div>';
       out += '</div>';
     });
     out += '</div></div>';
@@ -5764,7 +6756,7 @@ function printCRHtml(cr, ch) {
   const html = `<!DOCTYPE html>
 <html lang="fr"><head>
 <meta charset="UTF-8">
-<title>${cr.num} — ${ch ? ch.nom : 'Chantier'}</title>
+<title>${esc(cr.num)} — ${ch ? esc(ch.nom) : 'Chantier'}</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -5802,35 +6794,35 @@ body{font-family:'DM Sans',sans-serif;font-size:12px;color:#0F1E3D;background:#f
 </div>
 <div class="cover">
   <div class="cover-brand">🏛 Phénix-Architecture · Maître d'Œuvre</div>
-  <div class="cover-title">${cr.num} ${cr.meteo ? cr.meteo.split(' ')[0] : ''}</div>
+  <div class="cover-title">${esc(cr.num)} ${cr.meteo ? esc(cr.meteo.split(' ')[0]) : ''}</div>
   <div class="cover-sub">Compte Rendu de Chantier · ${dateStr}</div>
   <div class="cover-meta">
-    <div class="cover-meta-item"><label>Chantier</label><span>${ch ? ch.nom : '—'}</span></div>
-    <div class="cover-meta-item"><label>Rédigé par</label><span>${cr.auteur || '—'}</span></div>
+    <div class="cover-meta-item"><label>Chantier</label><span>${ch ? esc(ch.nom) : '—'}</span></div>
+    <div class="cover-meta-item"><label>Rédigé par</label><span>${esc(cr.auteur) || '—'}</span></div>
     <div class="cover-meta-item"><label>Prochaine réunion</label><span>${prochaine}</span></div>
   </div>
 </div>
 <div class="chantier-block">
-  <div class="field"><label>Maître d'ouvrage</label><span>${ch && ch.client ? ch.client : '—'}</span></div>
-  <div class="field"><label>Référence</label><span>${ch && ch.ref ? ch.ref : '—'}</span></div>
-  <div class="field"><label>Adresse</label><span>${ch && ch.adresse ? ch.adresse : '—'}</span></div>
+  <div class="field"><label>Maître d'ouvrage</label><span>${ch && ch.client ? esc(ch.client) : '—'}</span></div>
+  <div class="field"><label>Référence</label><span>${ch && ch.ref ? esc(ch.ref) : '—'}</span></div>
+  <div class="field"><label>Adresse</label><span>${ch && ch.adresse ? esc(ch.adresse) : '—'}</span></div>
   <div class="field"><label>Date</label><span>${dateStr}</span></div>
 </div>
 <div class="presents-block">
   <div class="label">Participants présents</div>
-  <div class="chips">${presents.split(',').map(p=>p.trim()).filter(Boolean).map(p=>'<span class="chip">'+p+'</span>').join('') || '<span style="color:#8BA5C0;font-style:italic">Aucun participant</span>'}</div>
+  <div class="chips">${presents.split(',').map(p=>p.trim()).filter(Boolean).map(p=>'<span class="chip">'+esc(p)+'</span>').join('') || '<span style="color:#8BA5C0;font-style:italic">Aucun participant</span>'}</div>
 </div>
 <div class="section">
   <div class="section-title"><span class="section-num">1</span> Avancement des travaux</div>
-  <div class="section-body">${cr.avancement && cr.avancement.trim() ? cr.avancement : '<span class="empty-val">Néant</span>'}</div>
+  <div class="section-body">${cr.avancement && cr.avancement.trim() ? esc(cr.avancement) : '<span class="empty-val">Néant</span>'}</div>
 </div>
 <div class="section">
   <div class="section-title"><span class="section-num">2</span> Réserves / Points à lever</div>
-  <div class="section-body">${cr.reserves && cr.reserves.trim() ? cr.reserves : '<span class="empty-val">Néant — RAS</span>'}</div>
+  <div class="section-body">${cr.reserves && cr.reserves.trim() ? esc(cr.reserves) : '<span class="empty-val">Néant — RAS</span>'}</div>
 </div>
 <div class="section">
   <div class="section-title"><span class="section-num">3</span> Décisions et actions à mener</div>
-  <div class="section-body">${cr.decisions && cr.decisions.trim() ? cr.decisions : '<span class="empty-val">Néant</span>'}</div>
+  <div class="section-body">${cr.decisions && cr.decisions.trim() ? esc(cr.decisions) : '<span class="empty-val">Néant</span>'}</div>
 </div>
 ${photosHtml}
 ${plansHtml}
@@ -5839,13 +6831,13 @@ ${plansHtml}
   <div style="font-size:24px;opacity:.4">📅</div>
 </div>
 <div class="signatures">
-  <div class="sig-block"><div style="font-size:10px;color:#4A6080">Le Maître d'Œuvre</div><div class="sig-blank">${cr.auteur || 'Phénix-Architecture'}</div></div>
-  <div class="sig-block"><div style="font-size:10px;color:#4A6080">Le Maître d'Ouvrage</div><div class="sig-blank">${ch && ch.client ? ch.client : '—'}</div></div>
+  <div class="sig-block"><div style="font-size:10px;color:#4A6080">Le Maître d'Œuvre</div><div class="sig-blank">${esc(cr.auteur) || 'Phénix-Architecture'}</div></div>
+  <div class="sig-block"><div style="font-size:10px;color:#4A6080">Le Maître d'Ouvrage</div><div class="sig-blank">${ch && ch.client ? esc(ch.client) : '—'}</div></div>
   <div class="sig-block"><div style="font-size:10px;color:#4A6080">Entreprise principale</div><div class="sig-blank">&nbsp;</div></div>
 </div>
 <div class="footer">
   <div style="font-family:'DM Serif Display',serif;color:#1B2D5B;font-size:12px">Phénix-Architecture</div>
-  <div>${cr.num} · ${ch ? ch.nom : '—'} · ${dateStr}</div>
+  <div>${esc(cr.num)} · ${ch ? esc(ch.nom) : '—'} · ${dateStr}</div>
   <div>Généré le ${today}</div>
 </div>
 </div></body></html>`;
@@ -5943,11 +6935,11 @@ function exportSynthesePDF() {
     let o = '<div class="ch-section'+(isFirst?'':' page-break"')+'">';
 
     // Header
-    o += '<div class="ch-header"><div><h2>'+c.nom+'</h2>'+statCh(c.statut);
+    o += '<div class="ch-header"><div><h2>'+ esc(c.nom)+'</h2>'+statCh( esc(c.statut));
     o += '<div class="ch-meta">';
-    if(c.client) o += '<span>👤 '+c.client+'</span>';
-    if(c.adresse) o += '<span>📍 '+c.adresse+'</span>';
-    if(c.ref) o += '<span>📁 '+c.ref+'</span>';
+    if( esc(c.client)) o += '<span>👤 '+ esc(c.client)+'</span>';
+    if( esc(c.adresse)) o += '<span>📍 '+ esc(c.adresse)+'</span>';
+    if( esc(c.ref)) o += '<span>📁 '+ esc(c.ref)+'</span>';
     if(c.debut||c.fin) o += '<span>📅 '+fD(c.debut)+' → '+fD(c.fin)+'</span>';
     o += '</div></div>';
     o += '<div class="ch-av"><div class="pct">'+av+'%</div><div class="lbl">Avancement</div></div></div>';
@@ -5965,11 +6957,11 @@ function exportSynthesePDF() {
 
     // Info
     o += '<div class="info-row">';
-    o += '<div class="ic"><label>Type de travaux</label><span>'+(c.type||'—')+'</span></div>';
+    o += '<div class="ic"><label>Type de travaux</label><span>'+( esc(c.type)||'—')+'</span></div>';
     o += '<div class="ic"><label>Budget travaux HT</label><span>'+fE(c.budget||0)+'</span></div>';
     o += '<div class="ic"><label>Reste à facturer</label><span style="color:'+(budHT-facHT<0?'#C0392B':'#2D7A4F')+'">'+fE(budHT-facHT)+'</span></div>';
     o += '</div>';
-    if(c.notes) o += '<div class="nbox">📝 '+c.notes+'</div>';
+    if( esc(c.notes)) o += '<div class="nbox">📝 '+ esc(c.notes)+'</div>';
 
     // LOTS
     if(lots.length) {
@@ -5978,14 +6970,14 @@ function exportSynthesePDF() {
       lots.forEach(l => {
         const inv = l.interv ? state.intervenants.find(i=>i.id==l.interv) : null;
         const isLate = l.fin && new Date(l.fin)<now && l.statut!=='termine';
-        o += '<tr><td style="padding-left:22px;font-weight:600">'+(l.nom||'—')+'</td>';
-        o += '<td style="color:#4A6080">'+(l.cat||'—')+'</td>';
-        o += '<td>'+(inv?'<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:15px;height:15px;border-radius:50%;background:'+(inv.color||'#4A9CC7')+';display:inline-flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;color:#fff">'+ini(inv.nom)+'</span>'+inv.nom+'</span>':'<span style="color:#ccc">—</span>')+'</td>';
+        o += '<tr><td style="padding-left:22px;font-weight:600">'+( esc(l.nom)||'—')+'</td>';
+        o += '<td style="color:#4A6080">'+( esc(l.cat)||'—')+'</td>';
+        o += '<td>'+(inv?'<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:15px;height:15px;border-radius:50%;background:'+(safeColor(inv.color) || '#4A9CC7')+';display:inline-flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;color:#fff">'+ini( esc(inv.nom))+'</span>'+ esc(inv.nom)+'</span>':'<span style="color:#ccc">—</span>')+'</td>';
         o += '<td style="text-align:right;font-weight:700">'+fE(l.ht)+'</td>';
         o += '<td style="text-align:right;color:#4A6080">'+fE(l.ht*(1+l.tva/100))+'</td>';
         o += '<td><div style="display:flex;align-items:center;gap:3px"><div style="width:32px;height:5px;background:#E4ECF3;border-radius:3px;overflow:hidden"><div style="height:100%;background:'+(l.statut==='termine'?'#2D7A4F':'#4A9CC7')+';width:'+(l.av||0)+'%"></div></div><span style="font-size:10px;font-weight:700">'+(l.av||0)+'%</span></div></td>';
         o += '<td style="font-size:10px;color:'+(isLate?'#C0392B':'#4A6080')+'">'+(l.debut?fD(l.debut):'—')+'<br>'+(l.fin?fD(l.fin):'—')+'</td>';
-        o += '<td>'+statLot(l.statut)+'</td></tr>';
+        o += '<td>'+statLot( esc(l.statut))+'</td></tr>';
       });
       const tHT=lots.reduce((s,l)=>s+l.ht,0), tTTC=lots.reduce((s,l)=>s+l.ht*(1+l.tva/100),0);
       o += '<tr style="background:#F0F4F8"><td style="padding-left:22px;font-weight:700;color:#1B2D5B" colspan="3">TOTAUX</td>';
@@ -6004,20 +6996,20 @@ function exportSynthesePDF() {
         const iTotal = iLots.reduce((s,l)=>s+l.ht*(1+l.tva/100),0);
         const assOk = inv.assuranceDate && new Date(inv.assuranceDate)>now;
         o += '<div class="irow">';
-        o += '<div class="ava" style="background:'+(inv.color||'#4A9CC7')+'">'+ini(inv.nom)+'</div>';
-        o += '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:12px">'+inv.nom+'</div>';
-        o += '<div style="font-size:11px;color:#4A9CC7;font-weight:600">'+inv.metier+'</div>';
+        o += '<div class="ava" style="background:'+(safeColor(inv.color) || '#4A9CC7')+'">'+ini( esc(inv.nom))+'</div>';
+        o += '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:12px">'+ esc(inv.nom)+'</div>';
+        o += '<div style="font-size:11px;color:#4A9CC7;font-weight:600">'+ esc(inv.metier)+'</div>';
         o += '<div style="font-size:10px;color:#4A6080;display:flex;gap:10px;flex-wrap:wrap;margin-top:1px">';
-        if(inv.tel) o += '<span>📞 '+inv.tel+'</span>';
-        if(inv.email) o += '<span>✉️ '+inv.email+'</span>';
-        if(inv.siret) o += '<span>SIRET: '+inv.siret+'</span>';
+        if( esc(inv.tel)) o += '<span>📞 '+ esc(inv.tel)+'</span>';
+        if( esc(inv.email)) o += '<span>✉️ '+ esc(inv.email)+'</span>';
+        if( esc(inv.siret)) o += '<span>SIRET: '+ esc(inv.siret)+'</span>';
         o += '</div>';
-        if(inv.assurance) o += '<div style="margin-top:2px"><span style="background:'+(assOk?'#E3F5EC':'#FDECEB')+';color:'+(assOk?'#2D7A4F':'#C0392B')+';padding:1px 7px;border-radius:10px;font-size:10px;font-weight:700">Décennale: '+inv.assurance+(assOk?' ✓':' ⚠')+'</span></div>';
-        if(inv.notes) o += '<div style="font-size:10px;color:#4A6080;font-style:italic;margin-top:2px">'+inv.notes+'</div>';
+        if( esc(inv.assurance)) o += '<div style="margin-top:2px"><span style="background:'+(assOk?'#E3F5EC':'#FDECEB')+';color:'+(assOk?'#2D7A4F':'#C0392B')+';padding:1px 7px;border-radius:10px;font-size:10px;font-weight:700">Décennale: '+ esc(inv.assurance)+(assOk?' ✓':' ⚠')+'</span></div>';
+        if( esc(inv.notes)) o += '<div style="font-size:10px;color:#4A6080;font-style:italic;margin-top:2px">'+ esc(inv.notes)+'</div>';
         o += '</div>';
         o += '<div style="text-align:right;flex-shrink:0"><div style="font-weight:700;font-size:11px">'+fE(iTotal)+' TTC</div>';
         o += '<div style="font-size:10px;color:#4A6080">'+iLots.length+' lot(s)</div>';
-        if(inv.note) o += '<div style="color:#8A6020;font-weight:700;font-size:11px;margin-top:2px">★ '+inv.note+'/10</div>';
+        if( esc(inv.note)) o += '<div style="color:#8A6020;font-weight:700;font-size:11px;margin-top:2px">★ '+ esc(inv.note)+'/10</div>';
         o += '</div></div>';
       });
       o += '</div>';
@@ -6033,11 +7025,11 @@ function exportSynthesePDF() {
         const sMap = {a_valider:['#E4ECF3','#4A6080','En attente'],validee:['#E8F4FB','#2A5298','Validée'],payee:['#E3F5EC','#2D7A4F','Payée'],retard:['#FDF3DC','#8A6020','En attente'],litige:['#FDECEB','#C0392B','Litige']};
         const [bg,col,lbl] = sMap[f.statut] || ['#eee','#666',f.statut];
         o += '<tr><td style="padding-left:22px;white-space:nowrap">'+fD(f.date)+'</td>';
-        o += '<td style="font-weight:700;color:#2A5298">'+(f.num||'—')+'</td>';
-        o += '<td>'+(lot?lot.nom:'—')+'</td>';
+        o += '<td style="font-weight:700;color:#2A5298">'+( esc(f.num)||'—')+'</td>';
+        o += '<td>'+(lot? esc(lot.nom) :'—')+'</td>';
         o += '<td style="text-align:right;font-weight:700">'+fE(f.ht)+'</td>';
         o += '<td><span style="background:'+bg+';color:'+col+';padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700">'+lbl+'</span>'+(f.statut!=='payee'&&age>30?' <span style="color:#C0392B;font-size:10px">'+age+'j</span>':'')+'</td></tr>';
-        if(f.notes) o += '<tr><td colspan="5" style="padding:0 7px 5px 22px;font-size:10px;color:#4A6080;font-style:italic">💬 '+f.notes+'</td></tr>';
+        if( esc(f.notes)) o += '<tr><td colspan="5" style="padding:0 7px 5px 22px;font-size:10px;color:#4A6080;font-style:italic">💬 '+ esc(f.notes)+'</td></tr>';
       });
       o += '</tbody></table>';
     }
@@ -6067,12 +7059,12 @@ function exportSynthesePDF() {
       lotsWithDates.forEach((l,idx)=>{
         const y=18+idx*ROW_H;
         const inv = l.interv ? state.intervenants.find(i=>i.id==l.interv) : null;
-        const bc = l.statut==='termine'?'#2D7A4F':(new Date(l.fin)<now?'#C0392B':(inv&&inv.color?inv.color:'#4A9CC7'));
+        const bc = l.statut==='termine'?'#2D7A4F':(new Date(l.fin)<now?'#C0392B':((inv&&safeColor(inv.color))||'#4A9CC7'));
         const sx=GL+Math.max(0,(new Date(l.debut)-minD2)/86400000/td2*GB);
         const bw=Math.max(3,((new Date(l.fin)-new Date(l.debut))/86400000)/td2*GB);
         if(idx%2===0) svg2 += '<rect x="0" y="'+y+'" width="'+GW+'" height="'+ROW_H+'" fill="rgba(0,0,0,.018)"/>';
         const nm2 = l.nom.length>24?l.nom.slice(0,23)+'…':l.nom;
-        svg2 += '<text x="2" y="'+(y+ROW_H-7)+'" font-size="10" fill="#0F1E3D" font-weight="500">'+nm2+'</text>';
+        svg2 += '<text x="2" y="'+(y+ROW_H-7)+'" font-size="10" fill="#0F1E3D" font-weight="500">'+esc(nm2)+'</text>';
         svg2 += '<rect x="'+sx.toFixed(1)+'" y="'+(y+4)+'" width="'+bw.toFixed(1)+'" height="'+(ROW_H-8)+'" rx="3" fill="'+bc+'" opacity="0.85"/>';
         if(bw>28) svg2 += '<text x="'+(sx+3).toFixed(1)+'" y="'+(y+ROW_H-7)+'" font-size="9" fill="#fff" font-weight="700">'+(l.av||0)+'%</text>';
       });
@@ -6091,24 +7083,24 @@ function exportSynthesePDF() {
         const hasRes = cr.reserves && cr.reserves.trim();
         o += '<div class="cr-block'+(hasRes?' res':'')+'" style="margin-bottom:12px">';
         o += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">';
-        o += '<div><div style="font-weight:700;font-size:13px;color:#1B2D5B">'+cr.num+(cr.meteo?' '+cr.meteo.split(' ')[0]:'')+'</div>';
-        o += '<div style="font-size:10px;color:#4A6080">'+fD(cr.date)+(cr.auteur?' · Rédigé par <strong>'+cr.auteur+'</strong>':'')+'</div>';
-        if(cr.presents) o += '<div style="font-size:10px;color:#4A6080;margin-top:2px">👥 '+cr.presents+'</div>';
+        o += '<div><div style="font-weight:700;font-size:13px;color:#1B2D5B">'+ esc(cr.num)+( esc(cr.meteo)?' '+cr.meteo.split(' ')[0]:'')+'</div>';
+        o += '<div style="font-size:10px;color:#4A6080">'+fD(cr.date)+( esc(cr.auteur)?' · Rédigé par <strong>'+ esc(cr.auteur)+'</strong>':'')+'</div>';
+        if( esc(cr.presents)) o += '<div style="font-size:10px;color:#4A6080;margin-top:2px">👥 '+ esc(cr.presents)+'</div>';
         o += '</div>';
         o += '<span style="background:'+(hasRes?'#FDF3DC':'#E3F5EC')+';color:'+(hasRes?'#8A6020':'#2D7A4F')+';padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;flex-shrink:0">'+(hasRes?'⚠ Réserves':'✓ RAS')+'</span></div>';
         if(cr.avancement && cr.avancement.trim()) {
           o += '<div style="margin-bottom:6px"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#2A5298;margin-bottom:3px">Avancement</div>';
-          o += '<div style="font-size:11px;line-height:1.6;white-space:pre-wrap;background:#EEF4F9;padding:7px 10px;border-radius:4px;border-left:3px solid #4A9CC7">'+cr.avancement+'</div></div>';
+          o += '<div style="font-size:11px;line-height:1.6;white-space:pre-wrap;background:#EEF4F9;padding:7px 10px;border-radius:4px;border-left:3px solid #4A9CC7">'+ esc(cr.avancement)+'</div></div>';
         }
         if(hasRes) {
           o += '<div style="margin-bottom:6px"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#8A6020;margin-bottom:3px">⚠ Réserves / Points à lever</div>';
-          o += '<div style="font-size:11px;line-height:1.6;white-space:pre-wrap;background:#FDF3DC;padding:7px 10px;border-radius:4px;border-left:3px solid #F5A623">'+cr.reserves+'</div></div>';
+          o += '<div style="font-size:11px;line-height:1.6;white-space:pre-wrap;background:#FDF3DC;padding:7px 10px;border-radius:4px;border-left:3px solid #F5A623">'+ esc(cr.reserves)+'</div></div>';
         }
         if(cr.decisions && cr.decisions.trim()) {
           o += '<div style="margin-bottom:5px"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#1B2D5B;margin-bottom:3px">Décisions & actions</div>';
-          o += '<div style="font-size:11px;line-height:1.6;white-space:pre-wrap;background:#F8FAFC;padding:7px 10px;border-radius:4px;border:1px solid #E4ECF3">'+cr.decisions+'</div></div>';
+          o += '<div style="font-size:11px;line-height:1.6;white-space:pre-wrap;background:#F8FAFC;padding:7px 10px;border-radius:4px;border:1px solid #E4ECF3">'+ esc(cr.decisions)+'</div></div>';
         }
-        if(cr.prochaine) o += '<div style="margin-top:5px;font-size:10px;color:#4A6080">📅 Prochaine réunion : <strong>'+fD(cr.prochaine)+'</strong></div>';
+        if( esc(cr.prochaine)) o += '<div style="margin-top:5px;font-size:10px;color:#4A6080">📅 Prochaine réunion : <strong>'+fD( esc(cr.prochaine))+'</strong></div>';
         if(cr.photos && cr.photos.length) {
           o += '<div style="margin-top:8px"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#4A6080;margin-bottom:5px">📷 Photos ('+cr.photos.length+')</div>';
           o += '<div style="display:flex;flex-wrap:wrap;gap:8px">';
@@ -6116,7 +7108,7 @@ function exportSynthesePDF() {
             const src = ph.storageUrl || ph.dataUrl;
             if(!src || src.startsWith('data:application/pdf')) return;
             o += '<div style="text-align:center"><img src="'+src+'" style="width:130px;height:100px;object-fit:cover;border-radius:5px;border:1px solid #C8D8E8;display:block">';
-            if(ph.caption) o += '<div style="font-size:9px;color:#4A6080;margin-top:2px;max-width:130px;word-break:break-word">'+ph.caption+'</div>';
+            if( esc(ph.caption)) o += '<div style="font-size:9px;color:#4A6080;margin-top:2px;max-width:130px;word-break:break-word">'+ esc(ph.caption)+'</div>';
             o += '</div>';
           });
           o += '</div></div>';
@@ -6154,7 +7146,7 @@ function exportSynthesePDF() {
 </div>
 <div class="cover">
   <div class="cover-brand">🏛 Phénix-Architecture · Maître d'Œuvre</div>
-  <div class="cover-title">Synthèse ${chantiersList.length>1?'des '+chantiersList.length+' Chantiers':chantiersList[0].nom}</div>
+  <div class="cover-title">Synthèse ${chantiersList.length>1?'des '+chantiersList.length+' Chantiers':esc(chantiersList[0].nom)}</div>
   <div class="cover-date">Généré le ${today}</div>
   <div class="cover-stats">
     <div class="cstat"><label>Chantiers</label><span>${chantiersList.length}</span></div>
@@ -6214,12 +7206,14 @@ function importJSON() { document.getElementById('importInput').click(); }
 function handleImport(e) {
   const file = e.target.files[0];
   if (!file) return;
+  if (IS_EXT()) { toast('⛔ Restauration réservée à l\'agence.'); e.target.value = ''; return; }
   const r = new FileReader();
   r.onload = ev => {
     try {
       const data = JSON.parse(ev.target.result);
-      if (!confirm('Remplacer toutes les données actuelles ?')) return;
-      Object.assign(state, data);
+      if (!confirm('Remplacer toutes les données actuelles ?\n\n⚠️ Ceci remplace aussi les données vues par vos collaborateurs. Une sauvegarde de l\'état actuel est téléchargée automatiquement avant.')) return;
+      exportJSON();
+      ENTITY_KEYS.forEach(k => { state[k] = Array.isArray(data[k]) ? data[k] : []; });
       saveLocal(); refreshAll(); toast('✅ Données restaurées.');
     } catch { toast('⚠️ Fichier JSON invalide.'); }
   };
