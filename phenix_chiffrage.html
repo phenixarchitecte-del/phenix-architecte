@@ -2408,13 +2408,45 @@ async function chargerOffresArtisansEnAttente(){
     const { db, auth, collection, getDocs } = await _phenixFbRefs();
     if (!auth.currentUser) return;
     const snap = await getDocs(collection(db, 'phenix_chiffrage_import'));
-    offresArtisansEnAttente = [];
-    snap.forEach(d => offresArtisansEnAttente.push({ _id: d.id, ...d.data() }));
-    const btn = document.getElementById('btn-offres-artisans');
-    const badge = document.getElementById('offres-artisans-badge');
-    if (btn) btn.style.display = offresArtisansEnAttente.length ? '' : 'none';
-    if (badge) badge.textContent = offresArtisansEnAttente.length ? '(' + offresArtisansEnAttente.length + ')' : '';
+    _appliquerOffresArtisans(snap, false);
   } catch(e){ console.warn('chargerOffresArtisansEnAttente error', e); }
+  _ecouterOffresArtisans();
+}
+function _appliquerOffresArtisans(snap, notifier){
+  const avant = new Set(offresArtisansEnAttente.map(o=>o._id));
+  offresArtisansEnAttente = [];
+  snap.forEach(d => offresArtisansEnAttente.push({ _id: d.id, ...d.data() }));
+  const nouvelles = offresArtisansEnAttente.filter(o=>!avant.has(o._id));
+  const btn = document.getElementById('btn-offres-artisans');
+  const badge = document.getElementById('offres-artisans-badge');
+  if (btn) btn.style.display = offresArtisansEnAttente.length ? '' : 'none';
+  if (badge) badge.textContent = offresArtisansEnAttente.length ? '(' + offresArtisansEnAttente.length + ')' : '';
+  const m = document.getElementById('modal-offres-artisans');
+  if (m && m.classList.contains('open')) { try{ renderOffresArtisansList(); }catch(e){} }
+  if (notifier && nouvelles.length){
+    const o = nouvelles[0];
+    showToast('📥 Nouvelle offre reçue : ' + ((o.artisan&&o.artisan.nom)||'artisan') + (o.lot?' — '+o.lot:''));
+  }
+}
+// Écoute en direct : une offre envoyée depuis Appels d'offres apparaît sans recharger la page
+let _offresUnsub = null, _offresPoll = null;
+async function _ecouterOffresArtisans(){
+  if (_offresUnsub) return;
+  try {
+    const { db, auth, collection, onSnapshot } = await _phenixFbRefs();
+    if (!auth.currentUser || !onSnapshot) return;
+    let premier = true;
+    _offresUnsub = onSnapshot(collection(db, 'phenix_chiffrage_import'),
+      snap => { _appliquerOffresArtisans(snap, !premier); premier = false; },
+      e => { console.warn('écoute offres:', e); _offresUnsub = null; });
+  } catch(e){ console.warn('_ecouterOffresArtisans', e); }
+  // Filet de sécurité : relecture au retour sur l'onglet et toutes les 60 s
+  if (!_offresPoll){
+    const relire = () => { if (!document.hidden) chargerOffresArtisansEnAttente(); };
+    document.addEventListener('visibilitychange', relire);
+    window.addEventListener('focus', relire);
+    _offresPoll = setInterval(relire, 60000);
+  }
 }
 window.chargerOffresArtisansEnAttente = chargerOffresArtisansEnAttente;
 
@@ -3149,7 +3181,7 @@ async function _phenixFbRefs(){
     db: fs.getFirestore(app),
     auth: getAuth(app),
     doc: fs.doc, setDoc: fs.setDoc, collection: fs.collection,
-    getDocs: fs.getDocs, deleteDoc: fs.deleteDoc
+    getDocs: fs.getDocs, deleteDoc: fs.deleteDoc, onSnapshot: fs.onSnapshot
   };
 }
 
