@@ -593,7 +593,6 @@ if (window.parent !== window) {
           <button class="btn btn-outline" onclick="exportToAppelsOffres()" style="border-color:#1E5FAA;color:#1E5FAA"><i class="ti ti-send" aria-hidden="true"></i>Envoyer vers Appels d'offres</button>
           <button class="btn btn-outline" onclick="ouvrirModalRaccorderDossier()" id="btn-raccorder-dossier" style="border-color:#e6b95c;color:#e6b95c;display:none"><i class="ti ti-link" aria-hidden="true"></i>Raccorder à Phénix Dossier</button>
           <button class="btn btn-outline" onclick="ouvrirModalOffresArtisans()" id="btn-offres-artisans" style="border-color:#2E7D4F;color:#2E7D4F;display:none"><i class="ti ti-inbox-down" aria-hidden="true"></i>Offres artisans reçues <span id="offres-artisans-badge"></span></button>
-          <button class="btn btn-outline" onclick="nettoyerFraisInternes()" title="Retire des lots les lignes de frais de maîtrise d'œuvre et de sécurité" style="border-color:#c9622a;color:#c9622a"><i class="ti ti-eraser" aria-hidden="true"></i>Retirer frais MOE / sécurité</button>
           <button class="btn btn-outline" onclick="openChiffrageArchiveModal()" id="btn-chiffrage-archive" style="border-color:#c896e0;color:#c896e0;display:none"><i class="ti ti-archive" aria-hidden="true"></i>Chiffrages enregistrés</button>
       </div>
     </div>
@@ -2571,8 +2570,8 @@ window.ouvrirModalOffresArtisans = ouvrirModalOffresArtisans;
 
 // Lignes à ne jamais retranscrire : frais de maîtrise d'œuvre, frais de sécurité, honoraires
 const _RE_FRAIS_INTERNES = /frais\s+(?:de|d['’]|du)\s*(?:la\s+)?(?:ma[iî]trise|moe|s[ée]curit|s[ée]cu\b|sps|coordination)|ma[iî]trise\s+d['’]?\s*(?:œ|oe)uvre|\bmoe\b|frais.{0,40}s[ée]curit[ée]|coordination\s+(?:sps|s[ée]curit)|\bhonoraires?\b|\b(?:ppsps|pgc)\b/i;
-function _ligneFraisInterne(l){ return _RE_FRAIS_INTERNES.test(String((l&&l.designation)||'')); }
-function _posteFraisInterne(p){ return _RE_FRAIS_INTERNES.test(String((p&&p.n)||'')); }
+function _ligneFraisInterne(l){ return false; }
+function _posteFraisInterne(p){ return false; }
 // Nettoyage rétroactif : retire des lots existants les postes de frais MOE / sécurité.
 // Les lots de maîtrise d'œuvre de l'agence elle-même (lot interne) ne sont pas touchés.
 function nettoyerFraisInternes(){
@@ -4008,7 +4007,8 @@ window.exportToAppelsOffres = exportToAppelsOffres;
 // artisan. Détection par mot-clé dans le nom du lot, désactivable au cas
 // par cas dans la modale.
 const MOTS_CLES_LOT_INTERNE = ['phénix','phenix','maîtrise d\'œuvre','maitrise d\'oeuvre','honoraires','moe','frais de sécurité','frais de securite','coordination sps','frais de maîtrise'];
-function estLotInterneParDefaut(nom){
+function estLotInterneParDefaut(nom){ return false;
+
   const n=(nom||'').toLowerCase();
   return MOTS_CLES_LOT_INTERNE.some(mot => n.includes(mot));
 }
