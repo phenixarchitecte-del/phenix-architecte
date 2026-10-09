@@ -593,6 +593,7 @@ if (window.parent !== window) {
           <button class="btn btn-outline" onclick="exportToAppelsOffres()" style="border-color:#1E5FAA;color:#1E5FAA"><i class="ti ti-send" aria-hidden="true"></i>Envoyer vers Appels d'offres</button>
           <button class="btn btn-outline" onclick="ouvrirModalRaccorderDossier()" id="btn-raccorder-dossier" style="border-color:#e6b95c;color:#e6b95c;display:none"><i class="ti ti-link" aria-hidden="true"></i>Raccorder à Phénix Dossier</button>
           <button class="btn btn-outline" onclick="ouvrirModalOffresArtisans()" id="btn-offres-artisans" style="border-color:#2E7D4F;color:#2E7D4F;display:none"><i class="ti ti-inbox-down" aria-hidden="true"></i>Offres artisans reçues <span id="offres-artisans-badge"></span></button>
+          <button class="btn btn-outline" onclick="nettoyerFraisInternes()" title="Retire des lots les lignes de frais de maîtrise d'œuvre et de sécurité" style="border-color:#c9622a;color:#c9622a"><i class="ti ti-eraser" aria-hidden="true"></i>Retirer frais MOE / sécurité</button>
           <button class="btn btn-outline" onclick="openChiffrageArchiveModal()" id="btn-chiffrage-archive" style="border-color:#c896e0;color:#c896e0;display:none"><i class="ti ti-archive" aria-hidden="true"></i>Chiffrages enregistrés</button>
       </div>
     </div>
@@ -606,7 +607,25 @@ if (window.parent !== window) {
       <div class="stat-card"><div class="stat-label">Marge totale artisans</div><div class="stat-value" id="stat-marge" style="color:#4fd18b">0 €</div><div class="stat-sub" id="stat-marge-pct">0%</div></div>
     </div>
 
-    <!-- TVA générale du projet -->
+    <!-- Lots à prévoir -->
+    <div id="lots-attendus" style="padding:12px 28px;background:var(--surface2);border-bottom:1px solid var(--border);color:var(--text)">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:space-between">
+        <div id="lots-attendus-titre" style="font-size:13px;font-weight:700;color:var(--nav)"></div>
+        <button class="btn btn-sm btn-outline" onclick="lotsAttendusEditer(document.getElementById('lots-attendus-edit').style.display==='none')"><i class="ti ti-edit" aria-hidden="true"></i>Modifier la liste</button>
+      </div>
+      <div id="lots-attendus-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div>
+      <div id="lots-attendus-edit" style="display:none;margin-top:10px">
+        <div style="font-size:12px;color:var(--text3);margin-bottom:4px">Un lot par ligne. Séparez les appellations équivalentes par « / » : le lot disparaît de la liste dès qu'un lot portant l'un de ces noms est chiffré.</div>
+        <textarea id="lots-attendus-ta" rows="9" style="width:100%;box-sizing:border-box;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface);color:var(--text)"></textarea>
+        <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">
+          <button class="btn btn-sm btn-primary" onclick="lotsAttendusEnregistrer()">Enregistrer</button>
+          <button class="btn btn-sm btn-outline" onclick="lotsAttendusDefaut()">Remettre la liste par défaut</button>
+          <button class="btn btn-sm btn-outline" onclick="lotsAttendusEditer(false)">Fermer</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Table lots -->
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 28px;background:var(--surface2);border-bottom:1px solid var(--border);color:var(--text)">
       <label style="font-size:13px;font-weight:600;color:var(--nav);white-space:nowrap">TVA générale du projet</label>
       <select id="tva-generale-select" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px">
@@ -2456,6 +2475,33 @@ function ouvrirModalOffresArtisans(){
 }
 window.ouvrirModalOffresArtisans = ouvrirModalOffresArtisans;
 
+// Lignes à ne jamais retranscrire : frais de maîtrise d'œuvre, frais de sécurité, honoraires
+const _RE_FRAIS_INTERNES = /frais\s+(?:de|d['’]|du)\s*(?:la\s+)?(?:ma[iî]trise|moe|s[ée]curit|s[ée]cu\b|sps|coordination)|ma[iî]trise\s+d['’]?\s*(?:œ|oe)uvre|\bmoe\b|frais.{0,40}s[ée]curit[ée]|coordination\s+(?:sps|s[ée]curit)|\bhonoraires?\b|\b(?:ppsps|pgc)\b/i;
+function _ligneFraisInterne(l){ return _RE_FRAIS_INTERNES.test(String((l&&l.designation)||'')); }
+function _posteFraisInterne(p){ return _RE_FRAIS_INTERNES.test(String((p&&p.n)||'')); }
+// Nettoyage rétroactif : retire des lots existants les postes de frais MOE / sécurité.
+// Les lots de maîtrise d'œuvre de l'agence elle-même (lot interne) ne sont pas touchés.
+function nettoyerFraisInternes(){
+  const trouves = [];
+  state.chantiers.forEach((c,ci) => (c.lots||[]).forEach((lot,li) => {
+    if (estLotInterneParDefaut(lot.nom)) return;
+    (lot.postes||[]).forEach((p,pi) => { if (_posteFraisInterne(p)) trouves.push({ci,li,pi,c,lot,p}); });
+  }));
+  if (!trouves.length){ showToast('✓ Aucune ligne de frais MOE / sécurité dans vos lots'); return; }
+  const apercu = trouves.slice(0,12).map(t => '• ' + (t.c.nom||'?') + ' · ' + (t.lot.num||'') + ' ' + (t.lot.nom||'') + ' : ' + (t.p.n||'').slice(0,60)).join('\n');
+  if (!confirm(trouves.length + ' ligne(s) de frais MOE / sécurité vont être retirées de vos lots :\n\n' + apercu + (trouves.length>12 ? '\n… et ' + (trouves.length-12) + ' autre(s)' : '') + '\n\n(Annulable avec Ctrl+Z.)')) return;
+  const set = new Set(trouves.map(t => t.p));
+  state.chantiers.forEach(c => (c.lots||[]).forEach(lot => { lot.postes = (lot.postes||[]).filter(p => !set.has(p)); }));
+  saveState(); renderChantierGrid(); renderChantierSelects();
+  if (state.currentChantier!==null && state.chantiers[state.currentChantier]) renderChiffrage();
+  showToast('🧹 ' + trouves.length + ' ligne(s) de frais retirée(s)');
+}
+window.nettoyerFraisInternes = nettoyerFraisInternes;
+function _lignesUtilesOffre(o){ return (o.lignes||[]).filter(l => l.prixUnitaire != null && !_ligneFraisInterne(l)); }
+function _totalUtileOffre(o){
+  if (!(o.lignes||[]).length) return o.totalHT||0;
+  return _lignesUtilesOffre(o).reduce((t,l)=>t+(parseFloat(l.quantite)||0)*(parseFloat(l.prixUnitaire)||0),0);
+}
 function renderOffresArtisansList(){
   const list = document.getElementById('offres-artisans-list');
   if (!offresArtisansEnAttente.length){
@@ -2466,15 +2512,15 @@ function renderOffresArtisansList(){
   list.innerHTML = offresArtisansEnAttente.map((o,oi) => {
     // Pré-sélection du dossier si un projetId correspond déjà à un chantier existant
     const ciMatch = state.chantiers.findIndex(c => String(c.projetId||'') === String(o.projetId||'') && o.projetId);
-    const nbLignesChiffrees = (o.lignes||[]).filter(l => l.prixUnitaire != null).length;
+    const nbLignesChiffrees = _lignesUtilesOffre(o).length;
     return `
     <div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap">
         <div>
-          <strong style="color:var(--nav)">${esc_dpgf(o.artisan?.nom||'Artisan')}</strong>
-          <span style="color:var(--text3);font-size:12px"> — ${esc_dpgf(o.lot||'')} · pour "${esc_dpgf(o.chantierTitre||'')}"</span>
+          <strong style="color:var(--nav)">${esc_dpgf(o.lot||'')} — ${esc_dpgf(o.artisan?.nom||'Artisan')}</strong>
+          <span style="color:var(--text3);font-size:12px"> · pour "${esc_dpgf(o.chantierTitre||'')}"</span>
         </div>
-        <div style="font-weight:700;color:#2E7D4F">${fmt(o.totalHT||0)} € HT</div>
+        <div style="font-weight:700;color:#2E7D4F">${fmt(_totalUtileOffre(o))} € HT</div>
       </div>
       <div style="font-size:12px;color:var(--text2);margin:4px 0">${nbLignesChiffrees} ligne(s) chiffrée(s)${o.artisan?.tel?' · 📞 '+esc_dpgf(o.artisan.tel):''}${o.disponibilite?' · 📅 dispo. '+esc_dpgf(o.disponibilite):''}</div>
       ${o.commentaireGeneral ? `<div style="font-size:12px;color:var(--text2);font-style:italic;margin-bottom:6px">"${esc_dpgf(o.commentaireGeneral)}"</div>` : ''}
@@ -2504,8 +2550,8 @@ async function creerLotDepuisOffreArtisan(oi){
   if (isNaN(ci) || !state.chantiers[ci]){ showToast('⚠️ Choisissez un dossier de destination'); return; }
   const chantier = state.chantiers[ci];
 
-  const postes = (o.lignes||[])
-    .filter(l => l.prixUnitaire != null)
+  const _nbFrais = (o.lignes||[]).filter(l => l.prixUnitaire != null && _ligneFraisInterne(l)).length;
+  const postes = _lignesUtilesOffre(o)
     .map(l => ({
       n: l.designation || '', q: parseFloat(l.quantite)||0, u: l.unite || 'u',
       puArtisan: parseFloat(l.prixUnitaire)||0,
@@ -2520,9 +2566,18 @@ async function creerLotDepuisOffreArtisan(oi){
 
   const nbExistants = (chantier.lots||[]).length;
   chantier.lots = chantier.lots || [];
+  // Le libellé reçu est « LOT 03 — Couverture » : on reprend le numéro et le nom du lot,
+  // puis on ajoute l'entreprise intervenante.
+  let _lnum = '', _lnom = String(o.lot || '').trim();
+  const _mm = _lnom.match(/^\s*(?:LOT\s*(?:N°|NO|N)?\s*)?(\d+\s*[A-Za-z]?)\s*[—–:\-.)]\s*(.*)$/i);
+  if (_mm){ const _k=_mm[1].replace(/\s+/g,'').toUpperCase(); _lnum = 'LOT ' + (/^\d$/.test(_k) ? '0'+_k : _k); _lnom = _mm[2].trim(); }
+  else if (o.numLot || o.lotNum || o.numero){ const _n=String(o.numLot||o.lotNum||o.numero).replace(/\D/g,''); if(_n) _lnum='LOT '+_n.padStart(2,'0'); }
+  if (!_lnum) _lnum = 'LOT '+(nbExistants+1).toString().padStart(2,'0');
+  const _ent = (o.artisan?.nom || 'Artisan');
   chantier.lots.push({
-    num: 'LOT '+(nbExistants+1).toString().padStart(2,'0'),
-    nom: (o.artisan?.nom || 'Artisan') + ' — ' + (o.lot || ''),
+    num: _lnum,
+    nom: (_lnom ? _lnom + ' — ' : '') + _ent,
+    entreprise: _ent,
     postes, aleas:5, honoraires:5, tva:20, statut:'Chiffrage', prestation:'std', marge:0,
     notes: notes.length ? ('--- Offre reçue via Appels d\'offres (' + (o.artisan?.nom||'artisan') + ', ' + new Date().toLocaleDateString('fr-FR') + ') ---\n' + notes.join('\n')) : ''
   });
@@ -2540,7 +2595,7 @@ async function creerLotDepuisOffreArtisan(oi){
   if (badge) badge.textContent = offresArtisansEnAttente.length ? '(' + offresArtisansEnAttente.length + ')' : '';
   if (btn) btn.style.display = offresArtisansEnAttente.length ? '' : 'none';
   if (state.currentChantier === ci) renderChiffrage();
-  showToast('✓ Nouveau lot « ' + (o.artisan?.nom||'Artisan') + ' — ' + (o.lot||'') + ' » créé dans ' + (chantier.nom||''));
+  showToast('✓ Nouveau lot « ' + _lnum + ' — ' + (_lnom ? _lnom + ' — ' : '') + _ent + ' » créé dans ' + (chantier.nom||'') + (_nbFrais ? ' (' + _nbFrais + ' ligne(s) de frais MOE/sécurité non reprise(s))' : ''));
 }
 window.creerLotDepuisOffreArtisan = creerLotDepuisOffreArtisan;
 
@@ -3205,7 +3260,7 @@ window.exportToAppelsOffres = exportToAppelsOffres;
 // d'œuvre / honoraires internes, qui n'ont rien à faire sous les yeux d'un
 // artisan. Détection par mot-clé dans le nom du lot, désactivable au cas
 // par cas dans la modale.
-const MOTS_CLES_LOT_INTERNE = ['phénix','phenix','maîtrise d\'œuvre','maitrise d\'oeuvre','honoraires','moe'];
+const MOTS_CLES_LOT_INTERNE = ['phénix','phenix','maîtrise d\'œuvre','maitrise d\'oeuvre','honoraires','moe','frais de sécurité','frais de securite','coordination sps','frais de maîtrise'];
 function estLotInterneParDefaut(nom){
   const n=(nom||'').toLowerCase();
   return MOTS_CLES_LOT_INTERNE.some(mot => n.includes(mot));
@@ -3271,7 +3326,93 @@ async function confirmerExportAppelsOffres(){
 }
 window.confirmerExportAppelsOffres = confirmerExportAppelsOffres;
 
+
+const LOTS_ATTENDUS_DEFAUT = [
+  'Démolition / Dépose / Curage',
+  'Terrassement / VRD',
+  'Maçonnerie / Gros œuvre / Fondations',
+  'Charpente / Ossature bois / M.O.B',
+  'Couverture / Zinguerie / Toiture',
+  'Façade / Enduit / Ravalement / ITE',
+  'Isolation',
+  'Menuiseries extérieures',
+  'Électricité',
+  'Plomberie / Sanitaire',
+  'Chauffage / Ventilation / VMC / PAC / Climatisation',
+  'Cloisons / Doublages / Plâtrerie / Placo',
+  'Menuiseries intérieures',
+  'Revêtements de sols / Carrelage / Parquet',
+  'Peinture / Finitions'
+];
+function _laNorm(t){ return String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/œ/g,'oe').replace(/[.'’]/g,'').replace(/[^a-z0-9]+/g,' ').trim(); }
+// Une alternative (« Menuiseries extérieures ») est reconnue si TOUS ses mots se retrouvent dans le lot
+// (mots courts : mot entier ; mots longs : 5 premières lettres, pour absorber pluriels et accents).
+function _laAltMatch(alt, words){
+  const toks=_laNorm(alt).split(' ').filter(Boolean);
+  if(!toks.length) return false;
+  return toks.every(t => words.some(w => t.length<=4 ? w===t : w.startsWith(t.slice(0,5))));
+}
+function _laItemMatch(item, lot){
+  const words=_laNorm((lot.nom||'')+' '+(lot.entreprise||'')).split(' ').filter(Boolean);
+  return String(item).split('/').some(a => _laAltMatch(a, words));
+}
+function getLotsAttendus(c){ return Array.isArray(c.lotsAttendus) ? c.lotsAttendus : LOTS_ATTENDUS_DEFAUT.slice(); }
+// Un lot prévu disparaît de la liste dès qu'un lot correspondant existe ET contient au moins un poste chiffré.
+function _renderLotsAttendus(){
+  const box=document.getElementById('lots-attendus'); if(!box) return;
+  const idx=state.currentChantier, c=idx===null?null:state.chantiers[idx];
+  if(!c){ box.style.display='none'; return; }
+  box.style.display='';
+  const liste=getLotsAttendus(c), lots=c.lots||[];
+  const statut=liste.map(it=>{
+    const m=lots.filter(l=>_laItemMatch(it,l));
+    const chiffre=m.some(l=>(l.postes||[]).length>0);
+    return {it, etat: chiffre?'ok':(m.length?'vide':'manque')};
+  });
+  const manquants=statut.filter(x=>x.etat!=='ok');
+  const nbOk=statut.length-manquants.length;
+  const titre=document.getElementById('lots-attendus-titre');
+  if(titre) titre.innerHTML = manquants.length
+    ? '⚠️ Lots à prévoir <span style="font-weight:500;color:var(--text3)">· '+manquants.length+' manquant'+(manquants.length>1?'s':'')+' · '+nbOk+'/'+statut.length+' chiffrés</span>'
+    : '✅ Tous les lots prévus sont chiffrés <span style="font-weight:500;color:var(--text3)">· '+statut.length+'/'+statut.length+'</span>';
+  const chips=document.getElementById('lots-attendus-chips');
+  chips.innerHTML = manquants.length ? manquants.map(x=>{
+    const k=liste.indexOf(x.it), nom=x.it.split('/')[0].trim(), vide=x.etat==='vide';
+    return '<span style="display:inline-flex;align-items:center;gap:2px;border:1px solid '+(vide?'#e6b95c':'#c9622a')+';border-radius:16px;background:'+(vide?'rgba(230,185,92,.12)':'rgba(201,98,42,.08)')+';font-size:12.5px;color:var(--text)">'
+      +'<button type="button" onclick="lotAttenduCreer('+k+')" title="Créer ce lot" style="all:unset;cursor:pointer;padding:4px 4px 4px 11px">'+esc_dpgf(nom)+(vide?' <i style="font-size:10px;color:#b8860b">(lot vide)</i>':'')+'</button>'
+      +'<button type="button" onclick="lotAttenduRetirer('+k+')" title="Non concerné par ce chantier" aria-label="Retirer de la liste" style="all:unset;cursor:pointer;padding:4px 9px 4px 4px;color:var(--text3)">✕</button></span>';
+  }).join('') : '';
+  const ed=document.getElementById('lots-attendus-edit');
+  if(ed && ed.style.display==='none'){ const ta=document.getElementById('lots-attendus-ta'); if(ta) ta.value=liste.join('\n'); }
+}
+function lotAttenduCreer(k){
+  const c=state.chantiers[state.currentChantier]; if(!c) return;
+  const it=getLotsAttendus(c)[k]; if(it===undefined) return;
+  openNewLotModal();
+  document.getElementById('fl-nom').value=it.split('/')[0].trim();
+}
+function lotAttenduRetirer(k){
+  const c=state.chantiers[state.currentChantier]; if(!c) return;
+  const l=getLotsAttendus(c).slice(); l.splice(k,1);
+  c.lotsAttendus=l; saveState(); _renderLotsAttendus();
+}
+function lotsAttendusEditer(ouvrir){
+  const ed=document.getElementById('lots-attendus-edit'); if(!ed) return;
+  ed.style.display=ouvrir?'':'none';
+  if(ouvrir){ const c=state.chantiers[state.currentChantier]; document.getElementById('lots-attendus-ta').value=getLotsAttendus(c).join('\n'); }
+}
+function lotsAttendusEnregistrer(){
+  const c=state.chantiers[state.currentChantier]; if(!c) return;
+  c.lotsAttendus=document.getElementById('lots-attendus-ta').value.split('\n').map(x=>x.trim()).filter(Boolean);
+  saveState(); lotsAttendusEditer(false); _renderLotsAttendus();
+}
+function lotsAttendusDefaut(){
+  const c=state.chantiers[state.currentChantier]; if(!c) return;
+  delete c.lotsAttendus; saveState(); lotsAttendusEditer(false); _renderLotsAttendus();
+}
+Object.assign(window,{lotAttenduCreer,lotAttenduRetirer,lotsAttendusEditer,lotsAttendusEnregistrer,lotsAttendusDefaut});
 function updateStats(lots){
+  try{ _renderLotsAttendus(); }catch(e){ console.warn('lots attendus', e); }
   let totalArtisan=0,totalClient=0,totalTTC=0;
   const tauxVus=new Set();
   const lotsInclus = lots.filter(l=>!l.exclu);
@@ -3808,7 +3949,7 @@ RÈGLES STRICTES :
     // Filet de sécurité : retire toute puce/tiret de liste résiduel en tête de désignation
     // (ex: "-Prise de courant" → "Prise de courant"), même si l'IA ne l'a pas fait.
     const nettoyerDesignation = s => String(s||'').replace(/^[\s]*[-•*–—]+[\s]*/, '').trim();
-    const postesExtraits = parsed.postes.map(p=>({
+    const postesExtraits = parsed.postes.filter(p=>!_posteFraisInterne({n:p.n})).map(p=>({
       n:nettoyerDesignation(p.n),
       q:parseFloat(p.q)||1,
       u:p.u||'u',
@@ -3925,6 +4066,7 @@ function parseRawText(text){
     }
 
     if(!designation||designation.length<2)continue;
+    if(_posteFraisInterne({n:designation}))continue;
     rows.push({n:designation,q:qte,u:unite,puArtisan:pu});
   }
   return rows;
