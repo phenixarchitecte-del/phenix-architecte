@@ -607,6 +607,35 @@ if (window.parent !== window) {
       <div class="stat-card"><div class="stat-label">Marge totale artisans</div><div class="stat-value" id="stat-marge" style="color:#4fd18b">0 €</div><div class="stat-sub" id="stat-marge-pct">0%</div></div>
     </div>
 
+    <!-- CCTP du chantier -->
+    <div id="cctp-card" style="padding:12px 28px;background:var(--surface2);border-bottom:1px solid var(--border);color:var(--text)">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:space-between">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--nav)">📄 CCTP du chantier</div>
+          <div id="cctp-card-sub" style="font-size:12px;color:var(--text3);margin-top:2px"></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-sm btn-outline" onclick="cctpOuvrirGeneral()"><i class="ti ti-file-text" aria-hidden="true"></i>CCTP général</button>
+          <button class="btn btn-sm btn-outline" id="cctp-btn-tout" onclick="cctpGenererTout()">✨ Rédiger les CCTP manquants</button>
+          <button class="btn btn-sm btn-outline" onclick="cctpExportPDF('tous')"><i class="ti ti-file-export" aria-hidden="true"></i>CCTP complet (PDF)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Contrats d'engagement -->
+    <div id="contrat-card" style="padding:12px 28px;background:var(--surface2);border-bottom:1px solid var(--border);color:var(--text)">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:space-between">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--nav)">🤝 Contrats d'engagement</div>
+          <div id="contrat-card-sub" style="font-size:12px;color:var(--text3);margin-top:2px"></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-sm btn-outline" onclick="contratVersPlanning('tous')" style="border-color:#1E5FAA;color:#1E5FAA">📅 Tout envoyer vers Planning</button>
+          <button class="btn btn-sm btn-outline" onclick="contratExportPDF('tous')"><i class="ti ti-file-export" aria-hidden="true"></i>Tous les contrats (PDF)</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Lots à prévoir -->
     <div id="lots-attendus" style="padding:12px 28px;background:var(--surface2);border-bottom:1px solid var(--border);color:var(--text)">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:space-between">
@@ -730,18 +759,30 @@ if (window.parent !== window) {
                 </tfoot>
               </table>
             </div>
+            <div id="contrat-lot-card" style="margin-top:16px">
+              <div class="detail-section-title">Contrat d'engagement</div>
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                <button class="btn btn-sm btn-accent" onclick="contratOuvrir(state.currentLot)"><i class="ti ti-file-certificate" aria-hidden="true"></i>Préparer / modifier le contrat</button>
+                <button class="btn btn-sm btn-outline" onclick="contratExportPDF(state.currentLot)"><i class="ti ti-file-export" aria-hidden="true"></i>Exporter en PDF</button>
+                <button class="btn btn-sm btn-outline" onclick="contratVersPlanning(state.currentLot)" style="border-color:#1E5FAA;color:#1E5FAA">📅 Envoyer vers Planning</button>
+                <span id="contrat-lot-etat" style="font-size:12px;color:var(--text3)"></span>
+              </div>
+            </div>
+            <div id="cctp-lot-card" style="margin-top:16px">
+              <div class="detail-section-title">CCTP du lot</div>
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px">
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;align-items:center">
+                  <button class="btn btn-sm btn-accent" id="cctp-lot-gen" onclick="cctpGenererLot()">✨ Rédiger avec l'IA</button>
+                  <button class="btn btn-sm btn-outline" onclick="cctpExportPDF(state.currentLot)"><i class="ti ti-file-export" aria-hidden="true"></i>Exporter en PDF</button>
+                  <span id="cctp-lot-etat" style="font-size:12px;color:var(--text3)"></span>
+                </div>
+                <textarea id="cctp-lot-ta" rows="16" onchange="cctpLotSauver(this.value)" placeholder="Le CCTP de ce lot apparaîtra ici (« ## » titre, « - » puce, **gras**). Vous pouvez aussi l'écrire vous-même." style="width:100%;box-sizing:border-box;padding:10px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:13px;line-height:1.5;background:var(--surface2);color:var(--text)"></textarea>
+              </div>
+            </div>
           </div>
           <div>
             <div class="detail-section-title">Paramètres & Totaux</div>
             <div class="side-card">
-              <div class="side-param">
-                <label>Aléas / imprévus (%)</label>
-                <input type="number" id="param-aleas" value="5" min="0" max="30" step="1" oninput="computeLotTotal()">
-              </div>
-              <div class="side-param">
-                <label>Frais généraux / MOE (%)</label>
-                <input type="number" id="param-honoraires" value="5" min="0" max="30" step="0.5" oninput="computeLotTotal()">
-              </div>
               <div class="side-param">
                 <label>Statut du lot</label>
                 <select id="param-statut" onchange="saveLot()">
@@ -757,8 +798,6 @@ if (window.parent !== window) {
               <div class="total-block">
                 <div class="total-row"><span class="lbl">Travaux client HT</span><span id="tot-travaux">0 €</span></div>
                 <div class="total-row"><span class="lbl">Marge brute</span><span id="tot-marge-brute" style="color:#4db8e8">0 €</span></div>
-                <div class="total-row"><span class="lbl">Aléas</span><span id="tot-aleas">0 €</span></div>
-                <div class="total-row"><span class="lbl">Frais généraux</span><span id="tot-honoraires">0 €</span></div>
                 <div class="total-row"><span class="lbl">TVA</span><span id="tot-tva">0 €</span></div>
                 <div class="total-row main"><span class="lbl">TOTAL TTC</span><span id="tot-ttc">0 €</span></div>
               </div>
@@ -1794,7 +1833,7 @@ if (window.parent !== window) {
       </div>
       <div class="export-card">
         <div class="export-title">Récapitulatif PDF — Estimation APS/APD</div>
-        <div class="export-desc">Génère un récapitulatif professionnel en-tête Phénix-Architecture avec décomposition par lots, paramètres (aléas, honoraires) et total général TTC.</div>
+        <div class="export-desc">Génère un récapitulatif professionnel en-tête Phénix-Architecture avec décomposition par lots et total général TTC.</div>
         <button class="btn btn-accent" onclick="exportPDF(true)" style="min-height:48px;font-size:14px"><i class="ti ti-file-type-pdf" aria-hidden="true"></i>Générer le devis client PDF</button>
         <button class="btn btn-outline" onclick="exportPDF(false)" style="min-height:48px;font-size:14px;margin-top:8px"><i class="ti ti-list-details" aria-hidden="true"></i>Générer la synthèse par lot (sans détail des postes)</button>
       </div>
@@ -1867,6 +1906,61 @@ if (window.parent !== window) {
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal('modal-chantier')">Annuler</button>
       <button class="btn btn-primary" id="btn-save-chantier" onclick="saveNewChantier()">Créer le chantier</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CONTRAT D'ENGAGEMENT -->
+<div class="modal-overlay" id="modal-contrat">
+  <div class="modal" style="max-width:720px;width:94%;max-height:92vh;overflow-y:auto">
+    <div class="modal-title" id="ct-titre">Contrat d'engagement</div>
+    <div id="ct-banniere" style="display:none;background:rgba(46,125,79,.12);border:1px solid #2E7D4F;border-radius:8px;padding:8px 12px;font-size:12.5px;margin-bottom:10px">✅ Lot validé : préparez maintenant le contrat d'engagement avec l'entreprise (vous pouvez le faire plus tard depuis la fiche du lot).</div>
+    <div class="form-row">
+      <div class="form-group"><label>Entreprise *</label><input type="text" id="ct-entreprise" placeholder="Raison sociale"></div>
+      <div class="form-group"><label>SIRET</label><input type="text" id="ct-siret"></div>
+    </div>
+    <div class="form-group"><label>Contact (nom, téléphone, e-mail)</label><input type="text" id="ct-contact"></div>
+    <div style="font-size:12px;font-weight:700;color:var(--nav);margin:10px 0 4px">① Prix engagé</div>
+    <div class="form-row">
+      <div class="form-group"><label>Prix engagé (€ HT)</label><input type="number" id="ct-prix" min="0" step="0.01"></div>
+      <div class="form-group" style="align-self:flex-end"><button class="btn btn-sm btn-outline" type="button" onclick="contratReprendrePrix()">↺ Reprendre le total des postes</button></div>
+    </div>
+    <div id="ct-achat" style="font-size:12px;color:var(--text3);margin-bottom:6px"></div>
+    <div style="font-size:12px;font-weight:700;color:var(--nav);margin:10px 0 4px">② Moment et durée d'intervention</div>
+    <div class="form-row">
+      <div class="form-group"><label>Semaine de début (1–53)</label><input type="number" id="ct-semaine" min="1" max="53" step="1" oninput="contratMaj()"></div>
+      <div class="form-group"><label>Année</label><input type="number" id="ct-annee" min="2000" step="1" oninput="contratMaj()"></div>
+      <div class="form-group"><label>Durée (semaines)</label><input type="number" id="ct-duree" min="0.5" step="0.5" oninput="contratMaj()"></div>
+    </div>
+    <div id="ct-periode" style="font-size:12.5px;color:var(--text2);margin-bottom:6px;font-weight:600"></div>
+    <div class="form-group"><label>Conditions particulières (facultatif)</label><textarea id="ct-obs" rows="3" style="width:100%;box-sizing:border-box;padding:8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:13px;background:var(--surface);color:var(--text)"></textarea></div>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;margin:4px 0 8px">
+      <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="ct-annexe-postes" checked> Joindre la liste des postes</label>
+      <label style="display:flex;gap:6px;align-items:center" id="ct-annexe-cctp-ligne"><input type="checkbox" id="ct-annexe-cctp"> Joindre le CCTP du lot</label>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Statut</label><select id="ct-statut" onchange="contratMaj()"><option value="a_signer">À faire signer</option><option value="signe">Signé</option></select></div>
+      <div class="form-group" id="ct-date-sign-ligne"><label>Date de signature</label><input type="date" id="ct-date-sign"></div>
+    </div>
+    <div class="modal-actions" style="flex-wrap:wrap">
+      <button class="btn btn-outline" onclick="contratFermer()">Plus tard</button>
+      <button class="btn btn-outline" onclick="contratExporterDepuisModal()"><i class="ti ti-file-export" aria-hidden="true"></i>Enregistrer et exporter en PDF</button>
+      <button class="btn btn-outline" onclick="contratEnvoyerDepuisModal()" style="border-color:#1E5FAA;color:#1E5FAA">📅 Enregistrer et envoyer vers Planning</button>
+      <button class="btn btn-primary" onclick="contratEnregistrerFermer()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CCTP GÉNÉRAL -->
+<div class="modal-overlay" id="modal-cctp">
+  <div class="modal" style="max-width:880px;width:94%">
+    <div class="modal-title">CCTP général du chantier</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:6px">Texte rédigé avec l'aide de l'IA : relisez-le et ajustez-le avant diffusion. Mise en forme : « ## » titre de chapitre, « ### » sous-titre, « - » puce, **gras**.</div>
+    <textarea id="cctp-modal-ta" rows="22" onchange="cctpGeneralSauver()" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:13px;line-height:1.5;background:var(--surface);color:var(--text)"></textarea>
+    <div class="modal-actions" style="flex-wrap:wrap">
+      <button class="btn btn-outline" id="cctp-modal-regen" onclick="cctpGeneralReecrire()">✨ Réécrire avec l'IA</button>
+      <button class="btn btn-outline" onclick="cctpGeneralSauver();cctpExportPDF('general')"><i class="ti ti-file-export" aria-hidden="true"></i>Exporter en PDF</button>
+      <button class="btn btn-primary" onclick="cctpGeneralFermer()">Enregistrer et fermer</button>
     </div>
   </div>
 </div>
@@ -2578,7 +2672,7 @@ async function creerLotDepuisOffreArtisan(oi){
     num: _lnum,
     nom: (_lnom ? _lnom + ' — ' : '') + _ent,
     entreprise: _ent,
-    postes, aleas:5, honoraires:5, tva:20, statut:'Chiffrage', prestation:'std', marge:0,
+    postes, tva:20, statut:'Chiffrage', prestation:'std', marge:0,
     notes: notes.length ? ('--- Offre reçue via Appels d\'offres (' + (o.artisan?.nom||'artisan') + ', ' + new Date().toLocaleDateString('fr-FR') + ') ---\n' + notes.join('\n')) : ''
   });
 
@@ -2673,6 +2767,668 @@ function lotSortKey(lot){
   const m = s.match(/(\d+)/);
   return m ? parseInt(m[1], 10) : Infinity;
 }
+// ═════════════════════════════════════════════════════════════
+//  CCTP — rédaction assistée par l'IA, par chantier et par lot
+//  Données : chantier.cctp = {general, date}, chantier.cctpContexte, lot.cctp (texte)
+// ═════════════════════════════════════════════════════════════
+const CCTP_PROXY = 'https://phenix-proxy.phenixarchitecte.workers.dev';
+const CCTP_LOTS_PAR_APPEL = 3;
+const CCTP_SYSTEM = `Tu es maître d'œuvre en France et tu rédiges les pièces écrites de marchés de travaux PRIVÉS en t'inspirant de la rigueur des marchés publics : un CCTP (Cahier des Clauses Techniques Particulières) structuré comme ceux des marchés publics de bâtiment, précis, vérifiable et directement exploitable par les entreprises.
+
+RÈGLES :
+- Français professionnel, ton prescriptif (« L'entreprise devra… », « Les travaux comprennent… »). Chaque exigence doit être vérifiable (performance, tolérance, produit, essai, document à remettre).
+- AUCUN prix, AUCUN montant. Les quantités viennent des postes chiffrés fournis : ne les contredis jamais et ne les invente pas.
+- N'invente aucune donnée du site (dimensions, état des existants, nature du sol…). Si une information manque, écris « à confirmer sur site » ou « selon relevé contradictoire ».
+- RÉFÉRENCES : cite UNIQUEMENT les textes, DTU et normes figurant dans la section « RÉFÉRENCES AUTORISÉES » fournie avec la demande, en recopiant exactement leur numéro. N'en ajoute aucun autre : pour toute autre exigence, écris « selon les DTU et règles de l'art en vigueur ». Ne cite jamais de numéro d'article, de DTU ou de norme absent de cette liste. Précise que les DTU s'appliquent « dans leur version en vigueur à la date de signature du marché ».
+- Matériaux : écris « ou équivalent » sauf si une marque est imposée par le maître d'ouvrage, avec obligation de soumettre l'équivalent à l'approbation du maître d'œuvre avant commande.
+- Le maître d'œuvre est « Phénix-Architecture ». N'écris jamais « architecte » pour le désigner.
+- Prends en compte l'explication du chantier et les contraintes techniques fournies : elles doivent se retrouver dans les prescriptions.
+- Texte brut structuré : « ## » pour un chapitre numéroté, « ### » pour un sous-titre, « - » pour une puce, **gras** autorisé. Pas de tableau, pas d'autre syntaxe markdown.`;
+
+const CCTP_PLAN_GENERAL = `Rédige le CCTP GÉNÉRAL (tronc commun à tous les lots, environ 900 à 1300 mots), avec les chapitres :
+## 1. Objet du document et présentation de l'opération
+## 2. Pièces contractuelles et ordre de priorité
+(contrat d'engagement, plans, CCTP général, CCTP de lot, liste des postes ; en cas de contradiction, le document le plus précis ou le plus contraignant prévaut après accord de Phénix-Architecture)
+## 3. Textes et documents de référence
+(uniquement la liste « RÉFÉRENCES AUTORISÉES » fournie)
+## 4. Connaissance des lieux et sujétions
+(visite préalable, état des existants, hypothèses retenues, ce qui est à confirmer sur site, surprises de chantier : prix ferme sous réserve de surprises de chantier ; toute prestation supplémentaire fait l'objet d'un avenant écrit préalable)
+## 5. Prescriptions communes à tous les lots
+(qualité et certification des matériaux : marquage CE, NF, déclarations de performance, Avis Techniques ; soumission des échantillons et fiches techniques à l'approbation avant commande ; plans d'exécution et visas ; protection des existants et des ouvrages réalisés)
+## 6. Organisation et sécurité du chantier
+(coordination entre lots et planning, installation de chantier, hygiène et sécurité, coordination SPS si applicable, repérage amiante avant travaux pour les bâtiments concernés, gestion et tri des déchets, nuisances, propreté)
+## 7. Contrôles, réception et documents à remettre
+(autocontrôles de l'entreprise, opérations préalables à la réception, levée des réserves, dossier des ouvrages exécutés)
+## 8. Garanties et assurances
+(attestations d'assurance avant intervention, garanties légales après réception)
+## 9. Limites de prestations et interfaces entre lots`;
+
+const CCTP_PLAN_LOT = `Pour chaque lot, rédige un CCTP de 450 à 700 mots, dans la structure d'un CCTP de marché public, avec les chapitres :
+## 1. Généralités et consistance des travaux
+## 2. Textes et normes applicables
+(uniquement les références autorisées pour ce lot)
+## 3. Provenance, qualité et préparation des matériaux
+(caractéristiques exigées, certifications, « ou équivalent » soumis à approbation)
+## 4. Mise en œuvre
+(supports, préparation, étapes, conditions de mise en œuvre, points d'attention)
+## 5. Prescriptions particulières à ce chantier
+## 6. Tolérances, contrôles et essais
+## 7. Prestations comprises, non comprises et interfaces avec les autres lots
+## 8. Documents à remettre
+(fiches techniques, procès-verbaux, notices d'entretien, garanties)`;
+
+// ── Base de références AUTORISÉES (l'IA ne doit citer que celles-ci) ──
+// À faire valider et enrichir au fil de l'eau : ajoutez/retirez des lignes ici, elles alimentent toute la rédaction.
+const CCTP_REFS_GENERALES = [
+  'Code civil : articles 1103 et 1104 (force obligatoire du contrat, bonne foi)',
+  'Code civil : articles 1792 et suivants (responsabilité et garanties des constructeurs) ; article 1793 (marché à forfait, travaux supplémentaires)',
+  'Code des assurances : article L241-1 (assurance de responsabilité décennale obligatoire)',
+  'Code du travail : articles L4531-1 et suivants (opérations de bâtiment et de génie civil, coordination en matière de sécurité et de protection de la santé) ; articles R4412-97 et suivants (repérage de l\'amiante avant travaux)',
+  'Code de l\'environnement : articles L541-1 et suivants (gestion et valorisation des déchets)',
+  'NF P 03-001 : cahier type de clauses administratives générales applicables aux travaux de bâtiment faisant l\'objet de marchés privés (à citer uniquement si le contrat la rend applicable)',
+  'Réglementation énergétique : RE2020 (arrêté du 4 août 2021) en construction neuve ; arrêté du 3 mai 2007 pour les bâtiments existants — à confirmer selon l\'opération',
+  'NF DTU applicables à chaque lot, dans leur version en vigueur à la date de signature du marché'
+];
+const CCTP_REFS_METIERS = [
+  { mots:['demol','depose','curage','deconstr'], refs:['Repérage amiante avant travaux : Code du travail, articles R4412-97 et suivants','Code de l\'environnement : articles L541-1 et suivants (déchets de chantier)'] },
+  { mots:['macon','gros oeuvre','fondation','beton','dalle','soubassement'], refs:['NF DTU 13.1 : fondations superficielles','NF DTU 13.3 : dallages','NF DTU 20.1 : ouvrages en maçonnerie de petits éléments (parois et murs)','NF DTU 21 : exécution des ouvrages en béton','Eurocodes (série NF EN 1990 et suivantes) pour le calcul des structures'] },
+  { mots:['charpente','ossature','mob','bois'], refs:['NF DTU 31.1 : charpente en bois','NF DTU 31.2 : construction de maisons et bâtiments à ossature en bois','NF EN 1995 (Eurocode 5) : calcul des structures en bois'] },
+  { mots:['couverture','zinguerie','toiture','tuile','ardoise','gouttiere'], refs:['NF DTU 40.21 : couverture en tuiles de terre cuite à emboîtement ou à glissement à pureau plat','NF DTU 40.11 : couverture en ardoises naturelles (si concerné)','NF DTU 40.29 : écrans souples de sous-toiture','NF DTU 40.5 : évacuation des eaux pluviales','NF DTU 40.41 : couverture en zinc (si concerné)'] },
+  { mots:['etancheite','toiture terrasse'], refs:['NF DTU 43.1 : étanchéité des toitures-terrasses avec éléments porteurs en maçonnerie'] },
+  { mots:['facade','enduit','ravalement','ite','bardage'], refs:['NF DTU 26.1 : enduits de mortiers','NF DTU 41.2 : revêtements extérieurs en bois (bardage)','Isolation thermique par l\'extérieur : Avis Technique ou Document Technique d\'Application du système retenu'] },
+  { mots:['isolation','isolant','combles'], refs:['Certification ACERMI des isolants','Avis Technique ou Document Technique d\'Application pour les procédés non traditionnels'] },
+  { mots:['menuiseries ext','menuiserie ext','fenetre','baie','volet','porte d entree','porte fenetre'], refs:['NF DTU 36.5 : mise en œuvre des fenêtres et portes extérieures','NF DTU 39 : travaux de vitrerie-miroiterie','NF DTU 34.4 : fermetures pour baies libres et stores'] },
+  { mots:['menuiseries int','menuiserie int','porte','escalier','placard'], refs:['NF DTU 36.2 : menuiseries intérieures en bois','NF DTU 36.3 : escaliers en bois et garde-corps associés'] },
+  { mots:['electricite','elec'], refs:['NF C 15-100 : installations électriques à basse tension','NF C 14-100 : installations de branchement (basse tension)','Attestation de conformité visée par le Consuel, lorsqu\'elle est exigible'] },
+  { mots:['plomberie','sanitaire'], refs:['NF DTU 60.1 : plomberie sanitaire pour bâtiments','NF DTU 60.11 : règles de calcul des installations de plomberie sanitaire et d\'évacuation des eaux pluviales'] },
+  { mots:['chauffage','ventilation','vmc','pac','clim','radiateur'], refs:['NF DTU 65.11 : dispositifs de sécurité des installations de chauffage central','NF DTU 65.16 : installations de pompes à chaleur','NF DTU 68.3 : installations de ventilation mécanique','NF DTU 61.1 : installations de gaz (si concerné)'] },
+  { mots:['cloison','doublage','placo','platrerie','plafond'], refs:['NF DTU 25.41 : ouvrages en plaques de plâtre','NF DTU 25.1 : enduits intérieurs en plâtre','NF DTU 25.42 : doublages et habillages en complexes et sandwiches'] },
+  { mots:['sol','carrelage','parquet','faience','chape'], refs:['NF DTU 52.1 : revêtements de sol scellés','NF DTU 52.2 : pose collée de revêtements céramiques et assimilés','NF DTU 51.2 : parquets collés','NF DTU 51.3 : planchers en bois ou en panneaux dérivés du bois','NF DTU 26.2 : chapes et dalles à base de liants hydrauliques'] },
+  { mots:['peinture','finition','papier peint'], refs:['NF DTU 59.1 : travaux de peinture des bâtiments'] },
+  { mots:['assainissement','vrd','terrassement','reseaux'], refs:['NF DTU 64.1 : assainissement non collectif des maisons d\'habitation individuelles (si concerné)','Étude de sol et prescriptions du géotechnicien, lorsqu\'elles existent'] }
+];
+function cctpNormTxt(t){ return String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/œ/g,'oe').replace(/[^a-z0-9]+/g,' ').trim(); }
+function cctpRefsLot(lot){
+  const n = ' ' + cctpNormTxt((lot.nom||'') + ' ' + (lot.num||'')) + ' ';
+  const out = [];
+  CCTP_REFS_METIERS.forEach(m => { if (m.mots.some(w => n.indexOf(' ' + w) >= 0 || (w.length > 3 && n.indexOf(w) >= 0))) m.refs.forEach(r => { if (out.indexOf(r) < 0) out.push(r); }); });
+  return out;
+}
+function cctpRefsTexte(refs){ return refs.length ? refs.map(r => '- ' + r).join('\n') : '- (aucune référence spécifique autorisée : écrire « selon les DTU et règles de l\'art en vigueur »)'; }
+
+function cctpInfoTexte(info){
+  info = info || {};
+  return [
+    info.nom && 'Chantier : ' + info.nom,
+    info.type && 'Nature de l\'opération : ' + info.type,
+    info.surface && 'Surface : ' + info.surface + ' m²',
+    info.adresse && 'Adresse : ' + info.adresse,
+    info.client && 'Maître d\'ouvrage : ' + info.client,
+    info.phase && 'Phase : ' + info.phase,
+    info.notes && 'Notes : ' + info.notes
+  ].filter(Boolean).join('\n');
+}
+function cctpLotTexte(l, i, avecPostes){
+  let t = 'LOT ' + (i+1) + ' — ' + (l.num ? l.num + ' — ' : '') + (l.nom || '');
+  if (avecPostes) t += '\nPostes chiffrés (quantités de référence) :\n' + ((l.postes||[]).map(p => '- ' + (p.n||'') + ' (' + (p.q||0) + ' ' + (p.u||'') + ')').join('\n') || '- (aucun poste)');
+  return t;
+}
+async function cctpAppel(userText){
+  const res = await fetchProxyAvecReessai(CCTP_PROXY, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:12000, system:CCTP_SYSTEM, messages:[{role:'user', content:userText}] })
+  });
+  if (!res.ok){
+    const e = await res.json().catch(() => null);
+    throw new Error((e && e.error && e.error.message) || ('Proxy HTTP ' + res.status));
+  }
+  return await lireFluxAnthropic(res);
+}
+// Découpe « =====GENERAL===== … =====LOT 3===== … »
+function cctpParse(raw){
+  const out = { general:'', lots:{} };
+  const parts = String(raw||'').split(/^=====\s*(GENERAL|LOT\s*\d+)\s*=====\s*$/m);
+  for (let k = 1; k < parts.length; k += 2){
+    const lab = parts[k].toUpperCase().replace(/\s+/g,''), txt = (parts[k+1]||'').trim();
+    if (!txt) continue;
+    if (lab === 'GENERAL') out.general = txt;
+    else out.lots[parseInt(lab.replace('LOT',''),10) - 1] = txt;
+  }
+  return out;
+}
+// o = {info, contexte, lots:[{num,nom,postes}], general:bool, idxs:[...], onProgress(fait,total)}
+async function cctpGenerer(o){
+  const ctx = cctpInfoTexte(o.info) + (o.contexte ? '\n\nEXPLICATION DU CHANTIER ET CONTRAINTES TECHNIQUES :\n' + o.contexte : '');
+  const lots = o.lots || [];
+  const liste = lots.map((l,i) => cctpLotTexte(l, i, false)).join('\n');
+  const taches = [];
+  if (o.general) taches.push('=====GENERAL=====\n' + ctx + '\n\nLOTS DE L\'OPÉRATION :\n' + liste + '\n\nRÉFÉRENCES AUTORISÉES (générales) :\n' + cctpRefsTexte(CCTP_REFS_GENERALES.concat(Array.from(new Set([].concat.apply([], lots.map(cctpRefsLot)))))) + '\n\n' + CCTP_PLAN_GENERAL +
+    '\n\nCommence ta réponse par la ligne exacte =====GENERAL===== puis le texte.');
+  const idxs = (o.idxs || []).filter(i => lots[i]);
+  for (let k = 0; k < idxs.length; k += CCTP_LOTS_PAR_APPEL){
+    const lot = idxs.slice(k, k + CCTP_LOTS_PAR_APPEL);
+    taches.push(ctx + '\n\nLOTS DE L\'OPÉRATION (vue d\'ensemble) :\n' + liste + '\n\nLOTS À RÉDIGER :\n' +
+      lot.map(i => cctpLotTexte(lots[i], i, true) + '\nRÉFÉRENCES AUTORISÉES POUR CE LOT :\n' + cctpRefsTexte(CCTP_REFS_GENERALES.slice(0,5).concat(cctpRefsLot(lots[i])))).join('\n\n') + '\n\n' + CCTP_PLAN_LOT +
+      '\n\nPour chaque lot, commence par la ligne exacte =====LOT n===== (n = numéro d\'ordre indiqué ci-dessus, ex. =====LOT ' + (lot[0]+1) + '=====) puis le texte.');
+  }
+  const res = { general:'', lots:{} };
+  let fait = 0, echecs = 0, derniere = null;
+  await Promise.all(taches.map(async t => {
+    try {
+      const p = cctpParse(await cctpAppel(t.replace(/^=====GENERAL=====\n/, '')));
+      if (p.general) res.general = p.general;
+      Object.assign(res.lots, p.lots);
+    } catch(e){ echecs++; derniere = e; }
+    fait++; if (o.onProgress) o.onProgress(fait, taches.length);
+  }));
+  if (taches.length && echecs === taches.length) throw derniere;
+  return res;
+}
+
+// ── Mise en forme (texte → HTML) ─────────────────────────────
+function cctpVersHtml(t){
+  const inl = s => esc_dpgf(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+  const out = []; let ul = false;
+  String(t||'').split('\n').forEach(raw => {
+    const l = raw.trimEnd(), li = l.match(/^\s*[-•]\s+(.*)$/);
+    if (li){ if (!ul){ out.push('<ul>'); ul = true; } out.push('<li>' + inl(li[1]) + '</li>'); return; }
+    if (ul){ out.push('</ul>'); ul = false; }
+    if (/^###\s+/.test(l)) out.push('<h3>' + inl(l.replace(/^###\s+/, '')) + '</h3>');
+    else if (/^##?\s+/.test(l)) out.push('<h2>' + inl(l.replace(/^##?\s+/, '')) + '</h2>');
+    else if (l.trim()) out.push('<p>' + inl(l) + '</p>');
+  });
+  if (ul) out.push('</ul>');
+  return out.join('\n');
+}
+
+// ── Export PDF : portée = 'general' | n° d'index de lot | 'tous' ──
+function cctpExportPDF(portee){
+  const ci = state.currentChantier, c = ci === null ? null : state.chantiers[ci];
+  if (!c){ showToast('⚠️ Sélectionnez un chantier'); return; }
+  const lots = c.lots || [];
+  const blocs = [];
+  const general = (c.cctp && c.cctp.general) || '';
+  if (portee === 'general' || portee === 'tous'){
+    if (general) blocs.push({ titre:'CCTP général', texte:general });
+    else if (portee === 'general'){ showToast('⚠️ Le CCTP général n\'est pas encore rédigé'); return; }
+  }
+  if (portee === 'tous'){
+    lots.forEach(l => { if (l.cctp) blocs.push({ titre:'CCTP — ' + (l.num ? l.num + ' — ' : '') + (l.nom||''), texte:l.cctp }); });
+  } else if (typeof portee === 'number'){
+    const l = lots[portee];
+    if (!l || !l.cctp){ showToast('⚠️ Ce lot n\'a pas encore de CCTP'); return; }
+    blocs.push({ titre:'CCTP — ' + (l.num ? l.num + ' — ' : '') + (l.nom||''), texte:l.cctp });
+  }
+  if (!blocs.length){ showToast('⚠️ Aucun CCTP à exporter'); return; }
+  const titreDoc = portee === 'tous' ? 'Cahier des Clauses Techniques Particulières' : blocs[0].titre;
+  const d = new Date().toLocaleDateString('fr-FR');
+  const corps = blocs.map((b, i) => '<section class="bloc' + (i ? ' saut' : '') + '"><h1>' + esc_dpgf(b.titre) + '</h1>' + cctpVersHtml(b.texte) + '</section>').join('\n');
+  const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>${esc_dpgf(titreDoc)} — ${esc_dpgf(c.nom||'')}</title>
+<style>
+*{box-sizing:border-box}
+@page{size:A4;margin:0}
+body{font-family:'Helvetica Neue',Arial,sans-serif;color:#1E293B;font-size:11.5px;line-height:1.55;margin:0;background:#fff;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+table.pg{width:100%;border-collapse:collapse}
+table.pg td{padding:0}
+td.sp{height:12mm}
+table.pg td.wrap{padding:0 15mm}
+.header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1E3A5F;padding-bottom:12px;margin-bottom:16px}
+.brand{font-size:20px;font-weight:700;color:#1E3A5F}.brand span{color:#4A9CC7}
+.brand-sub{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#64748B;margin-top:3px}
+.doc{text-align:right}.doc b{display:block;font-size:15px;color:#1E3A5F}.doc small{color:#64748B;font-size:10px}
+.info{background:#F1F5F9;border-radius:6px;padding:10px 14px;margin-bottom:8px;font-size:11px;display:flex;gap:28px;flex-wrap:wrap}
+.info div span{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#64748B}
+h1{font-size:17px;color:#1E3A5F;margin:18px 0 10px;break-after:avoid;page-break-after:avoid}
+h2{font-size:13px;color:#1E3A5F;margin:16px 0 5px;padding-bottom:3px;border-bottom:1px solid #CBD5E1;break-after:avoid;page-break-after:avoid}
+h3{font-size:12px;color:#334155;margin:11px 0 3px;break-after:avoid;page-break-after:avoid}
+p{margin:4px 0;orphans:3;widows:3;text-align:justify}
+ul{margin:4px 0 6px;padding-left:18px}li{margin:2px 0;break-inside:avoid}
+section.saut{break-before:page;page-break-before:always}
+.footer{text-align:center;font-size:9px;color:#94A3B8;border-top:1px solid #E2E8F0;padding-top:8px;margin-top:22px;line-height:1.8;break-inside:avoid}
+.no-print{text-align:right;padding:10px 15mm 0}.no-print button{background:#1E3A5F;color:#fff;border:0;padding:8px 18px;border-radius:6px;font-size:12px;cursor:pointer}
+@media print{.no-print{display:none}}
+</style></head><body>
+<div class="no-print"><button onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF</button></div>
+<table class="pg"><thead><tr><td class="sp"></td></tr></thead><tfoot><tr><td class="sp"></td></tr></tfoot><tbody><tr><td class="wrap">
+<div class="header"><div><div class="brand">Phénix<span>-Architecture</span></div><div class="brand-sub">Maître d'œuvre · Contractant général</div></div>
+<div class="doc"><b>${esc_dpgf(titreDoc)}</b><small>Date : ${d}</small></div></div>
+<div class="info"><div><span>Chantier</span>${esc_dpgf(c.nom||'')}</div>${c.client?'<div><span>Maître d\'ouvrage</span>'+esc_dpgf(c.client)+'</div>':''}${c.adresse?'<div><span>Adresse</span>'+esc_dpgf(c.adresse)+'</div>':''}</div>
+${corps}
+<div class="footer">Phénix-Architecture · SIRET 987 989 316 00011 · 6 lieu-dit l'Étreille, 63780 Saint-Georges-de-Mons<br>contact@phenixarchitecte.fr · 04 73 73 00 59</div>
+</td></tr></tbody></table></body></html>`;
+  const url = URL.createObjectURL(new Blob([html], { type:'text/html;charset=utf-8' }));
+  const a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener';
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+  showToast('CCTP ouvert — Imprimer pour enregistrer en PDF');
+}
+
+// ── Chantier : carte de synthèse + CCTP général ──────────────
+function _cctpRenderChantier(){
+  const box = document.getElementById('cctp-card'); if (!box) return;
+  const idx = state.currentChantier, c = idx === null ? null : state.chantiers[idx];
+  if (!c){ box.style.display = 'none'; return; }
+  box.style.display = '';
+  const lots = c.lots || [], nb = lots.filter(l => l.cctp).length, gen = !!(c.cctp && c.cctp.general);
+  document.getElementById('cctp-card-sub').textContent =
+    (gen ? 'CCTP général rédigé' + (c.cctp.date ? ' le ' + c.cctp.date : '') : 'CCTP général non rédigé') + ' · ' + nb + '/' + lots.length + ' lot(s) avec CCTP';
+}
+function cctpOuvrirGeneral(){
+  const c = state.chantiers[state.currentChantier]; if (!c) return;
+  document.getElementById('cctp-modal-ta').value = (c.cctp && c.cctp.general) || '';
+  document.getElementById('modal-cctp').classList.add('open');
+}
+function cctpGeneralSauver(){
+  const c = state.chantiers[state.currentChantier]; if (!c) return;
+  const v = document.getElementById('cctp-modal-ta').value;
+  if (v === ((c.cctp && c.cctp.general) || '')) return;
+  c.cctp = Object.assign({}, c.cctp, { general:v, date:new Date().toLocaleDateString('fr-FR') });
+  saveState(); _cctpRenderChantier();
+}
+function cctpGeneralFermer(){ cctpGeneralSauver(); closeModal('modal-cctp'); }
+function _cctpInfoChantier(c){ return { nom:c.nom, type:c.type, surface:c.surface, adresse:c.adresse, client:c.client, phase:c.phase, notes:c.notes }; }
+let _cctpBusy = false;
+async function _cctpLancer(opts, boutons, libelle){
+  if (_cctpBusy){ showToast('⏳ Une rédaction est déjà en cours'); return null; }
+  const c = state.chantiers[state.currentChantier]; if (!c) return null;
+  _cctpBusy = true;
+  const sauve = boutons.map(b => b && b.textContent);
+  boutons.forEach(b => { if (b){ b.disabled = true; b.textContent = '⏳ Rédaction en cours…'; } });
+  try {
+    const r = await cctpGenerer(Object.assign({ info:_cctpInfoChantier(c), contexte:c.cctpContexte || '', lots:c.lots || [],
+      onProgress:(f,t) => boutons.forEach(b => { if (b) b.textContent = '⏳ Rédaction ' + f + '/' + t + '…'; }) }, opts));
+    return r;
+  } catch(e){
+    showToast('❌ CCTP : ' + String(e.message||e).slice(0,90)); return null;
+  } finally {
+    _cctpBusy = false;
+    boutons.forEach((b,i) => { if (b){ b.disabled = false; b.textContent = sauve[i]; } });
+  }
+}
+async function cctpGeneralReecrire(){
+  const c = state.chantiers[state.currentChantier]; if (!c) return;
+  if (document.getElementById('cctp-modal-ta').value.trim() && !confirm('Remplacer le CCTP général actuel par une nouvelle rédaction ? Vos modifications seront perdues (Ctrl+Z possible).')) return;
+  const r = await _cctpLancer({ general:true, idxs:[] }, [document.getElementById('cctp-modal-regen')]);
+  if (r && r.general){
+    document.getElementById('cctp-modal-ta').value = r.general;
+    c.cctp = Object.assign({}, c.cctp, { general:r.general, date:new Date().toLocaleDateString('fr-FR') });
+    saveState(); _cctpRenderChantier(); showToast('📝 CCTP général rédigé');
+  }
+}
+async function cctpGenererTout(){
+  const c = state.chantiers[state.currentChantier]; if (!c) return;
+  const lots = c.lots || [];
+  if (!lots.length){ showToast('⚠️ Créez d\'abord des lots'); return; }
+  const manqueGen = !(c.cctp && c.cctp.general);
+  const idxs = lots.map((l,i) => i).filter(i => !lots[i].cctp);
+  if (!manqueGen && !idxs.length){ showToast('✓ Tous les CCTP sont déjà rédigés — rédigez-les à nouveau depuis chaque fiche si besoin'); return; }
+  const r = await _cctpLancer({ general:manqueGen, idxs }, [document.getElementById('cctp-btn-tout')]);
+  if (!r) return;
+  let n = 0;
+  if (manqueGen && r.general){ c.cctp = Object.assign({}, c.cctp, { general:r.general, date:new Date().toLocaleDateString('fr-FR') }); n++; }
+  idxs.forEach(i => { if (r.lots[i] && lots[i]){ lots[i].cctp = r.lots[i]; n++; } });
+  saveState(); renderChiffrage();
+  showToast(n ? '📝 ' + n + ' CCTP rédigé(s) — relisez-les avant diffusion' : '⚠️ Aucun CCTP reçu, réessayez');
+}
+
+// ── Lot : fiche détail ───────────────────────────────────────
+function cctpLotRefresh(){
+  const li = state.currentLot, c = state.chantiers[state.currentChantier];
+  const ta = document.getElementById('cctp-lot-ta'); if (!ta || li === null || !c || !c.lots[li]) return;
+  ta.value = c.lots[li].cctp || '';
+  document.getElementById('cctp-lot-etat').textContent = c.lots[li].cctp ? '' : 'Pas encore de CCTP pour ce lot';
+}
+function cctpLotSauver(v){
+  const li = state.currentLot, c = state.chantiers[state.currentChantier];
+  if (li === null || !c || !c.lots[li]) return;
+  if (v === (c.lots[li].cctp || '')) return;
+  c.lots[li].cctp = v; saveState();
+  document.getElementById('cctp-lot-etat').textContent = v ? '' : 'Pas encore de CCTP pour ce lot';
+}
+async function cctpGenererLot(){
+  const li = state.currentLot, c = state.chantiers[state.currentChantier];
+  if (li === null || !c || !c.lots[li]) return;
+  const ta = document.getElementById('cctp-lot-ta');
+  if (ta.value.trim() && !confirm('Remplacer le CCTP de ce lot par une nouvelle rédaction ? Vos modifications seront perdues (Ctrl+Z possible).')) return;
+  const r = await _cctpLancer({ general:false, idxs:[li] }, [document.getElementById('cctp-lot-gen')]);
+  if (r && r.lots[li]){
+    c.lots[li].cctp = r.lots[li]; ta.value = r.lots[li]; saveState();
+    document.getElementById('cctp-lot-etat').textContent = ''; showToast('📝 CCTP du lot rédigé — relisez-le avant diffusion');
+  } else if (r) showToast('⚠️ Aucun CCTP reçu, réessayez');
+}
+
+// ── Création des lots depuis une analyse IA : rédaction lancée en parallèle ──
+var iaCCTP = null;
+function cctpContexteIA(data){
+  const morceaux = [];
+  ['reno-prompt','neuf-prompt','surf-prompt'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && el.value && el.value.trim()) morceaux.push('Description du maître d\'œuvre : ' + el.value.trim());
+  });
+  const cap = (x, n) => { try { const s = JSON.stringify(x); return s.length > n ? s.slice(0, n) + '…' : s; } catch(e){ return ''; } };
+  if (data.projet) morceaux.push('Projet : ' + cap(data.projet, 1500));
+  if (data.pieces && data.pieces.length) morceaux.push('Pièces : ' + data.pieces.map(p => p.nom + ' ' + p.surface + ' m²').join(', '));
+  if (data.menuiseries) morceaux.push('Menuiseries : ' + cap(data.menuiseries, 1500));
+  if (data.analyse_delta) morceaux.push('Analyse des travaux : ' + cap(data.analyse_delta, 2000));
+  try { if (typeof questReponses !== 'undefined' && questReponses && Object.keys(questReponses).length) morceaux.push('Prescriptions techniques choisies : ' + cap(questReponses, 1200)); } catch(e){}
+  return morceaux.join('\n').slice(0, 7000);
+}
+function _iaCCTPStatus(job){
+  if (job !== iaCCTP) return;
+  const zone = document.getElementById('ia-summary-zone'); if (!zone) return;
+  let el = document.getElementById('ia-cctp-status');
+  if (!el){ el = document.createElement('div'); el.id = 'ia-cctp-status'; el.style.cssText = 'margin-top:8px;font-size:12px;color:var(--text2)'; zone.appendChild(el); }
+  el.textContent = job.status === 'running' ? '📝 Rédaction du CCTP général et des CCTP par lot en cours (en parallèle)…'
+    : job.status === 'done' ? '📝 CCTP prêt : général + ' + Object.keys(job.lots).length + ' lot(s) — ils seront joints aux lots créés.'
+    : '⚠️ CCTP non rédigé (' + (job.erreur || 'erreur') + ') — vous pourrez le rédiger depuis le chantier.';
+}
+function iaCCTPStart(data){
+  const lots = data.lots || [];
+  const job = { status:'running', general:'', lots:{}, contexte:cctpContexteIA(data), erreur:'' };
+  iaCCTP = job;
+  const p = data.projet || {};
+  job.promise = cctpGenerer({
+    info:{ nom:(document.getElementById('ia-chantier-nom')||{}).value || p.description || '', type:p.type === 'neuf' ? 'Construction neuve' : (p.type === 'renovation' ? 'Rénovation' : ''),
+           surface:p.surface_plancher || p.surface_concernee || '', notes:p.description || '' },
+    contexte:job.contexte, lots:lots.map(l => ({ num:l.num, nom:l.nom, postes:(l.postes||[]).map(x => ({ n:x.n, q:x.q, u:x.u })) })),
+    general:true, idxs:lots.map((l,i) => i)
+  }).then(r => { job.general = r.general; job.lots = r.lots; job.status = 'done'; })
+    .catch(e => { job.status = 'error'; job.erreur = String(e.message||e).slice(0,80); })
+    .then(() => _iaCCTPStatus(job));
+  _iaCCTPStatus(job);
+}
+// À la création des lots : joint le CCTP (tout de suite s'il est prêt, sinon dès qu'il arrive)
+function iaCCTPAttacher(chantier, map){
+  const job = iaCCTP; if (!job) return;
+  const appliquer = () => {
+    if (job.general){ chantier.cctp = { general:job.general, date:new Date().toLocaleDateString('fr-FR') }; }
+    chantier.cctpContexte = job.contexte || chantier.cctpContexte || '';
+    map.forEach(m => { if (job.lots[m[0]]) m[1].cctp = job.lots[m[0]]; });
+  };
+  if (job.status === 'done'){ appliquer(); return; }
+  if (job.status === 'running' && job.promise){
+    chantier.cctpContexte = job.contexte || '';
+    job.promise.then(() => {
+      if (job.status !== 'done') return;
+      if (!state.chantiers.includes(chantier)){ showToast('📝 CCTP prêt — rédigez-le depuis le chantier (🔄 la fiche a été rechargée)'); return; }
+      appliquer(); saveState();
+      try { _cctpRenderChantier(); if (document.getElementById('lots-tbody')) renderLotsTableOrCards(); } catch(e){}
+      showToast('📝 CCTP rédigé et joint au chantier — relisez-le avant diffusion');
+    });
+  }
+}
+Object.assign(window, { cctpExportPDF, cctpOuvrirGeneral, cctpGeneralSauver, cctpGeneralFermer, cctpGeneralReecrire, cctpGenererTout, cctpLotSauver, cctpGenererLot, iaCCTPStart, iaCCTPAttacher });
+
+// ═════════════════════════════════════════════════════════════
+//  CONTRAT D'ENGAGEMENT par lot (artisan) : prix engagé + période d'intervention
+//  Donnée : lot.contrat = {entreprise, contact, siret, prix, semaine, annee, duree, obs, annexePostes, annexeCctp, statut, dateSignature}
+// ═════════════════════════════════════════════════════════════
+function _ctMondayISO(annee, sem){
+  const j4 = new Date(Date.UTC(annee, 0, 4)), dow = (j4.getUTCDay() + 6) % 7;
+  const m = new Date(j4); m.setUTCDate(j4.getUTCDate() - dow + (sem - 1) * 7); return m;
+}
+function _ctFr(d){ return d.toLocaleDateString('fr-FR', { timeZone:'UTC', day:'2-digit', month:'2-digit', year:'numeric' }); }
+function ctPeriode(ct){
+  const sem = parseInt(ct.semaine, 10), an = parseInt(ct.annee, 10), dur = parseFloat(ct.duree);
+  if (!(sem >= 1 && sem <= 53) || !(an >= 2000)) return null;
+  const debut = _ctMondayISO(an, sem);
+  const fin = new Date(debut); fin.setUTCDate(debut.getUTCDate() + Math.max(0, Math.ceil((dur || 1) - 1)) * 7 + 4);
+  return { debut:_ctFr(debut), fin:_ctFr(fin), isoDebut:debut.toISOString().slice(0,10), isoFin:fin.toISOString().slice(0,10), sem, an, dur:dur || 1 };
+}
+function ctTotalAchat(lot){
+  return (lot.postes||[]).reduce((s,p) => s + (parseFloat(p.q)||0) * (parseFloat(p.puArtisan)||parseFloat(p.pu)||0), 0);
+}
+let _ctLi = null;
+function contratOuvrir(li, apresValidation){
+  const c = state.chantiers[state.currentChantier]; if (!c || !c.lots[li]) return;
+  const lot = c.lots[li]; _ctLi = li;
+  const ct = lot.contrat || {};
+  const an = new Date().getFullYear();
+  const v = (id, x) => { document.getElementById(id).value = x === undefined || x === null ? '' : x; };
+  v('ct-entreprise', ct.entreprise || lot.entreprise || '');
+  v('ct-contact', ct.contact || ''); v('ct-siret', ct.siret || '');
+  v('ct-prix', ct.prix !== undefined ? ct.prix : Math.round(ctTotalAchat(lot) * 100) / 100);
+  v('ct-semaine', ct.semaine || ''); v('ct-annee', ct.annee || an); v('ct-duree', ct.duree || 1);
+  v('ct-obs', ct.obs || ''); v('ct-statut', ct.statut || 'a_signer'); v('ct-date-sign', ct.dateSignature || '');
+  document.getElementById('ct-annexe-postes').checked = ct.annexePostes !== false;
+  document.getElementById('ct-annexe-cctp').checked = !!ct.annexeCctp;
+  document.getElementById('ct-annexe-cctp-ligne').style.display = lot.cctp ? '' : 'none';
+  document.getElementById('ct-titre').textContent = 'Contrat d\'engagement — ' + (lot.num ? lot.num + ' — ' : '') + (lot.nom || '');
+  document.getElementById('ct-banniere').style.display = apresValidation ? '' : 'none';
+  contratMaj();
+  document.getElementById('modal-contrat').classList.add('open');
+}
+function contratMaj(){
+  const c = state.chantiers[state.currentChantier], lot = c && c.lots[_ctLi]; if (!lot) return;
+  const achat = ctTotalAchat(lot);
+  document.getElementById('ct-achat').textContent = 'Total des postes du lot (prix achat artisan) : ' + fmt(achat) + ' € HT';
+  const p = ctPeriode({ semaine:document.getElementById('ct-semaine').value, annee:document.getElementById('ct-annee').value, duree:document.getElementById('ct-duree').value });
+  document.getElementById('ct-periode').textContent = p ? ('Du lundi ' + p.debut + ' au vendredi ' + p.fin + ' (semaine ' + p.sem + (p.dur > 1 ? ' → durée ' + p.dur + ' semaines' : '') + ')') : 'Indiquez la semaine de début (1 à 53) et l\'année';
+  document.getElementById('ct-date-sign-ligne').style.display = document.getElementById('ct-statut').value === 'signe' ? '' : 'none';
+}
+function contratLire(){
+  const g = id => document.getElementById(id).value;
+  return {
+    entreprise:g('ct-entreprise').trim(), contact:g('ct-contact').trim(), siret:g('ct-siret').trim(),
+    prix:parseFloat(g('ct-prix')) || 0, semaine:parseInt(g('ct-semaine'), 10) || '', annee:parseInt(g('ct-annee'), 10) || '',
+    duree:parseFloat(g('ct-duree')) || 1, obs:g('ct-obs').trim(),
+    annexePostes:document.getElementById('ct-annexe-postes').checked, annexeCctp:document.getElementById('ct-annexe-cctp').checked,
+    statut:g('ct-statut'), dateSignature:g('ct-date-sign')
+  };
+}
+function contratReprendrePrix(){
+  const c = state.chantiers[state.currentChantier], lot = c && c.lots[_ctLi]; if (!lot) return;
+  document.getElementById('ct-prix').value = Math.round(ctTotalAchat(lot) * 100) / 100;
+}
+function contratEnregistrer(silencieux){
+  const c = state.chantiers[state.currentChantier], lot = c && c.lots[_ctLi]; if (!lot) return false;
+  const ct = contratLire();
+  lot.contrat = ct;
+  if (ct.entreprise && !lot.entreprise) lot.entreprise = ct.entreprise;
+  saveState(); renderLotsTableOrCards(); _contratRenderChantier();
+  if (state.currentLot !== null){ const tw = document.getElementById('lots-table-wrap'); if (tw) tw.style.display = 'none'; contratLotRefresh(); }
+  if (!silencieux) showToast('✓ Contrat d\'engagement enregistré');
+  return true;
+}
+function contratFermer(){ closeModal('modal-contrat'); }
+function contratEnregistrerFermer(){ if (contratEnregistrer()) contratFermer(); }
+function contratExporterDepuisModal(){
+  const ct = contratLire();
+  if (!ct.entreprise){ showToast('⚠️ Indiquez l\'entreprise'); return; }
+  if (!ctPeriode(ct)){ showToast('⚠️ Indiquez la semaine de début et l\'année'); return; }
+  contratEnregistrer(true); contratExportPDF(_ctLi);
+}
+function contratLotRefresh(){
+  const li = state.currentLot, c = state.chantiers[state.currentChantier];
+  const el = document.getElementById('contrat-lot-etat'); if (!el || li === null || !c || !c.lots[li]) return;
+  const ct = c.lots[li].contrat;
+  if (!ct){ el.textContent = c.lots[li].statut === 'Valide' ? 'Lot validé : contrat non encore préparé' : 'Pas encore de contrat'; return; }
+  const p = ctPeriode(ct);
+  el.textContent = (ct.statut === 'signe' ? '✅ Signé' + (ct.dateSignature ? ' le ' + ct.dateSignature.split('-').reverse().join('/') : '') : '📝 À faire signer') + ' · ' + fmt(ct.prix || 0) + ' € HT' + (p ? ' · S' + p.sem + '/' + p.an + ', ' + p.dur + ' sem.' : '') + (ct.planningEnvoye ? ' · 📅 dans Planning (' + ct.planningEnvoye + ')' : '');
+}
+function _contratRenderChantier(){
+  const sub = document.getElementById('contrat-card-sub'); if (!sub) return;
+  const idx = state.currentChantier, c = idx === null ? null : state.chantiers[idx];
+  const box = document.getElementById('contrat-card'); if (box) box.style.display = c ? '' : 'none';
+  if (!c) return;
+  const lots = c.lots || [], valides = lots.filter(l => l.statut === 'Valide'), avec = lots.filter(l => l.contrat);
+  const signes = avec.filter(l => l.contrat.statut === 'signe').length, sans = valides.filter(l => !l.contrat).length;
+  const montant = avec.reduce((s,l) => s + (l.contrat.prix || 0), 0);
+  sub.textContent = valides.length + ' lot(s) validé(s) · ' + avec.length + ' contrat(s) préparé(s), ' + signes + ' signé(s)' + (avec.length ? ' · ' + fmt(montant) + ' € HT engagés' : '') + (sans ? ' · ' + sans + ' à préparer' : '') + (avec.filter(l => l.contrat.planningEnvoye).length ? ' · ' + avec.filter(l => l.contrat.planningEnvoye).length + ' dans Planning' : '');
+}
+
+// ── Export PDF : portée = index de lot | 'tous' ──
+function _ctSection(c, lot){
+  const ct = lot.contrat, p = ctPeriode(ct) || { debut:'—', fin:'—', sem:'—', an:'', dur:ct.duree || 1 };
+  const titreLot = (lot.num ? lot.num + ' — ' : '') + (lot.nom || '');
+  const postes = (lot.postes || []).map(x => {
+    const q = parseFloat(x.q) || 0, pu = parseFloat(x.puArtisan) || parseFloat(x.pu) || 0;
+    return '<tr><td>' + esc_dpgf(x.n) + '</td><td class="r">' + q + ' ' + esc_dpgf(x.u || '') + '</td><td class="r">' + fmt(pu) + ' €</td><td class="r">' + fmt(q * pu) + ' €</td></tr>';
+  }).join('');
+  const dureeTxt = p.dur + ' semaine' + (p.dur > 1 ? 's' : '');
+  return `<section class="bloc"><div class="titre">Contrat d'engagement</div><div class="sous">${esc_dpgf(titreLot)}</div>
+<div class="cles">
+  <div><span>Prix engagé</span><b>${fmt(ct.prix || 0)} € HT</b></div>
+  <div><span>Début d'intervention</span><b>Semaine ${p.sem}${p.an ? ' / ' + p.an : ''}</b><small>Lundi ${p.debut}</small></div>
+  <div><span>Durée d'intervention</span><b>${dureeTxt}</b><small>Fin prévue : ${p.fin}</small></div>
+</div>
+<div class="parties">
+  <div><span>Le maître d'œuvre, contractant général</span><b>Phénix-Architecture</b>6 lieu-dit l'Étreille, 63780 Saint-Georges-de-Mons<br>SIRET 987 989 316 00011<br>Représenté par Maxime Suchet</div>
+  <div><span>L'entreprise</span><b>${esc_dpgf(ct.entreprise || '')}</b>${ct.siret ? 'SIRET ' + esc_dpgf(ct.siret) + '<br>' : ''}${esc_dpgf(ct.contact || '')}</div>
+</div>
+<div class="chantier"><span>Chantier</span><b>${esc_dpgf(c.nom || '')}</b>${c.adresse ? esc_dpgf(c.adresse) : ''}${c.client ? ' · Maître d\'ouvrage : ' + esc_dpgf(c.client) : ''}</div>
+<h2>Article 1 — Esprit du contrat et résolution amiable des différends</h2>
+<p>Le présent contrat a pour but de sécuriser toutes les parties en fixant à l'avance deux points essentiels : le <b>prix engagé</b> et le <b>moment et la durée d'intervention</b>. Les parties l'exécutent de bonne foi (article 1104 du Code civil) et privilégient, en toutes circonstances, l'échange et le dialogue.</p>
+<p>En cas de difficulté (désaccord sur le prix, les quantités ou la nature des travaux, retard, imprévu de chantier, réserve sur la qualité d'exécution…), la partie concernée en informe l'autre <b>par écrit</b> (un courriel suffit), dès qu'elle en a connaissance, en exposant précisément l'objet de sa demande.</p>
+<p>La <b>résolution amiable est un préalable obligatoire à toute action contentieuse</b> : les parties se rencontrent ou échangent (sur site, par téléphone ou en visioconférence) dans un délai de huit jours à compter de cette information et recherchent ensemble une solution, qu'elles formalisent par écrit. À défaut d'accord, elles peuvent recourir à une médiation ou à une conciliation conventionnelle (articles 1530 et suivants du Code de procédure civile), menée par un tiers choisi d'un commun accord.</p>
+<p>Ce n'est qu'en cas d'échec de ces démarches que la partie la plus diligente peut saisir la juridiction compétente. Cette règle ne fait pas obstacle aux mesures urgentes ou conservatoires.</p>
+<h2>Article 2 — Objet</h2>
+<p>L'entreprise s'engage à exécuter le lot « ${esc_dpgf(titreLot)} » du chantier désigné ci-dessus, conformément aux règles de l'art, aux documents techniques remis${ct.annexePostes ? ' et à la liste des postes jointe en annexe 1' : ''}${ct.annexeCctp && lot.cctp ? ' ainsi qu\'au CCTP du lot joint en annexe 2' : ''}.</p>
+<h2>Article 3 — Prix engagé</h2>
+<p>Le montant des travaux de ce lot est fixé à <b>${fmt(ct.prix || 0)} € HT</b> (la TVA étant appliquée au taux en vigueur selon la nature des travaux). Ce prix est <b>ferme</b> pour les prestations décrites dans les documents contractuels, <b>sous réserve des surprises de chantier visées à l'article 4</b>. L'entreprise reconnaît avoir pu prendre connaissance des lieux et du dossier, et avoir intégré dans son prix les sujétions normalement prévisibles.</p>
+<h2>Article 4 — Surprises de chantier et travaux supplémentaires</h2>
+<p>Sont considérées comme surprises de chantier les difficultés non visibles ou non décelables avant le démarrage des travaux (par exemple : état réel des supports ou de la structure existante, éléments cachés, réseaux non repérés, nature du sol, désordres dissimulés).</p>
+<p>Dès qu'elle en constate une, l'entreprise : (1) suspend la partie de travaux concernée, (2) en informe sans délai Phénix-Architecture par écrit, photographies à l'appui, (3) remet un chiffrage de la prestation supplémentaire et précise son incidence éventuelle sur la durée d'intervention.</p>
+<p>Aucune prestation supplémentaire ne peut être exécutée ni facturée sans <b>avenant écrit</b>, signé des parties avant son exécution, précisant la nature des travaux, leur prix et leur incidence sur le délai (article 1793 du Code civil). Seules les mesures strictement nécessaires à la sécurité des personnes et à la conservation des ouvrages peuvent être prises sans attendre l'avenant, après information immédiate de Phénix-Architecture. Les avenants sont discutés dans l'esprit de l'article 1.</p>
+<h2>Article 5 — Période d'intervention</h2>
+<p>L'entreprise s'engage à intervenir à compter de la <b>semaine ${p.sem}${p.an ? ' de l\'année ' + p.an : ''}</b> (lundi ${p.debut}), pour une durée de <b>${dureeTxt}</b>, soit une fin d'intervention prévue le vendredi ${p.fin}. Ces dates sont calées dans le planning général du chantier : tout risque de retard ou de décalage doit être signalé sans délai à Phénix-Architecture, dans le cadre de l'article 1.</p>
+<h2>Article 6 — Obligations de l'entreprise</h2>
+<ul><li>Fournir, avant son intervention, ses attestations d'assurance en cours de validité (responsabilité civile et décennale pour les travaux concernés).</li>
+<li>Respecter les règles d'hygiène et de sécurité du chantier, protéger les existants et laisser son emplacement propre en fin d'intervention.</li>
+<li>Assurer la coordination avec les autres corps d'état selon les instructions de Phénix-Architecture.</li></ul>
+${ct.obs ? '<h2>Conditions particulières</h2><p>' + esc_dpgf(ct.obs).replace(/\n/g, '<br>') + '</p>' : ''}
+<div class="sigs">
+  <div><b>Pour l'entreprise</b>${esc_dpgf(ct.entreprise || '')}<small>Date et signature précédées de la mention « Lu et approuvé, bon pour engagement »</small></div>
+  <div><b>Pour Phénix-Architecture</b>Maxime Suchet<small>Date et signature</small></div>
+</div>
+${ct.annexePostes ? '<div class="annexe"><h2>Annexe 1 — Liste des postes</h2><table class="postes"><thead><tr><th>Désignation</th><th class="r">Quantité</th><th class="r">PU HT</th><th class="r">Total HT</th></tr></thead><tbody>' + postes + '</tbody></table></div>' : ''}
+${ct.annexeCctp && lot.cctp ? '<div class="annexe saut"><h2>Annexe 2 — CCTP du lot</h2>' + cctpVersHtml(lot.cctp) + '</div>' : ''}
+</section>`;
+}
+function contratExportPDF(portee){
+  const ci = state.currentChantier, c = ci === null ? null : state.chantiers[ci];
+  if (!c){ showToast('⚠️ Sélectionnez un chantier'); return; }
+  const lots = (c.lots || []).filter((l,i) => portee === 'tous' ? !!l.contrat : i === portee && l.contrat);
+  if (!lots.length){ showToast('⚠️ Aucun contrat préparé'); return; }
+  const incomplets = lots.filter(l => !l.contrat.entreprise || !ctPeriode(l.contrat));
+  if (incomplets.length && !confirm(incomplets.length + ' contrat(s) sans entreprise ou sans semaine de début : les exporter quand même ?')) return;
+  const corps = lots.map(l => _ctSection(c, l)).join('\n');
+  const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Contrat d'engagement — ${esc_dpgf(c.nom || '')}${lots.length === 1 ? ' — ' + esc_dpgf(lots[0].nom || '') : ''}</title>
+<style>
+*{box-sizing:border-box}
+@page{size:A4;margin:0}
+body{font-family:'Helvetica Neue',Arial,sans-serif;color:#1E293B;font-size:11.5px;line-height:1.5;margin:0;background:#fff;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+table.pg{width:100%;border-collapse:collapse}table.pg>thead>tr>td,table.pg>tfoot>tr>td,table.pg>tbody>tr>td{padding:0}
+td.sp{height:12mm}table.pg>tbody>tr>td.wrap{padding:0 15mm}
+.entete{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1E3A5F;padding-bottom:10px;margin-bottom:14px}
+.brand{font-size:20px;font-weight:700;color:#1E3A5F}.brand span{color:#4A9CC7}.brand-sub{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#64748B;margin-top:3px}
+.titre{font-size:20px;font-weight:700;color:#1E3A5F}.sous{font-size:14px;color:#334155;margin:2px 0 12px}
+.cles{display:flex;gap:10px;margin-bottom:12px}
+.cles div{flex:1;background:#F1F5F9;border:1px solid #CBD5E1;border-radius:8px;padding:10px 12px}
+.cles span,.parties span,.chantier span{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#64748B;margin-bottom:2px}
+.cles b{display:block;font-size:15px;color:#1E3A5F}.cles small{display:block;color:#475569;font-size:10.5px;margin-top:2px}
+.parties{display:flex;gap:10px;margin-bottom:8px}.parties div{flex:1;border:1px solid #E2E8F0;border-radius:8px;padding:9px 12px;font-size:11px}.parties b{display:block;font-size:12.5px;color:#1E3A5F;margin-bottom:2px}
+.chantier{border:1px solid #E2E8F0;border-radius:8px;padding:9px 12px;margin-bottom:6px;font-size:11px}.chantier b{display:block;font-size:12.5px;color:#1E3A5F}
+h2{font-size:12.5px;color:#1E3A5F;margin:13px 0 4px;border-bottom:1px solid #CBD5E1;padding-bottom:2px;break-after:avoid;page-break-after:avoid}
+p{margin:4px 0;text-align:justify;orphans:3;widows:3}ul{margin:4px 0;padding-left:18px}li{margin:2px 0}
+.sigs{display:flex;gap:14px;margin-top:18px;break-inside:avoid;page-break-inside:avoid}
+.sigs div{flex:1;border:1px solid #CBD5E1;border-radius:8px;padding:10px 12px;height:105px}.sigs b{display:block;color:#1E3A5F;font-size:11.5px}.sigs small{display:block;margin-top:6px;color:#94A3B8;font-size:9px}
+.annexe{margin-top:16px}.annexe.saut{break-before:page;page-break-before:always}
+table.postes{width:100%;border-collapse:collapse;font-size:10.5px}table.postes th{background:#1E3A5F;color:#fff;text-align:left;padding:5px 7px}
+table.postes td{padding:5px 7px;border-bottom:1px solid #E2E8F0}table.postes tr{break-inside:avoid;page-break-inside:avoid}.r{text-align:right !important;white-space:nowrap}
+table.postes thead{display:table-header-group}
+section.bloc+section.bloc{break-before:page;page-break-before:always}
+.annexe h2+ul,.annexe h3{break-after:avoid}.annexe h3{font-size:11.5px;color:#334155;margin:9px 0 3px}
+.footer{text-align:center;font-size:9px;color:#94A3B8;border-top:1px solid #E2E8F0;padding-top:8px;margin-top:20px;line-height:1.8}
+.no-print{text-align:right;padding:10px 15mm 0}.no-print button{background:#1E3A5F;color:#fff;border:0;padding:8px 18px;border-radius:6px;font-size:12px;cursor:pointer}
+@media print{.no-print{display:none}}
+</style></head><body>
+<div class="no-print"><button onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF</button></div>
+<table class="pg"><thead><tr><td class="sp"></td></tr></thead><tfoot><tr><td class="sp"></td></tr></tfoot><tbody><tr><td class="wrap">
+<div class="entete"><div><div class="brand">Phénix<span>-Architecture</span></div><div class="brand-sub">Maître d'œuvre · Contractant général</div></div><div style="text-align:right;font-size:10px;color:#64748B">Établi le ${new Date().toLocaleDateString('fr-FR')}</div></div>
+${corps}
+<div class="footer">Phénix-Architecture · SIRET 987 989 316 00011 · 6 lieu-dit l'Étreille, 63780 Saint-Georges-de-Mons<br>contact@phenixarchitecte.fr · 04 73 73 00 59</div>
+</td></tr></tbody></table></body></html>`;
+  const url = URL.createObjectURL(new Blob([html], { type:'text/html;charset=utf-8' }));
+  const a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener';
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+  showToast('Contrat ouvert — Imprimer pour enregistrer en PDF');
+}
+
+// ── Envoi vers Phénix Planning : état partagé « phenix_planning_state/main » ──
+// Structure lue par Planning : { currentChantierId, chantiers: { [id du dossier]: { interventions:[{id,lot,artisan,dateDebut,dateFin,notes}] } } }
+// Correspondance vers la liste de lots de Phénix Planning (menu déroulant + couleurs)
+function ctLotPlanning(nom){
+  const t = String(nom||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const R = [
+    ['Maçonnerie', /macon|gros.?oeuvre|terrassement|demolition|fondation|dalle|beton/],
+    ['Charpente / Couverture', /charpente|couverture|toiture|zinguerie|ardoise|tuile|ossature/],
+    ['Menuiseries extérieures', /menuiserie.*ext|fenetre|baie|volet|porte.?d.?entree|occultation/],
+    ['Menuiseries intérieures', /menuiserie.*int|porte.*int|placard|escalier|parquet.*menuis/],
+    ['Isolation / Plâtrerie', /isolation|platr|cloison|doublage|plaque|faux.?plafond/],
+    ['Électricité', /electri|courant|domotique/],
+    ['Plomberie', /plomb|sanitaire|salle.?d.?eau/],
+    ['Chauffage / VMC', /chauff|vmc|ventilation|climatisation|pompe.?a.?chaleur|poele|cheminee/],
+    ['Revêtements', /carrelage|revetement|sol|faience|chape|moquette|stratifie/],
+    ['Peinture', /peinture|enduit.?de.?finition|tapisserie/],
+    ['Façades', /facade|ravalement|enduit.?ext|bardage|isolation.*exterieure|ite\b/],
+    ['VRD', /vrd|reseaux|assainissement|voirie|amenagement.?ext|terrasse|cloture/]
+  ];
+  for (const r of R) if (r[1].test(t)) return r[0];
+  return 'Autre';
+}
+async function contratVersPlanning(portee){
+  const c = state.chantiers[state.currentChantier]; if (!c) return;
+  const tous = (c.lots || []).map((l,i) => [l,i]).filter(x => x[0].contrat && (portee === 'tous' || portee === x[1]));
+  const prets = tous.filter(x => x[0].contrat.entreprise && ctPeriode(x[0].contrat));
+  if (!prets.length){ showToast('⚠️ Aucun contrat complet à envoyer (entreprise + semaine de début + année)'); return; }
+  const cle = c.projetId ? String(c.projetId) : null;
+  const key = cle || ('chiffrage-' + String(c.nom || 'chantier').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''));
+  if (!cle && !confirm('Ce chantier n\'est pas relié à un dossier Phénix Dossier (utilisez « Raccorder à Phénix Dossier » pour le faire).\n\nOK = envoyer quand même : dans Phénix Planning, le planning apparaîtra sous « planning à rattacher » et vous le rattacherez au bon dossier en un clic.\nAnnuler = ne rien envoyer.')) return;
+  try {
+    const refs = await _phenixFbRefs();
+    if (!refs.auth.currentUser) throw new Error('vous n\'êtes pas connecté');
+    const ref = refs.doc(refs.db, 'phenix_planning_state', 'main');
+    const snap = await refs.getDoc(ref);
+    let st = {};
+    if (snap.exists()){ try { st = JSON.parse(snap.data().data || '{}'); } catch(e){ throw new Error('état de Planning illisible, rien n\'a été modifié'); } }
+    if (!st || typeof st !== 'object') st = {};
+    st.chantiers = st.chantiers || {};
+    const ch = st.chantiers[key] = st.chantiers[key] || { interventions:[] };
+    ch.interventions = ch.interventions || [];
+    if (!cle && !ch.nom) ch.nom = c.nom || '';
+    const ids = [];
+    prets.forEach(x => {
+      const l = x[0], ct = l.contrat, p = ctPeriode(ct);
+      const id = ct.planningId || ('ctr-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
+      ids.push([ct, id]);
+      const suffixe = new RegExp('\\s*[—–-]\\s*' + String(ct.entreprise).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*$', 'i');
+      const nomLot = String(l.nom || '').replace(suffixe, '').trim(); const note = (l.num ? l.num + ' ' : '') + nomLot + ' · Contrat d\'engagement ' + (ct.statut === 'signe' ? 'signé' + (ct.dateSignature ? ' le ' + ct.dateSignature.split('-').reverse().join('/') : '') : 'à faire signer') + ' · semaine ' + p.sem + '/' + p.an + ', ' + p.dur + ' sem.';
+      const iv = { id, lot:ctLotPlanning(String(l.nom || '').replace(suffixe, '').trim()), artisan:ct.entreprise, dateDebut:p.isoDebut, dateFin:p.isoFin, notes:note };
+      const k = ch.interventions.findIndex(z => z.id === id);
+      if (k >= 0) ch.interventions[k] = Object.assign({}, ch.interventions[k], iv, { notes:ch.interventions[k].notes || note });
+      else ch.interventions.push(iv);
+    });
+    if (!st.currentChantierId) st.currentChantierId = key;
+    await refs.setDoc(ref, { data:JSON.stringify(st), updatedAt:new Date().toISOString() });
+    const jour = new Date().toLocaleDateString('fr-FR');
+    ids.forEach(x => { x[0].planningId = x[1]; x[0].planningEnvoye = jour; });
+    saveState(); renderLotsTableOrCards(); _contratRenderChantier();
+    if (state.currentLot !== null){ const tw = document.getElementById('lots-table-wrap'); if (tw) tw.style.display = 'none'; contratLotRefresh(); }
+    showToast('📅 ' + prets.length + ' intervention(s) envoyée(s) vers Phénix Planning' + (cle ? '' : ' (à rattacher à un dossier)') + (tous.length > prets.length ? ' — ' + (tous.length - prets.length) + ' contrat(s) incomplet(s) ignoré(s)' : ''));
+  } catch(e){
+    showToast('❌ Envoi vers Planning impossible : ' + String(e.message || e).slice(0, 90));
+  }
+}
+function contratEnvoyerDepuisModal(){
+  const ct = contratLire();
+  if (!ct.entreprise){ showToast('⚠️ Indiquez l\'entreprise'); return; }
+  if (!ctPeriode(ct)){ showToast('⚠️ Indiquez la semaine de début et l\'année'); return; }
+  const li = _ctLi; contratEnregistrer(true); contratVersPlanning(li);
+}
+Object.assign(window, { contratVersPlanning, contratEnvoyerDepuisModal, contratOuvrir, contratMaj, contratReprendrePrix, contratEnregistrer, contratFermer, contratEnregistrerFermer, contratExporterDepuisModal, contratExportPDF });
+
 function sortLotsInPlace(lots){
   if (!Array.isArray(lots)) return lots;
   // On garde une référence vers le lot actuellement ouvert en détail (si présent
@@ -2758,11 +3514,6 @@ function computeChantierTotals(c){
       lotArtisan+=q*(parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
       lotClient+=q*(parseFloat(p.puClient)||parseFloat(p.pu)||0);
     });
-    // Aléas/honoraires calculés sur le sous-total de CE lot uniquement,
-    // pas sur le cumulé de tous les lots déjà traités.
-    const aleas=lotClient*(numOr(l.aleas,5)/100);
-    const hon=lotClient*(numOr(l.honoraires,5)/100);
-    lotClient+=aleas+hon;
     htArtisan+=lotArtisan;
     htClient+=lotClient;
   });
@@ -3086,9 +3837,7 @@ function renderLotsTable(){
       travArtisan+=q*(parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
       travClient+=q*(parseFloat(p.puClient)||parseFloat(p.pu)||0);
     });
-    const aleas=travClient*(numOr(lot.aleas,5)/100);
-    const hon=travClient*(numOr(lot.honoraires,5)/100);
-    const ht=travClient+aleas+hon;
+    const ht=travClient;
     const tva=parseFloat(lot.tva||20)/100;
     const ttc=ht*(1+tva);
     const margeEur=travClient-travArtisan;
@@ -3101,7 +3850,7 @@ function renderLotsTable(){
     tr.innerHTML=`
       <td style="text-align:center"><input type="checkbox" ${exclu?'':'checked'} title="Décocher pour exclure ce lot des totaux (comparaison entre artisans, par exemple)" onchange="toggleLotExclusion(${li},!this.checked)"></td>
       <td class="lot-num" style="${styleBarre}">${lot.num||''}</td>
-      <td style="${styleBarre}"><div class="lot-name">${lot.nom}</div><div style="font-size:10px;color:var(--text3)">Achat artisan : ${fmt(travArtisan)} € HT</div></td>
+      <td style="${styleBarre}"><div class="lot-name">${lot.nom}${lot.cctp?' <span title="CCTP rédigé" style="font-size:9px;font-weight:700;color:#2E7D4F;border:1px solid #2E7D4F;border-radius:8px;padding:0 5px;vertical-align:middle">CCTP</span>':''}${lot.contrat?' <span title="Contrat d\'engagement" style="font-size:9px;font-weight:700;color:#1E5FAA;border:1px solid #1E5FAA;border-radius:8px;padding:0 5px;vertical-align:middle">'+(lot.contrat.statut==='signe'?'Contrat signé':'Contrat')+'</span>':''}</div><div style="font-size:10px;color:var(--text3)">Achat artisan : ${fmt(travArtisan)} € HT</div></td>
       <td class="ht-val" style="${styleBarre}">${fmt(ht)} €<br>${margeBadgeHtml(margePct)}</td>
       <td class="ttc-val" style="${styleBarre}">${fmt(ttc)} €</td>
       <td><span class="status-badge ${sc}">${lot.statut||'Chiffrage'}</span>${exclu?'<div style="font-size:10px;color:var(--danger);margin-top:3px;font-weight:600">Exclu du total</div>':''}</td>
@@ -3138,9 +3887,7 @@ function computeLotAmounts(lot){
     const q=parseFloat(p.q)||0;
     travClient+=q*(parseFloat(p.puClient)||parseFloat(p.pu)||0);
   });
-  const aleas=travClient*(numOr(lot.aleas,5)/100);
-  const hon=travClient*(numOr(lot.honoraires,5)/100);
-  const ht=travClient+aleas+hon;
+  const ht=travClient;
   const tva=parseFloat(lot.tva||20);
   const ttc=ht*(1+tva/100);
   return { ht, ttc, tva };
@@ -3236,7 +3983,7 @@ async function _phenixFbRefs(){
     db: fs.getFirestore(app),
     auth: getAuth(app),
     doc: fs.doc, setDoc: fs.setDoc, collection: fs.collection,
-    getDocs: fs.getDocs, deleteDoc: fs.deleteDoc, onSnapshot: fs.onSnapshot
+    getDocs: fs.getDocs, deleteDoc: fs.deleteDoc, onSnapshot: fs.onSnapshot, getDoc: fs.getDoc
   };
 }
 
@@ -3413,6 +4160,8 @@ function lotsAttendusDefaut(){
 Object.assign(window,{lotAttenduCreer,lotAttenduRetirer,lotsAttendusEditer,lotsAttendusEnregistrer,lotsAttendusDefaut});
 function updateStats(lots){
   try{ _renderLotsAttendus(); }catch(e){ console.warn('lots attendus', e); }
+  try{ _cctpRenderChantier(); }catch(e){ console.warn('cctp', e); }
+  try{ _contratRenderChantier(); }catch(e){ console.warn('contrat', e); }
   let totalArtisan=0,totalClient=0,totalTTC=0;
   const tauxVus=new Set();
   const lotsInclus = lots.filter(l=>!l.exclu);
@@ -3423,10 +4172,6 @@ function updateStats(lots){
       lotArtisan+=q*(parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
       lotClient+=q*(parseFloat(p.puClient)||parseFloat(p.pu)||0);
     });
-    // Aléas/honoraires calculés sur le sous-total de CE lot uniquement.
-    const aleas=lotClient*(numOr(lot.aleas,5)/100);
-    const hon=lotClient*(numOr(lot.honoraires,5)/100);
-    lotClient+=aleas+hon;
     totalArtisan+=lotArtisan;
     totalClient+=lotClient;
     const tauxLot=numOr(lot.tva,20);
@@ -3516,7 +4261,7 @@ function saveNewLot(){
   if(!nom){alert('Désignation requise');return;}
   const modele=document.getElementById('fl-modele').value;
   const postes=modele&&LOT_TEMPLATES[modele]?LOT_TEMPLATES[modele].map(p=>({n:p.n,q:p.q,u:p.u,puArtisan:p.pu.std,puClient:Math.round(p.pu.std*1.2),pu:p.pu.std})):[];
-  const lot={num,nom,postes,aleas:5,honoraires:5,tva:20,statut:'Chiffrage',prestation:'std',notes:'',marge:20};
+  const lot={num,nom,postes,tva:20,statut:'Chiffrage',prestation:'std',notes:'',marge:20};
   if(!state.chantiers[state.currentChantier].lots)state.chantiers[state.currentChantier].lots=[];
   state.chantiers[state.currentChantier].lots.push(lot);
   saveState();if(typeof renderLotsTableOrCards === "function") renderLotsTableOrCards(); else renderLotsTable();renderChantierGrid();closeModal('modal-lot');showToast('Lot créé');
@@ -3536,8 +4281,6 @@ function openLotDetail(li){
   document.getElementById('detail-num').value=lot.num||'';
   document.getElementById('detail-nom').value=lot.nom||'';
   document.getElementById('detail-chantier-name').textContent=c.nom+(c.client?' — '+c.client:'');
-  document.getElementById('param-aleas').value=numOr(lot.aleas,5);
-  document.getElementById('param-honoraires').value=numOr(lot.honoraires,5);
   document.getElementById('param-statut').value=lot.statut||'Chiffrage';
   document.getElementById('param-notes').value=lot.notes||'';
   document.getElementById('detail-prestation').value=lot.prestation||'std';
@@ -3547,6 +4290,8 @@ function openLotDetail(li){
   document.getElementById('lot-detail').style.display='flex';
   renderPostes();
   computeLotTotal();
+  cctpLotRefresh();
+  contratLotRefresh();
 }
 
 function closeLotDetail(){
@@ -3735,20 +4480,14 @@ function computeLotTotal(){
     travArtisan+=q*(parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
     travClient+=q*(parseFloat(p.puClient)||parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
   });
-  lot.aleas=numOr(document.getElementById('param-aleas').value,0);
-  lot.honoraires=numOr(document.getElementById('param-honoraires').value,0);
   lot.tva=parseFloat(document.getElementById('detail-tva').value)||20;
   lot.marge=numOr(document.getElementById('param-marge').value,20);
-  const aleas=travClient*(lot.aleas/100);
-  const hon=travClient*(lot.honoraires/100);
-  const ht=travClient+aleas+hon;
+  const ht=travClient;
   const tvaAmt=ht*(lot.tva/100);
   const ttc=ht+tvaAmt;
   const margeEur=travClient-travArtisan;
   document.getElementById('tot-travaux').textContent=fmt(travClient)+' €';
   document.getElementById('tot-marge-brute').textContent=fmt(margeEur)+' € (achat : '+fmt(travArtisan)+' €)';
-  document.getElementById('tot-aleas').textContent=fmt(aleas)+' €';
-  document.getElementById('tot-honoraires').textContent=fmt(hon)+' €';
   document.getElementById('tot-tva').textContent=fmt(tvaAmt)+' € ('+lot.tva+'%)';
   document.getElementById('tot-ttc').textContent=fmt(ttc)+' €';
   saveLot();
@@ -3781,9 +4520,11 @@ function saveLot(){
   const li=state.currentLot;
   if(li===null)return;
   const lot=state.chantiers[state.currentChantier].lots[li];
+  const _statutAvant=lot.statut;
   lot.statut=document.getElementById('param-statut').value;
   lot.notes=document.getElementById('param-notes').value;
-  saveState();if(typeof renderLotsTableOrCards === "function") renderLotsTableOrCards(); else renderLotsTable();renderChantierGrid();
+  saveState();
+  if(_statutAvant!=='Valide' && lot.statut==='Valide' && !lot.contrat){ setTimeout(()=>contratOuvrir(li,true),150); }if(typeof renderLotsTableOrCards === "function") renderLotsTableOrCards(); else renderLotsTable();renderChantierGrid();
   // renderLotsTableOrCards() réaffiche la liste des lots (elle rafraîchit
   // aussi les totaux/le tableau en arrière-plan, ce qui reste utile) — mais
   // si on est en train de regarder le détail d'un lot, cette liste ne doit
@@ -4256,7 +4997,7 @@ function confirmImportArtisan(){
         lotIdx = newLotCache[nom];
       } else {
         const num='LOT '+(chantier.lots.length+1).toString().padStart(2,'0');
-        chantier.lots.push({num,nom,postes:[],aleas:5,honoraires:5,tva:20,statut:'Chiffrage',prestation:'std',notes:'Créé automatiquement depuis import devis artisan (IA)',marge:marge});
+        chantier.lots.push({num,nom,postes:[],tva:20,statut:'Chiffrage',prestation:'std',notes:'Créé automatiquement depuis import devis artisan (IA)',marge:marge});
         lotIdx = chantier.lots.length-1;
         newLotCache[nom]=lotIdx;
         nbCreated++;
@@ -4267,7 +5008,7 @@ function confirmImportArtisan(){
         lotIdx = newLotCache[nom];
       } else {
         const num='LOT '+(chantier.lots.length+1).toString().padStart(2,'0');
-        chantier.lots.push({num,nom,postes:[],aleas:5,honoraires:5,tva:20,statut:'Chiffrage',prestation:'std',notes:'Créé automatiquement depuis import devis artisan (IA)',marge:marge});
+        chantier.lots.push({num,nom,postes:[],tva:20,statut:'Chiffrage',prestation:'std',notes:'Créé automatiquement depuis import devis artisan (IA)',marge:marge});
         lotIdx = chantier.lots.length-1;
         newLotCache[nom]=lotIdx;
         nbCreated++;
@@ -4312,9 +5053,7 @@ function exportCSVForChantier(idx){
       travArtisan+=q*(parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
       travClient+=q*(parseFloat(p.puClient)||parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
     });
-    const aleas=travClient*(numOr(lot.aleas,5)/100);
-    const hon=travClient*(numOr(lot.honoraires,5)/100);
-    const ht=travClient+aleas+hon;
+    const ht=travClient;
     const tva=parseFloat(lot.tva||20);
     const ttc=ht*(1+tva/100);
     const margePct=travArtisan>0?Math.round(((travClient-travArtisan)/travArtisan)*100):0;
@@ -4379,9 +5118,7 @@ function exportPDF(detaille){
       const q=parseFloat(p.q)||0;
       htClient+=q*(parseFloat(p.puClient)||parseFloat(p.pu)||0);
     });
-    const aleas=htClient*(numOr(lot.aleas,5)/100);
-    const hon=htClient*(numOr(lot.honoraires,5)/100);
-    const ht=htClient+aleas+hon;
+    const ht=htClient;
     const tva=parseFloat(lot.tva||20);
     const tvaAmt=ht*(tva/100);
     const ttc=ht+tvaAmt;
@@ -4757,9 +5494,7 @@ function renderLotsMobileCards(){
       travArtisan += q * (parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
       travClient  += q * (parseFloat(p.puClient)||parseFloat(p.puArtisan)||parseFloat(p.pu)||0);
     });
-    const aleas = travClient * (numOr(lot.aleas,5)/100);
-    const hon   = travClient * (numOr(lot.honoraires,5)/100);
-    const ht    = travClient + aleas + hon;
+    const ht    = travClient;
     const ttc   = ht * (1 + (parseFloat(lot.tva||20)/100));
     const margeEur = travClient - travArtisan;
     const margePct = travArtisan > 0 ? Math.round((margeEur/travArtisan)*100) : 0;
@@ -5290,7 +6025,7 @@ function confirmExportMesures(){
   if(lotSel==='__new__'){
     const nb=(state.chantiers[ci].lots||[]).length;
     if(!state.chantiers[ci].lots) state.chantiers[ci].lots=[];
-    state.chantiers[ci].lots.push({num:'LOT '+(nb+1).toString().padStart(2,'0'),nom:'Métrés sur plan',postes:[],aleas:5,honoraires:5,tva:20,statut:'Chiffrage',prestation:'std',notes:'Issu des métrés sur plan',marge:20});
+    state.chantiers[ci].lots.push({num:'LOT '+(nb+1).toString().padStart(2,'0'),nom:'Métrés sur plan',postes:[],tva:20,statut:'Chiffrage',prestation:'std',notes:'Issu des métrés sur plan',marge:20});
     li=state.chantiers[ci].lots.length-1;
   } else { li=parseInt(lotSel); }
   const lot=state.chantiers[ci].lots[li];
@@ -5701,7 +6436,7 @@ function confirmerImportIA() {
   chantier._nomChiffrageActif = nomChiffrage;
   chantier._dateChiffrageActif = new Date().toISOString().split('T')[0];
 
-  let nbLots = 0, nbPostes = 0;
+  let nbLots = 0, nbPostes = 0; const _cctpIdx = [];
   lots.forEach((lot, li) => {
     const chk = document.getElementById('ia-lot-chk-'+li);
     // Un lot n'est exclu que si sa case existe ET qu'elle a été explicitement décochée.
@@ -5726,12 +6461,13 @@ function confirmerImportIA() {
     chantier.lots.push({
       num: 'LOT '+(nbExistants+1).toString().padStart(2,'0'),
       nom: lot.nom, postes,
-      aleas:5, honoraires:5, tva:20, statut:'Chiffrage', prestation:'std',
+      tva:20, statut:'Chiffrage', prestation:'std',
       notes: 'Généré par analyse IA — ' + (iaResultData?.projet?.description||''),
       marge:0
     });
-    nbLots++; nbPostes += postes.length;
+    nbLots++; nbPostes += postes.length; _cctpIdx.push(li);
   });
+  iaCCTPAttacher(chantier, _cctpIdx.map((li,k) => [li, chantier.lots[chantier.lots.length-_cctpIdx.length+k]]));
 
   saveState();
   closeModal('modal-ia-resultats');
@@ -5761,9 +6497,7 @@ function _totalChiffrage(lots){
       const q=parseFloat(p.q)||0;
       lotClient+=q*(parseFloat(p.puClient)||parseFloat(p.pu)||0);
     });
-    const aleas=lotClient*(numOr(l.aleas,5)/100);
-    const hon=lotClient*(numOr(l.honoraires,5)/100);
-    ht+=lotClient+aleas+hon;
+    ht+=lotClient;
   });
   return ht;
 }
@@ -6014,6 +6748,7 @@ function _ouvrirModalResultats(data) {
       ${pieces.length ? `<div style="margin-top:6px;font-size:12px;color:var(--text2)"><strong style="color:var(--nav)">Pièces :</strong> ${pieces.map(p=>`${p.nom} <strong>${p.surface} m²</strong>`).join(' · ')}</div>` : ''}
     </div>`;
 
+  iaCCTPStart(data);
   const lotsEl = document.getElementById('ia-lots-container');
   lotsEl.innerHTML = '';
   lots.forEach((lot, li) => {
