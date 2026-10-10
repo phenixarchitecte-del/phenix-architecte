@@ -63,7 +63,7 @@ const TACHES_COL     = collection(db, 'phenix_taches');
 
 // ── Exposition globale pour le code non-module ci-dessous ──
 window._fb = {
-  db, doc, setDoc, deleteDoc, getDoc,
+  db, doc, setDoc, deleteDoc, getDoc, getDocs, collection,
   PROJETS_COL, ECHEANCES_COL,
 
   // Sauvegarde un projet (crée ou met à jour)
@@ -2356,6 +2356,7 @@ if (window.parent !== window) {
             <option value="chantier">Suivi de chantier (externe, chantiers choisis)</option>
             <option value="equipe">Équipe agence (accès complet)</option>
             <option value="admin">Administrateur</option>
+            <option value="client">Client (carnet de projet uniquement)</option>
           </select></div>
         <div class="form-group" style="grid-column:1/-1" id="usr-chantiers-wrap"><label>Chantiers accessibles</label>
           <div id="usr-chantiers" style="display:flex;flex-direction:column;gap:6px;max-height:200px;overflow:auto;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px"></div></div>
@@ -2494,7 +2495,10 @@ if (window.parent !== window) {
       <div class="page" id="page-chantiers">
         <div class="page-header">
           <div><div class="page-title">Chantiers</div><div class="page-subtitle" id="ch-subtitle">—</div><div class="page-title-line"></div></div>
-          <button class="btn btn-primary staff-only" onclick="openModalChantier()"><i class="ti ti-plus"></i> Nouveau chantier</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn staff-only" onclick="importFromCarnet()" style="border-color:#4A9CC7;color:#4A9CC7"><i class="ti ti-book"></i> Importer depuis Carnet</button>
+            <button class="btn btn-primary staff-only" onclick="openModalChantier()"><i class="ti ti-plus"></i> Nouveau chantier</button>
+          </div>
         </div>
         <div id="chantiers-list">
           <div class="empty-state"><div class="empty-icon"><i class="ti ti-building-factory-2"></i></div><div class="empty-title">Aucun chantier créé</div><div class="empty-sub">Créez votre premier chantier pour commencer</div></div>
@@ -3110,6 +3114,7 @@ async function _resolveRole() {
   const admins = ADMIN_EMAILS.map(x => String(x).toLowerCase());
   const configured = admins.some(x => x && x.indexOf('remplacer') < 0);
   if (denied || (udoc && udoc.actif === false)) CH_ROLE = 'bloque';   // lecture refusée = compte non autorisé
+  else if (udoc && udoc.role === 'client') CH_ROLE = 'bloque';   // les clients n'ont accès qu'au carnet de projet
   else if (udoc && ['admin', 'equipe', 'chantier'].indexOf(udoc.role) >= 0) CH_ROLE = udoc.role;
   else if (admins.indexOf(email) >= 0) CH_ROLE = 'admin';
   else CH_ROLE = configured ? 'equipe' : 'admin';
@@ -3633,7 +3638,7 @@ async function renderActivite() {
 //  ÉQUIPE & ACCÈS (administrateur)
 // ═══════════════════════════════════════════════════════════
 let _users = [], _usersListening = false;
-const ROLE_LABELS = { admin: 'Administrateur', equipe: 'Équipe agence', chantier: 'Suivi de chantier' };
+const ROLE_LABELS = { admin: 'Administrateur', equipe: 'Équipe agence', chantier: 'Suivi de chantier', client: 'Client (carnet)' };
 function renderEquipe() {
   const al = document.getElementById('eq-alert');
   if (al) al.style.display = _legacyMode ? '' : 'none';
@@ -3649,7 +3654,7 @@ function _renderEquipeTable() {
   if (!tb) return;
   if (!_users.length) { tb.innerHTML = '<tr><td colspan="6" style="padding:1.5rem;text-align:center;color:var(--text3)">Aucun accès enregistré. Vous (administrateur) êtes reconnu automatiquement.</td></tr>'; return; }
   tb.innerHTML = _users.slice().sort((a, b) => String(a.nom || a._id).localeCompare(String(b.nom || b._id))).map(u => {
-    const names = (u.role === 'chantier')
+    const names = (u.role === 'chantier' || u.role === 'client')
       ? (u.chantierIds || []).map(id => { const c = state.chantiers.find(x => x.id == id); return c ? esc(c.nom) : ('#' + id); }).join(', ') || '<aucun>'
       : 'Tous';
     return '<tr><td style="padding-left:16px;font-weight:600">' + esc( esc(u.nom) || '—') + '</td><td style="font-size:12px">' + esc(u._id) + '</td>' +
@@ -3659,7 +3664,7 @@ function _renderEquipeTable() {
   }).join('');
 }
 function usrRoleChanged() {
-  document.getElementById('usr-chantiers-wrap').style.display = document.getElementById('usr-role').value === 'chantier' ? '' : 'none';
+  document.getElementById('usr-chantiers-wrap').style.display = ['chantier', 'client'].indexOf(document.getElementById('usr-role').value) >= 0 ? '' : 'none';
 }
 function openModalUser(emailId) {
   const u = emailId ? _users.find(x => x._id === emailId) : null;
@@ -3685,12 +3690,12 @@ async function saveUserAccess() {
   const actif = document.getElementById('usr-actif').checked;
   if (email === CH_ME.email && (role !== 'admin' || !actif)) { toast('⚠️ Vous ne pouvez pas retirer vos propres droits d\'administrateur.'); return; }
   const ids = Array.prototype.slice.call(document.querySelectorAll('.usr-ch:checked')).map(x => Number(x.value));
-  if (role === 'chantier' && !ids.length && !confirm('Aucun chantier coché : cette personne ne verra rien. Continuer ?')) return;
+  if ((role === 'chantier' || role === 'client') && !ids.length && !confirm('Aucun chantier coché : cette personne ne verra rien. Continuer ?')) return;
   const prev = _users.find(x => x._id === email);
   try {
     await window._fbChantier.saveUser(email, {
       email: email, nom: document.getElementById('usr-nom').value.trim(), role: role, actif: actif,
-      chantierIds: role === 'chantier' ? ids : [], createdAt: (prev && prev.createdAt) || new Date().toISOString(),
+      chantierIds: (role === 'chantier' || role === 'client') ? ids : [], createdAt: (prev && prev.createdAt) || new Date().toISOString(),
       updatedAt: new Date().toISOString(), updatedBy: CH_ME.email
     });
     closeModal('modalUser'); toast('✅ Accès enregistré.');
@@ -5205,6 +5210,45 @@ async function importFromChiffrage() {
   } catch(e) {
     console.error('Import chiffrage error', e);
     toast('⚠️ Échec de l\'import depuis Chiffrage.');
+  }
+}
+
+// ── Import d'un carnet de projet (Phénix Carnet → Chantier) ──
+//  Le carnet dépose ses transferts dans phenix_carnet_export/{projetId}. Ici, on crée
+//  le chantier et ses lots pour chaque transfert qui n'a pas encore de chantier lié.
+async function importFromCarnet() {
+  if (IS_EXT()) return;
+  if (!window._fb || typeof window._fb.getDocs !== 'function') { toast('⚠️ Connexion Firebase indisponible.'); return; }
+  try {
+    const snap = await window._fb.getDocs(window._fb.collection(window._fb.db, 'phenix_carnet_export'));
+    const exps = []; snap.forEach(d => exps.push(Object.assign({ _id: d.id }, d.data())));
+    const todo = exps.filter(e => !state.chantiers.some(c => c.projetId && String(c.projetId) === String(e.projetId || e._id)));
+    if (!todo.length) { toast('Aucun carnet à importer : chaque carnet transféré a déjà son chantier.'); return; }
+    let made = 0;
+    for (const e of todo) {
+      const c = e.chantier || {}, lots = e.lots || [];
+      if (!confirm('Créer le chantier « ' + (c.nom || e._id) + ' » depuis le carnet de projet ?\n' + lots.length + ' lot(s) · budget ' + Math.round(c.budget || 0) + ' € HT')) continue;
+      const ch = {
+        id: uid(), nom: c.nom || ('Chantier ' + e._id), ref: c.ref || '', client: c.client || '',
+        type: c.type || 'Construction neuve', adresse: c.adresse || '', debut: '', fin: '',
+        budget: Math.round(c.budget) || 0, statut: c.statut || 'preparation', notes: c.notes || '',
+        honoraires: 0, commissions: 0, projetId: String(e.projetId || e._id)
+      };
+      state.chantiers.push(ch);
+      lots.forEach(item => {
+        state.lots.push({
+          id: uid(), chantierId: ch.id, nom: (item.num ? item.num + ' — ' : '') + item.nom, cat: 'Autre',
+          interv: null, statut: mapStatutChiffrage(item.statut), ht: +item.montantHt || 0, tva: item.tva != null ? +item.tva : 20, av: 0,
+          debut: '', fin: '', notes: 'Importé depuis le carnet de projet le ' + new Date().toLocaleDateString('fr-FR')
+        });
+      });
+      try { await window._fb.setDoc(window._fb.doc(window._fb.db, 'phenix_carnet_export', e._id), { importedAt: new Date().toISOString() }, { merge: true }); } catch (x) { console.warn(x); }
+      made++;
+    }
+    if (made) { saveLocal(); refreshAll(); toast('✅ ' + made + ' chantier(s) créé(s) depuis le carnet. Pensez à renseigner les honoraires.'); }
+  } catch (err) {
+    console.error('Import carnet error', err);
+    toast('⚠️ Échec de l\'import depuis le carnet.');
   }
 }
 

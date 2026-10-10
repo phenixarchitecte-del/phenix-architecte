@@ -1,0 +1,2017 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Phénix-Architecture · Carnet de projet</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Concept : un fascicule de chantier. Bandeau de couverture, onglets par lot, chaque onglet = quoi / comment / vigilance / prix. Bleu nuit Phénix, dessins techniques à l'échelle. */
+:root{
+  --bg:#EDF0F6; --paper:#FFFFFF; --ink:#0B1630; --muted:#56637E; --line:#CBD3E2; --navy:#0E2247;
+  --accent:#1F62B8; --accent-soft:#DCE8F8; --gold:#8A6212; --gold-soft:#F6EAD0; --bar-muted:#A7B2C8;
+  --mk-bg:#0E2247; --mk-fg:#FFFFFF; --ok:#1E7A4C; --ok-soft:#DDF0E5; --warn:#A33A1F;
+  --m-plast:#EFEFEA; --m-ins:#F1DE8A; --m-ins2:#E6C8A0; --m-wood:#D2A874; --m-wood2:#B98655;
+  --m-conc:#B6BCC8; --m-brick:#D07A58; --m-air:#D9E8F8; --m-mem:#1F62B8; --m-mort:#D9D5CB;
+  --f-a:#B7C4DB; --f-b:#DDB88A; --f-c:#9CCFD2; --f-d:#D2CDC0;
+  --fs-display:'Barlow Condensed','Arial Narrow',sans-serif; --fs-body:'IBM Plex Sans',system-ui,sans-serif; --fs-mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0A1428; --paper:#101E3A; --ink:#E7ECF7; --muted:#93A0BC; --line:#26385C; --navy:#6FB0F5;
+  --accent:#6FB0F5; --accent-soft:#16294B; --gold:#E3B861; --gold-soft:#3A2F16; --bar-muted:#34476E;
+  --mk-bg:#6FB0F5; --mk-fg:#0A1428; --ok:#5CC596; --ok-soft:#14352A; --warn:#F09A80;
+  --m-plast:#6A7285; --m-ins:#6E6325; --m-ins2:#76593A; --m-wood:#7A5A36; --m-wood2:#654A2D;
+  --m-conc:#4A5468; --m-brick:#8E4430; --m-air:#1B2F52; --m-mem:#6FB0F5; --m-mort:#605D55;
+  --f-a:#46587C; --f-b:#8A6841; --f-c:#356A70; --f-d:#6B685F; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0A1428; --paper:#101E3A; --ink:#E7ECF7; --muted:#93A0BC; --line:#26385C; --navy:#6FB0F5;
+  --accent:#6FB0F5; --accent-soft:#16294B; --gold:#E3B861; --gold-soft:#3A2F16; --bar-muted:#34476E;
+  --mk-bg:#6FB0F5; --mk-fg:#0A1428; --ok:#5CC596; --ok-soft:#14352A; --warn:#F09A80;
+  --m-plast:#6A7285; --m-ins:#6E6325; --m-ins2:#76593A; --m-wood:#7A5A36; --m-wood2:#654A2D;
+  --m-conc:#4A5468; --m-brick:#8E4430; --m-air:#1B2F52; --m-mem:#6FB0F5; --m-mort:#605D55;
+  --f-a:#46587C; --f-b:#8A6841; --f-c:#356A70; --f-d:#6B685F; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.55 var(--fs-body);padding-inline:16px;padding-block:0}
+.wrap{max-width:1040px;margin:0 auto}
+h1,h2,h3{font-family:var(--fs-display);font-weight:600;line-height:1.05;margin:0;text-wrap:balance}
+p{margin:0}
+.mono{font-family:var(--fs-mono)}
+.eyebrow{font:500 11px/1.4 var(--fs-mono);letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+
+/* Couverture */
+.cover{display:grid;grid-template-columns:1fr;gap:20px;padding-block:28px 22px;border-bottom:2px solid var(--ink)}
+@media(min-width:760px){.cover{grid-template-columns:1.5fr 1fr;align-items:end}}
+.brand{display:flex;align-items:center;gap:10px;margin-bottom:18px}
+.brand b{font:700 20px var(--fs-display);letter-spacing:.14em}
+.brand span{font:500 11px var(--fs-mono);letter-spacing:.09em;color:var(--muted);text-transform:uppercase}
+.brand i{display:block;width:26px;height:26px;background:var(--navy);clip-path:polygon(50% 0,100% 100%,50% 78%,0 100%)}
+.cover h1{font-size:clamp(44px,9vw,76px);letter-spacing:.01em;text-transform:uppercase}
+.cover .sub{margin-top:8px;color:var(--muted);max-width:46ch}
+.ref{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font:400 12.5px/1.5 var(--fs-mono);min-width:0}
+.ref dt{color:var(--muted)} .ref dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.stamp{display:inline-block;margin-top:10px;font:500 11px var(--fs-mono);letter-spacing:.08em;text-transform:uppercase;border:1px solid var(--gold);color:var(--gold);padding:3px 8px;border-radius:3px}
+
+.bar .lb[data-act]{cursor:pointer}.bar .lb[data-act]:hover{text-decoration:underline}
+.lg{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:10px;font:400 12.5px var(--fs-mono);color:var(--muted)}
+.lg span{display:inline-flex;align-items:center;gap:6px}.lg svg{width:16px;height:16px;flex:0 0 auto}
+/* Onglets */
+.tabs{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);display:flex;gap:2px;overflow-x:auto;border-bottom:1px solid var(--line);margin-inline:-16px;padding-inline:16px;scrollbar-width:thin}
+.tab{flex:0 0 auto;appearance:none;border:0;background:none;color:var(--muted);font:600 15px var(--fs-body);padding:13px 14px;border-bottom:3px solid transparent;cursor:pointer}
+.tab:hover:not(:disabled){color:var(--ink)}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.tab:disabled{opacity:.45;cursor:not-allowed;font-weight:500}
+.tab:focus-visible,.btn:focus-visible,[data-act]:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.panel{padding-block:26px 40px;display:flex;flex-direction:column;gap:26px}
+.panel h2{font-size:clamp(30px,5vw,40px);text-transform:uppercase;letter-spacing:.01em}
+.lead{color:var(--muted);max-width:68ch;margin-top:8px}
+.sec>h3{font-size:22px;text-transform:uppercase;letter-spacing:.02em;margin-bottom:10px;display:flex;align-items:baseline;gap:10px}
+.sec>h3 small{font:500 11px var(--fs-mono);letter-spacing:.08em;color:var(--muted)}
+
+.card{background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:16px;min-width:0}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr))}
+.grid-2{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr))}
+.fact{display:flex;flex-direction:column;gap:2px}
+.fact b{font:600 26px var(--fs-display);letter-spacing:.01em}
+.fact span{font:500 11px var(--fs-mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+
+.legendrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:10px}
+.legendrow .card b{display:block;font:600 18px var(--fs-display);text-transform:uppercase;letter-spacing:.03em;color:var(--accent)}
+.legendrow .card p{font-size:13.5px;color:var(--muted)}
+
+.fig{padding:12px;overflow-x:auto}
+.fig svg{display:block;width:100%;min-width:560px;height:auto}
+.cap{font:400 12px/1.5 var(--fs-mono);color:var(--muted);margin-top:8px}
+.mk{fill:var(--mk-bg)} .mkt{fill:var(--mk-fg);font:600 11px var(--fs-mono)}
+.svt{fill:var(--ink);font:400 11.5px var(--fs-mono)} .svm{fill:var(--muted);font:400 10.5px var(--fs-mono)}
+.dim{stroke:var(--ink);stroke-width:1;fill:none}
+.k-plast{fill:var(--m-plast)} .k-ins{fill:var(--m-ins)} .k-ins2{fill:var(--m-ins2)} .k-wood{fill:var(--m-wood)} .k-wood2{fill:var(--m-wood2)}
+.k-conc{fill:var(--m-conc)} .k-brick{fill:var(--m-brick)} .k-air{fill:var(--m-air)} .k-mem{fill:var(--m-mem)} .k-mort{fill:var(--m-mort)}
+.ptn{stroke:var(--ink);stroke-opacity:.35;fill:none;stroke-width:.8} .ptf{fill:var(--ink);fill-opacity:.35}
+.ol{stroke:var(--ink);stroke-width:.7}
+
+.keylist{list-style:none;margin:12px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:6px 18px}
+.keylist li{display:flex;gap:10px;font-size:14px;align-items:flex-start;min-width:0}
+.keylist .n{flex:0 0 22px;height:22px;border-radius:50%;background:var(--mk-bg);color:var(--mk-fg);font:600 11px/22px var(--fs-mono);text-align:center}
+
+.steps{counter-reset:s;list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.steps li{counter-increment:s;display:grid;grid-template-columns:30px 1fr;gap:10px;font-size:14.5px}
+.steps li::before{content:counter(s);width:26px;height:26px;border:1.5px solid var(--accent);color:var(--accent);border-radius:50%;font:600 12px/23px var(--fs-mono);text-align:center}
+.steps b{font-weight:600}
+
+.opts{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr))}
+.opt{text-align:left;appearance:none;font:inherit;color:inherit;background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:14px;display:flex;flex-direction:column;gap:6px;cursor:pointer;min-width:0}
+.opt:hover{border-color:var(--accent)}
+.opt.on{border:2px solid var(--accent);padding:13px}
+.opt h4{margin:0;font:600 20px/1.1 var(--fs-display);text-transform:uppercase;letter-spacing:.02em}
+.opt .pr{font:500 13px var(--fs-mono)}
+.opt p{font-size:13.5px;color:var(--muted)}
+.badge{align-self:flex-start;font:500 10.5px var(--fs-mono);letter-spacing:.08em;text-transform:uppercase;padding:2px 7px;border-radius:3px;border:1px solid var(--line);color:var(--muted)}
+.opt.on .badge{border-color:var(--gold);background:var(--gold-soft);color:var(--gold)}
+
+.seg{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.chip{appearance:none;font:500 14px var(--fs-body);color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:4px;padding:8px 12px;cursor:pointer}
+.chip.on{background:var(--navy);border-color:var(--navy);color:var(--mk-fg)}
+.chip small{font:400 11px var(--fs-mono);opacity:.8;margin-left:6px}
+
+.tw{overflow-x:auto}
+.tbl{width:100%;border-collapse:collapse;font-size:14px}
+.tbl th{font:500 11px var(--fs-mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:1.5px solid var(--ink);white-space:nowrap}
+.tbl td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+.tbl .num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.tbl tfoot td{font-weight:600;border-bottom:0;border-top:1.5px solid var(--ink)}
+.tbl td:first-child{min-width:200px}
+.sw{display:inline-block;width:12px;height:12px;border:1px solid var(--ink);vertical-align:-1px;margin-right:8px}
+
+.watch{border-left:3px solid var(--gold);background:var(--gold-soft);padding:12px 14px;border-radius:0 6px 6px 0}
+.watch h4{margin:0 0 6px;font:600 17px var(--fs-display);text-transform:uppercase;letter-spacing:.04em;color:var(--gold)}
+.watch ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;font-size:14px}
+
+.check{display:flex;flex-direction:column;gap:8px}
+.check label{display:flex;gap:10px;align-items:flex-start;font-size:14.5px;cursor:pointer}
+.check input{width:18px;height:18px;margin-top:2px;accent-color:var(--accent);flex:0 0 auto}
+
+.bars{display:flex;flex-direction:column;gap:8px}
+.bar{display:grid;grid-template-columns:minmax(120px,230px) 1fr minmax(84px,auto);gap:10px;align-items:center;font-size:13.5px}
+@media(max-width:560px){.bar{grid-template-columns:1fr auto}.bar .tr{grid-column:1/3;order:3}}
+.bar .tr{height:12px;background:var(--bg);border-radius:2px;overflow:hidden}
+.bar .tr i{display:block;height:100%;background:var(--bar-muted)}
+.bar.hl .tr i{background:var(--accent)}
+.bar.hl .lb{font-weight:600}
+.bar .am{text-align:right;font:500 13px var(--fs-mono);font-variant-numeric:tabular-nums}
+.totals{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:12px;margin-top:16px;padding-top:14px;border-top:1.5px solid var(--ink)}
+.totals b{display:block;font:600 28px var(--fs-display)}
+.totals span{font:500 11px var(--fs-mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.rowsel{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.rowsel:last-child{border-bottom:0}
+.btn{appearance:none;font:500 13px var(--fs-body);color:var(--accent);background:none;border:1px solid var(--accent);border-radius:4px;padding:6px 11px;cursor:pointer}
+.soon{display:flex;flex-wrap:wrap;gap:8px}
+.soon span{font:400 12.5px var(--fs-mono);border:1px dashed var(--line);color:var(--muted);padding:5px 10px;border-radius:3px}
+.foot{border-top:2px solid var(--ink);padding-block:18px 36px;font:400 12px/1.6 var(--fs-mono);color:var(--muted);display:flex;flex-direction:column;gap:4px}
+[data-act]{cursor:pointer}
+@media(prefers-reduced-motion:no-preference){.panel{animation:in .25s ease}@keyframes in{from{opacity:.4}to{opacity:1}}}
+
+/* ---- Configurateur ---- */
+body{padding-bottom:84px}
+.dock{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--paper);border-top:1.5px solid var(--navy);padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px))}
+.dk{max-width:1040px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.dk b{display:block;font:600 22px var(--fs-display)}.dk small{font:400 12px var(--fs-mono);color:var(--muted)}
+.btn.solid{background:var(--accent);color:var(--paper);border-color:var(--accent)}
+.btn.big{padding:12px 18px;font-size:15px}
+.muted{color:var(--muted)}
+.dl{font:600 13px var(--fs-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.dl.up{color:var(--warn)}.dl.down{color:var(--ok)}
+.cgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,230px),1fr));gap:10px}
+.cc{appearance:none;text-align:left;font:inherit;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;cursor:pointer}
+.cc:hover{border-color:var(--accent)}.cc.done{border-color:var(--ok);box-shadow:inset 3px 0 0 var(--ok)}
+.cs{font:500 10.5px var(--fs-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}.cc.done .cs{color:var(--ok)}
+.cc b{font:600 17px var(--fs-display)}.cn{font-size:13px;color:var(--muted)}
+.prog{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.pl{font-size:14px}
+.pt{flex:1 1 160px;height:10px;background:var(--bg);border-radius:2px;overflow:hidden}.pt i{display:block;height:100%;background:var(--ok)}
+.ocs{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:12px}
+.oc{background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:14px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.oc.on{border-color:var(--accent);box-shadow:0 0 0 1.5px var(--accent)}
+.oc h4{font:600 19px var(--fs-display)}.ocb{display:flex;gap:6px;flex-wrap:wrap;min-height:20px}
+.badge.on{background:var(--accent);color:var(--paper);border-color:var(--accent)}
+.ocp{display:flex;flex-direction:column}.ocp .dl{font-size:18px}.ocp small{font:400 12px var(--fs-mono);color:var(--muted)}
+.ocd{font-size:13.5px;color:var(--muted)}
+.mts{display:flex;flex-direction:column;gap:5px}
+.mt{display:grid;grid-template-columns:96px 1fr auto;gap:8px;align-items:center;font-size:12.5px}
+.ml{color:var(--muted)}.mb{height:7px;background:var(--bg);border-radius:2px;overflow:hidden}.mb i{display:block;height:100%;background:var(--bar-muted)}
+.mv{font:500 12px var(--fs-mono);text-align:right;white-space:nowrap}.mv small{color:var(--muted);font-size:10.5px}
+.mv.best{color:var(--ok);font-weight:600}
+.pc{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:3px;font-size:13.5px;flex:1}
+.pc li{padding-left:20px;position:relative}.pc li:before{position:absolute;left:0;font-weight:700}
+.pc li.p:before{content:"+";color:var(--ok)}.pc li.c:before{content:"−";color:var(--warn)}
+.seg{display:flex;flex-wrap:wrap;gap:8px}
+.chip{appearance:none;font:500 13px var(--fs-mono);color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:6px 12px;cursor:pointer}
+.chip.on{background:var(--accent);color:var(--paper);border-color:var(--accent)}
+.navrow,.actrow{display:flex;gap:10px;flex-wrap:wrap;justify-content:space-between;align-items:center}
+.actrow{justify-content:flex-start;margin-top:14px}
+.form{display:flex;flex-direction:column;gap:6px}.form label{font-size:13px;color:var(--muted);margin-top:6px}
+.in,.ta{width:100%;font:15px var(--fs-body);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:9px 10px}
+.ta{resize:vertical;margin-top:6px}
+.chk{display:flex;gap:10px;align-items:flex-start;color:var(--ink)!important;font-size:14px!important}.chk input{margin-top:3px}
+.rep{border-top:1px solid var(--line);padding:8px 0}.rep summary{cursor:pointer;font-weight:600}
+.dl.non{color:var(--muted);font-weight:500}
+.plain{padding-left:18px;margin:6px 0 12px}.plain li{margin:2px 0}
+.sel{width:auto;min-width:150px}
+.fcat{border-top:1px solid var(--line);padding:10px 0}.fch{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.fco{display:flex;flex-direction:column;gap:6px;margin-top:8px;padding-left:4px}.fco .chk{margin-top:0}
+.cbanner{margin-bottom:12px}
+.jl{border-top:1px solid var(--line);padding:10px 0}.jl:first-child{border-top:0}.jl p{margin-top:6px;font-size:14.5px}
+.jh{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+html,body{margin:0}
+.ubar{display:flex;gap:10px;align-items:center;justify-content:flex-end;flex-wrap:wrap;padding:8px 0;max-width:1040px;margin:0 auto;font-size:13px}
+.ubar .uc{margin-right:auto;color:var(--muted);font:500 12px var(--fs-mono)}
+.ubar[hidden],.login[hidden]{display:none}
+.login{position:fixed;inset:0;z-index:100;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto}
+.lgc{width:100%;max-width:380px;display:flex;flex-direction:column;gap:8px}
+.lgc label{font-size:13px;color:var(--muted);margin-top:6px}.lgc .btn{margin-top:12px}
+</style>
+
+</head><body>
+<div class="ubar" id="ubar" hidden></div>
+<div class="wrap">
+  <div class="cover">
+    <div>
+      <div class="brand"><i></i><b>PHÉNIX</b><span>Architecture</span></div>
+      <div class="eyebrow">Carnet de projet · Indice A</div>
+      <h1 id="cv-name">Villa Rivière</h1>
+      <p class="sub" id="cv-sub">Maison individuelle de plain-pied, 119 m² habitables. Tout ce qui sera construit, matériau par matériau, avec les plans, les coupes et le prix de chaque poste.</p>
+      <span class="stamp" id="cv-stamp">Maquette · projet fictif</span>
+    </div>
+    <dl class="ref" id="cv-ref">
+      <dt>Dossier</dt><dd>PH-2026-014</dd>
+      <dt>Clients</dt><dd>M. et Mme Rivière</dd>
+      <dt>Terrain</dt><dd>Lotissement Les Chaumes, Puy-de-Dôme (63)</dd>
+      <dt>Mission</dt><dd>Maîtrise d’œuvre et contractant général</dd>
+      <dt>Édité le</dt><dd>10/10/2026</dd>
+    </dl>
+  </div>
+
+  <nav class="tabs" role="tablist" aria-label="Chapitres du carnet" id="tabs"></nav>
+
+  <div id="panels"></div>
+
+  <footer class="foot">
+    <span>Phénix-Architecture EURL · Maîtrise d’œuvre et contractant général · Saint-Georges-de-Mons (63)</span>
+    <span>contact@phenixarchitecte.fr · 04 73 73 00 59</span>
+    <span>Maquette de présentation. Dimensions, performances et prix sont indicatifs et à valider avant tout usage contractuel.</span>
+  </footer>
+</div>
+<div class="dock" id="dock"></div>
+<div class="login" id="login" role="dialog" aria-modal="true" aria-label="Connexion">
+  <form class="card lgc" id="login-form" autocomplete="on">
+    <div class="brand"><i></i><b>PHÉNIX</b><span>Architecture</span></div>
+    <h2>Carnet de projet</h2>
+    <p class="muted">Connectez-vous avec l’adresse e-mail que Phénix a associée à votre projet.</p>
+    <label for="lg-email">Adresse e-mail</label><input id="lg-email" class="in" type="email" autocomplete="username" required>
+    <label for="lg-pass">Mot de passe</label><input id="lg-pass" class="in" type="password" autocomplete="current-password" required>
+    <button class="btn solid big" type="submit">Se connecter</button>
+    <button class="btn" type="button" id="lg-reset">Première connexion ou mot de passe oublié</button>
+    <p class="cap" id="login-msg" role="status"></p>
+  </form>
+</div>
+
+<script>
+(function(){
+"use strict";
+var D2R=Math.PI/180;
+var nf0=function(n){return n.toLocaleString("fr-FR",{maximumFractionDigits:0})};
+var eur=function(n){return n.toLocaleString("fr-FR",{style:"currency",currency:"EUR",maximumFractionDigits:0})};
+var eur2=function(n){return n.toLocaleString("fr-FR",{style:"currency",currency:"EUR",minimumFractionDigits:2,maximumFractionDigits:2})};
+var dec=function(n,d){d=d==null?1:d;return n.toLocaleString("fr-FR",{minimumFractionDigits:d,maximumFractionDigits:d})};
+var r1=function(n){return Math.round(n*10)/10};
+
+var S={tab:"synth",roof:"terre",wall:"ossature",floor:"A",done:{}};
+
+/* ---------- Données : pièces et sols ---------- */
+var ROOMS=[
+ {n:"Séjour-cuisine",x:0,y:3.6,w:6.6,h:5.4,f:"A"},
+ {n:"Entrée",x:6.6,y:7.2,w:3.6,h:1.8,f:"A"},
+ {n:"Dégagement",x:6.6,y:3.6,w:6.6,h:1.2,f:"A"},
+ {n:"Suite parentale",x:0,y:0,w:4.2,h:3.6,f:"B"},
+ {n:"Chambre 2",x:6.6,y:0,w:3.3,h:3.6,f:"B"},
+ {n:"Chambre 3",x:9.9,y:0,w:3.3,h:3.6,f:"B"},
+ {n:"Salle d’eau",x:4.2,y:0,w:2.4,h:3.6,f:"C"},
+ {n:"Salle de bains",x:7.8,y:4.8,w:2.4,h:2.4,f:"C"},
+ {n:"WC",x:6.6,y:4.8,w:1.2,h:2.4,f:"C"},
+ {n:"Cellier",x:10.2,y:4.8,w:3.0,h:4.2,f:"D"}
+];
+var AREA=0,FA={A:0,B:0,C:0,D:0};
+ROOMS.forEach(function(r){r.a=Math.round(r.w*r.h*100)/100;AREA+=r.a;FA[r.f]+=r.a});
+AREA=Math.round(AREA*100)/100;
+
+var FLOORS={
+ A:{n:"Carrelage grand format 60 × 120",short:"Pièces de vie",pu:78,rows:[
+  ["Où","Séjour-cuisine, entrée, dégagement"],
+  ["Matériau","Grès cérame pleine masse rectifié, aspect béton ciré, épaisseur 9 mm, classement U3 P3"],
+  ["Support","Chape fluide ciment de 5 cm sur plancher chauffant, primaire d’accrochage"],
+  ["Pose","Collée à double encollage (colle C2 S1 sur le support et au dos du carreau), joints de 2 mm"],
+  ["Détails","Joints de fractionnement au droit des seuils et des grandes surfaces, plinthes assorties de 8 cm"]],
+  watch:["Contrôler le séchage de la chape et la mise en chauffe progressive avant la pose.","Planéité du support à vérifier à la règle de 2 m : un grand format ne rattrape rien.","Le double encollage est systématique en grand format, il garantit l’absence de vide sous le carreau."]},
+ B:{n:"Parquet contrecollé chêne",short:"Chambres",pu:92,rows:[
+  ["Où","Suite parentale, chambre 2, chambre 3"],
+  ["Matériau","Parquet contrecollé chêne, 14 mm dont 3 mm de couche d’usure, finition huilée"],
+  ["Support","Chape fluide ciment de 5 cm sur plancher chauffant, taux d’humidité contrôlé avant pose"],
+  ["Pose","Collée en plein avec colle élastique compatible plancher chauffant"],
+  ["Détails","Jeu de dilatation de 8 à 10 mm en périphérie, plinthes bois de 10 cm peintes"]],
+  watch:["Humidité de la chape contrôlée à la bombe à carbure avant toute pose.","Jeu périphérique à respecter, il disparaît sous la plinthe.","Barre de seuil à prévoir à chaque passage vers le carrelage."]},
+ C:{n:"Carrelage 30 × 60 antidérapant",short:"Pièces d’eau",pu:85,rows:[
+  ["Où","Salle d’eau, salle de bains, WC"],
+  ["Matériau","Grès cérame 30 × 60, classement antidérapant R10, douche à carreler avec pente"],
+  ["Support","Chape fluide ciment, receveur à carreler réalisé en ragréage de pente"],
+  ["Pose","Collée à double encollage, système d’étanchéité sous carrelage (SEL) en zone de douche, joints époxy dans la douche"],
+  ["Détails","Remontée d’étanchéité en pied de mur, siphon de sol inox, plinthes carrelées"]],
+  watch:["L’étanchéité est posée avant le carrelage et se contrôle avant recouvrement.","Pente de douche de 1 à 2 % vers le siphon, vérifiée à l’eau.","Joint souple en angle, jamais de joint rigide dans les angles."]},
+ D:{n:"Carrelage 45 × 45 antidérapant",short:"Cellier",pu:62,rows:[
+  ["Où","Cellier, buanderie et local technique"],
+  ["Matériau","Grès cérame 45 × 45, R10, teinte grise"],
+  ["Support","Chape fluide ciment, siphon de sol avec pente locale"],
+  ["Pose","Collée à simple encollage (petit format), joints de 4 mm"],
+  ["Détails","Plinthes carrelées de 8 cm, traitement des pieds de cloisons pour le nettoyage à l’eau"]],
+  watch:["Siphon de sol à positionner avant la chape.","Prévoir la place du lave-linge et des arrivées d’eau avant la pose."]}
+};
+var FLOOR_KEYS=["A","B","C","D"];
+
+/* ---------- Données : murs ---------- */
+var WALLS={
+ ossature:{n:"Ossature bois",pu:248,spec:"Montants 45 × 145 mm, entraxe 60 cm, bardage mélèze",
+  desc:"Des montants bois remplis d’isolant forment la structure. Un panneau de contreventement la rigidifie, un écran pare-pluie la protège, et le bardage est tenu à distance par une lame d’air ventilée.",
+  pros:"Chantier sec et rapide, bonne performance thermique pour une faible épaisseur.",
+  layers:[
+  {t:"Plaque de plâtre BA13",e:13,l:0.25,k:"plast"},
+  {t:"Contre-cloison technique avec laine minérale",e:45,l:0.035,k:"ins"},
+  {t:"Frein-vapeur hygrovariable",e:0,l:null,k:"mem"},
+  {t:"Ossature 45 × 145 remplie de laine de bois",e:145,l:0.038,k:"ins2"},
+  {t:"Panneau OSB 3, contreventement",e:12,l:0.13,k:"wood"},
+  {t:"Écran pare-pluie perméable à la vapeur",e:0,l:null,k:"mem"},
+  {t:"Lame d’air ventilée sur tasseaux",e:27,l:null,k:"air"},
+  {t:"Bardage mélèze",e:21,l:null,k:"wood2"}],
+  watch:["Lisse basse posée sur arase étanche, à plus de 20 cm du terrain fini.","Continuité du frein-vapeur : adhésifs et manchons sur chaque traversée.","Grille anti-rongeurs en bas et en haut de la lame d’air.","Fixations de charges lourdes (cuisine haute, TV) à prévoir avant la pose des plaques."]},
+ banche:{n:"Béton banché",pu:232,spec:"Voile béton armé de 20 cm, doublage isolant collé, enduit extérieur",
+  desc:"Le béton est coulé entre deux banches métalliques. Le voile porte la maison et apporte de l’inertie. L’isolant est collé côté intérieur avec la plaque de plâtre, un enduit protège l’extérieur.",
+  pros:"Grande inertie thermique, bonne étanchéité à l’air, grandes portées possibles.",
+  layers:[
+  {t:"Plaque de plâtre BA13 sur doublage",e:13,l:0.25,k:"plast"},
+  {t:"Isolant PSE graphité collé",e:140,l:0.032,k:"ins"},
+  {t:"Voile béton armé banché",e:200,l:2.0,k:"conc"},
+  {t:"Enduit monocouche",e:15,l:1.0,k:"mort"}],
+  watch:["Réservations des réseaux et fourreaux avant le coulage : on ne perce pas un voile armé.","Rupteurs de ponts thermiques aux liaisons avec la dalle.","Reprises de bétonnage et calepinage des banches validés avant le chantier."]},
+ parpaing:{n:"Parpaing",pu:186,spec:"Blocs béton creux de 20 cm, chaînages, doublage isolant collé",
+  desc:"Des blocs de béton creux sont maçonnés, avec des chaînages horizontaux et verticaux. L’isolant est collé à l’intérieur et un enduit couvre l’extérieur.",
+  pros:"Solution économique, mise en œuvre courante, bonne tenue structurelle.",
+  layers:[
+  {t:"Plaque de plâtre BA13 sur doublage",e:13,l:0.25,k:"plast"},
+  {t:"Isolant PSE graphité collé",e:120,l:0.032,k:"ins"},
+  {t:"Parpaing creux de 20 cm",e:200,l:0.9,k:"conc"},
+  {t:"Enduit monocouche",e:15,l:1.0,k:"mort"}],
+  watch:["Chaînages et linteaux ceinturent chaque ouverture.","Fissures d’enduit : joints de fractionnement aux changements de support.","Étanchéité à l’air à soigner autour des menuiseries et des réseaux."]},
+ brique:{n:"Brique rouge",pu:214,spec:"Brique alvéolaire de 20 cm, doublage isolant, enduit extérieur",
+  desc:"Des briques de terre cuite alvéolées sont montées à joints minces. Elles régulent bien l’humidité. L’isolant est ajouté côté intérieur.",
+  pros:"Matériau sain, bon confort d’été, montage rapide à joints minces.",
+  layers:[
+  {t:"Plaque de plâtre BA13 sur doublage",e:13,l:0.25,k:"plast"},
+  {t:"Laine de verre sur ossature métallique",e:120,l:0.032,k:"ins"},
+  {t:"Brique alvéolaire de 20 cm",e:200,l:0.3,k:"brick"},
+  {t:"Enduit monocouche",e:15,l:1.0,k:"mort"}],
+  watch:["Premier rang posé sur arase étanche parfaitement de niveau.","Rupteurs thermiques aux planchers et aux appuis.","Réservations et saignées limitées : on ne rainure pas une brique alvéolaire sans accord."]}
+};
+var WALL_KEYS=["ossature","banche","parpaing","brique"];
+var WALL_NET=102.2;
+var WALL_PAT={ins:"p-ins",ins2:"p-ins",conc:"p-conc",mort:"p-conc",brick:"p-brick",wood:"p-wood",wood2:"p-wood"};
+
+/* ---------- Données : toiture ---------- */
+var ROOF_G={span:9.6,pitch:35,len:14.4,eave:0.5,step:0.6,wallLen:13.84};
+var ROOFS={
+ terre:{n:"Tuile terre cuite à emboîtement",pu:68,kg:42,p:"Aspect traditionnel et teinte stable dans le temps.",w:"Durable, bon confort d’été."},
+ beton:{n:"Tuile béton",pu:52,kg:46,p:"Même principe de pose, coloris plus limités.",w:"Économique, un peu plus lourde."},
+ ardoise:{n:"Ardoise naturelle",pu:125,kg:28,p:"Finition haut de gamme, pose au clou ou au crochet.",w:"Très durable, main-d’œuvre plus longue."},
+ bac:{n:"Bac acier prélaqué",pu:58,kg:6,p:"Toiture légère, pose rapide, aspect contemporain.",w:"Très léger, attention au bruit de pluie."}
+};
+var ROOF_KEYS=["terre","beton","ardoise","bac"];
+
+var CHECKS={
+ toit:["Type et teinte de la couverture","Débord de toit de 50 cm sur les quatre côtés","Pente de 35° confirmée avec le permis de construire","Combles perdus non aménageables : confirmé"],
+ murs:["Complexe de mur et épaisseur totale (elle modifie les cotes intérieures)","Nature et teinte de la finition extérieure","Positions des prises et luminaires sur les murs à contre-cloison"],
+ sols:["Format et teinte des carrelages","Essence et teinte du parquet","Traitement des seuils entre pièces","Hauteur et finition des plinthes"]
+};
+
+/* ---------- Calculs ---------- */
+function table(lines){
+  var tot=0;
+  var rows=lines.map(function(l){
+    var q=r1(l[1]);var t=q*l[3];tot+=t;
+    var qs=Number.isInteger(q)?nf0(q):dec(q,1);
+    return "<tr><td>"+l[0]+"</td><td class=\"num\">"+qs+" "+l[2]+"</td><td class=\"num\">"+(Number.isInteger(l[3])?eur(l[3]):eur2(l[3]))+"</td><td class=\"num\">"+eur(t)+"</td></tr>";
+  }).join("");
+  return {tot:tot,html:"<div class=\"tw\"><table class=\"tbl\"><thead><tr><th>Poste</th><th class=\"num\">Quantité</th><th class=\"num\">Prix unitaire HT</th><th class=\"num\">Total HT</th></tr></thead><tbody>"+rows+"</tbody><tfoot><tr><td colspan=\"3\">Total HT</td><td class=\"num\">"+eur(tot)+"</td></tr></tfoot></table></div>"};
+}
+function calcRoof(){
+  var g=ROOF_G,half=g.span/2,cos=Math.cos(g.pitch*D2R);
+  var h=half*Math.tan(g.pitch*D2R),ramp=(half+g.eave)/cos,area=2*ramp*g.len;
+  var n=Math.ceil(g.wallLen/g.step)+1,o=ROOFS[S.roof];
+  var t=table([
+    ["Fermettes industrielles, fourniture, levage et pose",n,"u",195],
+    ["Contreventement et anti-flambement",1,"forfait",1450],
+    ["Écran de sous-toiture HPV",area,"m²",5.2],
+    ["Contre-lattage et lattage",area,"m²",16.5],
+    ["Couverture : "+o.n.toLowerCase(),area,"m²",o.pu],
+    ["Faîtage, rives et accessoires",g.len+4*ramp,"ml",38],
+    ["Gouttières et descentes d’eaux pluviales",2*g.len,"ml",58],
+    ["Isolation des combles perdus, laine soufflée, R ≈ 10",AREA,"m²",27]
+  ]);
+  return {t:t,total:t.tot,area:area,n:n,h:h,ramp:ramp};
+}
+function calcWalls(){
+  var w=WALLS[S.wall];
+  var t=table([["Mur complet, "+w.n.toLowerCase()+" (structure, isolation, finitions intérieure et extérieure)",WALL_NET,"m²",w.pu],["Étanchéité à l’air et traitement des points singuliers",1,"forfait",1450]]);
+  return {t:t,total:t.tot};
+}
+function calcFloors(){
+  var lines=FLOOR_KEYS.map(function(k){return [FLOORS[k].n+" · "+FLOORS[k].short.toLowerCase(),FA[k],"m²",FLOORS[k].pu]});
+  lines.push(["Ragréage et primaire d’accrochage",AREA,"m²",9]);
+  lines.push(["Barres de seuil",8,"u",45]);
+  var t=table(lines);
+  return {t:t,total:t.tot};
+}
+function wallStats(w){
+  var tot=0,R=0;
+  w.layers.forEach(function(l){tot+=l.e;if(l.l)R+=l.e/1000/l.l});
+  return {e:tot,R:R};
+}
+
+/* ---------- Dessins ---------- */
+function trussSvg(){
+  var g=ROOF_G,W=520,x0=92,y0=250,k=W/g.span,hp=(g.span/2)*Math.tan(g.pitch*D2R)*k;
+  var A=[x0,y0],B=[x0+W,y0],P=[x0+W/2,y0-hp],C=[x0+W/3,y0],Dd=[x0+2*W/3,y0];
+  var M1=[(A[0]+P[0])/2,(A[1]+P[1])/2],M2=[(B[0]+P[0])/2,(B[1]+P[1])/2];
+  var ov=g.eave*k,t=Math.tan(g.pitch*D2R);
+  var A2=[x0-ov,y0+ov*t],B2=[x0+W+ov,y0+ov*t];
+  function ln(a,b,w){return "<line x1=\""+a[0].toFixed(1)+"\" y1=\""+a[1].toFixed(1)+"\" x2=\""+b[0].toFixed(1)+"\" y2=\""+b[1].toFixed(1)+"\" stroke-width=\""+w+"\"/>"}
+  var s="<svg viewBox=\"0 0 700 340\" role=\"img\" aria-label=\"Schéma d’une fermette à treillis en W\">";
+  s+="<g stroke=\"var(--m-wood2)\" stroke-linecap=\"butt\" fill=\"none\">"+ln(A2,P,9)+ln(B2,P,9)+ln(A,B,9)+ln(C,M1,6)+ln(C,P,6)+ln(Dd,P,6)+ln(Dd,M2,6)+"</g>";
+  s+="<rect x=\""+(x0-24)+"\" y=\""+(y0+6)+"\" width=\"48\" height=\"12\" class=\"k-conc ol\"/><rect x=\""+(x0+W-24)+"\" y=\""+(y0+6)+"\" width=\"48\" height=\"12\" class=\"k-conc ol\"/>";
+  [A,B,P,C,Dd,M1,M2].forEach(function(p){s+="<rect x=\""+(p[0]-12).toFixed(1)+"\" y=\""+(p[1]-12).toFixed(1)+"\" width=\"24\" height=\"24\" rx=\"2\" fill=\"var(--accent)\" fill-opacity=\".35\" stroke=\"var(--accent)\" stroke-width=\"1\"/>"});
+  // cotations
+  var cy=y0+62;
+  s+="<path class=\"dim\" d=\"M"+A[0]+" "+cy+"H"+B[0]+"M"+A[0]+" "+(cy-6)+"V"+(cy+6)+"M"+B[0]+" "+(cy-6)+"V"+(cy+6)+"\"/>";
+  s+="<text class=\"svt\" x=\""+(x0+W/2)+"\" y=\""+(cy-8)+"\" text-anchor=\"middle\">Portée "+dec(g.span,2)+" m</text>";
+  var hx=B[0]+52;
+  s+="<path class=\"dim\" d=\"M"+(P[0]+14)+" "+P[1]+"H"+(hx+6)+"M"+(B[0]+20)+" "+y0+"H"+(hx+6)+"M"+hx+" "+P[1]+"V"+y0+"\"/>";
+  s+="<text class=\"svt\" transform=\"translate("+(hx+16)+" "+((P[1]+y0)/2)+") rotate(-90)\" text-anchor=\"middle\">Hauteur "+dec(hp/k,2)+" m</text>";
+  var rr=62,ex=A[0]+rr*Math.cos(g.pitch*D2R),ey=y0-rr*Math.sin(g.pitch*D2R);
+  s+="<path class=\"dim\" d=\"M"+(A[0]+rr)+" "+y0+" A"+rr+" "+rr+" 0 0 0 "+ex.toFixed(1)+" "+ey.toFixed(1)+"\"/><text class=\"svt\" x=\""+(A[0]+rr+8)+"\" y=\""+(y0-10)+"\">"+g.pitch+"°</text>";
+  s+="<text class=\"svm\" x=\""+(A2[0]-6)+"\" y=\""+(A2[1]+22)+"\">débord 0,50 m</text>";
+  // repères
+  var nrm=[-Math.sin(g.pitch*D2R),-Math.cos(g.pitch*D2R)];
+  var q=[A[0]+(P[0]-A[0])*.3+26*nrm[0],A[1]+(P[1]-A[1])*.3+26*nrm[1]];
+  var mk=[[q[0],q[1],1],[x0+W*.5,y0+30,2],[(C[0]+M1[0])/2-20,(C[1]+M1[1])/2+8,3],[P[0],P[1]-30,4],[B[0]+34,y0+30,5]];
+  mk.forEach(function(m){s+="<circle cx=\""+m[0].toFixed(1)+"\" cy=\""+m[1].toFixed(1)+"\" r=\"10\" class=\"mk\"/><text class=\"mkt\" x=\""+m[0].toFixed(1)+"\" y=\""+(m[1]+4).toFixed(1)+"\" text-anchor=\"middle\">"+m[2]+"</text>"});
+  return s+"</svg>";
+}
+function layersSvg(){
+  var o=ROOFS[S.roof];
+  var rows=[
+   ["k-brick",o.n,"selon modèle"],
+   ["k-wood","Liteaux 27 × 38, entraxe selon la tuile","27 mm"],
+   ["k-wood2","Contre-lattes, lame d’air ventilée","27 mm"],
+   ["k-air","Écran de sous-toiture HPV, respirant","< 1 mm"],
+   ["k-wood","Fermette, section selon note de calcul","selon calcul"],
+   ["k-ins","Combles perdus, laine soufflée, R ≈ 10","400 mm"],
+   ["k-plast","Frein-vapeur et plaque de plâtre BA13 sous les fermettes","13 mm"]
+  ];
+  var s="<svg viewBox=\"0 0 660 316\" role=\"img\" aria-label=\"Coupe de principe des couches de toiture\">";
+  s+="<text class=\"svm\" x=\"0\" y=\"12\">EXTÉRIEUR</text>";
+  rows.forEach(function(r,i){
+    var y=22+i*40;
+    s+="<rect x=\"0\" y=\""+y+"\" width=\"660\" height=\"34\" class=\""+r[0]+" ol\"/>";
+    s+="<circle cx=\"22\" cy=\""+(y+17)+"\" r=\"10\" class=\"mk\"/><text class=\"mkt\" x=\"22\" y=\""+(y+21)+"\" text-anchor=\"middle\">"+(i+1)+"</text>";
+    s+="<text class=\"svt\" x=\"44\" y=\""+(y+21)+"\">"+r[1]+"</text><text class=\"svt\" x=\"648\" y=\""+(y+21)+"\" text-anchor=\"end\">"+r[2]+"</text>";
+  });
+  s+="<text class=\"svm\" x=\"0\" y=\"312\">INTÉRIEUR</text></svg>";
+  return s;
+}
+function wallSvg(w){
+  var sc=w.sc||1.3,x0=70,y0=52,h=200,tot=0,pf=(w.id||"w")+"-";
+  var s="<svg viewBox=\"0 0 640 336\" role=\"img\" aria-label=\"Coupe détail du mur\"><defs>"+
+   "<pattern id=\""+pf+"p-ins\" width=\"14\" height=\"14\" patternUnits=\"userSpaceOnUse\"><path class=\"ptn\" d=\"M0 7Q3.5 0 7 7T14 7\"/></pattern>"+
+   "<pattern id=\""+pf+"p-conc\" width=\"10\" height=\"10\" patternUnits=\"userSpaceOnUse\"><circle class=\"ptf\" cx=\"2\" cy=\"2\" r=\".9\"/><circle class=\"ptf\" cx=\"7\" cy=\"6\" r=\"1.1\"/><circle class=\"ptf\" cx=\"3\" cy=\"8\" r=\".7\"/></pattern>"+
+   "<pattern id=\""+pf+"p-brick\" width=\"10\" height=\"10\" patternUnits=\"userSpaceOnUse\"><path class=\"ptn\" d=\"M-1 1L1-1M0 10L10 0M9 11L11 9\"/></pattern>"+
+   "<pattern id=\""+pf+"p-wood\" width=\"6\" height=\"8\" patternUnits=\"userSpaceOnUse\"><path class=\"ptn\" d=\"M3 0V8\"/></pattern></defs>";
+  var x=x0,body="",marks="";
+  w.layers.forEach(function(l,i){
+    var wp=Math.max(l.e*sc,3);tot+=l.e;
+    body+="<rect x=\""+x.toFixed(1)+"\" y=\""+y0+"\" width=\""+wp.toFixed(1)+"\" height=\""+h+"\" class=\"k-"+l.k+" ol\"/>";
+    if(WALL_PAT[l.k])body+="<rect x=\""+x.toFixed(1)+"\" y=\""+y0+"\" width=\""+wp.toFixed(1)+"\" height=\""+h+"\" fill=\"url(#"+pf+WALL_PAT[l.k]+")\"/>";
+    var cx=x+wp/2,my=y0-16-(i%2)*24;
+    marks+="<line x1=\""+cx.toFixed(1)+"\" y1=\""+(my+10)+"\" x2=\""+cx.toFixed(1)+"\" y2=\""+y0+"\" class=\"ol\"/><circle cx=\""+cx.toFixed(1)+"\" cy=\""+my+"\" r=\"10\" class=\"mk\"/><text class=\"mkt\" x=\""+cx.toFixed(1)+"\" y=\""+(my+4)+"\" text-anchor=\"middle\">"+(i+1)+"</text>";
+    x+=wp;
+  });
+  var cy=y0+h+34;
+  s+=body+marks;
+  s+="<path class=\"dim\" d=\"M"+x0+" "+cy+"H"+x.toFixed(1)+"M"+x0+" "+(cy-6)+"V"+(cy+6)+"M"+x.toFixed(1)+" "+(cy-6)+"V"+(cy+6)+"\"/>";
+  s+="<text class=\"svt\" x=\""+((x0+x)/2).toFixed(1)+"\" y=\""+(cy-9)+"\" text-anchor=\"middle\">Épaisseur totale "+tot+" mm</text>";
+  s+="<text class=\"svm\" x=\""+(x0-10)+"\" y=\""+(y0+h/2)+"\" text-anchor=\"end\">"+(w.s1||"INT.")+"</text><text class=\"svm\" x=\""+(x+10).toFixed(1)+"\" y=\""+(y0+h/2)+"\">"+(w.s2||"EXT.")+"</text>";
+  return s+"</svg>";
+}
+function planSvg(){
+  var k=40,M=34,W=13.2*k+2*M,H=9*k+2*M+26;
+  var s="<svg viewBox=\"0 0 "+W+" "+H+"\" role=\"img\" aria-label=\"Plan du rez-de-chaussée avec les revêtements de sol\">";
+  ROOMS.forEach(function(r,i){
+    var dim=r.f!==S.floor?" style=\"opacity:.42\"":"";
+    var cx=M+(r.x+r.w/2)*k,cy=M+(r.y+r.h/2)*k;
+    s+="<g data-act=\"floor\" data-id=\""+r.f+"\" tabindex=\"0\" role=\"button\" aria-label=\""+r.n+", "+dec(r.a,1)+" m², "+FLOORS[r.f].n+"\""+dim+">";
+    s+="<rect x=\""+(M+r.x*k)+"\" y=\""+(M+r.y*k)+"\" width=\""+(r.w*k)+"\" height=\""+(r.h*k)+"\" style=\"fill:var(--f-"+r.f.toLowerCase()+");stroke:var(--ink);stroke-width:1.2\"/>";
+    s+="<text class=\"svt\" x=\""+cx+"\" y=\""+(cy-2)+"\" text-anchor=\"middle\" style=\"font-size:11px\">"+r.n+"</text><text class=\"svm\" x=\""+cx+"\" y=\""+(cy+12)+"\" text-anchor=\"middle\">"+dec(r.a,1)+" m²</text></g>";
+  });
+  s+="<rect x=\""+M+"\" y=\""+M+"\" width=\""+(13.2*k)+"\" height=\""+(9*k)+"\" fill=\"none\" stroke=\"var(--ink)\" stroke-width=\"7\" pointer-events=\"none\"/>";
+  s+="<line x1=\""+(M+0.9*k)+"\" y1=\""+(M+9*k)+"\" x2=\""+(M+5.7*k)+"\" y2=\""+(M+9*k)+"\" stroke=\"var(--accent)\" stroke-width=\"7\"/>";
+  s+="<text class=\"svm\" x=\""+(M+3.3*k)+"\" y=\""+(M+9*k+20)+"\" text-anchor=\"middle\">baie vitrée sud</text>";
+  s+="<path class=\"dim\" d=\"M"+M+" "+(M-18)+"H"+(M+13.2*k)+"M"+M+" "+(M-24)+"V"+(M-12)+"M"+(M+13.2*k)+" "+(M-24)+"V"+(M-12)+"\"/><text class=\"svt\" x=\""+(M+6.6*k)+"\" y=\""+(M-22)+"\" text-anchor=\"middle\">13,20 m</text>";
+  s+="<path class=\"dim\" d=\"M"+(M-18)+" "+M+"V"+(M+9*k)+"M"+(M-24)+" "+M+"H"+(M-12)+"M"+(M-24)+" "+(M+9*k)+"H"+(M-12)+"\"/><text class=\"svt\" transform=\"translate("+(M-24)+" "+(M+4.5*k)+") rotate(-90)\" text-anchor=\"middle\">9,00 m</text>";
+  var sx=M+13.2*k-40;
+  s+="<path class=\"dim\" d=\"M"+(sx-40)+" "+(H-12)+"H"+sx+"M"+(sx-40)+" "+(H-17)+"V"+(H-7)+"M"+sx+" "+(H-17)+"V"+(H-7)+"\"/><text class=\"svm\" x=\""+(sx+6)+"\" y=\""+(H-8)+"\">1 m</text>";
+  s+="<text class=\"svm\" x=\""+M+"\" y=\""+(H-8)+"\">Dimensions intérieures. Entrée côté sud.</text>";
+  return s+"</svg>";
+}
+
+/* ---------- Rendu ---------- */
+function checks(key){
+  return "<div class=\"card\"><h3 style=\"font-size:20px;text-transform:uppercase;letter-spacing:.03em;margin-bottom:10px\">À valider avec vous</h3><div class=\"check\">"+
+   CHECKS[key].map(function(c,i){var id="c-"+key+i;return "<label for=\""+id+"\"><input type=\"checkbox\" id=\""+id+"\" data-chk=\""+id+"\""+(S.done[id]?" checked":"")+"><span>"+c+"</span></label>"}).join("")+"</div></div>";
+}
+function watchBox(list){return "<div class=\"watch\"><h4>Points de vigilance</h4><ul>"+list.map(function(x){return "<li>"+x+"</li>"}).join("")+"</ul></div>"}
+
+function renderToit(){
+  var r=calcRoof(),o=ROOFS[S.roof],g=ROOF_G;
+  $("p-toit").innerHTML=
+  "<div><h2>Toiture</h2><p class=\"lead\">Charpente en fermettes industrielles à treillis en W. Elles sont fabriquées en usine, calculées pour votre projet et posées en une journée de levage.</p></div>"+
+  "<div class=\"grid\"><div class=\"card fact\"><b>"+g.pitch+"°</b><span>Pente</span></div><div class=\"card fact\"><b>"+dec(g.span,2)+" m</b><span>Portée</span></div><div class=\"card fact\"><b>"+r.n+" fermettes</b><span>Entraxe "+dec(g.step*100,0)+" cm</span></div><div class=\"card fact\"><b>"+dec(r.area,0)+" m²</b><span>Surface de couverture</span></div></div>"+
+  "<div class=\"sec\"><h3>La fermette <small>FIG. 1</small></h3><div class=\"card fig\">"+trussSvg()+"<p class=\"cap\">Fermette en W vue de face. Pente "+g.pitch+"°, débord 0,50 m. Section des bois fixée par la note de calcul du fabricant.</p></div>"+
+   "<ul class=\"keylist\"><li><span class=\"n\">1</span><span>Membrure supérieure : elle porte la couverture.</span></li><li><span class=\"n\">2</span><span>Entrait : la membrure basse, il reprend les efforts et reçoit le plafond.</span></li><li><span class=\"n\">3</span><span>Diagonales : elles répartissent les charges vers les appuis.</span></li><li><span class=\"n\">4</span><span>Plaques à dents : elles assemblent chaque nœud, en usine.</span></li><li><span class=\"n\">5</span><span>Appui sur sablière : posé sur l’arase des murs.</span></li></ul></div>"+
+  "<div class=\"sec\"><h3>Montage de la couverture <small>FIG. 2</small></h3><div class=\"grid-2\"><div class=\"card fig\">"+layersSvg()+"<p class=\"cap\">Coupe de principe, dessinée à plat et non à l’échelle. De l’extérieur vers l’intérieur.</p></div>"+
+   "<div class=\"card\"><ol class=\"steps\"><li><span><b>Levage des fermettes</b> et fixation sur les sablières à l’entraxe de "+dec(g.step*100,0)+" cm.</span></li><li><span><b>Contreventement</b> et anti-flambement posés dès le levage.</span></li><li><span><b>Écran HPV</b> tendu sur les fermettes, recouvrements de 10 cm.</span></li><li><span><b>Contre-lattes</b> clouées dans les fermettes, elles créent la lame d’air.</span></li><li><span><b>Liteaux</b> posés à l’entraxe imposé par la tuile.</span></li><li><span><b>Couverture</b>, faîtage et rives, puis gouttières.</span></li><li><span><b>Isolant soufflé</b> sur le plafond une fois le toit hors d’eau.</span></li></ol></div></div></div>"+
+  "<div class=\"sec\"><h3>Choix du revêtement de couverture</h3><div class=\"opts\">"+
+   ROOF_KEYS.map(function(k){var x=ROOFS[k];return "<button class=\"opt"+(k===S.roof?" on":"")+"\" data-act=\"roof\" data-id=\""+k+"\" aria-pressed=\""+(k===S.roof)+"\"><span class=\"badge\">"+(k===S.roof?"Choix retenu":"Comparer")+"</span><h4>"+x.n+"</h4><span class=\"pr\">"+eur(x.pu)+" /m² posé · "+x.kg+" kg/m²</span><p>"+x.p+" "+x.w+"</p></button>"}).join("")+"</div>"+
+   "<p class=\"cap\">Le poids de la couverture entre dans le calcul des fermettes : changer de revêtement impose de refaire la note de calcul.</p></div>"+
+  priceBlock("toit","<div class=\"sec\"><h3>Chiffrage de la toiture</h3><div class=\"card\">"+r.t.html+"</div></div>")+crewSec("toit")+
+  watchBox(["Ventilation de la couverture : entrées d’air en bas de pente et sorties au faîtage.","Trappe d’accès aux combles et passage des gaines à isoler avant le soufflage.","Épaisseur d’isolant de 400 mm : prévoir des cales d’espacement autour des spots et des conduits.","Fixation des panneaux solaires éventuels à prévoir dans le calcul des fermettes."])+
+  checks("toit");
+}
+
+function renderMurs(){
+  var w=WALLS[S.wall],st=wallStats(w),c=calcWalls();
+  var rows=w.layers.map(function(l,i){return "<tr><td><span class=\"n mono\" style=\"font-weight:600\">"+(i+1)+"</span></td><td><span class=\"sw k-"+l.k+"\"></span>"+l.t+"</td><td class=\"num\">"+(l.e?l.e+" mm":"film")+"</td><td class=\"num\">"+(l.l?dec(l.l,3):"-")+"</td><td class=\"num\">"+(l.l?dec(l.e/1000/l.l,2):"-")+"</td></tr>"}).join("");
+  $("p-murs").innerHTML=
+  "<div><h2>Murs périphériques</h2><p class=\"lead\">"+w.desc+"</p></div>"+
+  "<div class=\"sec\"><h3>Le complexe de mur</h3><div class=\"seg\" role=\"group\" aria-label=\"Type de mur\">"+
+   WALL_KEYS.map(function(k){return "<button class=\"chip"+(k===S.wall?" on":"")+"\" data-act=\"wall\" data-id=\""+k+"\" aria-pressed=\""+(k===S.wall)+"\">"+WALLS[k].n+"<small>"+eur(WALLS[k].pu)+"/m²</small></button>"}).join("")+"</div>"+
+   "<div class=\"grid\" style=\"margin-bottom:14px\"><div class=\"card fact\"><b>"+st.e+" mm</b><span>Épaisseur totale</span></div><div class=\"card fact\"><b>R ≈ "+dec(st.R,1)+"</b><span>Résistance thermique, m².K/W</span></div><div class=\"card fact\"><b>"+dec(WALL_NET,1)+" m²</b><span>Surface nette de mur</span></div></div>"+
+   "<div class=\"card fig\">"+wallSvg(w)+"<p class=\"cap\">Coupe horizontale à l’échelle 1/8. "+w.spec+".</p></div></div>"+
+  "<div class=\"sec\"><h3>Détail des couches <small>DE L’INTÉRIEUR VERS L’EXTÉRIEUR</small></h3><div class=\"card\"><div class=\"tw\"><table class=\"tbl\"><thead><tr><th>Repère</th><th>Matériau</th><th class=\"num\">Épaisseur</th><th class=\"num\">λ W/m.K</th><th class=\"num\">R m².K/W</th></tr></thead><tbody>"+rows+"</tbody></table></div>"+
+   "<p class=\"cap\">"+w.pros+" R calculé en additionnant e/λ des couches isolantes, sans les ponts thermiques ni les résistances superficielles.</p></div></div>"+
+  priceBlock("murs","<div class=\"sec\"><h3>Chiffrage des murs</h3><div class=\"card\">"+c.t.html+"</div></div>")+crewSec("murs")+
+  watchBox(w.watch)+checks("murs");
+}
+
+function renderSols(){
+  var f=FLOORS[S.floor],c=calcFloors();
+  var chips=FLOOR_KEYS.map(function(k){return "<button class=\"chip"+(k===S.floor?" on":"")+"\" data-act=\"floor\" data-id=\""+k+"\" aria-pressed=\""+(k===S.floor)+"\"><span class=\"sw\" style=\"background:var(--f-"+k.toLowerCase()+");margin-right:6px\"></span>"+FLOORS[k].short+"<small>"+dec(FA[k],1)+" m²</small></button>"}).join("");
+  var det=f.rows.map(function(r){return "<tr><td style=\"white-space:nowrap;font:500 11px var(--fs-mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);min-width:90px\">"+r[0]+"</td><td>"+r[1]+"</td></tr>"}).join("");
+  $("p-sols").innerHTML=
+  "<div><h2>Revêtements de sol</h2><p class=\"lead\">Quatre revêtements pour "+dec(AREA,1)+" m². Touchez une pièce ou une pastille de couleur pour lire la fiche du revêtement : où il se pose, sur quel support et comment.</p></div>"+
+  "<div class=\"sec\"><h3>Plan du rez-de-chaussée <small>FIG. 1</small></h3><div class=\"seg\" role=\"group\" aria-label=\"Revêtement\">"+chips+"</div><div class=\"card fig\">"+planSvg()+"</div></div>"+
+  "<div class=\"sec\"><h3>"+f.n+" <small>"+f.short.toUpperCase()+" · "+dec(FA[S.floor],1)+" M²</small></h3><div class=\"card\"><div class=\"tw\"><table class=\"tbl\"><tbody>"+det+"</tbody></table></div></div></div>"+
+  watchBox(f.watch)+
+  priceBlock("sols","<div class=\"sec\"><h3>Chiffrage des sols</h3><div class=\"card\">"+c.t.html+"</div></div>")+crewSec("sols")+
+  checks("sols");
+}
+
+/* ====================== Nouveaux chapitres ====================== */
+var PERI=2*(13.84+9.64),SLAB=13.84*9.64;
+S.part="std";
+
+/* Planning : source unique pour le Gantt et les tableaux d’intervenants */
+var PLAN=[
+ ["fond","Géomètre","Implantation et piquetage",1,1],
+ ["fond","Terrassier","Décapage et fouilles",1,2],
+ ["fond","Maçon","Semelles et soubassement",3,3],
+ ["fond","Terrassier","Drain périphérique et remblais",6,1],
+ ["dalle","Plombier","Évacuations enterrées",6,1],
+ ["dalle","Électricien","Fourreaux sous dalle",6,1],
+ ["dalle","Maçon","Hérisson et dalle béton armé",7,2],
+ ["dalle","Applicateur de chape","Isolant à plots et chape fluide",25,1],
+ ["murs","Charpentier","Ossature bois et contreventement",9,3],
+ ["murs","Charpentier","Isolant des murs et bardage",17,2],
+ ["toit","Charpentier-couvreur","Levage des fermettes",12,1],
+ ["toit","Charpentier-couvreur","Écran, liteaux et couverture",13,3],
+ ["toit","Zingueur","Gouttières et descentes",16,1],
+ ["toit","Isolateur","Laine soufflée des combles",22,1],
+ ["menu","Menuisier poseur","Menuiseries extérieures et volets",16,2],
+ ["menu","Menuisier poseur","Portes intérieures",28,1],
+ ["elec","Électricien","Gaines, boîtes et câblage",18,3],
+ ["elec","Électricien","Tableau, appareillage et tests",32,2],
+ ["elec","Gestionnaire de réseau","Raccordement au réseau",30,1],
+ ["elec","Consuel","Visite de conformité",34,1],
+ ["plomb","Plombier","Alimentations et évacuations",18,3],
+ ["plomb","Plombier","Sanitaires et robinetterie",32,2],
+ ["chauf","Chauffagiste","Collecteur et tubes de plancher",23,1],
+ ["chauf","Chauffagiste","Pompe à chaleur et mise en service",31,2],
+ ["chauf","Ventiliste","Gaines de VMC en combles",19,2],
+ ["chauf","Ventiliste","Caisson, bouches et réglage",31,1],
+ ["plat","Plaquiste","Cloisons et plafonds",20,4],
+ ["plat","Plaquiste","Bandes et enduits de finition",27,2],
+ ["pein","Peintre","Impression et première couche",28,2],
+ ["pein","Peintre","Finitions et retouches",35,2],
+ ["sols","Carreleur","Carrelage",29,3],
+ ["sols","Parqueteur","Parquet des chambres",32,1],
+ ["cuis","Cuisiniste","Pose de la cuisine",33,1],
+ ["cuis","Menuisier agenceur","Dressing et placards",33,2],
+ ["plan","Phénix","Pilotage et visite hebdomadaire",1,37],
+ ["plan","Opérateur agréé","Test d’étanchéité à l’air",34,1],
+ ["plan","Phénix et clients","Réception et levée des réserves",37,2]
+];
+var CH_NAMES={fond:"Fondations",dalle:"Dalle",murs:"Murs",toit:"Toiture",menu:"Menuiseries",elec:"Électricité",plomb:"Plomberie",chauf:"Chauffage et ventilation",plat:"Plâtrerie",pein:"Peinture",sols:"Sols",cuis:"Cuisine",plan:"Pilotage"};
+
+/* Outils communs */
+function sec(t,sm,inner){return '<div class="sec"><h3>'+t+(sm?' <small>'+sm+'</small>':'')+'</h3>'+inner+'</div>'}
+function card(inner){return '<div class="card">'+inner+'</div>'}
+function figCard(svg,cap){return '<div class="card fig">'+svg+(cap?'<p class="cap">'+cap+'</p>':'')+'</div>'}
+function keys(list){return '<ul class="keylist">'+list.map(function(t,i){return '<li><span class="n">'+(i+1)+'</span><span>'+t+'</span></li>'}).join('')+'</ul>'}
+function stepsOl(list){return '<ol class="steps">'+list.map(function(t){return '<li><span>'+t+'</span></li>'}).join('')+'</ol>'}
+function matTable(rows){
+  return '<div class="card"><div class="tw"><table class="tbl"><thead><tr><th>Matière</th><th>Où</th><th>Mise en œuvre</th><th>Posé par</th></tr></thead><tbody>'+
+   rows.map(function(r){return '<tr><td><b>'+r[0]+'</b></td><td>'+r[1]+'</td><td>'+r[2]+'</td><td>'+r[3]+'</td></tr>'}).join('')+'</tbody></table></div></div>';
+}
+function wk(s,d){return d<2?'S'+s:'S'+s+' à S'+(s+d-1)}
+function crewSec(key){
+  var rows=PLAN.filter(function(p){return p[0]===key}).map(function(p){return '<tr><td><b>'+p[1]+'</b></td><td>'+p[2]+'</td><td class="num">'+wk(p[3],p[4])+'</td></tr>'}).join('');
+  return sec('Qui intervient','',card('<div class="tw"><table class="tbl"><thead><tr><th>Intervenant</th><th>Mission</th><th class="num">Semaines de chantier</th></tr></thead><tbody>'+rows+'</tbody></table></div><p class="cap">Phénix coordonne tous les intervenants et contrôle chaque étape. Semaines comptées depuis le début du chantier.</p>'));
+}
+function pats(p){
+  return '<pattern id="'+p+'-ins" width="14" height="14" patternUnits="userSpaceOnUse"><path class="ptn" d="M0 7Q3.5 0 7 7T14 7"/></pattern>'+
+   '<pattern id="'+p+'-conc" width="10" height="10" patternUnits="userSpaceOnUse"><circle class="ptf" cx="2" cy="2" r=".9"/><circle class="ptf" cx="7" cy="6" r="1.1"/><circle class="ptf" cx="3" cy="8" r=".7"/></pattern>';
+}
+function strataSvg(rows,top,bot,label){
+  var n=rows.length,hh=40,H=n*hh+34;
+  var s='<svg viewBox="0 0 660 '+H+'" role="img" aria-label="'+(label||'Coupe de principe')+'">';
+  s+='<text class="svm" x="0" y="12">'+top+'</text>';
+  rows.forEach(function(r,i){
+    var y=22+i*hh;
+    s+='<rect x="0" y="'+y+'" width="660" height="34" class="'+r[0]+' ol"/>';
+    s+='<circle cx="22" cy="'+(y+17)+'" r="10" class="mk"/><text class="mkt" x="22" y="'+(y+21)+'" text-anchor="middle">'+(i+1)+'</text>';
+    s+='<text class="svt" x="44" y="'+(y+21)+'">'+r[1]+'</text><text class="svt" x="648" y="'+(y+21)+'" text-anchor="end">'+r[2]+'</text>';
+  });
+  return s+'<text class="svm" x="0" y="'+(H-4)+'">'+bot+'</text></svg>';
+}
+function basePlan(inner,o){
+  o=o||{};
+  var k=40,M=34,W=13.2*k+2*M,H=9*k+2*M+(o.extra||0);
+  function P(m){return M+m*k}
+  var s='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+(o.aria||'Plan')+'">';
+  ROOMS.forEach(function(r){
+    var fill=o.fill?o.fill(r):'none';
+    s+='<rect x="'+P(r.x)+'" y="'+P(r.y)+'" width="'+(r.w*k)+'" height="'+(r.h*k)+'" style="fill:'+fill+';stroke:var(--ink);stroke-width:1"/>';
+    if(!o.nolabel)s+='<text class="svm" x="'+(P(r.x)+6)+'" y="'+(P(r.y)+14)+'">'+r.n+'</text>';
+  });
+  s+=inner(P,k);
+  s+='<rect x="'+M+'" y="'+M+'" width="'+(13.2*k)+'" height="'+(9*k)+'" fill="none" stroke="var(--ink)" stroke-width="7" pointer-events="none"/>';
+  return s+'</svg>';
+}
+function mkChap(key,title,lead,facts,figs,mats,t,watch){
+  var f='<div class="grid">'+facts.map(function(x){return '<div class="card fact"><b>'+x[0]+'</b><span>'+x[1]+'</span></div>'}).join('')+'</div>';
+  return {total:t.tot,html:'<div><h2>'+title+'</h2><p class="lead">'+lead+'</p></div>'+f+figs.join('')+(mats?sec('Matières choisies','',matTable(mats)):'')+crewSec(key)+priceBlock(key,sec('Chiffrage','HT',card(t.html)))+watchBox(watch)+checks(key)};
+}
+function legend(items){return '<div class="lg">'+items.join('')+'</div>'}
+
+/* Cases à valider */
+CHECKS.fond=["Hors gel et profondeur des fouilles confirmés par l’étude de sol","Emplacement de la maison et altimétrie du rez-de-chaussée","Position des arrivées d’eau, d’électricité et de l’évacuation"];
+CHECKS.dalle=["Hauteur du sol fini par rapport au terrain (+ 0,20 m)","Position des évacuations enterrées avant le coulage","Pièces chauffées au sol : confirmées"];
+CHECKS.menu=["Teinte des menuiseries et des volets","Sens d’ouverture de chaque fenêtre et de la porte d’entrée","Hauteur d’allège des fenêtres de chambres","Modèle de poignée et de serrure"];
+CHECKS.elec=["Nombre et position des prises dans chaque pièce","Hauteur des interrupteurs et des prises","Choix de la gamme d’appareillage et de sa teinte","Prises extérieures, borne de recharge, portail : souhaits"];
+CHECKS.plomb=["Modèle de WC, vasques et robinetterie","Dimensions de la douche à l’italienne","Position du lave-linge et du vidoir"];
+CHECKS.chauf=["Position de l’unité extérieure de la pompe à chaleur (bruit, vue)","Température souhaitée par pièce","Position des bouches de ventilation dans les chambres"];
+CHECKS.plat=["Hauteur sous plafond : 2,50 m confirmée","Position des renforts pour meubles suspendus","Trappes de visite : emplacements acceptés"];
+CHECKS.pein=["Teintes de chaque pièce sur échantillons réels","Finition mate ou satinée selon la pièce","Teinte des huisseries et des portes"];
+CHECKS.cuis=["Plan de la cuisine, hauteurs et profondeurs","Teinte des façades et du plan de travail","Marques et modèles de l’électroménager","Dimensions des meubles que vous conservez"];
+CHECKS.plan=["Dates de début et de fin de chantier annoncées","Dates de visite avec vous et de réception","Assurance dommages-ouvrage souscrite avant l’ouverture du chantier"];
+
+/* ---------------- Fondations ---------------- */
+function fondSvg(){
+  var s=1.6,ox=250,oy=118;
+  function X(c){return ox+c*s} function Y(c){return oy-c*s}
+  function RC(x1,y1,x2,y2,cls,pat){
+    var a='x="'+X(x1).toFixed(1)+'" y="'+Y(y2).toFixed(1)+'" width="'+((x2-x1)*s).toFixed(1)+'" height="'+((y2-y1)*s).toFixed(1)+'"';
+    var r='<rect '+a+' class="'+cls+' ol"/>';
+    if(pat)r+='<rect '+a+' fill="url(#fd-'+pat+')"/>';
+    return r;
+  }
+  function PG(pts,cls,pat){
+    var d=pts.map(function(p){return X(p[0]).toFixed(1)+','+Y(p[1]).toFixed(1)}).join(' ');
+    var r='<polygon points="'+d+'" class="'+cls+' ol"/>';
+    if(pat)r+='<polygon points="'+d+'" fill="url(#fd-'+pat+')"/>';
+    return r;
+  }
+  var o='<svg viewBox="0 0 640 300" role="img" aria-label="Coupe sur la semelle filante"><defs>'+pats('fd')+'</defs>';
+  o+=RC(-95,-112,135,0,'k-wood2');
+  o+=PG([[22,0],[60,0],[60,-80],[35,-80],[35,-55],[22,-55]],'k-ins2','conc');
+  o+=RC(-20,-85,40,-80,'k-conc');
+  o+=RC(-15,-80,35,-55,'k-conc','conc');
+  o+=RC(0,-55,20,20,'k-conc','conc');
+  o+=RC(-95,19,0,20,'k-plast')+RC(-95,14,0,19,'k-mort')+RC(-95,2,0,14,'k-ins','ins')+RC(-95,-11,0,2,'k-conc','conc')+RC(-95,-31,0,-11,'k-ins2','conc');
+  o+=RC(20,-55,22,20,'k-mem');
+  o+=RC(0,20,20,21,'k-mem')+RC(0,21,20,27,'k-wood');
+  o+='<circle cx="'+X(47)+'" cy="'+Y(-68)+'" r="9" class="k-air ol"/><circle cx="'+X(47)+'" cy="'+Y(-68)+'" r="3.5" class="ol" fill="none"/>';
+  o+='<path d="M'+X(60)+' '+Y(0)+'V'+Y(-80)+'H'+X(36)+'" fill="none" stroke="var(--ink)" stroke-width="1.2" stroke-dasharray="5 3"/>';
+  o+='<path d="M'+X(22)+' '+Y(0)+'H'+X(135)+'" stroke="var(--ink)" stroke-width="1.6"/><text class="svm" x="'+X(100)+'" y="'+(Y(0)-6)+'">Terrain fini</text>';
+  o+='<text class="svm" x="'+X(-92)+'" y="'+(Y(20)-6)+'">Sol fini +0,20 m</text>';
+  o+='<path class="dim" d="M'+X(-106)+' '+Y(0)+'V'+Y(-80)+'M'+(X(-106)-5)+' '+Y(0)+'H'+(X(-106)+5)+'M'+(X(-106)-5)+' '+Y(-80)+'H'+(X(-106)+5)+'"/>';
+  o+='<text class="svt" transform="translate('+(X(-106)-8)+' '+Y(-40)+') rotate(-90)" text-anchor="middle">Hors gel 0,80 m</text>';
+  o+='<path class="dim" d="M'+X(-15)+' '+Y(-97)+'H'+X(35)+'M'+X(-15)+' '+(Y(-97)-5)+'V'+(Y(-97)+5)+'M'+X(35)+' '+(Y(-97)-5)+'V'+(Y(-97)+5)+'"/><text class="svt" x="'+X(10)+'" y="'+(Y(-97)-8)+'" text-anchor="middle">Semelle 50 × 25 cm</text>';
+  var mk=[[1,40,-83,-90],[2,35,-62,-66],[5,52,-68,-42],[6,55,-20,-18],[3,12,-10,6],[8,21,10,28],[4,15,24,50]];
+  mk.forEach(function(m){
+    o+='<line x1="'+X(150)+'" y1="'+Y(m[3])+'" x2="'+X(m[1])+'" y2="'+Y(m[2])+'" class="ol"/><circle cx="'+X(150)+'" cy="'+Y(m[3])+'" r="10" class="mk"/><text class="mkt" x="'+X(150)+'" y="'+(Y(m[3])+4)+'" text-anchor="middle">'+m[0]+'</text>';
+  });
+  o+='<line x1="'+X(-50)+'" y1="'+(Y(45)+10)+'" x2="'+X(-50)+'" y2="'+Y(-5)+'" class="ol"/><circle cx="'+X(-50)+'" cy="'+Y(45)+'" r="10" class="mk"/><text class="mkt" x="'+X(-50)+'" y="'+(Y(45)+4)+'" text-anchor="middle">7</text>';
+  return o+'</svg>';
+}
+function bFond(){
+  var t=table([
+   ['Étude de sol G2 et implantation par le géomètre',1,'forfait',1850],
+   ['Terrassement : décapage et fouilles hors gel',1,'forfait',4200],
+   ['Semelle filante béton armé C25/30',PERI,'ml',118],
+   ['Soubassement en blocs à bancher armés',PERI,'ml',96],
+   ['Imperméabilisation du soubassement',PERI,'ml',14],
+   ['Drain périphérique, géotextile et remblais',PERI,'ml',52]]);
+  var figs=[
+   sec('Coupe sur la semelle','FIG. 1',figCard(fondSvg(),'Coupe de principe au droit d’un mur extérieur. Cotes en cm.')+keys(['Béton de propreté de 5 cm : fond de fouille plan et propre.','Semelle filante en béton armé, largeur 50 cm, hauteur 25 cm.','Soubassement en blocs à bancher de 20 cm, armés et remplis de béton.','Arase étanche puis lisse basse de l’ossature, à plus de 20 cm du terrain fini.','Drain périphérique en PVC avec exutoire vers un regard.','Gravier drainant protégé par un géotextile, puis remblais compactés.','Dallage sur hérisson : voir le chapitre Dalle.','Revêtement d’imperméabilisation bitumineux sur la face extérieure.'])),
+   sec('Séquence des travaux','',card(stepsOl(['<b>Implantation</b> de la maison au piquet par le géomètre.','<b>Décapage</b> de la terre végétale et fouilles jusqu’au bon sol.','<b>Réception du fond de fouille</b> par Phénix avant tout béton.','<b>Béton de propreté</b>, ferraillage de la semelle, coulage.','<b>Soubassement</b> en blocs à bancher, armatures et chaînage haut.','<b>Imperméabilisation</b>, drain, gravier et remblais par couches.'])))
+  ];
+  var mats=[
+   ['Béton de propreté','Sous les semelles','5 cm, fond de fouille nivelé','Maçon'],
+   ['Béton armé C25/30','Semelles filantes','Aciers fixés par l’étude de béton armé','Maçon'],
+   ['Blocs à bancher','Soubassement','20 cm, armés, remplis de béton, chaînage haut','Maçon'],
+   ['Revêtement bitumineux','Face extérieure du soubassement','Deux couches, de la semelle au terrain fini','Maçon'],
+   ['Drain PVC, gravier 10/20, géotextile','Pourtour des fondations','Pente de 1 %, exutoire vers regard','Terrassier']];
+  return mkChap('fond','Fondations','Semelles filantes sous les murs extérieurs, descendues hors gel. L’étude de sol confirme la profondeur et la contrainte admissible avant le premier coup de pelle.',
+   [['0,80 m','Profondeur hors gel'],['50 × 25 cm','Semelle filante'],['C25/30','Béton des semelles'],[dec(PERI,1)+' ml','Longueur des fondations']],figs,mats,t,
+   ['La profondeur et le dimensionnement sont validés par l’étude de sol G2, jamais par habitude.','Fond de fouille jamais laissé sous la pluie : bétonner le jour du terrassement final.','Fourreaux et traversées de réseaux à poser avant le coulage des semelles.','Gel : protéger le béton frais en cas de température proche de 0 °C.']);
+}
+
+/* ---------------- Dalle ---------------- */
+function dallePlan(){
+  return basePlan(function(P,k){
+    var o='';
+    var pts=[[1.0,6.0],[5.4,1.8],[7.2,6.0],[9.0,5.6],[11.7,5.6]];
+    o+='<path d="M'+P(1.0)+' '+P(4.2)+'H'+P(13.7)+'" stroke="var(--m-brick)" stroke-width="3" fill="none"/>';
+    pts.forEach(function(p){o+='<line x1="'+P(p[0])+'" y1="'+P(p[1])+'" x2="'+P(p[0])+'" y2="'+P(4.2)+'" stroke="var(--m-brick)" stroke-width="2"/><circle cx="'+P(p[0])+'" cy="'+P(p[1])+'" r="5" fill="var(--m-brick)" stroke="var(--ink)" stroke-width="1"/>'});
+    o+='<rect x="'+(P(13.7)-6)+'" y="'+(P(4.2)-6)+'" width="12" height="12" class="k-conc ol"/>';
+    o+='<path d="M'+P(11.2)+' '+P(9.0)+'V'+P(8.2)+'" stroke="var(--accent)" stroke-width="2.5" stroke-dasharray="5 3" fill="none"/><path d="M'+P(11.7)+' '+P(9.0)+'V'+P(8.2)+'" stroke="var(--ink)" stroke-width="2.5" stroke-dasharray="5 3" fill="none"/>';
+    o+='<circle cx="'+P(11.2)+'" cy="'+(P(9.0)+8)+'" r="4" fill="var(--accent)"/><circle cx="'+P(11.7)+'" cy="'+(P(9.0)+8)+'" r="4" fill="var(--ink)"/>';
+    return o;
+  },{aria:'Plan des réseaux sous dalle',extra:6});
+}
+function bDalle(){
+  var t=table([
+   ['Hérisson de gravier 20/40, 20 cm, compacté',SLAB,'m²',18],
+   ['Film polyéthylène sous dalle',SLAB,'m²',2.2],
+   ['Dalle béton armé C25/30, 13 cm, treillis soudé',SLAB,'m²',46],
+   ['Isolant PSE à plots pour plancher chauffant, 120 mm',AREA,'m²',31],
+   ['Chape fluide ciment, 5 cm',AREA,'m²',22],
+   ['Réseaux enterrés : évacuations et fourreaux',1,'forfait',2650]]);
+  var rows=[['k-plast','Revêtement de sol, voir le chapitre Sols','selon pièce'],['k-mort','Chape fluide ciment, tubes du plancher chauffant noyés','50 mm'],['k-ins','Isolant PSE à plots pour plancher chauffant, R ≈ 4,0','120 mm'],['k-conc','Dalle béton armé C25/30, treillis soudé','130 mm'],['k-air','Film polyéthylène','0,2 mm'],['k-ins2','Hérisson de gravier 20/40 compacté','200 mm'],['k-wood2','Terrain naturel décapé et compacté','selon étude de sol']];
+  var figs=[
+   sec('Coupe du plancher bas','FIG. 1',figCard(strataSvg(rows,'INTÉRIEUR','TERRAIN','Coupe du plancher sur terre-plein'),'Coupe de principe, non à l’échelle. Épaisseur totale hors revêtement : 51 cm environ, haut de dalle finie à + 0,20 m.')),
+   sec('Réseaux enterrés','FIG. 2',figCard(dallePlan(),'Tout ce qui passe sous la dalle se pose avant le coulage.')+legend(['<span><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5" fill="var(--m-brick)" stroke="var(--ink)"/></svg>Appareil à évacuer</span>','<span><svg viewBox="0 0 16 16"><path d="M0 8H16" stroke="var(--m-brick)" stroke-width="3"/></svg>Collecteur EU, pente de 1 à 3 cm par mètre</span>','<span><svg viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12" class="k-conc ol"/></svg>Regard de branchement</span>','<span><svg viewBox="0 0 16 16"><path d="M0 8H16" stroke="var(--accent)" stroke-width="3" stroke-dasharray="4 2"/></svg>Fourreau eau</span>','<span><svg viewBox="0 0 16 16"><path d="M0 8H16" stroke="var(--ink)" stroke-width="3" stroke-dasharray="4 2"/></svg>Fourreau électricité</span>'])),
+   sec('Séquence des travaux','',card(stepsOl(['<b>Plombier</b> : évacuations enterrées et pente contrôlée avant remblai.','<b>Électricien</b> : fourreaux d’entrée eau et électricité, gaines vers le tableau.','<b>Hérisson</b> étalé et compacté par couches, puis film polyéthylène.','<b>Dalle béton armé</b> avec treillis soudé calé sur cales.','<b>Séchage</b> avant la pose du plancher chauffant.','<b>Isolant à plots, tubes et chape fluide</b> posés en fin de gros œuvre.'])))];
+  var mats=[
+   ['Gravier 20/40','Hérisson sous dalle','20 cm compactés par couches','Maçon'],
+   ['Béton armé C25/30','Dalle du rez-de-chaussée','13 cm, treillis soudé enrobé de 3 cm','Maçon'],
+   ['Isolant PSE à plots','Sur la dalle','120 mm, accueille les tubes du plancher chauffant','Chauffagiste'],
+   ['Chape fluide ciment','Toutes les pièces','5 cm au-dessus de l’isolant, planéité contrôlée','Applicateur de chape'],
+   ['Tubes d’évacuation PVC','Sous la dalle','Diamètres selon appareil, pente continue','Plombier']];
+  return mkChap('dalle','Dalle et plancher bas','Dallage sur terre-plein, isolé par le dessus avec le plancher chauffant. Le haut de la dalle est à 20 cm au-dessus du terrain fini.',
+   [['13 cm','Dalle béton armé'],['R ≈ 4,0','Isolant sous chape'],['5 cm','Chape fluide'],[dec(SLAB,0)+' m²','Surface de plancher']],figs,mats,t,
+   ['Les réseaux oubliés avant la dalle se paient cher : une réunion de repérage avec chaque artisan avant le coulage.','Planéité de la chape à contrôler à la règle de 2 m avant la pose des revêtements.','Séchage et mise en chauffe progressive de la chape avant tout carrelage ou parquet.','Joints de fractionnement et joint périphérique à ne pas combler.']);
+}
+
+/* ---------------- Menuiseries ---------------- */
+var OPEN=[
+ ['1','Baie coulissante 2 vantaux','4,80 × 2,15','Sud',1,3950],
+ ['2','Porte d’entrée','0,90 × 2,15','Sud',1,2150],
+ ['3','Fenêtre du cellier','0,90 × 1,00','Sud',1,540],
+ ['4','Fenêtre de la cuisine','1,20 × 1,05','Ouest',1,690],
+ ['5','Fenêtres des chambres','1,20 × 1,35','Nord et est',3,780],
+ ['6','Fenêtre de la salle d’eau','0,60 × 1,00','Nord',1,440]
+];
+function facadeSvg(){
+  var k=38,ox=34,oy=236,Wm=13.84,Hm=2.7;
+  function X(m){return ox+m*k} function Y(m){return oy-m*k}
+  function B(x1,x2,y1,y2,cls){return '<rect x="'+X(x1).toFixed(1)+'" y="'+Y(y2).toFixed(1)+'" width="'+((x2-x1)*k).toFixed(1)+'" height="'+((y2-y1)*k).toFixed(1)+'" class="'+cls+' ol"/>'}
+  var s='<svg viewBox="0 0 640 300" role="img" aria-label="Façade sud avec les menuiseries">';
+  s+=B(-0.5,Wm+0.5,Hm,Hm+0.28,'k-brick');
+  s+=B(0,Wm,0,Hm,'k-wood2');
+  s+=B(0,Wm,-0.2,0,'k-conc');
+  s+='<path d="M'+X(-0.9)+' '+Y(-0.2)+'H'+X(Wm+0.9)+'" stroke="var(--ink)" stroke-width="1.6"/>';
+  s+=B(1.22,6.02,2.15,2.4,'k-mort')+B(1.22,6.02,0,2.15,'k-air');
+  s+='<path d="M'+X(3.62)+' '+Y(2.15)+'V'+Y(0)+'" stroke="var(--ink)" stroke-width="1.4"/>';
+  s+=B(8.27,9.17,0,2.15,'k-mem');
+  s+=B(11.57,12.47,2.1,2.35,'k-mort')+B(11.57,12.47,1.1,2.1,'k-air');
+  [[3.62,1],[8.72,2],[12.02,3]].forEach(function(m){
+    s+='<line x1="'+X(m[0])+'" y1="'+(Y(Hm+0.28)-14)+'" x2="'+X(m[0])+'" y2="'+Y(m[0]===8.72?2.15:(m[0]===12.02?2.35:2.4))+'" class="ol"/><circle cx="'+X(m[0])+'" cy="'+(Y(Hm+0.28)-24)+'" r="10" class="mk"/><text class="mkt" x="'+X(m[0])+'" y="'+(Y(Hm+0.28)-20)+'" text-anchor="middle">'+m[1]+'</text>';
+  });
+  s+='<text class="svm" x="'+X(0)+'" y="'+(Y(-0.2)+22)+'">FAÇADE SUD · hauteur sous égout 2,70 m · coffres de volets roulants en partie haute</text>';
+  return s+'</svg>';
+}
+function bMenu(){
+  var lines=OPEN.map(function(o){return [o[1]+', '+o[2]+' m',o[4],'u',o[5]]});
+  lines.push(['Volets roulants électriques des fenêtres et de la porte-fenêtre',6,'u',410]);
+  lines.push(['Volet roulant électrique de la baie coulissante',1,'u',1100]);
+  lines.push(['Portes intérieures alvéolaires à peindre, bloc-porte 83 × 204',8,'u',320]);
+  var t=table(lines);
+  var tab='<div class="card"><div class="tw"><table class="tbl"><thead><tr><th>Repère</th><th>Menuiserie</th><th>Dimensions (m)</th><th>Façade</th><th class="num">Qté</th><th class="num">Prix posé</th></tr></thead><tbody>'+
+   OPEN.map(function(o){return '<tr><td><span class="mono" style="font-weight:600">'+o[0]+'</span></td><td>'+o[1]+'</td><td>'+o[2]+'</td><td>'+o[3]+'</td><td class="num">'+o[4]+'</td><td class="num">'+eur(o[5])+'</td></tr>'}).join('')+'</tbody></table></div><p class="cap">Repères 1 à 3 visibles sur la façade sud ci-dessus. Le WC et la salle de bains sont aveugles : ils sont ventilés mécaniquement.</p></div>';
+  var figs=[
+   sec('Façade sud','FIG. 1',figCard(facadeSvg(),'Élévation à l’échelle. Les ouvertures de la façade sud captent le soleil d’hiver, le débord de toit limite le soleil d’été.')),
+   sec('Liste des menuiseries','',tab),
+   sec('Ordre de pose d’une fenêtre','',card(stepsOl(['<b>Contrôle</b> des cotes de baie et de l’équerrage.','<b>Appui et bavette</b> en aluminium posés avec pente vers l’extérieur.','<b>Calage et mise à niveau</b> du dormant, fixation mécanique dans l’ossature.','<b>Mousse polyuréthane</b> basse expansion dans le joint de 8 à 10 mm.','<b>Compribande</b> côté extérieur et membrane d’étanchéité à l’air côté intérieur.','<b>Volet roulant</b> : coffre, lames et raccordement électrique.','<b>Réglage</b>, joints, nettoyage, protection du vitrage jusqu’à la fin du chantier.'])))];
+  var mats=[
+   ['Cadre aluminium','Toutes les ouvertures','Rupture de pont thermique, laquage gris anthracite','Menuisier poseur'],
+   ['Double vitrage 4/16/4','Toutes les ouvertures','Lame d’argon, intercalaire isolant','Menuisier poseur'],
+   ['Volets roulants électriques','Fenêtres et baie','Coffre dans la tapée, lames aluminium','Menuisier poseur et électricien'],
+   ['Portes intérieures','8 portes','Bloc-porte alvéolaire à peindre, huisserie bois','Menuisier poseur']];
+  return mkChap('menu','Menuiseries','Huit ouvertures extérieures en aluminium, posées dans l’ossature, puis les portes intérieures. Ce chapitre fixe les dimensions, les teintes et les accessoires.',
+   [['8','Ouvertures extérieures'],['Alu','Rupture de pont thermique'],['4/16/4','Double vitrage argon'],['Uw ≈ 1,3','W/m².K visé']],figs,mats,t,
+   ['Pose dans l’épaisseur de l’isolant : l’étanchéité à l’air autour du cadre se joue sur le compribande et la membrane.','Alimentation électrique des volets roulants à prévoir avant la pose des cadres.','Fenêtres basses de chambre : hauteur d’allège à vérifier pour la sécurité des enfants.','Vitrages à protéger de la poussière de plâtre et de peinture.']);
+}
+
+/* ---------------- Électricité ---------------- */
+var ELEC={'Séjour-cuisine':[11,3,5],'Entrée':[1,2,1],'Dégagement':[2,2,2],'Suite parentale':[4,2,1],'Chambre 2':[3,1,1],'Chambre 3':[3,1,1],'Salle d’eau':[2,1,2],'Salle de bains':[2,1,2],'WC':[0,1,1],'Cellier':[3,1,1]};
+function perimPt(r,t,d){
+  var x1=r.x+d,y1=r.y+d,x2=r.x+r.w-d,y2=r.y+r.h-d,w=x2-x1,h=y2-y1,u=(t%1)*2*(w+h);
+  if(u<w)return [x1+u,y1]; u-=w;
+  if(u<h)return [x2,y1+u]; u-=h;
+  if(u<w)return [x2-u,y2]; u-=w;
+  return [x1,y2-u];
+}
+function elecPlan(){
+  return basePlan(function(P,k){
+    var o='';
+    ROOMS.forEach(function(r){
+      var e=ELEC[r.n],i,p;
+      for(i=0;i<e[0];i++){p=perimPt(r,(i+0.5)/e[0],0.2);o+='<circle cx="'+P(p[0]).toFixed(1)+'" cy="'+P(p[1]).toFixed(1)+'" r="3.4" fill="var(--accent)" stroke="var(--ink)" stroke-width=".6"/>'}
+      for(i=0;i<e[1];i++){p=perimPt(r,0.54+i*0.035,0.2);o+='<rect x="'+(P(p[0])-3.5).toFixed(1)+'" y="'+(P(p[1])-3.5).toFixed(1)+'" width="7" height="7" fill="var(--ink)"/>'}
+      var cols=Math.ceil(Math.sqrt(e[2])),rows=Math.ceil(e[2]/cols);
+      for(i=0;i<e[2];i++){var cx=P(r.x+((i%cols)+0.5)/cols*r.w),cy=P(r.y+(Math.floor(i/cols)+0.5)/rows*r.h+0.15);
+        o+='<circle cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'" r="5" fill="none" stroke="var(--ink)" stroke-width="1.1"/><path d="M'+(cx-3.5).toFixed(1)+' '+(cy-3.5).toFixed(1)+'L'+(cx+3.5).toFixed(1)+' '+(cy+3.5).toFixed(1)+'M'+(cx+3.5).toFixed(1)+' '+(cy-3.5).toFixed(1)+'L'+(cx-3.5).toFixed(1)+' '+(cy+3.5).toFixed(1)+'" stroke="var(--ink)" stroke-width="1"/>'}
+    });
+    o+='<rect x="'+P(10.4)+'" y="'+P(5.0)+'" width="22" height="14" class="ol" style="fill:var(--accent-soft);stroke-width:1.5"/><text class="svm" x="'+(P(10.4)+11)+'" y="'+(P(5.0)+10.5)+'" text-anchor="middle" style="font-size:9px">GTL</text>';
+    return o;
+  },{aria:'Plan électrique du rez-de-chaussée',nolabel:false});
+}
+function heightSvg(){
+  var k=108,fy=292,x0=70;
+  function Y(m){return fy-m*k}
+  var s='<svg viewBox="0 0 640 316" role="img" aria-label="Hauteurs de pose des appareillages">';
+  s+='<rect x="'+x0+'" y="'+Y(2.5)+'" width="520" height="'+(2.5*k)+'" class="k-plast ol"/><path d="M'+(x0-14)+' '+fy+'H'+(x0+540)+'" stroke="var(--ink)" stroke-width="1.8"/>';
+  [0,0.5,1,1.5,2,2.5].forEach(function(m){s+='<path class="dim" d="M'+(x0-8)+' '+Y(m)+'H'+x0+'"/><text class="svm" x="'+(x0-12)+'" y="'+(Y(m)+4)+'" text-anchor="end">'+dec(m,2)+'</text>'});
+  var it=[[130,0.30,'Prise courante','0,30 m','p'],[240,1.10,'Interrupteur','1,10 m','i'],[350,1.05,'Prise plan de travail','1,05 m','p'],[460,0.30,'Prise RJ45','0,30 m','p'],[540,2.5,'Luminaire','plafond','l']];
+  s+='<rect x="320" y="'+Y(0.9)+'" width="60" height="'+(0.9*k)+'" class="k-conc ol" opacity=".8"/><rect x="316" y="'+Y(0.94)+'" width="68" height="'+(0.04*k)+'" class="k-wood2 ol"/>';
+  it.forEach(function(m){
+    var y=Y(m[1]);
+    s+='<path d="M'+x0+' '+y+'H'+(m[0]-8)+'" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3"/>';
+    if(m[4]==='p')s+='<circle cx="'+m[0]+'" cy="'+y+'" r="6" fill="var(--accent)" stroke="var(--ink)"/>';
+    if(m[4]==='i')s+='<rect x="'+(m[0]-6)+'" y="'+(y-6)+'" width="12" height="12" fill="var(--ink)"/>';
+    if(m[4]==='l')s+='<circle cx="'+m[0]+'" cy="'+(y+9)+'" r="7" fill="none" stroke="var(--ink)" stroke-width="1.4"/>';
+    s+='<text class="svt" x="'+m[0]+'" y="'+(y-12+(m[4]==='l'?22:0))+'" text-anchor="middle" style="font-size:11px">'+m[2]+'</text>';
+    if(m[4]!=='l')s+='<text class="svm" x="'+m[0]+'" y="'+(y+22)+'" text-anchor="middle">'+m[3]+'</text>';
+  });
+  return s+'<text class="svm" x="'+x0+'" y="308">Plan de travail de cuisine à 0,90 m</text></svg>';
+}
+function bElec(){
+  var P=0,I=0,L=0,rows='';
+  ROOMS.forEach(function(r){var e=ELEC[r.n];P+=e[0];I+=e[1];L+=e[2];rows+='<tr><td>'+r.n+'</td><td class="num">'+e[0]+'</td><td class="num">'+e[1]+'</td><td class="num">'+e[2]+'</td><td>'+(r.n==='Séjour-cuisine'?'Dont 4 prises sur le plan de travail, 2 prises RJ45':(/^Chambre|Suite/.test(r.n)?'1 prise RJ45':''))+'</td></tr>'});
+  var t=table([
+   ['Tableau électrique, gaine technique du logement et protections',1,'forfait',1650],
+   ['Points de prise 16 A encastrés',P,'u',68],
+   ['Points d’éclairage et câblage',L,'u',52],
+   ['Interrupteurs et va-et-vient',I,'u',58],
+   ['Circuits spécialisés : cuisson, four, lave-linge, lave-vaisselle, congélateur, chauffe-eau',6,'u',190],
+   ['Coffret de communication et baie de brassage',1,'forfait',1200],
+   ['Prises RJ45',5,'u',75],
+   ['Demande de raccordement et attestation de conformité',1,'forfait',750]]);
+  var tabHtml='<div class="card"><div class="tw"><table class="tbl"><thead><tr><th>Pièce</th><th class="num">Prises</th><th class="num">Interrupteurs</th><th class="num">Points lumineux</th><th>Précisions</th></tr></thead><tbody>'+rows+'</tbody><tfoot><tr><td>Total</td><td class="num">'+P+'</td><td class="num">'+I+'</td><td class="num">'+L+'</td><td></td></tr></tfoot></table></div></div>';
+  var circ=[['Éclairage','10 A','1,5 mm²'],['Prises 16 A (8 par circuit au plus)','16 A','1,5 mm²'],['Prises 20 A (12 par circuit au plus)','20 A','2,5 mm²'],['Plaque de cuisson','32 A','6 mm²'],['Four','20 A','2,5 mm²'],['Lave-linge','20 A','2,5 mm²'],['Lave-vaisselle','20 A','2,5 mm²'],['Volets roulants','16 A','1,5 mm²'],['Pompe à chaleur','selon notice du fabricant','selon notice']];
+  var circHtml='<div class="card"><div class="tw"><table class="tbl"><thead><tr><th>Circuit</th><th>Protection</th><th>Section</th></tr></thead><tbody>'+circ.map(function(c){return '<tr><td>'+c[0]+'</td><td>'+c[1]+'</td><td>'+c[2]+'</td></tr>'}).join('')+'</tbody></table></div></div>';
+  var figs=[
+   sec('Plan électrique','FIG. 1',figCard(elecPlan(),'Positions indicatives, à ajuster avec vous pièce par pièce avant le câblage.')+legend(['<span><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="4" fill="var(--accent)" stroke="var(--ink)"/></svg>Prise 16 A</span>','<span><svg viewBox="0 0 16 16"><rect x="3" y="3" width="10" height="10" fill="var(--ink)"/></svg>Interrupteur</span>','<span><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="var(--ink)"/><path d="M4 4L12 12M12 4L4 12" stroke="var(--ink)"/></svg>Point lumineux</span>','<span><svg viewBox="0 0 16 16"><rect x="1" y="3" width="14" height="10" style="fill:var(--accent-soft);stroke:var(--ink)"/></svg>Tableau (GTL)</span>'])),
+   sec('Quantités par pièce','',tabHtml),
+   sec('Hauteurs de pose','FIG. 2',figCard(heightSvg(),'Hauteurs d’usage, compatibles avec l’accessibilité d’un logement neuf.')),
+   sec('Circuits du tableau','',circHtml)];
+  var mats=[
+   ['Câbles cuivre 1,5 et 2,5 mm²','Dans les gaines de l’ossature','Gaines ICTA, boîtes d’encastrement étanches à l’air','Électricien'],
+   ['Appareillage encastré','Toutes les pièces','Gamme blanche mate, plaques sans vis apparentes','Électricien'],
+   ['Tableau 4 rangées','Cellier','Parafoudre et différentiels 30 mA type A','Électricien'],
+   ['Courants faibles','Séjour et chambres','Baie de brassage, câble RJ45 catégorie 6','Électricien']];
+  return mkChap('elec','Électricité','Prises, interrupteurs et points lumineux dessinés pièce par pièce, avec les hauteurs de pose et les circuits du tableau.',
+   [[P+' prises','16 A et spécialisées'],[I+' interrupteurs','Va-et-vient inclus'],[L+' points lumineux','Plafond et applique'],['1 tableau','Dans le cellier']],figs,mats,t,
+   ['Boîtes d’encastrement étanches à l’air dans l’ossature : l’étanchéité du pare-vapeur en dépend.','Tout se décide avant le câblage : déplacer une prise après la plâtrerie coûte du temps et de l’argent.','Gaines de réserve vers les combles pour les évolutions futures.','Visite de conformité du Consuel à anticiper avant la mise en service définitive.']);
+}
+
+/* ---------------- Plomberie ---------------- */
+function plombSvg(){
+  var s='<svg viewBox="0 0 700 300" role="img" aria-label="Schéma de distribution de l’eau">';
+  s+='<path d="M170 56H680" stroke="var(--accent)" stroke-width="6"/><path d="M170 240H680" stroke="var(--m-brick)" stroke-width="6"/>';
+  s+='<text class="svm" x="178" y="44">EAU FROIDE</text><text class="svm" x="178" y="262">EAU CHAUDE</text>';
+  s+='<rect x="8" y="34" width="130" height="44" rx="3" class="k-air ol"/><text class="svt" x="73" y="52" text-anchor="middle">Compteur</text><text class="svm" x="73" y="68" text-anchor="middle">et réducteur</text><path d="M138 56H170" stroke="var(--accent)" stroke-width="6"/>';
+  s+='<rect x="8" y="218" width="130" height="44" rx="3" class="k-brick ol"/><text class="svt" x="73" y="236" text-anchor="middle">Ballon 200 L</text><text class="svm" x="73" y="252" text-anchor="middle" style="fill:var(--ink)">thermodynamique</text><path d="M138 240H170" stroke="var(--m-brick)" stroke-width="6"/>';
+  var rooms=[['Cuisine','évier, LV',1],['Salle de bains','vasques, douche',1],['Salle d’eau','vasque, douche',1],['Cellier','LL, vidoir',1],['WC','WC suspendu',0]];
+  rooms.forEach(function(r,i){
+    var x=178+i*104,cx=x+48;
+    s+='<line x1="'+cx+'" y1="56" x2="'+cx+'" y2="120" stroke="var(--accent)" stroke-width="2.5"/>';
+    if(r[2])s+='<line x1="'+cx+'" y1="180" x2="'+cx+'" y2="240" stroke="var(--m-brick)" stroke-width="2.5"/>';
+    s+='<rect x="'+x+'" y="120" width="96" height="60" rx="3" class="k-plast ol"/><text class="svt" x="'+cx+'" y="146" text-anchor="middle" style="font-size:11px">'+r[0]+'</text><text class="svm" x="'+cx+'" y="164" text-anchor="middle" style="font-size:9.5px">'+r[1]+'</text>';
+  });
+  return s+'<text class="svm" x="8" y="292">Une nourrice par réseau, un départ en PER sous gaine par appareil</text></svg>';
+}
+function bPlomb(){
+  var t=table([
+   ['Alimentations PER sous gaine et nourrices',1,'forfait',2350],
+   ['Évacuations PVC dans les murs et colonnes',1,'forfait',1280],
+   ['WC suspendu avec bâti-support',1,'u',620],
+   ['Meuble double vasque avec robinetterie, salle de bains',1,'u',1180],
+   ['Douche à l’italienne avec siphon, paroi et robinetterie, salle de bains',1,'u',1350],
+   ['Douche, vasque et robinetterie, salle d’eau',1,'u',1620],
+   ['Raccordements de la cuisine et du cellier',1,'forfait',520],
+   ['Ballon thermodynamique 200 L',1,'u',2350],
+   ['Robinet de puisage extérieur antigel',1,'u',160]]);
+  var app=[['Cuisine','Évier, lave-vaisselle','Froide et chaude','Ø 40'],['Salle de bains','Double vasque, douche à l’italienne','Froide et chaude','Ø 32 vasques, Ø 40 douche'],['Salle d’eau','Douche, vasque','Froide et chaude','Ø 40 et Ø 32'],['WC','WC suspendu sur bâti-support','Froide','Ø 100'],['Cellier','Lave-linge, vidoir','Froide','Ø 40'],['Extérieur','Robinet de puisage antigel','Froide','-']];
+  var appHtml='<div class="card"><div class="tw"><table class="tbl"><thead><tr><th>Pièce</th><th>Appareils</th><th>Eau</th><th>Évacuation (mm)</th></tr></thead><tbody>'+app.map(function(a){return '<tr><td><b>'+a[0]+'</b></td><td>'+a[1]+'</td><td>'+a[2]+'</td><td>'+a[3]+'</td></tr>'}).join('')+'</tbody></table></div></div>';
+  var figs=[
+   sec('Distribution de l’eau','FIG. 1',figCard(plombSvg(),'Schéma de principe. Le WC n’a pas d’eau chaude.')),
+   sec('Appareils et évacuations','',appHtml),
+   sec('Séquence des travaux','',card(stepsOl(['<b>Sous dalle</b> : évacuations posées avant le coulage (chapitre Dalle).','<b>Dans les murs</b> : alimentations et évacuations passées dans l’ossature avant la plâtrerie.','<b>Essai en pression</b> des réseaux avant fermeture des cloisons.','<b>Après peinture et carrelage</b> : pose des sanitaires et de la robinetterie.','<b>Mise en service</b> du ballon et purge des réseaux.'])))];
+  var mats=[
+   ['Tube PER sous gaine','Alimentations','Un départ par appareil depuis la nourrice, pas de raccord caché','Plombier'],
+   ['PVC d’évacuation','Évacuations','Pente de 1 à 3 cm par mètre, ventilation primaire en toiture','Plombier'],
+   ['Bâti-support de WC','WC suspendu','Renfort de plâtrerie, hauteur de cuvette 40 cm','Plombier et plaquiste'],
+   ['Ballon thermodynamique 200 L','Cellier','Sur socle, groupe de sécurité raccordé à l’évacuation','Plombier'],
+   ['Siphon de douche inox','Douches à l’italienne','Pente de 1 à 2 % vers le siphon, étanchéité sous carrelage','Plombier et carreleur']];
+  return mkChap('plomb','Plomberie','Alimentation en eau froide et chaude depuis deux nourrices, évacuations en PVC, sanitaires suspendus. Ce chapitre répond à la question : où passe chaque tuyau.',
+   [['2 réseaux','Eau froide et chaude'],['200 L','Ballon thermodynamique'],['6 douches et vasques','Appareils sanitaires'],['Ø 100','WC, évacuation']],figs,mats,t,
+   ['Test de pression obligatoire avant de fermer les cloisons, pas après.','Trappes de visite pour les vannes d’arrêt et la nourrice, emplacements validés avec vous.','Renforts de plâtrerie derrière chaque appareil suspendu.','Ventilation primaire des évacuations à traverser en toiture sans rompre l’étanchéité.']);
+}
+
+/* ---------------- Chauffage et ventilation ---------------- */
+var LOOPS={'Séjour-cuisine':3,'Entrée':1,'Dégagement':1,'Suite parentale':1,'Chambre 2':1,'Chambre 3':1,'Salle d’eau':1,'Salle de bains':1,'WC':1,'Cellier':1};
+function chaufPlan(){
+  return basePlan(function(P,k){
+    var o='',total=0;
+    ROOMS.forEach(function(r){
+      var n=LOOPS[r.n],sw=r.w/n,i;total+=n;
+      for(i=0;i<n;i++){
+        var xa=r.x+i*sw+0.18,xb=r.x+(i+1)*sw-0.18,d='',y=r.y+0.42,dir=0;
+        d='M'+P(xa).toFixed(1)+' '+P(y).toFixed(1);
+        while(y<=r.y+r.h-0.25){
+          d+='H'+P(dir?xa:xb).toFixed(1);
+          y+=0.25;
+          if(y<=r.y+r.h-0.25)d+='V'+P(y).toFixed(1);
+          dir=1-dir;
+        }
+        o+='<path d="'+d+'" fill="none" stroke="var(--accent)" stroke-width="1.3"/>';
+      }
+    });
+    o+='<rect x="'+P(12.3)+'" y="'+P(8.3)+'" width="42" height="16" class="ol" style="fill:var(--gold-soft);stroke-width:1.5"/><text class="svm" x="'+(P(12.3)+21)+'" y="'+(P(8.3)+11)+'" text-anchor="middle" style="font-size:9px">Collecteur</text>';
+    return o;
+  },{aria:'Plan du plancher chauffant'});
+}
+function ventPlan(){
+  var ins=[[2.4,5.5],[4.6,7.2],[2.1,1.8],[8.3,1.8],[11.5,1.8]],ext=[[1.0,8.2],[5.4,2.6],[7.2,5.4],[9.0,5.8],[11.7,6.4]];
+  return basePlan(function(P,k){
+    var o='';
+    ins.forEach(function(p){o+='<circle cx="'+P(p[0])+'" cy="'+P(p[1])+'" r="10" fill="var(--accent)" stroke="var(--ink)"/><text class="mkt" x="'+P(p[0])+'" y="'+(P(p[1])+4)+'" text-anchor="middle">+</text>'});
+    ext.forEach(function(p){o+='<circle cx="'+P(p[0])+'" cy="'+P(p[1])+'" r="10" class="k-brick ol"/><text class="svt" x="'+P(p[0])+'" y="'+(P(p[1])+4)+'" text-anchor="middle" style="font-weight:600">−</text>'});
+    return o;
+  },{aria:'Plan de ventilation'});
+}
+function bChauf(){
+  var loops=0;ROOMS.forEach(function(r){loops+=LOOPS[r.n]});
+  var t=table([
+   ['Pompe à chaleur air-eau 8 kW, fournie, posée et mise en service',1,'u',11200],
+   ['Collecteur et tubes du plancher chauffant, pas de 15 cm',AREA,'m²',38],
+   ['VMC double flux, caisson haut rendement',1,'u',5800],
+   ['Gaines isolées, bouches d’insufflation et d’extraction',1,'forfait',1900],
+   ['Sèche-serviette électrique, salle de bains',1,'u',620],
+   ['Régulation, thermostats et réglage des débits',1,'forfait',750]]);
+  var figs=[
+   sec('Plancher chauffant','FIG. 1',figCard(chaufPlan(),loops+' boucles de tubes PER, une à trois par pièce selon la surface. Les tubes se posent sur l’isolant à plots avant la chape.')),
+   sec('Ventilation','FIG. 2',figCard(ventPlan(),'Air neuf soufflé dans les pièces de vie et les chambres, air vicié extrait dans les pièces humides. Le caisson est en combles, gaines sous l’isolant.')+legend(['<span><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="var(--accent)" stroke="var(--ink)"/></svg>Insufflation</span>','<span><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" class="k-brick ol"/></svg>Extraction</span>'])),
+   sec('Principe','',card(stepsOl(['<b>Pompe à chaleur</b> à l’extérieur : elle capte les calories de l’air.','<b>Eau tiède</b> envoyée au collecteur, 12 départs avec débitmètres.','<b>Tubes noyés</b> dans la chape fluide : le sol diffuse une chaleur douce.','<b>VMC double flux</b> : l’air sortant réchauffe l’air neuf entrant.'])))];
+  var mats=[
+   ['Pompe à chaleur air-eau 8 kW','Extérieur, côté nord ou est','Socle béton, plots anti-vibratiles, liaisons hydrauliques isolées','Chauffagiste'],
+   ['Tubes PER 16 mm','Plancher chauffant','Pas de 15 cm, boucles de 100 m au plus','Chauffagiste'],
+   ['Collecteur 12 départs','Cellier','Débitmètres, vannes d’arrêt, coffret de régulation','Chauffagiste'],
+   ['VMC double flux','Combles','Gaines isolées Ø 125 mm, bouches réglables','Ventiliste'],
+   ['Sèche-serviette électrique','Salle de bains','Fixation sur renfort de plâtrerie','Électricien']];
+  return mkChap('chauf','Chauffage et ventilation','Pompe à chaleur et plancher chauffant basse température pour le confort, VMC double flux pour l’air sain. Les performances sont visées, elles seront confirmées par l’étude thermique.',
+   [['8 kW','Pompe à chaleur air-eau'],[loops+' boucles','Plancher chauffant'],['Double flux','VMC, rendement visé ≥ 85 %'],[dec(AREA,0)+' m²','Surface chauffée']],figs,mats,t,
+   ['Position de l’unité extérieure : distance aux limites de propriété et bruit à vérifier.','Mise en chauffe progressive de la chape avant la pose des revêtements, selon protocole.','Entretien : filtres de VMC à changer chaque année, regard accessible.','WC et salle de bains aveugles : les bouches d’extraction sont obligatoires.']);
+}
+
+/* ---------------- Plâtrerie ---------------- */
+var PARTS={
+ std:{n:'Cloison standard 72/48',s1:'PIÈCE A',s2:'PIÈCE B',where:'Entre les pièces sèches : séjour, entrée, dégagement.',layers:[{t:'Plaque de plâtre BA13',e:12.5,l:0.25,k:'plast'},{t:'Montants de 48 mm et laine minérale',e:48,l:0.035,k:'ins'},{t:'Plaque de plâtre BA13',e:12.5,l:0.25,k:'plast'}]},
+ eau:{n:'Cloison pièces d’eau',s1:'PIÈCE D’EAU',s2:'PIÈCE VOISINE',where:'Autour de la salle de bains, de la salle d’eau et du WC.',layers:[{t:'Plaque hydrofuge BA13, côté pièce d’eau',e:12.5,l:0.25,k:'air'},{t:'Montants de 48 mm et laine minérale',e:48,l:0.035,k:'ins'},{t:'Plaque de plâtre BA13',e:12.5,l:0.25,k:'plast'}]},
+ acou:{n:'Cloison acoustique',s1:'CHAMBRE A',s2:'CHAMBRE B',where:'Entre les chambres, la suite parentale et la salle d’eau.',layers:[{t:'Plaque de plâtre BA13',e:12.5,l:0.25,k:'plast'},{t:'Plaque de plâtre BA13',e:12.5,l:0.25,k:'plast'},{t:'Montants de 70 mm et laine minérale',e:70,l:0.035,k:'ins'},{t:'Plaque de plâtre BA13',e:12.5,l:0.25,k:'plast'},{t:'Plaque de plâtre BA13',e:12.5,l:0.25,k:'plast'}]}
+};
+var PART_KEYS=['std','eau','acou'];
+function platPlan(){
+  return basePlan(function(P,k){
+    var o='',w=[[4.2,0,4.2,3.6],[6.6,0,6.6,3.6],[9.9,0,9.9,3.6]];
+    w.forEach(function(s){o+='<line x1="'+P(s[0])+'" y1="'+P(s[1])+'" x2="'+P(s[2])+'" y2="'+P(s[3])+'" stroke="var(--accent)" stroke-width="6"/>'});
+    return o;
+  },{aria:'Plan des types de cloisons',fill:function(r){return r.f==='C'?'var(--m-air)':'none'}});
+}
+function bPlat(){
+  var t=table([
+   ['Cloisons 72/48 standard, 2 plaques BA13',70,'m²',42],
+   ['Cloisons 72/48 pièces d’eau, plaques hydrofuges',24,'m²',48],
+   ['Cloisons acoustiques entre chambres',27,'m²',54],
+   ['Plafonds en plaques BA13 sur fourrures',AREA,'m²',28],
+   ['Bandes à joints et enduit de finition, niveau Q3',453,'m²',9.5],
+   ['Trappes de visite et habillages de gaines',1,'forfait',650]]);
+  var p=PARTS[S.part];
+  var chips=PART_KEYS.map(function(k){return '<button class="chip'+(k===S.part?' on':'')+'" data-act="part" data-id="'+k+'" aria-pressed="'+(k===S.part)+'">'+PARTS[k].n+'</button>'}).join('');
+  var tot=0;p.layers.forEach(function(l){tot+=l.e});
+  var figs=[
+   sec('Les trois cloisons du projet','FIG. 1','<div class="seg" role="group" aria-label="Type de cloison">'+chips+'</div>'+figCard(wallSvg({layers:p.layers,sc:4,s1:p.s1,s2:p.s2,id:'pl'}),p.n+'. Épaisseur '+tot+' mm. '+p.where)),
+   sec('Où se pose chaque cloison','FIG. 2',figCard(platPlan(),'Les pièces d’eau en bleu reçoivent des plaques hydrofuges. Les traits bleus épais marquent les cloisons acoustiques.')),
+   sec('Séquence des travaux','',card(stepsOl(['<b>Traçage</b> des cloisons au sol et au plafond.','<b>Rails et montants</b>, passage des gaines électriques et des tubes.','<b>Laine minérale</b>, puis première plaque, renforts pour meubles suspendus.','<b>Seconde plaque</b>, plafonds sous les fermettes sur fourrures.','<b>Bandes et enduits</b> : passes successives et ponçage jusqu’au niveau Q3.'])))];
+  var mats=[
+   ['Plaque de plâtre BA13','Cloisons et plafonds','Vissée tous les 30 cm, joints décalés','Plaquiste'],
+   ['Plaque hydrofuge','Pièces d’eau','Côté humide, étanchéité sous carrelage en zone de douche','Plaquiste'],
+   ['Laine minérale 45 à 70 mm','Dans les cloisons','Pleine épaisseur, sans tassement','Plaquiste'],
+   ['Fourrures métalliques','Plafonds','Suspentes réglables sous les fermettes','Plaquiste'],
+   ['Enduit de finition','Toutes les plaques','Niveau Q3 pour éclairage rasant','Plaquiste']];
+  return mkChap('plat','Plâtrerie','Cloisons, doublages et plafonds en plaques de plâtre. C’est ici que se décident le confort acoustique, la résistance à l’humidité et la qualité de la peinture.',
+   [['2,50 m','Hauteur sous plafond'],['3 types','De cloisons'],['72 mm','Cloison courante'],['Q3','Niveau de finition']],figs,mats,t,
+   ['Renforts avant la pose de la seconde plaque pour les meubles suspendus, les bâtis de WC et les sèche-serviettes.','Calendrier : la plâtrerie ne démarre qu’une fois les réseaux passés et testés.','Joints de dilatation tous les 15 m environ sur les grands linéaires.','Pièces d’eau : plaque hydrofuge et étanchéité sous carrelage, pas l’une sans l’autre.']);
+}
+
+/* ---------------- Peinture ---------------- */
+var TEINTES={'Séjour-cuisine':['Gris clair','#D9D9D6','Mat'],'Entrée':['Gris clair','#D9D9D6','Mat'],'Dégagement':['Blanc cassé','#EFEDE8','Mat'],'Suite parentale':['Sable','#E3D5BC','Mat, mur de tête bleu-gris'],'Chambre 2':['Sable','#E3D5BC','Mat'],'Chambre 3':['Vert sauge','#B7C4AE','Mat'],'Salle d’eau':['Blanc','#F4F2EE','Satinée, résistante à l’humidité'],'Salle de bains':['Blanc','#F4F2EE','Satinée, résistante à l’humidité'],'WC':['Blanc','#F4F2EE','Satinée lessivable'],'Cellier':['Blanc','#F4F2EE','Mat lessivable']};
+function wallM2(r){return Math.round(2*(r.w+r.h)*2.5*0.88)}
+function bPein(){
+  var dry=0,wet=0,rows='';
+  ROOMS.forEach(function(r){var a=wallM2(r),c=TEINTES[r.n];if(r.f==='C')wet+=a;else dry+=a;
+    rows+='<tr><td><b>'+r.n+'</b></td><td><span class="sw" style="background:'+c[1]+'"></span>'+c[0]+'</td><td>'+c[2]+'</td><td class="num">'+a+' m²</td><td><span class="sw" style="background:#FAF9F7"></span>Blanc mat</td></tr>'});
+  var t=table([
+   ['Préparation, ponçage et impression des murs et plafonds',dry+wet+AREA,'m²',4.8],
+   ['Murs : 2 couches acryliques mates',dry,'m²',11.5],
+   ['Murs des pièces d’eau : 2 couches satinées',wet,'m²',14.5],
+   ['Plafonds : 2 couches mates',AREA,'m²',13],
+   ['Portes intérieures et huisseries',8,'u',95]]);
+  var strata=strataSvg([['k-air','Finition : 2 couches de peinture acrylique','≈ 0,1 mm'],['k-mort','Impression : sous-couche d’accrochage','≈ 0,05 mm'],['k-plast','Enduit de finition, niveau Q3','1 à 2 mm'],['k-ins','Bandes à joints et enduit de remplissage','2 à 3 mm'],['k-conc','Plaque de plâtre BA13','12,5 mm']],'PIÈCE','OSSATURE','Coupe d’un système de peinture');
+  var tab='<div class="card"><div class="tw"><table class="tbl"><thead><tr><th>Pièce</th><th>Murs</th><th>Finition</th><th class="num">Surface</th><th>Plafond</th></tr></thead><tbody>'+rows+'</tbody><tfoot><tr><td colspan="3">Total murs</td><td class="num">'+(dry+wet)+' m²</td><td></td></tr></tfoot></table></div><p class="cap">Surfaces nettes, ouvertures déduites. Les teintes à l’écran sont indicatives : elles se valident sur échantillons posés au mur.</p></div>';
+  var figs=[
+   sec('Le système de peinture','FIG. 1',figCard(strata,'Coupe de principe, épaisseurs exagérées. Une bonne peinture dépend d’abord de la préparation du support.')),
+   sec('Teintes et finitions par pièce','',tab),
+   sec('Séquence des travaux','',card(stepsOl(['<b>Protection</b> des menuiseries, sols et appareillages.','<b>Ponçage</b> des enduits et dépoussiérage.','<b>Impression</b> des plaques et plafonds.','<b>Première couche</b> avant la pose des sols, pour ne pas les tacher.','<b>Seconde couche</b> et finitions après pose des plinthes et des appareils.'])))];
+  var mats=[
+   ['Impression acrylique','Murs et plafonds neufs','Une couche, égalise l’absorption du support','Peintre'],
+   ['Peinture acrylique mate','Murs des pièces sèches, plafonds','Deux couches croisées, rouleau et pinceau pour les angles','Peintre'],
+   ['Peinture acrylique satinée','Pièces d’eau','Deux couches, lessivable et résistante à l’humidité','Peintre'],
+   ['Peinture pour boiseries','Portes et huisseries','Deux couches après ponçage et sous-couche','Peintre']];
+  return mkChap('pein','Peinture','Teintes, finitions et surfaces pièce par pièce. Le chapitre sert aussi de nuancier de décision : chaque teinte se valide sur échantillon avant l’application.',
+   [[(dry+wet)+' m²','Surface de murs'],[dec(AREA,0)+' m²','Surface de plafonds'],['3 teintes','Plus les blancs'],['2 couches','Sur impression']],figs,mats,t,
+   ['Échantillon de 1 m² posé dans la pièce avant de valider une teinte : la lumière change tout.','Peinture des plafonds avant celle des murs, dans l’ordre de la pièce vers la sortie.','Pas de peinture sur un support humide ou un enduit non sec.','Retouches à prévoir après la pose de la cuisine et du mobilier.']);
+}
+
+/* ---------------- Cuisine et mobilier ---------------- */
+function cuisSvg(){
+  var k=70,ox=30,oy=30;
+  function X(m){return ox+m*k} function Y(m){return oy+m*k}
+  function R(x,y,w,h,cls,txt,fs){
+    var r='<rect x="'+X(x)+'" y="'+Y(y)+'" width="'+(w*k)+'" height="'+(h*k)+'" class="'+cls+' ol"/>';
+    if(txt)r+='<text class="svt" x="'+(X(x)+w*k/2)+'" y="'+(Y(y)+h*k/2+4)+'" text-anchor="middle" style="font-size:'+(fs||10)+'px">'+txt+'</text>';
+    return r;
+  }
+  var s='<svg viewBox="0 0 520 440" role="img" aria-label="Plan d’implantation de la cuisine et du séjour">';
+  s+=R(0,0,6.6,5.4,'k-plast','',0);
+  s+=R(0,0,3.6,0.65,'k-conc','Meubles bas');
+  s+=R(0,0.65,0.65,1.6,'k-conc','');
+  s+=R(3.6,0,0.7,0.65,'k-mort','Frigo');
+  s+=R(4.3,0,0.6,0.65,'k-mort','Four');
+  s+=R(1.4,1.5,2.2,1.0,'k-conc','Îlot, plaque');
+  [1.8,2.5,3.2].forEach(function(x){s+='<circle cx="'+X(x)+'" cy="'+Y(2.75)+'" r="9" class="k-wood ol"/>'});
+  s+=R(1.2,3.3,1.6,0.9,'k-wood','Table');
+  [1.45,2.0,2.55].forEach(function(x){s+=R(x-0.2,3.0,0.4,0.3,'k-wood2','',0)+R(x-0.2,4.2,0.4,0.3,'k-wood2','',0)});
+  s+=R(3.5,3.3,2.2,0.95,'k-air','Canapé');
+  s+=R(4.0,4.6,1.0,0.5,'k-wood','',0);
+  s+=R(6.15,1.6,0.45,1.6,'k-conc','TV',9);
+  s+='<path d="M'+X(1.2)+' '+Y(0.33)+'L'+X(2.5)+' '+Y(2.0)+'L'+X(3.95)+' '+Y(0.33)+'Z" fill="none" stroke="var(--accent)" stroke-width="1.4" stroke-dasharray="5 4"/>';
+  s+='<text class="svm" x="'+X(2.5)+'" y="'+Y(1.15)+'" text-anchor="middle" style="fill:var(--accent)">triangle d’activité</text>';
+  s+='<rect x="'+X(0)+'" y="'+Y(0)+'" width="'+(6.6*k)+'" height="'+(5.4*k)+'" fill="none" stroke="var(--ink)" stroke-width="4"/>';
+  s+='<line x1="'+X(0.9)+'" y1="'+Y(5.4)+'" x2="'+X(5.7)+'" y2="'+Y(5.4)+'" stroke="var(--accent)" stroke-width="5"/>';
+  s+='<text class="svm" x="'+X(3.3)+'" y="'+(Y(5.4)+18)+'" text-anchor="middle">baie vitrée sud</text><text class="svm" x="'+X(0)+'" y="'+(Y(5.4)+36)+'">Séjour-cuisine, 6,60 × 5,40 m. Fenêtre de la cuisine sur le mur ouest.</text>';
+  return s+'</svg>';
+}
+function bCuis(){
+  var t=table([
+   ['Cuisine équipée : meubles bas et hauts, îlot, plan de travail quartz',1,'forfait',9800],
+   ['Électroménager encastrable : plaque induction, four, hotte, lave-vaisselle, réfrigérateur',1,'forfait',4200],
+   ['Dressing sur mesure de la suite parentale',2.4,'ml',780],
+   ['Placards des chambres 2 et 3',2.4,'ml',480]]);
+  var items=[['Meubles bas','3,60 m + retour de 1,60 m','Façades laquées mates, caissons mélaminés 18 mm'],['Îlot avec plaque','2,20 × 1,00 m','Plan de travail quartz 20 mm, prise intégrée'],['Colonnes','Réfrigérateur et four','Encastrées, ventilation en partie haute'],['Meubles hauts','2,40 m','Sur renforts de plâtrerie'],['Dressing de la suite','2,40 m','Mélaminé blanc, penderie et tiroirs'],['Placards des chambres','2 × 1,20 m','Portes coulissantes, mélaminé blanc']];
+  var tab='<div class="card"><div class="tw"><table class="tbl"><thead><tr><th>Élément</th><th>Dimensions</th><th>Matière et détail</th></tr></thead><tbody>'+items.map(function(i){return '<tr><td><b>'+i[0]+'</b></td><td>'+i[1]+'</td><td>'+i[2]+'</td></tr>'}).join('')+'</tbody></table></div></div>';
+  var figs=[
+   sec('Plan d’implantation','FIG. 1',figCard(cuisSvg(),'Le mobilier libre (canapé, table, meuble TV) est dessiné pour vérifier les circulations. Il n’est pas fourni par Phénix.')),
+   sec('Éléments fournis','',tab),
+   sec('Séquence des travaux','',card(stepsOl(['<b>Plan définitif</b> signé et cotes relevées sur place après la plâtrerie.','<b>Arrivées d’eau, évacuations et électricité</b> positionnées sur le plan.','<b>Pose des meubles</b> après carrelage et peinture.','<b>Plan de travail</b> et crédence posés, raccordements et tests.','<b>Dressings et placards</b> posés en dernier, sur sol fini.'])))];
+  var mats=[
+   ['Façades laquées mates','Cuisine','19 mm, charnières à fermeture amortie','Cuisiniste'],
+   ['Plan de travail en quartz','Cuisine et îlot','20 mm, découpes pour évier et plaque','Cuisiniste'],
+   ['Électroménager encastrable','Cuisine','Raccordements validés avec plombier et électricien','Cuisiniste'],
+   ['Mélaminé blanc','Dressing et placards','18 mm, chants collés, tiroirs à coulisses','Menuisier agenceur']];
+  return mkChap('cuis','Cuisine et mobilier','Plan d’implantation de la cuisine et du séjour, avec le dressing et les placards. Les arrivées d’eau et d’électricité se calent sur ce plan.',
+   [['3,60 m','Linéaire de meubles bas'],['2,20 m','Îlot central'],['2,40 m','Dressing de la suite'],['4','Intervenants']],figs,mats,t,
+   ['La position de l’évier, de la plaque et du frigo fixe les évacuations et les circuits spécialisés : à valider avant les gaines.','Hotte : sortie ou recyclage à choisir, la VMC double flux ne doit pas servir à l’évacuation de la hotte.','Cotes définitives relevées après la plâtrerie, jamais sur les plans.','Passage de l’électroménager par la baie ou la porte : dimensions à vérifier.']);
+}
+
+/* ---------------- Planning et réception ---------------- */
+function ganttSvg(){
+  var rows=PLAN.slice().sort(function(a,b){return a[3]-b[3]||CH_ORDER.indexOf(a[0])-CH_ORDER.indexOf(b[0])});
+  var wk0=272,ww=14,n=38,top=30,rh=20,H=top+rows.length*rh+10,W=wk0+n*ww+10,i;
+  var s='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Planning de chantier en semaines" style="min-width:820px">';
+  for(i=0;i<n;i++){
+    if(i%4===0){s+='<text class="svm" x="'+(wk0+i*ww)+'" y="16">S'+(i+1)+'</text>'}
+    s+='<line x1="'+(wk0+i*ww)+'" y1="'+(top-6)+'" x2="'+(wk0+i*ww)+'" y2="'+(H-6)+'" stroke="var(--line)" stroke-width="'+(i%4===0?1:.5)+'"/>';
+  }
+  rows.forEach(function(r,j){
+    var y=top+j*rh;
+    if(j%2===0)s+='<rect x="0" y="'+(y-3)+'" width="'+W+'" height="'+rh+'" fill="var(--bg)" opacity=".6"/>';
+    s+='<text class="svt" x="4" y="'+(y+11)+'" style="font-size:10.5px">'+r[1]+' · '+r[2]+'</text>';
+    var pil=r[0]==='plan';
+    s+='<rect x="'+(wk0+(r[3]-1)*ww+1)+'" y="'+(y)+'" width="'+(r[4]*ww-2)+'" height="12" rx="2" style="fill:'+(pil?'var(--bar-muted)':'var(--accent)')+'"/>';
+  });
+  return s+'</svg>';
+}
+function bPlan(){
+  var t=table([['Test d’étanchéité à l’air par un opérateur agréé',1,'u',450],['Nettoyage de fin de chantier',1,'forfait',650]]);
+  var guar=[['Réception','Visite avec vous, procès-verbal, réserves listées et levées dans un délai convenu.'],['Parfait achèvement','1 an : tous les défauts signalés à la réception ou dans l’année sont repris.'],['Garantie biennale','2 ans pour le bon fonctionnement des équipements dissociables : volets, robinetterie, appareillage.'],['Garantie décennale','10 ans pour la solidité de l’ouvrage et son usage normal.'],['Dommages-ouvrage','Assurance à souscrire avant l’ouverture du chantier, elle préfinance les réparations.'],['Contrôles de fin de chantier','Étanchéité à l’air, conformité électrique (Consuel) et attestation de performance RE2020.']];
+  var figs=[
+   sec('Planning prévisionnel','FIG. 1',figCard(ganttSvg(),'Chantier prévu sur 38 semaines. Une barre est une intervention, le chapitre correspondant détaille chaque tâche. Les durées sont indicatives et dépendent de la météo et des délais d’approvisionnement.')),
+   sec('Réception et garanties','','<div class="grid">'+guar.map(function(g){return '<div class="card"><h4 style="margin:0 0 6px;font:600 18px var(--fs-display);text-transform:uppercase;letter-spacing:.03em;color:var(--accent)">'+g[0]+'</h4><p style="font-size:14px;color:var(--muted)">'+g[1]+'</p></div>'}).join('')+'</div>')];
+  var res=mkChap('plan','Planning et réception','Qui intervient, dans quel ordre et à quelle semaine. En fin de chantier : les contrôles, la réception et les garanties qui vous protègent.',
+   [['38 semaines','Durée prévue'],[String(nTrades()),'Intervenants'],[String(PLAN.length),'Interventions'],['1','Interlocuteur : Phénix']],figs,null,t,
+   ['Les semaines d’attente (séchage de la dalle, de la chape) sont des vraies étapes, pas du retard.','Visite hebdomadaire sur site avec compte rendu, partagé avec vous.','Réserves de réception : noter tout défaut le jour même, sans attendre la dernière visite.','Entrée dans les lieux seulement après réception et levée des réserves bloquantes.']);
+  return res;
+}
+
+/* ====================== Configurateur ====================== */
+var RA=2*((ROOF_G.span/2+ROOF_G.eave)/Math.cos(ROOF_G.pitch*D2R))*ROOF_G.len;
+var SEJ_WALL=wallM2(ROOMS[0]);
+var TTC=1.2;
+S.opt={};S.conf={};S.note={};S.thick={isol:400};S.cat=null;S.client={nom:'',email:'',tel:'',ok:false};S.msg='';S.owner=false;S.replies=[];S.repMsg='';S.grand=0;
+
+var METRICS={
+ R:{l:'Thermique',u:'m².K/W',hi:1,d:1},ep:{l:'Épaisseur',u:'mm',hi:0,d:0},db:{l:'Acoustique',u:'dB',hi:1,d:0},
+ co2:{l:'Carbone',u:'kg CO₂e/m²',hi:0,d:0},vie:{l:'Durée de vie',u:'ans',hi:1,d:0},delai:{l:'Délai de chantier',u:'jours',hi:0,d:0},
+ cout:{l:'Facture de chauffage',u:'€/an',hi:0,d:0},uw:{l:'Coefficient Uw',u:'W/m².K',hi:0,d:1},poids:{l:'Poids',u:'kg/m²',hi:0,d:0},
+ chauf:{l:'Besoin de chauffage',u:'% en plus',hi:0,d:0}
+};
+function V(x){return typeof x==='function'?x():x}
+function O(id,n,d,price,m,pros,cons){return {id:id,n:n,d:d,price:price,m:m||{},pros:pros,cons:cons}}
+function sgn(n){var r=Math.round(n);return r===0?'0 €':(r>0?'+ ':'− ')+eur(Math.abs(r))}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+
+var ISO={verre:{n:'Laine de verre soufflée',l:0.041,b:0.62,co:0.23},ouate:{n:'Ouate de cellulose soufflée',l:0.040,b:0.78,co:0.12},bois:{n:'Laine de bois en vrac',l:0.042,b:0.95,co:0.15}};
+function isoKey(){return S.opt.isoltoit||'comb'}
+function isoList(){return isoKey()==='ramp'?[200,240,300]:[300,350,400,450,500]}
+function isoThick(){var l=isoList(),t=S.thick.isol;return l.indexOf(t)>=0?t:(isoKey()==='ramp'?300:400)}
+function isoSurf(){return isoKey()==='ramp'?r1(RA):AREA}
+function isoPrice(k,e,s){return (2.2+ISO[k].b*e/10)*s}
+
+var WX={
+ ossature:[['Chantier sec et rapide','Bonne isolation pour peu d’épaisseur'],['Moins d’inertie thermique','Bardage bois à entretenir']],
+ banche:[['Grande inertie thermique, bon confort d’été','Très bonne étanchéité à l’air'],['Chantier plus long et plus humide','Impossible de modifier une fois coulé']],
+ parpaing:[['Solution la plus économique','Mise en œuvre très courante'],['Isolation à ajouter côté intérieur','Moins d’inertie qu’un voile béton']],
+ brique:[['Matériau sain et durable','Bon confort d’été'],['Plus chère que le parpaing','Saignées pour les réseaux limitées']]
+};
+var RWm={ossature:44,banche:58,parpaing:52,brique:50},COm={ossature:25,banche:95,parpaing:70,brique:60},VIm={ossature:70,banche:100,parpaing:90,brique:100},DEm={ossature:15,banche:25,parpaing:22,brique:20};
+var RX={
+ terre:[['Durable, aspect traditionnel','Teinte stable, bon confort d’été'],['Poids élevé pour la charpente','Plus chère que la tuile béton']],
+ beton:[['Économique','Large choix de coloris'],['Teinte qui vieillit','Plus lourde que la terre cuite']],
+ ardoise:[['Finition haut de gamme','Légère et très durable'],['Prix élevé','Pose longue et spécialisée']],
+ bac:[['Très légère, pose rapide','Prix de pose réduit'],['Bruit de la pluie','Aspect contemporain, moins traditionnel']]
+};
+var RVI={terre:100,beton:50,ardoise:100,bac:40},RDE={terre:12,beton:10,ardoise:18,bac:6};
+var WIN_BASE=3950+540+690+3*780+440;
+
+var CATS=[
+ {id:'murs',g:'Structure et enveloppe',t:'Murs périphériques',q:'Quelle structure pour les murs extérieurs ? Elle fixe l’épaisseur, le confort d’été et la durée du chantier.',ref:'ossature',bind:'wall',tab:'murs',metrics:['R','ep','db','co2','vie','delai'],
+  opts:WALL_KEYS.map(function(k){var w=WALLS[k],s=wallStats(w);return O(k,w.n,w.spec,r1(WALL_NET)*w.pu,{R:s.R,ep:s.e,db:RWm[k],co2:COm[k],vie:VIm[k],delai:DEm[k]},WX[k][0],WX[k][1])})},
+ {id:'plancher',g:'Structure et enveloppe',t:'Plancher bas',q:'Dalle sur terre-plein ou plancher sur vide sanitaire ? Ce choix modifie aussi les fondations.',ref:'terre',metrics:['co2','vie','delai'],
+  opts:[
+   O('terre','Dalle sur terre-plein','Béton armé sur hérisson, solution du projet.',SLAB*66.2,{co2:55,vie:100,delai:12},['Solution la plus économique','Pas de vide sanitaire à ventiler'],['Réseaux enterrés inaccessibles','Sensible aux remontées si le terrain est mal drainé']),
+   O('hourdis','Poutrelles-hourdis sur vide sanitaire','Plancher préfabriqué, vide ventilé de 60 cm.',SLAB*128,{co2:70,vie:100,delai:15},['Réseaux accessibles dans le vide sanitaire','Plancher rigide et durable'],['Surcoût notable','Chantier plus long, fondations plus hautes']),
+   O('bois','Plancher bois sur vide sanitaire','Solives bois et panneaux, vide ventilé.',SLAB*138,{co2:25,vie:60,delai:14},['Léger et bon bilan carbone','Réseaux accessibles dans le plancher'],['Sensible à l’humidité du vide sanitaire','Plancher chauffant plus complexe à concevoir'])]},
+ {id:'couverture',g:'Structure et enveloppe',t:'Couverture',q:'Quel revêtement de toiture ? Son poids est pris en compte dans le calcul des fermettes.',ref:'terre',bind:'roof',tab:'toit',metrics:['poids','vie','delai'],
+  opts:ROOF_KEYS.map(function(k){var o=ROOFS[k];return O(k,o.n,o.p,r1(RA)*o.pu,{poids:o.kg,vie:RVI[k],delai:RDE[k]},RX[k][0],RX[k][1])})},
+ {id:'isoltoit',g:'Structure et enveloppe',t:'Isolation de la toiture',q:'Isoler sous le plafond (combles perdus) ou sous les rampants (combles aménageables) ?',ref:'comb',metrics:[],
+  opts:[
+   O('comb','Combles perdus, isolant sur le plafond','Isolant soufflé, combles non utilisables.',0,{},['Isolation la plus économique','Très bonne performance thermique'],['Combles non utilisables','Accès limité pour l’entretien']),
+   O('ramp','Sous rampants, combles aménageables','Fermettes aménageables et finition des rampants.',AREA*55,{},['Volume sous toiture utilisable plus tard','Combles chauffés, plus de volume'],['Surcoût de charpente et de finition','Plus de surface à isoler'])]},
+ {id:'isolant',g:'Structure et enveloppe',t:'Isolant de toiture et épaisseur',q:'Quel isolant et quelle épaisseur ? Chaque centimètre de plus améliore la résistance thermique et ajoute au prix.',ref:'verre',metrics:['R','co2'],thick:true,base:function(){return isoPrice('verre',400,AREA)},
+  opts:[
+   O('verre','Laine de verre soufflée','Standard du marché.',function(){return isoPrice('verre',isoThick(),isoSurf())},function(){var e=isoThick();return {R:e/1000/ISO.verre.l,co2:ISO.verre.co*e/10}},['Prix le plus bas','Très bonne performance thermique'],['Confort d’été moyen','Poussière à la pose']),
+   O('ouate','Ouate de cellulose soufflée','Isolant biosourcé, issu du papier recyclé.',function(){return isoPrice('ouate',isoThick(),isoSurf())},function(){var e=isoThick();return {R:e/1000/ISO.ouate.l,co2:ISO.ouate.co*e/10}},['Meilleur confort d’été','Faible empreinte carbone'],['Plus chère que la laine de verre','Peut se tasser avec le temps']),
+   O('bois','Laine de bois en vrac','Isolant biosourcé en fibres de bois.',function(){return isoPrice('bois',isoThick(),isoSurf())},function(){var e=isoThick();return {R:e/1000/ISO.bois.l,co2:ISO.bois.co*e/10}},['Très bon confort d’été','Matériau naturel et durable'],['Prix le plus élevé','Moins répandue, fournisseurs limités'])]},
+ {id:'menuiseries',g:'Ouvertures',t:'Fenêtres et baie vitrée',q:'Aluminium, PVC ou bois ? Le matériau change le prix, l’entretien et la finesse des cadres.',ref:'alu',tab:'menu',metrics:['uw','vie'],
+  opts:[
+   O('alu','Aluminium à rupture de pont thermique','Cadres fins, teinte gris anthracite.',WIN_BASE,{uw:1.3,vie:40},['Cadres fins, plus de lumière','Aucun entretien'],['Plus chères que le PVC','Cadre froid sans rupture de pont thermique']),
+   O('pvc','PVC','Cadres plus épais, blanc ou teinté.',WIN_BASE*0.78,{uw:1.2,vie:30},['Meilleur prix','Très bonne isolation thermique'],['Cadres plus épais, moins de vitrage','Teintes et finitions limitées']),
+   O('bois','Bois','Essence au choix, lasure ou peinture.',WIN_BASE*1.2,{uw:1.4,vie:30},['Aspect chaleureux','Bon bilan carbone'],['Entretien régulier de la finition','Prix le plus élevé'])]},
+ {id:'volets',g:'Ouvertures',t:'Volets',q:'Quel type de fermeture pour les fenêtres et la baie vitrée ?',ref:'elec',tab:'menu',metrics:[],
+  opts:[
+   O('elec','Volets roulants électriques','Commande radio, coffre dans la tapée.',6*410+1100,{},['Confort d’usage, programmation possible','Sécurité et occultation totale'],['Panne possible du moteur','Coffre à intégrer dans le mur']),
+   O('man','Volets roulants manuels','Manivelle ou sangle.',6*250+600,{},['Moins chers et plus simples','Pas de moteur à remplacer'],['Moins pratiques au quotidien','Manœuvre difficile sur la grande baie']),
+   O('none','Sans volets','Vitrage seul.',0,{},['Aucun coût','Plus de lumière, façade plus nette'],['Pas d’occultation ni de protection solaire','Moins de sécurité'])]},
+ {id:'porte',g:'Ouvertures',t:'Porte d’entrée',q:'Quelle porte d’entrée pour votre façade sud ?',ref:'alu',tab:'menu',metrics:['uw','vie'],
+  opts:[
+   O('alu','Porte aluminium','Cadre et ouvrant isolés, serrure multipoints.',2150,{uw:1.4,vie:40},['Très durable, sans entretien','Large choix de teintes'],['Plus chère que l’acier','Surface froide au toucher']),
+   O('acier','Porte acier isolée','Panneau acier isolé, finition laquée.',1750,{uw:1.3,vie:35},['Très bon rapport qualité-prix','Excellente sécurité'],['Choix de décors plus limité','Peut se rayer ou se bosser']),
+   O('boisp','Porte bois massif','Panneau bois, finition lasurée.',2650,{uw:1.6,vie:30},['Aspect chaleureux et haut de gamme','Réparable facilement'],['Entretien régulier','Prix le plus élevé'])]},
+ {id:'portesint',g:'Ouvertures',t:'Portes intérieures',q:'Quel type de bloc-porte pour les huit portes intérieures ?',ref:'alv',tab:'menu',metrics:['db','vie'],
+  opts:[
+   O('alv','Alvéolaire à peindre','Porte plane en panneau alvéolaire.',2560,{db:25,vie:20},['Choix de teinte libre à la peinture','Bon prix'],['Légère, bruit transmis','Peinture à prévoir']),
+   O('post','Post-formée blanche','Porte prépeinte, prête à poser.',1920,{db:25,vie:15},['Moins chère, aucune peinture','Pose rapide'],['Teinte unique','Moins résistante aux chocs']),
+   O('massif','Bois massif à peindre','Panneau plein, finition peinte.',4160,{db:30,vie:40},['Solide, bonne isolation phonique','Sensation de qualité'],['Prix le plus élevé','Poids important, huisseries renforcées'])]},
+ {id:'chauffage',g:'Confort technique',t:'Chauffage',q:'Quel système de chauffage ? Comparez l’investissement et la facture annuelle.',ref:'pac',tab:'chauf',metrics:['cout','vie'],
+  opts:[
+   O('pac','Pompe à chaleur air-eau et plancher chauffant','Chaleur douce diffusée par le sol.',11200+AREA*38+750,{cout:340,vie:17},['Facture la plus basse','Confort homogène par le sol'],['Investissement le plus élevé','Unité extérieure à placer']),
+   O('air','Pompe à chaleur air-air, splits','Unités murales dans les pièces de vie et les chambres.',7400,{cout:372,vie:15},['Moins chère que la pompe à chaleur air-eau','Peut rafraîchir en été'],['Chaleur moins homogène','Unités visibles dans les pièces']),
+   O('gran','Poêle à granulés et radiateurs électriques','Poêle dans le séjour, radiateurs dans les chambres.',7200,{cout:400,vie:20},['Combustible économique','Poêle décoratif'],['Stockage et approvisionnement des granulés','Nettoyage régulier et ramonage']),
+   O('elec','Radiateurs électriques à inertie','Un radiateur par pièce.',4400,{cout:1190,vie:25},['Investissement très faible','Aucun entretien'],['Facture 3 à 4 fois plus élevée','Confort moins homogène'])]},
+ {id:'ventilation',g:'Confort technique',t:'Ventilation',q:'VMC double flux ou simple flux ? Le double flux récupère la chaleur de l’air extrait.',ref:'df',tab:'chauf',metrics:['chauf','vie'],
+  opts:[
+   O('df','VMC double flux','Échangeur de chaleur, filtres sur l’air neuf.',7700,{chauf:0,vie:20},['Récupère la chaleur de l’air extrait','Air neuf filtré, confort acoustique'],['Plus chère à l’achat et à entretenir','Gaines à passer dans les combles']),
+   O('sf','VMC simple flux hygroréglable','Extraction dans les pièces humides, entrées d’air dans les menuiseries.',3200,{chauf:12,vie:25},['Prix bas, entretien simple','Installation rapide'],['Pertes de chaleur à l’extraction','Entrées d’air visibles sur les fenêtres'])]},
+ {id:'solsvie',g:'Finitions',t:'Sol des pièces de vie',q:'Quel sol pour le séjour, la cuisine, l’entrée et le dégagement ?',ref:'carr120',tab:'sols',metrics:['vie','delai'],
+  opts:[
+   O('carr120','Carrelage grand format 60 × 120','Grès cérame rectifié, joints fins.',FA.A*78,{vie:50,delai:6},['Très résistant, facile à nettoyer','Très bon avec le plancher chauffant'],['Sol froid hors chauffage','Pose délicate, planéité exigeante']),
+   O('carr60','Carrelage 60 × 60','Grès cérame, format courant.',FA.A*64,{vie:50,delai:5},['Moins cher que le grand format','Pose plus simple'],['Plus de joints visibles','Aspect moins épuré']),
+   O('parquet','Parquet contrecollé chêne','Collé en plein sur chape.',FA.A*92,{vie:30,delai:3},['Chaleureux et confortable','Rénovable par ponçage'],['Sensible aux rayures et à l’eau','Plus cher que le carrelage']),
+   O('strat','Stratifié haute résistance','Lames clipsées sur sous-couche.',FA.A*38,{vie:15,delai:2},['Prix le plus bas','Pose très rapide'],['Durée de vie plus courte','Rendement du plancher chauffant réduit']),
+   O('lvt','Sol vinyle clipsable','Lames vinyle étanches.',FA.A*46,{vie:20,delai:2},['Étanche, silencieux à la marche','Pose rapide'],['Aspect moins noble','Sensible aux rayures'])]},
+ {id:'solsch',g:'Finitions',t:'Sol des chambres',q:'Quel sol pour la suite parentale et les chambres ?',ref:'parquet',tab:'sols',metrics:['vie','delai'],
+  opts:[
+   O('parquet','Parquet contrecollé chêne','Collé en plein sur chape.',FA.B*92,{vie:30,delai:3},['Chaleureux et confortable','Rénovable par ponçage'],['Sensible aux rayures','Plus cher que le stratifié']),
+   O('strat','Stratifié haute résistance','Lames clipsées sur sous-couche.',FA.B*38,{vie:15,delai:2},['Prix le plus bas','Pose rapide'],['Durée de vie plus courte','Aspect moins noble']),
+   O('carrb','Carrelage aspect bois 20 × 120','Grès cérame imitation parquet.',FA.B*70,{vie:50,delai:5},['Très durable et facile à nettoyer','Compatible plancher chauffant'],['Moins chaleureux au pied','Pose plus longue'])]},
+ {id:'finition',g:'Finitions',t:'Murs du séjour',q:'Peinture seule ou lambris ? Les lambris habillent une partie ou toute la hauteur des murs.',ref:'peint',tab:'pein',metrics:['vie'],
+  opts:[
+   O('peint','Peinture','Deux couches acryliques mates.',SEJ_WALL*16.3,{vie:10},['Prix le plus bas','Retouches faciles'],['À refaire tous les 8 à 12 ans','Marque plus facilement']),
+   O('lamb2','Lambris mi-hauteur et peinture','Lambris bois peint sur 1,10 m, peinture au-dessus.',SEJ_WALL*0.44*58+SEJ_WALL*0.56*16.3,{vie:18},['Protège les murs des chocs','Effet décoratif classique'],['Surcoût sur la pose','Poussière sur les rainures']),
+   O('lamb','Lambris sur toute la hauteur','Lambris bois peint ou lasuré.',SEJ_WALL*58,{vie:25},['Très durable et chaleureux','Cache les défauts du support'],['Prix élevé','Pièce visuellement plus petite'])]},
+ {id:'cuisine',g:'Finitions',t:'Gamme de cuisine',q:'Quelle gamme de cuisine équipée, électroménager inclus ?',ref:'conf',tab:'cuis',metrics:['vie'],
+  opts:[
+   O('ess','Essentielle','Façades stratifiées, plan de travail stratifié, électroménager de base.',9800,{vie:12},['Budget maîtrisé','Large choix de coloris'],['Plan de travail moins résistant','Électroménager d’entrée de gamme']),
+   O('conf','Confort','Façades laquées mates, plan de travail quartz, électroménager encastrable.',14000,{vie:18},['Très bon équilibre prix et durabilité','Plan de travail quartz résistant'],['Investissement moyen','Électroménager de gamme moyenne']),
+   O('prem','Premium','Façades laquées, quartz épais, électroménager haut de gamme.',21500,{vie:25},['Finitions et équipements haut de gamme','Très durable'],['Prix élevé','Délai de fabrication plus long'])]}
+];
+var CGROUPS=['Structure et enveloppe','Ouvertures','Confort technique','Finitions'];
+
+function selId(c){return c.bind==='wall'?S.wall:c.bind==='roof'?S.roof:(S.opt[c.id]||c.ref)}
+function findOpt(c,id){for(var i=0;i<c.opts.length;i++)if(c.opts[i].id===id)return c.opts[i];return c.opts[0]}
+function baseOf(c){return c.base!=null?V(c.base):V(findOpt(c,c.ref).price)}
+function catDelta(c){return V(findOpt(c,selId(c)).price)-baseOf(c)}
+function choixDelta(){var s=0;CATS.forEach(function(c){if(hasLots()){if(!isImposed(c))s+=catDelta(c)}else if(!c.bind)s+=catDelta(c)});return s}
+function allDelta(){var s=0;CATS.forEach(function(c){if(!isImposed(c))s+=catDelta(c)});return s}
+function nConf(){var n=0;CATS.forEach(function(c){if(S.conf[c.id])n++});return n}
+function catById(id){for(var i=0;i<CATS.length;i++)if(CATS[i].id===id)return CATS[i];return null}
+
+function dl(n,ok){var v=Math.round(n*TTC);if(v===0)return '<span class="dl non">'+(ok?'0 €':'Non inclus')+'</span>';return '<span class="dl '+(v>0?'up':(v<0?'down':''))+'">'+sgn(n*TTC)+'</span>'}
+
+function metricsHtml(c,vals,o){
+  return c.metrics.map(function(k){
+    var M=METRICS[k],arr=c.opts.map(function(x){return vals[x.id][k]}),mx=Math.max.apply(null,arr),mn=Math.min.apply(null,arr),v=vals[o.id][k];
+    var best=mx!==mn&&(M.hi?v===mx:v===mn);
+    var w=mx?Math.max(6,v/mx*100):6;
+    return '<div class="mt"><span class="ml">'+M.l+'</span><span class="mb"><i style="width:'+w.toFixed(0)+'%"></i></span><span class="mv'+(best?' best':'')+'">'+dec(v,M.d)+' <small>'+M.u+'</small></span></div>';
+  }).join('');
+}
+function optCard(c,o,vals){
+  var sel=selId(c)===o.id,ref=c.ref===o.id,imp=isImposed(c);
+  var badges=(sel?'<span class="badge on">'+(imp?'Imposé':S.conf[c.id]?'Votre choix':'Sélection actuelle')+'</span>':'')+(ref?'<span class="badge">Proposition Phénix</span>':'');
+  var d=V(o.price)-baseOf(c);
+  return '<div class="oc'+(sel?' on':'')+'"><div class="ocb">'+badges+'</div><h4>'+o.n+'</h4><div class="ocp">'+dl(d,!!S.conf[c.id])+'<small>poste : '+eur(V(o.price)*TTC)+' TTC</small></div><p class="ocd">'+o.d+'</p>'+
+   (c.metrics.length?'<div class="mts">'+metricsHtml(c,vals,o)+'</div>':'')+
+   '<ul class="pc">'+o.pros.map(function(p){return '<li class="p">'+p+'</li>'}).join('')+o.cons.map(function(p){return '<li class="c">'+p+'</li>'}).join('')+'</ul>'+
+   (imp?'<p class="cap">'+esc(fcat(c).why||'Solution imposée pour ce projet.')+'</p>':'<button class="btn'+(sel&&S.conf[c.id]?' solid':'')+'" data-act="opt" data-cat="'+c.id+'" data-id="'+o.id+'" aria-pressed="'+(sel&&!!S.conf[c.id])+'">'+(sel&&S.conf[c.id]?'Choisi ✓':'Choisir cette option')+'</button>')+'</div>';
+}
+function renderChoix(){
+  if(!pub())return gateHtml();
+  if(S.cat==='send')return renderSend();
+  var c=S.cat?catById(S.cat):null;
+  if(!c){
+    var n=nConf(),h='<div><h2>Vos choix</h2><p class="lead">Pour chaque poste, Phénix vous propose une solution de référence. Comparez les alternatives : prix, performances, avantages et limites. Le prix total se recalcule à chaque choix et vos réponses nous parviennent pour préparer le devis définitif.</p></div>';
+    h+=syncBox();h+='<div class="card"><div class="prog"><span class="pl"><b>'+n+' choix confirmés</b> sur '+CATS.length+'</span><span class="pt"><i style="width:'+(n/CATS.length*100).toFixed(0)+'%"></i></span></div></div>';
+    CGROUPS.forEach(function(g){
+      h+='<div class="sec"><h3>'+g+'</h3><div class="cgrid">';
+      CATS.filter(function(x){return x.g===g}).forEach(function(x){
+        var o=findOpt(x,selId(x));
+        h+='<button class="cc'+(S.conf[x.id]?' done':'')+'" data-act="cat" data-id="'+x.id+'"><span class="cs">'+(isImposed(x)?'Imposé':S.conf[x.id]?'Choisi':'Proposition Phénix')+'</span><b>'+x.t+'</b><span class="cn">'+o.n+(x.thick?' · '+isoThick()+' mm':'')+'</span>'+dl(catDelta(x),!!S.conf[x.id])+'</button>';
+      });
+      h+='</div></div>';
+    });
+    h+='<div><button class="btn solid big" data-act="cat" data-id="send">Voir le récapitulatif et envoyer</button></div>';
+    return h;
+  }
+  var vals={};c.opts.forEach(function(o){vals[o.id]=V(o.m)||{}});
+  var i=CATS.indexOf(c),prev=CATS[i-1],next=CATS[i+1];
+  var h2='<div><button class="btn" data-act="cat" data-id="">← Tous les choix</button></div>'+
+   '<div><div class="eyebrow">'+c.g+' · '+(i+1)+' sur '+CATS.length+'</div><h2>'+c.t+'</h2><p class="lead">'+c.q+'</p></div>';
+  if(c.thick){
+    h2+='<div class="card"><div class="eyebrow" style="margin-bottom:8px">Épaisseur d’isolant</div><div class="seg" role="group" aria-label="Épaisseur">'+isoList().map(function(e){return '<button class="chip'+(e===isoThick()?' on':'')+'" data-act="thick" data-id="'+e+'" aria-pressed="'+(e===isoThick())+'">'+e+' mm</button>'}).join('')+'</div><p class="cap">'+(isoKey()==='ramp'?'Sous rampants, l’épaisseur est limitée par la hauteur des chevrons.':'En combles perdus, l’épaisseur n’est limitée que par la hauteur disponible.')+'</p></div>';
+  }
+  if(fcat(c).mode==='restreint')h2+='<div class="watch"><ul><li>Options limitées pour votre projet'+(fcat(c).why?' : '+esc(fcat(c).why):'')+'</li></ul></div>';
+  h2+='<div class="ocs">'+visibleOpts(c).map(function(o){return optCard(c,o,vals)}).join('')+'</div>';
+  h2+='<div class="card"><label class="eyebrow" for="note-'+c.id+'">Une remarque pour Phénix sur ce poste ?</label><textarea id="note-'+c.id+'" class="ta" data-note="'+c.id+'" rows="3" placeholder="Une contrainte, une préférence, une question">'+esc(S.note[c.id]||'')+'</textarea></div>';
+  h2+='<div class="navrow">'+(prev?'<button class="btn" data-act="cat" data-id="'+prev.id+'">← '+prev.t+'</button>':'<span></span>')+(c.tab?'<button class="btn" data-act="tab" data-id="'+c.tab+'">Voir le chapitre du carnet</button>':'')+(next?'<button class="btn" data-act="cat" data-id="'+next.id+'">'+next.t+' →</button>':'<button class="btn solid" data-act="cat" data-id="send">Récapitulatif</button>')+'</div>';
+  return h2;
+}
+function recapRows(){
+  return CATS.map(function(c){var o=findOpt(c,selId(c));return '<tr><td><b>'+c.t+'</b></td><td>'+o.n+(c.thick?' · '+isoThick()+' mm':'')+(S.conf[c.id]?'':' <small class="muted">(proposition)</small>')+'</td><td class="num">'+dl(catDelta(c),!!S.conf[c.id])+'</td><td>'+esc(S.note[c.id]||'')+'</td></tr>'}).join('');
+}
+function renderSend(){
+  var ok=S.client.ok?' checked':'';
+  return '<div><button class="btn" data-act="cat" data-id="">← Tous les choix</button></div>'+
+   '<div><h2>Récapitulatif</h2><p class="lead">Vérifiez vos choix, indiquez vos coordonnées et envoyez-les à Phénix. Ce récapitulatif sert de base au devis définitif, il ne vaut pas engagement.</p></div>'+
+   '<div class="card"><div class="tw"><table class="tbl"><thead><tr><th>Poste</th><th>Votre sélection</th><th class="num">Écart TTC</th><th>Remarque</th></tr></thead><tbody>'+recapRows()+'</tbody><tfoot><tr><td colspan="2">Écart total avec la proposition Phénix</td><td class="num">'+dl(allDelta(),true)+'</td><td></td></tr></tfoot></table></div></div>'+
+   '<div class="card"><div class="totals" style="margin-top:0;border-top:0;padding-top:0"><div><b>'+eur(S.grand*TTC)+'</b><span>Total TTC estimé</span></div><div><b>'+eur(S.grand)+'</b><span>Total HT</span></div><div><b>'+nConf()+' / '+CATS.length+'</b><span>Choix confirmés</span></div></div></div>'+
+   '<div class="card form"><div class="eyebrow">Vos coordonnées</div>'+
+    '<label for="f-nom">Nom et prénom</label><input id="f-nom" class="in" data-fld="nom" autocomplete="name" value="'+esc(S.client.nom)+'">'+
+    '<label for="f-email">Adresse e-mail</label><input id="f-email" class="in" data-fld="email" type="email" autocomplete="email" value="'+esc(S.client.email)+'">'+
+    '<label for="f-tel">Téléphone</label><input id="f-tel" class="in" data-fld="tel" type="tel" autocomplete="tel" value="'+esc(S.client.tel)+'">'+
+    '<label class="chk" for="f-ok"><input id="f-ok" type="checkbox" data-fld-ok="1"'+ok+'><span>Je comprends que ces prix sont estimatifs et qu’un devis définitif suivra.</span></label>'+
+    '<div class="actrow"><button class="btn solid" data-act="send">Valider et transmettre à Phénix</button><button class="btn" data-act="dl">Télécharger le récapitulatif</button><button class="btn" data-act="copy">Copier le récapitulatif</button></div>'+
+    '<p class="cap" id="send-msg" role="status">'+esc(S.msg||statutTxt())+'</p></div>';
+}
+function renderDock(){
+  if(!pub()){$('dock').innerHTML='';return}
+  var d=allDelta();
+  $('dock').innerHTML='<div class="dk"><div><b>'+eur(S.grand*TTC)+' TTC</b><small>'+(Math.round(d*TTC)===0?'Proposition Phénix':dl(d,true)+' avec vos choix')+' · '+nConf()+'/'+CATS.length+' confirmés</small></div><button class="btn solid" data-act="cat" data-id="'+(S.tab==='choix'&&S.cat?(S.cat==='send'?'':'send'):'')+'">'+(S.tab==='choix'&&S.cat&&S.cat!=='send'?'Récapitulatif':(S.tab==='choix'&&S.cat==='send'?'Mes choix':'Faire mes choix'))+'</button></div>';
+}
+
+function payload(){
+  var items=CATS.map(function(c){var o=findOpt(c,selId(c));return {cat:c.id,titre:c.t,option:o.id,libelle:o.n,confirme:!!S.conf[c.id],ecartTTC:Math.round(catDelta(c)*TTC),note:S.note[c.id]||'',epaisseurMm:c.thick?isoThick():null}});
+  return {projet:S.fiche.nom,client:{nom:S.client.nom,email:S.client.email,tel:S.client.tel},createdAt:new Date().toISOString(),totalTTC:Math.round(S.grand*TTC),ecartTTC:Math.round(allDelta()*TTC),confirmes:nConf(),total:CATS.length,items:items};
+}
+function csvOf(p){
+  function q(s){return '"'+String(s==null?'':s).replace(/"/g,'""')+'"'}
+  var rows=[['Poste','Choix','Confirmé','Écart TTC','Remarque']].concat(p.items.map(function(i){return [i.titre,i.libelle+(i.epaisseurMm?' '+i.epaisseurMm+' mm':''),i.confirme?'oui':'non',i.ecartTTC,i.note]}));
+  rows.push(['Total TTC estimé','','',p.totalTTC,'']);
+  return '﻿'+rows.map(function(r){return r.map(q).join(';')}).join('\r\n');
+}
+function textOf(p){
+  return 'Choix '+p.projet+'\n'+p.items.map(function(i){return '- '+i.titre+' : '+i.libelle+(i.epaisseurMm?' '+i.epaisseurMm+' mm':'')+' ('+(i.ecartTTC>=0?'+':'')+i.ecartTTC+' € TTC)'+(i.note?' · '+i.note:'')}).join('\n')+'\nTotal TTC estimé : '+p.totalTTC+' €';
+}
+function setMsg(t){S.msg=t;var m=$('send-msg');if(m)m.textContent=t;var m2=$('fiche-msg');if(m2)m2.textContent=t}
+function checkClient(){
+  if(!S.client.nom.trim()||!/^\S+@\S+\.\S+$/.test(S.client.email.trim())){setMsg('Indiquez votre nom et une adresse e-mail valide.');return false}
+  if(!S.client.ok){setMsg('Cochez la case de confirmation pour continuer.');return false}
+  return true;
+}
+function dlChoix(skip){if(!skip&&!checkClient())return;setMsg(saveFile('choix-'+(S.cid||'projet')+'.csv',csvOf(payload()))?'Récapitulatif téléchargé.':'Le téléchargement a échoué. Copiez le récapitulatif.')}
+function copyChoix(){
+  var t=textOf(payload());
+  try{navigator.clipboard.writeText(t).then(function(){setMsg('Récapitulatif copié.')},function(){setMsg('Copie impossible dans ce navigateur.')})}catch(e){setMsg('Copie impossible dans ce navigateur.')}
+}
+
+/* Sauvegarde locale du brouillon du client */
+var LS_KEY='phenix-choix-v1';
+function saveLocal(){if(!S.cid)return;try{localStorage.setItem(LS_KEY,JSON.stringify({opt:S.opt,conf:S.conf,note:S.note,thick:S.thick,roof:S.roof,wall:S.wall,client:{nom:S.client.nom,email:S.client.email,tel:S.client.tel}}))}catch(e){}}
+function loadLocal(){
+  try{var j=JSON.parse(localStorage.getItem(LS_KEY)||'null');if(!j)return;
+    if(j.opt)S.opt=j.opt;if(j.conf)S.conf=j.conf;if(j.note)S.note=j.note;if(j.thick)S.thick=j.thick;
+    if(j.roof&&ROOFS[j.roof])S.roof=j.roof;if(j.wall&&WALLS[j.wall])S.wall=j.wall;
+    if(j.client){S.client.nom=j.client.nom||'';S.client.email=j.client.email||'';S.client.tel=j.client.tel||''}
+  }catch(e){}
+}
+function cfgAct(a,el){
+  var id=el.getAttribute('data-id');
+  if(a==='cat'){S.cat=id||null;S.tab='choix';renderAll();try{window.scrollTo({top:$('tabs').getBoundingClientRect().top+window.scrollY-4})}catch(e){}return true}
+  if(a==='opt'&&!pub())return true;
+  if(a==='opt'){var cid=el.getAttribute('data-cat'),c=catById(cid);if(isImposed(c)||allowed(c).indexOf(id)<0)return true;setSel(c,id);S.conf[cid]=true;saveLocal();var oo=findOpt(c,id);afterChoice(c,c.t+' : '+oo.n+(c.thick?' '+isoThick()+' mm':'')+' ('+sgn(catDelta(c)*TTC)+' TTC par rapport à la proposition).');renderAll();return true}
+  if(a==='thick'){S.thick.isol=parseInt(id,10);afterChoice(catById('isolant'),'Isolant : épaisseur '+S.thick.isol+' mm.');renderAll();return true}
+  if(a==='send'){sendChoix();return true}
+  if(a==='dl'){dlChoix();return true}
+  if(a==='copy'){copyChoix();return true}
+  if(a==='fsync'){syncLots(false);return true}
+  if(a==='fexport'){exportChantier();return true}
+  if(a==='logout'){if(window._fb)window._fb.logout();return true}
+  if(a==='expcsv'){dlChoix(true);return true}
+  if(a==='fsave'){saveFiche();return true}
+  if(a==='jpost'){postJ();return true}
+  return false;
+}
+document.addEventListener('input',function(e){
+  var t=e.target,f=t.getAttribute&&t.getAttribute('data-fld'),n=t.getAttribute&&t.getAttribute('data-note');
+  if(f){S.client[f]=t.value;saveLocal()}
+  if(n){S.note[n]=t.value;saveLocal()}
+});
+document.addEventListener('change',function(e){var t=e.target;if(t.getAttribute&&t.getAttribute('data-fld-ok'))S.client.ok=t.checked});
+
+
+/* ====================== Fiche projet, suivi partagé, journal ====================== */
+function defFiche(){return {nom:'Villa Rivière',dossier:'PH-2026-014',clients:'M. et Mme Rivière',email:'',tel:'',terrain:'Lotissement Les Chaumes, Puy-de-Dôme (63)',specifs:'',regl:'',fictif:true,publie:true,cats:{},surface:0,lots:[],tva:20,chiffrageAt:null,exportedAt:null}}
+S.fiche=defFiche();S.dirty=false;S.ficheMsg='';S.statut='brouillon';S.validatedAt=null;S.db=null;S.jdb=false;S.journal=[];S.jmsg='';S.jcat='';S.syncMsg='';S.stale=false;S.sid=Math.random().toString(36).slice(2)+Date.now().toString(36);
+function mergeFiche(d){var f=defFiche();Object.keys(d||{}).forEach(function(k){if(k!=='sid'&&k!=='updatedAt'&&d[k]!=null)f[k]=d[k]});if(!f.cats||typeof f.cats!=='object')f.cats={};return f}
+function nowIso(){return new Date().toISOString()}
+function fdate(t){try{return new Date(t).toLocaleString('fr-FR',{dateStyle:'short',timeStyle:'short'})}catch(e){return ''}}
+function pub(){return S.owner||S.fiche.publie||S.role==='chantier'}
+function fcat(c){return (S.fiche.cats&&S.fiche.cats[c.id])||{mode:'libre',opts:[],why:''}}
+function fc(id){if(!S.fiche.cats)S.fiche.cats={};return S.fiche.cats[id]||(S.fiche.cats[id]={mode:'libre',opts:[],why:''})}
+function allowed(c){var f=fcat(c),ids=c.opts.map(function(o){return o.id});if(f.mode==='libre')return ids;var a=(f.opts||[]).filter(function(i){return ids.indexOf(i)>=0});return a.length?a:ids}
+function isImposed(c){var f=fcat(c);return f.mode==='impose'&&(f.opts||[]).length>0&&allowed(c).length===1}
+function visibleOpts(c){var a=allowed(c);return c.opts.filter(function(o){return a.indexOf(o.id)>=0})}
+function setSel(c,id){if(c.bind==='wall')S.wall=id;else if(c.bind==='roof')S.roof=id;else S.opt[c.id]=id}
+function applyFiche(){CATS.forEach(function(c){var a=allowed(c);if(isImposed(c)){setSel(c,a[0]);S.conf[c.id]=true}else if(a.indexOf(selId(c))<0){setSel(c,a[0]);S.conf[c.id]=false}})}
+function whoName(){return S.owner?'Phénix':(S.client.nom||'Client')}
+
+/* Page de garde générée depuis la fiche */
+function renderCover(){
+  var f=S.fiche;
+  $('cv-name').textContent=f.nom||'Projet';
+  var sub=f.fictif?'Maison individuelle de plain-pied, 119 m² habitables. Tout ce qui sera construit, matériau par matériau, avec les plans, les coupes et le prix de chaque poste.':((f.surface>0?'Maison individuelle, '+dec(f.surface,0)+' m² habitables. ':'')+'Tout ce qui sera construit, matériau par matériau, avec le prix de chaque poste.');$('cv-sub').textContent=sub;var st=f.fictif?'Maquette · projet fictif':(f.plansOk?'':'Plans, métrés et prix des chapitres provisoires');$('cv-stamp').textContent=st;$('cv-stamp').hidden=!st;
+  $('cv-ref').innerHTML='<dt>Dossier</dt><dd>'+esc(f.dossier)+'</dd><dt>Clients</dt><dd>'+esc(f.clients)+'</dd><dt>Terrain</dt><dd>'+esc(f.terrain)+'</dd><dt>Mission</dt><dd>Maîtrise d’œuvre et contractant général</dd><dt>Mis à jour le</dt><dd>'+esc(new Date().toLocaleDateString('fr-FR'))+'</dd>';
+}
+function lines(s){return String(s||'').split('\n').map(function(x){return x.trim()}).filter(Boolean)}
+function ficheHtml(){
+  var a=lines(S.fiche.specifs),b=lines(S.fiche.regl),imp=CATS.filter(isImposed);
+  if(!a.length&&!b.length&&!imp.length)return '';
+  var ul=function(t,l){return l.length?'<div class="eyebrow">'+t+'</div><ul class="plain">'+l.map(function(x){return '<li>'+esc(x)+'</li>'}).join('')+'</ul>':''};
+  return '<div class="sec"><h3>Particularités et contraintes du projet</h3><div class="card">'+ul('Particularités du terrain et du projet',a)+ul('Contraintes de règlement',b)+
+   ul('Solutions techniques imposées',imp.map(function(c){return c.t+' : '+findOpt(c,allowed(c)[0]).n+(fcat(c).why?' ('+fcat(c).why+')':'')}))+'</div></div>';
+}
+function chapBanner(tab){
+  var cs=CATS.filter(function(c){return c.tab===tab});if(!cs.length||!pub())return '';
+  return '<div class="card cbanner"><div class="eyebrow">Choix retenus pour ce chapitre</div>'+cs.map(function(c){
+    var o=findOpt(c,selId(c)),imp=isImposed(c),st=imp?'Imposé':(S.conf[c.id]?'Choisi':'Proposition Phénix'),
+    warn=(!c.bind&&selId(c)!==c.ref)?'<small class="muted">Ce chapitre décrit encore la solution de référence ; votre choix sera détaillé dans la version définitive.</small>':'';
+    return '<div class="rowsel"><span><b>'+c.t+'</b> · '+o.n+' <span class="badge'+(imp||S.conf[c.id]?' on':'')+'">'+st+'</span> '+dl(catDelta(c),!!S.conf[c.id])+(warn?'<br>'+warn:'')+'</span><button class="btn" data-act="cat" data-id="'+c.id+'">'+(imp?'Voir':'Modifier')+'</button></div>';
+  }).join('')+'</div>';
+}
+function gateHtml(){return '<div><h2>Vos choix</h2></div><div class="card"><p>Phénix prépare le configurateur de votre projet. Il s’ouvrira ici dès que la fiche de votre projet sera validée.</p></div>'}
+function syncBox(){return S.syncMsg?'<div class="watch"><ul><li>'+esc(S.syncMsg)+'</li></ul></div>':''}
+
+/* Synchronisation */
+function softRender(){var a=document.activeElement;if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName||''))S.stale=true;else renderAll()}
+document.addEventListener('focusout',function(){if(S.stale){S.stale=false;setTimeout(renderAll,60)}});
+function dbFail(e,what){S.syncMsg=(e&&e.code==='invalid_argument')?'Votre accès ne permet pas d’enregistrer en ligne : demandez à Phénix de vous inviter comme contributeur.':what+' (erreur '+(e&&e.code||'réseau')+').';renderAll()}
+function suiviData(){return {opt:S.opt,conf:S.conf,note:S.note,thick:S.thick,wall:S.wall,roof:S.roof,client:{nom:S.client.nom,email:S.client.email,tel:S.client.tel},statut:S.statut,validatedAt:S.validatedAt||null,updatedAt:nowIso(),sid:S.sid,who:whoName()}}
+function pushSuivi(){if(!S.db)return;S.db.doc('suivi/choix').set(suiviData()).then(function(){if(S.syncMsg){S.syncMsg='';renderAll()}}).catch(function(e){dbFail(e,'Vos modifications ne sont pas enregistrées en ligne')})}
+var pushT=null;function pushSoon(){clearTimeout(pushT);pushT=setTimeout(pushSuivi,700)}
+function applySuivi(d){
+  S.opt=d.opt||{};S.conf=d.conf||{};S.note=d.note||{};S.thick=d.thick||{isol:400};
+  if(d.wall&&WALLS[d.wall])S.wall=d.wall;if(d.roof&&ROOFS[d.roof])S.roof=d.roof;
+  if(d.client){S.client.nom=d.client.nom||S.client.nom;S.client.email=d.client.email||S.client.email;S.client.tel=d.client.tel||S.client.tel}
+  S.statut=d.statut||'brouillon';S.validatedAt=d.validatedAt||null;
+}
+function logJ(kind,text,cat){
+  var e={t:nowIso(),kind:kind,by:S.owner?'moe':'client',who:whoName(),text:text,cat:cat||null,email:S.me.email||''};
+  if(S.db)S.db.collection('journal').add(e).catch(function(x){dbFail(x,'Le journal n’a pas pu être mis à jour')});
+  else{e.id='l'+Date.now();S.journal.unshift(e)}
+}
+function afterChoice(c,txt){
+  if(S.statut==='valide')S.statut='modifie';
+  pushSuivi();logJ('choix',txt,c.id);
+}
+/* Envoi / validation */
+function statutTxt(){
+  if(S.statut==='valide')return 'Choix validés le '+fdate(S.validatedAt)+'. Vous pouvez les modifier à tout moment.';
+  if(S.statut==='modifie')return 'Modifié depuis la validation du '+fdate(S.validatedAt)+' : validez de nouveau pour prévenir Phénix.';
+  return '';
+}
+function sendChoix(){
+  if(!checkClient())return;
+  if(!S.db){setMsg('L’envoi en ligne n’est pas disponible avec votre accès. Téléchargez le récapitulatif pour le transmettre à Phénix.');return}
+  S.statut='valide';S.validatedAt=nowIso();setMsg('Envoi en cours…');
+  S.db.doc('suivi/choix').set(suiviData()).then(function(){
+    logJ('valide','Choix validés par '+whoName()+' : '+nConf()+' sur '+CATS.length+' confirmés, total '+eur(S.grand*TTC)+' TTC.');
+    setMsg('Vos choix ont été transmis à Phénix. Vous pouvez encore les modifier : tout changement sera signalé dans le journal.');
+  }).catch(function(e){S.statut='brouillon';setMsg(e&&e.code==='invalid_argument'?'Votre accès ne permet pas l’envoi en ligne. Demandez à Phénix de vous inviter comme contributeur, ou téléchargez le récapitulatif.':'L’envoi a échoué. Réessayez, ou téléchargez le récapitulatif.')});
+}
+
+/* Fiche projet (maître d’œuvre) */
+function fiField(k,l,ph,type){return '<label for="fi-'+k+'">'+l+'</label><input id="fi-'+k+'" class="in" data-fi="'+k+'"'+(type?' type="'+type+'"':'')+' placeholder="'+(ph||'')+'" value="'+esc(S.fiche[k])+'">'}
+function renderFiche(){
+  if(!S.owner)return '';
+  var f=S.fiche,h='<div><h2>Fiche projet</h2><p class="lead">Première partie : vous renseignez les informations du projet. Elles génèrent la page de garde, les questions posées au client et la suite du carnet. Vous et le client pouvez modifier vos choix à tout moment ; chaque changement est consigné dans le journal.</p></div>';
+  h+=syncBox();
+  h+='<div class="watch"><ul><li>Le total et la liste des lots viennent de Phénix Chiffrage. Les plans, pièces, métrés et tableaux de prix de chaque chapitre sont encore ceux de la maquette : d’ici là, le carnet porte le tampon « Plans, métrés et prix des chapitres provisoires ».</li></ul></div>';
+  h+='<div class="card form"><div class="eyebrow">Client et dossier</div>'+fiField('nom','Nom du projet','Villa Rivière')+fiField('dossier','Numéro de dossier','')+fiField('clients','Clients','M. et Mme …')+fiField('email','E-mail du client','','email')+fiField('tel','Téléphone du client','','tel')+fiField('terrain','Terrain','Adresse, commune')+
+   '<label class="chk" for="fi-fic"><input id="fi-fic" type="checkbox" data-fi-fic="1"'+(f.fictif?' checked':'')+'><span>Projet de démonstration (affiche le tampon « Maquette »)</span></label>'+
+   '<label class="chk" for="fi-plans"><input id="fi-plans" type="checkbox" data-fi-plans="1"'+(f.plansOk?' checked':'')+'><span>Plans, métrés et prix des chapitres saisis (retire le tampon « provisoires »)</span></label></div>';
+  h+='<div class="card form"><div class="eyebrow">Particularités et contraintes</div>'+
+   '<label for="fi-specifs">Particularités du projet (une par ligne)</label><textarea id="fi-specifs" class="ta" data-fi="specifs" rows="4" placeholder="Terrain en pente, altitude 600 m, accès étroit, mitoyenneté…">'+esc(f.specifs)+'</textarea>'+
+   '<label for="fi-regl">Contraintes de règlement (une par ligne)</label><textarea id="fi-regl" class="ta" data-fi="regl" rows="4" placeholder="PLU : toiture 2 pans, pente 30 à 40°, teintes tuiles brun rouge. RE2020. Hauteur 7 m au faîtage…">'+esc(f.regl)+'</textarea></div>';
+  h+='<div class="card"><div class="eyebrow">Solutions techniques par poste</div><p class="cap">Libre : le client choisit parmi toutes les options. Restreint : seules les options cochées lui sont proposées. Imposé : une seule solution, avec le motif affiché.</p>';
+  CATS.forEach(function(c){
+    var x=fcat(c),m=x.mode;
+    h+='<div class="fcat"><div class="fch"><b>'+c.t+'</b><select class="in sel" data-fm="'+c.id+'" aria-label="Mode pour '+c.t+'"><option value="libre"'+(m==='libre'?' selected':'')+'>Libre</option><option value="restreint"'+(m==='restreint'?' selected':'')+'>Restreint</option><option value="impose"'+(m==='impose'?' selected':'')+'>Imposé</option></select></div>';
+    if(m!=='libre'){
+      h+='<div class="fco">'+c.opts.map(function(o){
+        var on=(x.opts||[]).indexOf(o.id)>=0;
+        return '<label class="chk"><input type="'+(m==='impose'?'radio':'checkbox')+'" name="fo-'+c.id+'" data-fo="'+c.id+':'+o.id+'"'+(on?' checked':'')+'><span>'+o.n+' <small class="muted">'+sgn((V(o.price)-baseOf(c))*TTC)+'</small></span></label>';
+      }).join('')+'<input class="in" data-fw="'+c.id+'" placeholder="Motif affiché au client (PLU, RE2020, étude…)" value="'+esc(x.why||'')+'" aria-label="Motif pour '+c.t+'"></div>';
+    }
+    h+='</div>';
+  });
+  h+='</div>';
+  h+=chiffrageCard();
+  h+='<div class="card form"><div class="eyebrow">Ouverture au client</div><label class="chk" for="fi-pub"><input id="fi-pub" type="checkbox" data-fi-pub="1"'+(f.publie?' checked':'')+'><span>Ouvrir le configurateur au client</span></label>'+
+   '<div class="actrow"><button class="btn solid" data-act="fsave">Enregistrer la fiche</button><button class="btn" data-act="expcsv">Exporter les choix du client (CSV)</button></div>'+
+   '<p class="cap" id="fiche-msg" role="status">'+esc(S.ficheMsg||(S.dirty?'Modifications non enregistrées.':''))+'</p></div>';
+  h+='<div class="card"><div class="eyebrow">Choix du client</div><p><b>'+nConf()+' sur '+CATS.length+'</b> postes confirmés · total '+eur(S.grand*TTC)+' TTC · '+(S.statut==='valide'?'validés le '+fdate(S.validatedAt):S.statut==='modifie'?'modifiés depuis la validation':'pas encore validés')+'</p></div>';
+  return h;
+}
+function saveFiche(){
+  var d={},f=S.fiche;Object.keys(f).forEach(function(k){d[k]=f[k]});d.updatedAt=nowIso();d.sid=S.sid;
+  if(!S.db){S.ficheMsg='Enregistrement en ligne indisponible dans cet aperçu.';renderAll();return}
+  S.db.doc('projet/fiche').set(d).then(function(){S.dirty=false;if(window._fb&&window._fb.saveIndex)window._fb.saveIndex(S.cid,{nom:f.nom,clients:f.clients,updatedAt:nowIso()}).catch(function(){});S.ficheMsg='Fiche enregistrée. '+(f.publie?'Le configurateur est ouvert au client.':'Le configurateur reste fermé au client.');logJ('fiche','Fiche projet mise à jour'+(f.publie?' (configurateur ouvert au client).':'.'));renderAll()}).catch(function(e){S.ficheMsg=(e&&e.code==='invalid_argument')?'Seul un éditeur peut modifier la fiche.':'Enregistrement impossible ('+(e&&e.code||'réseau')+').';renderAll()});
+}
+
+/* Journal de chantier */
+var JK={msg:'Message',choix:'Choix',fiche:'Fiche',valide:'Validation'};
+function renderJrnl(){
+  var h='<div><h2>Journal de chantier</h2><p class="lead">Le fil d’information partagé entre Phénix et vous : messages, décisions, modifications de choix. Tout ce qui est écrit ici est visible des deux côtés.</p></div>'+syncBox();
+  h+='<div class="card form"><label for="jc">Poste concerné</label><select id="jc" class="in sel" data-jc="1"><option value="">Général</option>'+CATS.map(function(c){return '<option value="'+c.id+'"'+(S.jcat===c.id?' selected':'')+'>'+c.t+'</option>'}).join('')+'</select>'+
+   '<label for="jm">Votre message</label><textarea id="jm" class="ta" data-jm="1" rows="3" placeholder="Une question, une précision de chantier, une décision à noter">'+esc(S.jmsg)+'</textarea>'+
+   '<div class="actrow"><button class="btn solid" data-act="jpost">Publier au journal</button></div></div>';
+  if(!S.journal.length)return h+'<div class="card"><p>Aucune entrée pour le moment.</p></div>';
+  h+='<div class="card">'+S.journal.map(function(e){
+    var c=e.cat?catById(e.cat):null;
+    return '<div class="jl"><div class="jh"><span class="badge'+(e.by==='moe'?' on':'')+'">'+(e.by==='moe'?'Phénix':esc(e.who||'Client'))+'</span><span class="badge">'+(JK[e.kind]||'Info')+'</span>'+(c?'<span class="badge">'+c.t+'</span>':'')+'<small class="muted">'+esc(fdate(e.t))+'</small></div><p>'+esc(e.text)+'</p></div>';
+  }).join('')+'</div>';
+  return h;
+}
+function postJ(){
+  var t=(S.jmsg||'').trim();if(!t)return;
+  logJ('msg',t,S.jcat||null);S.jmsg='';renderAll();
+}
+
+/* Saisies */
+document.addEventListener('input',function(e){
+  var t=e.target,g=function(k){return t.getAttribute?t.getAttribute(k):null},fi=g('data-fi'),fw=g('data-fw');
+  if(fi){S.fiche[fi]=(fi==='tva'?(parseFloat(t.value)||20):fi==='surface'?(parseFloat(t.value)||0):t.value);S.dirty=true;S.ficheMsg='';if(fi==='nom'||fi==='dossier'||fi==='clients'||fi==='terrain')renderCover()}
+  if(fw){fc(fw).why=t.value;S.dirty=true}
+  if(g('data-jm'))S.jmsg=t.value;
+  if(g('data-note'))pushSoon();
+});
+document.addEventListener('change',function(e){
+  var t=e.target,g=function(k){return t.getAttribute?t.getAttribute(k):null},fm=g('data-fm'),fo=g('data-fo');
+  if(fm){var c=catById(fm),x=fc(fm);x.mode=t.value;x.opts=t.value==='impose'?[c.ref]:t.value==='restreint'?c.opts.map(function(o){return o.id}):[];S.dirty=true;renderAll()}
+  if(fo){var p=fo.split(':'),x2=fc(p[0]);if(x2.mode==='impose')x2.opts=[p[1]];else{x2.opts=x2.opts||[];var i=x2.opts.indexOf(p[1]);if(t.checked&&i<0)x2.opts.push(p[1]);if(!t.checked&&i>=0)x2.opts.splice(i,1)}S.dirty=true;renderAll()}
+  if(g('data-fi-pub')){S.fiche.publie=t.checked;S.dirty=true}
+  if(g('data-fi-fic')){S.fiche.fictif=t.checked;S.dirty=true;renderCover()}
+  if(g('data-jc'))S.jcat=t.value;
+  if(g('data-lc')!==null&&g('data-lc')!==undefined){var li=+g('data-lc');if(S.fiche.lots[li]){S.fiche.lots[li].chap=t.value;S.dirty=true;renderAll()}}
+  if(g('data-proj')){if(S.dirty&&!window.confirm('Des modifications de la fiche ne sont pas enregistrées. Changer de projet quand même ?')){renderAll();return}openProject(t.value)}
+  if(g('data-fi-plans')){S.fiche.plansOk=t.checked;S.dirty=true;renderCover()}
+});
+
+/* ====================== Firebase : connexion, rôles, projets ====================== */
+var ADMIN_EMAILS=['contact@phenixarchitecte.fr'];
+var ROLE_FR={admin:'Administrateur',equipe:'Équipe agence',chantier:'Suivi de chantier',client:'Client'};
+S.role='';S.me={email:'',nom:''};S.cid=null;S.chList=[];S.unsubs=[];S.chIds=[];S.loginNote='';
+function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
+function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+function showLogin(on,msg){var l=$('login');l.hidden=!on;var m=$('login-msg');if(m)m.textContent=msg||''}
+function renderUbar(){
+  var u=$('ubar');if(!S.role){u.hidden=true;return}
+  u.hidden=false;
+  u.innerHTML='<span class="uc">'+esc(S.me.nom)+' · '+esc(ROLE_FR[S.role]||'')+'</span>'+
+   (S.chList.length?'<select class="in sel" data-proj="1" aria-label="Projet">'+S.chList.map(function(c){return '<option value="'+esc(c.id)+'"'+(c.id===S.cid?' selected':'')+'>'+esc(c.label||c.nom)+'</option>'}).join('')+'</select>':'')+
+   '<button class="btn" data-act="logout">Déconnexion</button>';
+}
+function bootFb(){
+  showLogin(true,'Connexion au serveur…');
+  document.addEventListener('submit',function(e){if(e.target&&e.target.id==='login-form'){e.preventDefault();doLogin()}});
+  document.addEventListener('click',function(e){var t=e.target;if(t&&t.id==='lg-reset'){var em=String($('lg-email').value||'').trim().toLowerCase();if(!em){showLogin(true,'Saisissez d’abord votre e-mail ci-dessus.');return}window._fb.resetPassword(em).then(function(){showLogin(true,'Si un accès existe pour cette adresse, un e-mail vient d’être envoyé pour choisir un mot de passe.')},function(){showLogin(true,'Envoi impossible. Réessayez dans quelques minutes.')})}});
+  var go=function(){window._fb.onAuth(onUser);showLogin(true,'')};
+  if(window._fb)go();else window.addEventListener('fb-ready',go,{once:true});
+  setTimeout(function(){if(!window._fb)showLogin(true,'Connexion au serveur impossible. Vérifiez votre réseau, puis rechargez la page.')},9000);
+}
+function doLogin(){
+  var e=String($('lg-email').value||'').trim().toLowerCase(),p=String($('lg-pass').value||'');
+  if(!e||!p){showLogin(true,'Saisissez votre e-mail et votre mot de passe.');return}
+  showLogin(true,'Connexion…');
+  window._fb.login(e,p).catch(function(x){var c=(x&&x.code)||'';showLogin(true,/invalid|wrong|not-found|credential/.test(c)?'E-mail ou mot de passe incorrect.':/too-many/.test(c)?'Trop de tentatives. Réessayez dans quelques minutes.':'Connexion impossible ('+c+').')});
+}
+function closeProject(){S.unsubs.forEach(function(f){try{f()}catch(e){}});S.unsubs=[]}
+function onUser(u){
+  if(!u){closeProject();S.listUnsubs.forEach(function(f){try{f()}catch(e){}});S.listUnsubs=[];S.src={proj:[],imp:[],idx:[]};S.got={};S.role='';S.cid=null;S.db=null;S.owner=false;showLogin(true,S.loginNote);S.loginNote='';renderUbar();return}
+  var email=String(u.email||'').toLowerCase();
+  window._fb.getUser(email).then(function(d){return d},function(e){return (e&&e.code==='permission-denied')?'denied':null}).then(function(d){
+    var role=null;
+    if(d==='denied')role='bloque';
+    else if(d&&d.actif===false)role='bloque';
+    else if(d&&['admin','equipe','chantier','client'].indexOf(d.role)>=0)role=d.role;
+    else if(ADMIN_EMAILS.indexOf(email)>=0)role='admin';
+    if(!role||role==='bloque'){S.loginNote='Ce compte n’a pas accès au carnet de projet. Contactez Phénix.';window._fb.logout();return}
+    S.role=role;S.owner=(role==='admin'||role==='equipe');S.me={email:email,nom:(d&&d.nom)||email.split('@')[0]};S.chIds=((d&&d.chantierIds)||[]).map(String);
+    showLogin(false,'');
+    if(S.owner)loadStaff();else loadMember();
+  });
+}
+S.src={proj:[],imp:[],idx:[]};S.got={};S.listUnsubs=[];
+function rebuildList(){
+  if(!(S.got.proj&&S.got.imp&&S.got.idx))return;
+  var m={};
+  function ent(id){id=String(id);return m[id]||(m[id]={id:id,nom:'',client:'',adresse:'',ref:'',dos:false,imp:false,idx:false})}
+  S.src.proj.forEach(function(p){if(p&&p.id!=null){var e=ent(p.id);e.dos=true;e.nom=p.nom||'';e.client=p.client||'';e.adresse=p.adresse||p.terrain||'';e.ref=p.ref||p.numero||''}});
+  S.src.imp.forEach(function(i){ent(i._id).imp=true});
+  S.src.idx.forEach(function(i){var e=ent(i._id);e.idx=true;if(!e.nom)e.nom=i.nom||''});
+  S.chList=Object.keys(m).map(function(k){return m[k]}).filter(function(e){return e.dos||e.imp||e.idx}).map(function(e){
+    e.nom=e.nom||e.client||('Projet '+e.id);
+    e.label=e.nom+(e.idx?' · carnet ouvert':(e.imp?' · chiffrage reçu':' · sans chiffrage'));return e}).sort(function(a,b){return (b.idx-a.idx)||(b.imp-a.imp)||a.nom.localeCompare(b.nom)});
+  if(!S.chList.length){S.syncMsg='Aucun projet trouvé. Créez le projet dans Phénix Dossier, puis envoyez son chiffrage depuis Phénix Chiffrage.';renderAll();return}
+  if(!S.cid||!S.chList.some(function(c){return c.id===S.cid})){
+    var last=lsGet('phenix-carnet-last'),pick=S.chList.filter(function(c){return c.id===last})[0]||S.chList[0];
+    openProject(pick.id);
+  }else softRender();
+}
+function loadStaff(){
+  var eh=function(e){S.syncMsg='Liste des projets inaccessible ('+(e&&e.code||'erreur')+').';renderAll()};
+  S.listUnsubs.push(window._fb.listProjets(function(l){S.src.proj=l;S.got.proj=1;rebuildList()},eh));
+  S.listUnsubs.push(window._fb.listImports(function(l){S.src.imp=l;S.got.imp=1;rebuildList()},eh));
+  S.listUnsubs.push(window._fb.listIndex(function(l){S.src.idx=l;S.got.idx=1;rebuildList()},eh));
+}
+function loadMember(){
+  if(!S.chIds.length){S.chList=[];S.syncMsg='Aucun projet n’est associé à votre compte. Contactez Phénix.';renderAll();return}
+  Promise.all(S.chIds.map(function(id){return window._fb.getIndex(id).then(function(f){return {id:id,nom:(f&&f.nom)||('Projet '+id)}},function(){return {id:id,nom:'Projet '+id}})})).then(function(l){S.chList=l.map(function(e){e.label=e.nom;return e});openProject(l[0].id)});
+}
+function openProject(cid){
+  closeProject();S.cid=String(cid);lsSet('phenix-carnet-last',S.cid);LS_KEY='phenix-carnet-'+S.cid;
+  var c=S.chList.filter(function(x){return x.id===S.cid})[0]||{};
+  S.opt={};S.conf={};S.note={};S.thick={isol:400};S.statut='brouillon';S.validatedAt=null;S.journal=[];S.cat=null;S.dirty=false;S.syncMsg='';S.ficheMsg='';S.msg='';S.wall='ossature';S.roof='terre';S.stale=false;
+  S.client={nom:S.owner?'':S.me.nom,email:S.owner?'':S.me.email,tel:'',ok:false};
+  var f=defFiche();f.nom=c.nom||'Projet';f.dossier=c.ref||'';f.clients=c.client||'';f.terrain=c.adresse||'';f.fictif=false;f.plansOk=false;f.publie=false;S.fiche=f;
+  loadLocal();
+  S.db=window._fb.mkDb(S.cid);S.jdb=true;
+  var eh=function(e){dbFail(e,'Synchronisation impossible')};
+  S.unsubs.push(S.db.doc('projet/fiche').onSnapshot(function(s){
+    if(!s.exists){if(S.owner&&!hasLots())syncLots(true);return}
+    var d=s.data()||{};if(d.sid===S.sid||(S.owner&&S.dirty))return;
+    S.fiche=mergeFiche(d);softRender();
+  },eh));
+  S.unsubs.push(S.db.doc('suivi/choix').onSnapshot(function(s){
+    if(!s.exists)return;var d=s.data()||{};if(d.sid===S.sid)return;
+    applySuivi(d);softRender();
+  },eh));
+  S.unsubs.push(S.db.collection('journal').onSnapshot(function(s){
+    S.journal=s.docs.map(function(x){var o=x.data()||{};o.id=x.id;return o}).sort(function(a,b){return String(b.t||'').localeCompare(String(a.t||''))});
+    softRender();
+  },eh));
+  S.tab='synth';renderAll();
+}
+function saveFile(name,data){
+  try{var b=new Blob([data],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},500);return true}catch(e){return false}
+}
+
+/* Chiffrage (Phénix Chiffrage → carnet) et transfert (carnet → Phénix Chantier) */
+function hasLots(){return !!(S.fiche.lots&&S.fiche.lots.length)}
+function lotsHT(){return (S.fiche.lots||[]).reduce(function(s,l){return s+(+l.montantHt||0)},0)}
+function syncLots(auto){
+  if(!S.owner||!S.cid||!window._fb)return;
+  window._fb.getImport(S.cid).then(function(d){
+    if(!d||!d.lots||!d.lots.length){if(!auto){S.ficheMsg='Aucun chiffrage reçu pour ce projet : dans Phénix Chiffrage, utilisez « Envoyer vers Carnet ».';renderAll()}return}
+    var cnt={},best=20;
+    var oldChap={};(S.fiche.lots||[]).forEach(function(l){if(l.chap)oldChap[l.num+'|'+l.nom]=l.chap});
+    S.fiche.lots=d.lots.map(function(l){var t=(l.tva!=null&&!isNaN(+l.tva))?+l.tva:20;cnt[t]=(cnt[t]||0)+1;return {num:String(l.num||''),nom:String(l.nom||''),montantHt:+l.montantHt||0,tva:t,statut:String(l.statut||''),chap:oldChap[String(l.num||'')+'|'+String(l.nom||'')]||''}});
+    Object.keys(cnt).forEach(function(k){if(cnt[k]>(cnt[best]||0))best=+k});
+    var F=S.fiche;if(d.chantierNom&&(!F.nom||F.fictif))F.nom=String(d.chantierNom);if(d.client&&(!F.clients||F.fictif))F.clients=String(d.client);if(d.clientEmail&&(!F.email||F.fictif))F.email=String(d.clientEmail);if(d.adresse&&(!F.terrain||F.fictif))F.terrain=String(d.adresse);if(+d.surface>0&&!(+F.surface>0))F.surface=+d.surface;if(F.fictif){F.fictif=false}
+    S.fiche.tva=best;S.fiche.chiffrageAt=nowIso();S.dirty=true;
+    S.ficheMsg='Chiffrage récupéré : '+S.fiche.lots.length+' lot(s), '+eur(lotsHT())+' HT. Enregistrez la fiche pour le conserver.';renderAll();
+  },function(e){S.ficheMsg='Lecture du chiffrage impossible ('+(e&&e.code||'erreur')+').';renderAll()});
+}
+function notesText(){
+  var p=payload(),t='Carnet de projet — choix du client ('+p.confirmes+'/'+p.total+' confirmés)\n'+p.items.map(function(i){return '- '+i.titre+' : '+i.libelle+(i.epaisseurMm?' '+i.epaisseurMm+' mm':'')+(i.confirme?'':' (proposition)')+(i.note?' — '+i.note:'')}).join('\n');
+  var a=lines(S.fiche.specifs),b=lines(S.fiche.regl);
+  if(a.length)t+='\nParticularités : '+a.join(' ; ');
+  if(b.length)t+='\nContraintes de règlement : '+b.join(' ; ');
+  return t;
+}
+function exportChantier(){
+  if(!S.owner||!S.cid||!window._fb)return;
+  if(!hasLots()){S.ficheMsg='Récupérez d’abord le chiffrage depuis Phénix Chiffrage.';renderAll();return}
+  if(S.dirty){S.ficheMsg='Enregistrez la fiche avant le transfert.';renderAll();return}
+  var f=S.fiche,data={projetId:S.cid,exportedAt:nowIso(),exportedBy:S.me.email,
+    chantier:{nom:f.nom,ref:f.dossier,client:f.clients,adresse:f.terrain,type:'Construction neuve',statut:'preparation',budget:Math.round(lotsHT()+choixDelta()),notes:notesText()},
+    lots:f.lots,choix:payload().items,contraintes:{specifs:f.specifs,regl:f.regl}};
+  window._fb.exportToChantier(S.cid,data).then(function(){
+    f.exportedAt=data.exportedAt;S.dirty=true;saveFiche();
+    logJ('fiche','Carnet transféré vers Phénix Chantier ('+f.lots.length+' lots, budget '+eur(data.chantier.budget)+' HT).');
+  }).catch(function(e){S.ficheMsg='Transfert impossible ('+(e&&e.code||'erreur')+').';renderAll()});
+}
+function normTxt(t){return String(t||'').toLowerCase().replace(/œ/g,'oe').normalize('NFD').replace(/[̀-ͯ]/g,'')}
+var LOT_RULES=[['ext',/allee|portail|cloture|portillon|enrobe|espaces? verts?|amenagements? exterieurs?|paysag/],['vrd',/vrd|reseau|terrassement|assainissement|viabilisation|branchement|tranchee|raccordement|evacuation eaux|eaux pluviales/],['fond',/fondation/],['dalle',/dalle|dallage|plancher/],['toit',/charpente|couverture|toiture|zinguerie|etancheite/],['menu',/menuiserie|fenetre|porte|volet/],['elec',/electricit|courant/],['plomb',/plomberie|sanitaire/],['chauf',/chauffage|ventilation|vmc|pompe a chaleur|climatisation/],['pein',/peinture/],['sols',/revetement|carrelage|parquet|chape|sol\b|sols\b/],['cuis',/cuisine|mobilier|agencement/],['plat',/platrerie|placo|isolation|cloison|doublage|plafond/],['murs',/maconnerie|gros.?oeuvre|mur|ossature|facade|enduit|bardage|beton/]];
+function chapLabel(k){for(var i=0;i<TABS.length;i++)if(TABS[i][0]===k)return TABS[i][1];return k}
+function lotChap(l){
+  if(l.chap&&$('p-'+l.chap)&&l.chap!=='synth')return l.chap;
+  var n=normTxt(l.nom);for(var i=0;i<LOT_RULES.length;i++)if(LOT_RULES[i][1].test(n))return LOT_RULES[i][0];
+  return '';
+}
+function priceBlock(key,def){return hasLots()?lotsSec(key):def}
+function lotsSec(key){
+  var ls=(S.fiche.lots||[]).filter(function(l){return lotChap(l)===key}),tot=0;
+  var body=ls.length?'<div class="tw"><table class="tbl"><thead><tr><th>Lot</th><th class="num">Total HT</th></tr></thead><tbody>'+ls.map(function(l){tot+=+l.montantHt||0;return '<tr><td>'+esc((l.num?l.num+' — ':'')+l.nom)+'</td><td class="num">'+eur(+l.montantHt||0)+'</td></tr>'}).join('')+'</tbody><tfoot><tr><td>Total du chapitre</td><td class="num">'+eur(tot)+'</td></tr></tfoot></table></div>'
+   :'<p>Aucun lot de Phénix Chiffrage n’est rattaché à ce chapitre.</p>';
+  return '<div class="sec"><h3>Chiffrage de votre projet <small>HT</small></h3><div class="card">'+body+'<p class="cap">Lots issus de Phénix Chiffrage. Le détail ligne à ligne est dans votre devis.</p></div></div>';
+}
+function lotsTable(){
+  if(!hasLots())return '';
+  return '<div class="tw"><table class="tbl"><thead><tr><th>Lot</th><th class="num">HT</th><th>Chapitre du carnet</th></tr></thead><tbody>'+S.fiche.lots.map(function(l,i){
+    var cur=lotChap(l),manual=l.chap&&$('p-'+l.chap);
+    return '<tr><td>'+esc((l.num?l.num+' — ':'')+l.nom)+'</td><td class="num">'+eur(+l.montantHt||0)+'</td><td><select class="in sel" data-lc="'+i+'" aria-label="Chapitre du lot '+esc(l.nom)+'"><option value=""'+(manual?'':' selected')+'>Automatique'+(!manual&&cur?' ('+esc(chapLabel(cur))+')':!manual?' (aucun)':'')+'</option>'+CH_ORDER.map(function(k){return '<option value="'+k+'"'+(manual&&l.chap===k?' selected':'')+'>'+esc(chapLabel(k))+'</option>'}).join('')+'</select></td></tr>';
+  }).join('')+'</tbody></table></div>';
+}
+function chiffrageCard(){
+  var f=S.fiche;
+  return '<div class="card form"><div class="eyebrow">Chiffrage (Phénix Chiffrage)</div>'+
+   '<p>'+(hasLots()?'<b>'+f.lots.length+' lot(s)</b> · '+eur(lotsHT())+' HT'+(f.chiffrageAt?' · récupéré le '+esc(fdate(f.chiffrageAt)):''):'Aucun chiffrage récupéré. Dans Phénix Chiffrage, utilisez « Envoyer vers Chantier » pour ce projet, puis récupérez-le ici.')+'</p>'+
+   lotsTable()+
+   fiField('tva','TVA applicable (%)','20','number')+fiField('surface','Surface habitable (m²)','','number')+
+   '<div class="actrow"><button class="btn" data-act="fsync">Récupérer le chiffrage</button></div></div>'+
+   '<div class="card form"><div class="eyebrow">Transfert vers Phénix Chantier</div>'+
+   '<p>'+(f.exportedAt?'Dernier transfert le '+esc(fdate(f.exportedAt))+'. ':'Pas encore transféré. ')+'Le transfert envoie le chiffrage, les choix du client et les contraintes ; Phénix Chantier crée le chantier avec le bouton « Importer depuis Carnet ».</p>'+
+   '<div class="actrow"><button class="btn solid" data-act="fexport">Transférer vers Chantier</button></div></div>';
+}
+
+/* ====================== Terrassement, réseaux, allée, portail, clôture ====================== */
+var TRANCH=38,ALLEE=65,CLOT=62,JARDIN=400;
+PLAN.push(
+ ["vrd","Terrassier","Plateforme et tranchées de réseaux",1,2],
+ ["vrd","Terrassier","Assainissement et regards",5,2],
+ ["vrd","Terrassier","Fourreaux d’électricité et de télécom",7,1],
+ ["vrd","Concessionnaire d’eau","Branchement et compteur",8,1],
+ ["vrd","Terrassier","Gestion des eaux pluviales",9,1],
+ ["ext","Terrassier","Forme de l’allée et du stationnement",34,1],
+ ["ext","Clôturier","Clôture",35,2],
+ ["ext","Applicateur d’enrobé","Revêtement de l’allée",36,1],
+ ["ext","Portailiste","Portail et motorisation",36,1],
+ ["ext","Paysagiste","Terre végétale et engazonnement",37,1]);
+CH_NAMES.vrd="Terrassement et réseaux";CH_NAMES.ext="Allée, portail et clôture";
+CHECKS.vrd=["Accord de la commune pour le raccordement aux réseaux publics","Mode d’assainissement confirmé (réseau public ou installation autonome)","Position du coffret d’électricité et du compteur d’eau en limite de propriété","Déclaration des travaux près des réseaux enterrés faite avant les fouilles"];
+CHECKS.ext=["Largeur et sens d’ouverture du portail","Emplacement des places de stationnement","Hauteur et teinte de la clôture, conforme au règlement du lotissement","Gestion de la pente de l’allée vers la rue ou le jardin"];
+METRICS.entret={l:'Entretien',u:'€/an',hi:0,d:0};
+
+function swatch(c,dash){return '<svg viewBox="0 0 16 16"><line x1="1" y1="8" x2="15" y2="8" stroke="'+c+'" stroke-width="3"'+(dash?' stroke-dasharray="4 2"':'')+'/></svg>'}
+function vrdMap(){
+  var s='<svg viewBox="0 0 640 420" role="img" aria-label="Plan de masse des réseaux">';
+  s+='<rect x="0" y="372" width="640" height="48" fill="var(--bg)"/><text class="svm" x="14" y="400">Voie publique</text>';
+  s+='<rect x="40" y="30" width="560" height="342" fill="none" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="7 4"/><text class="svm" x="48" y="48">Limite de propriété</text>';
+  s+='<rect x="230" y="120" width="170" height="96" class="k-mort ol"/><text class="svt" x="315" y="172" text-anchor="middle">Maison</text>';
+  s+='<polyline points="270,216 270,300 270,372" fill="none" stroke="var(--m-brick)" stroke-width="4"/><rect x="262" y="292" width="16" height="16" class="k-conc ol"/><text class="svm" x="284" y="300">Regard</text>';
+  s+='<polyline points="350,216 350,330 440,330 440,372" fill="none" stroke="var(--accent)" stroke-width="3"/><rect x="432" y="340" width="16" height="12" class="k-air ol"/><text class="svm" x="452" y="350">Compteur d’eau</text>';
+  s+='<polyline points="385,216 385,350 500,350 500,372" fill="none" stroke="var(--gold)" stroke-width="3"/><rect x="492" y="342" width="16" height="16" class="k-brick ol"/><text class="svm" x="514" y="352">Coffret</text>';
+  s+='<polyline points="370,216 370,340 540,340 540,372" fill="none" stroke="var(--ink)" stroke-width="2" stroke-dasharray="6 3"/>';
+  s+='<polyline points="230,190 150,190 150,250" fill="none" stroke="var(--m-mem)" stroke-width="3"/><circle cx="150" cy="268" r="20" fill="var(--m-air)" stroke="var(--ink)" stroke-width="1.2"/><text class="svm" x="150" y="306" text-anchor="middle">Infiltration</text>';
+  s+='<text class="svm" x="302" y="352">Eaux usées vers le réseau public</text>';
+  return s+'</svg>';
+}
+function trenchSvg(){
+  var s='<svg viewBox="0 0 380 260" role="img" aria-label="Coupe d’une tranchée de réseaux">';
+  s+='<rect x="0" y="40" width="380" height="210" class="k-mort ol" opacity=".55"/>';
+  s+='<rect x="90" y="40" width="200" height="190" fill="var(--bg)" stroke="var(--ink)" stroke-width="1.2"/>';
+  s+='<rect x="91" y="150" width="198" height="79" class="k-conc" opacity=".55"/>';
+  s+='<rect x="91" y="170" width="198" height="59" fill="var(--m-ins)" opacity=".75"/>';
+  s+='<line x1="91" y1="108" x2="289" y2="108" stroke="var(--accent)" stroke-width="3" stroke-dasharray="6 3"/><text class="svm" x="298" y="112">Grillage avertisseur</text>';
+  [[130,'var(--accent)'],[190,'var(--m-brick)'],[250,'var(--m-wood2)']].forEach(function(p){s+='<circle cx="'+p[0]+'" cy="198" r="11" fill="'+p[1]+'" stroke="var(--ink)" stroke-width="1.2"/>'});
+  s+='<text class="svm" x="298" y="76">Remblai compacté</text><text class="svm" x="298" y="160">Sable 0/4, 10 cm</text><text class="svm" x="298" y="200">Fourreaux</text>';
+  s+='<line x1="62" y1="40" x2="62" y2="230" stroke="var(--ink)" stroke-width="1"/><polygon points="62,40 58,50 66,50" fill="var(--ink)"/><polygon points="62,230 58,220 66,220" fill="var(--ink)"/><text class="svm" x="14" y="140" transform="rotate(-90 20 140)" text-anchor="middle">80 cm</text>';
+  s+='<text class="svm" x="14" y="30">Terrain fini</text><line x1="0" y1="40" x2="380" y2="40" stroke="var(--ink)" stroke-width="2"/>';
+  return s+'</svg>';
+}
+function bVrd(){
+  var t=table([
+   ['Décapage de la terre végétale et plateforme de la maison',1,'forfait',3600],
+   ['Tranchées de réseaux (eau, électricité, télécom) : fouille, sable et remblais',TRANCH,'ml',34],
+   ['Fourreaux, grillage avertisseur et chambres de tirage',TRANCH,'ml',16],
+   ['Branchement d’eau potable : tube PEHD et regard de compteur (hors frais du concessionnaire)',1,'forfait',1650],
+   ['Évacuation des eaux usées : PVC Ø125, regards et raccordement au réseau public',1,'forfait',3800],
+   ['Eaux pluviales : puits d’infiltration',1,'forfait',2900]]);
+  var figs=[
+   sec('Plan de masse des réseaux','FIG. 1',figCard(vrdMap(),'Schéma de principe. Les tracés réels dépendent de la position des réseaux dans la rue, fixée par le plan de géomètre.')+legend([
+     '<span>'+swatch('var(--m-brick)')+'Eaux usées</span>','<span>'+swatch('var(--accent)')+'Eau potable</span>','<span>'+swatch('var(--gold)')+'Électricité</span>','<span>'+swatch('var(--ink)',true)+'Télécom</span>','<span>'+swatch('var(--m-mem)')+'Eaux de pluie</span>'])),
+   sec('Coupe d’une tranchée de fourreaux','FIG. 2',figCard(trenchSvg(),'Fourreaux posés sur un lit de sable, recouverts de sable puis de remblai compacté, avec un grillage coloré qui avertit en cas de fouille future.')+keys(['Profondeur d’au moins 80 cm sous le terrain fini pour les réseaux sous pelouse.','Lit de sable de 10 cm pour protéger les gaines des cailloux.','Grillage avertisseur 30 cm au-dessus : bleu pour l’eau, rouge pour l’électricité, vert pour le télécom.','Remblai compacté par couches : un sol mal tassé s’affaisse après la première pluie.'])),
+   sec('Séquence des travaux','',card(stepsOl(['<b>Déclaration des travaux</b> près des réseaux enterrés, avant toute fouille.','<b>Plateforme</b> : décapage de la terre végétale, mise en dépôt pour le jardin.','<b>Tranchées</b> : fourreaux d’électricité et de télécom, tube d’eau, évacuations.','<b>Branchements</b> : le concessionnaire raccorde le compteur d’eau et le coffret d’électricité.','<b>Eaux pluviales</b> : puits ou ouvrage d’infiltration, regards et essai d’écoulement.'])))];
+  var mats=[
+   ['Tube PVC Ø125 série CR8','Eaux usées enterrées','Pente de 2 à 3 %, lit de sable, regards à chaque changement de direction','Terrassier'],
+   ['Regards béton ou PVC 40 × 40','Changements de direction, branchement','Couvercle accessible, hauteur ajustée au terrain fini','Terrassier'],
+   ['Tube PEHD Ø32 bleu','Alimentation en eau potable','Jusqu’au compteur en limite de propriété','Terrassier'],
+   ['Gaines TPC rouge Ø63 et télécom verte Ø45','Électricité et fibre/téléphone','Avec aiguille de tirage et grillage avertisseur','Terrassier'],
+   ['Puits d’infiltration en anneaux béton','Eaux de pluie','Dimensionné d’après le test de perméabilité du sol','Terrassier']];
+  return mkChap('vrd','Terrassement et réseaux','Tout ce qui relie la maison à la rue : la plateforme, les tranchées, l’évacuation des eaux usées et de pluie, et les branchements d’eau, d’électricité et de télécom.',
+   [[String(TRANCH)+' ml','Tranchées de réseaux'],['Ø 125','Évacuation des eaux usées'],['80 cm','Profondeur des fourreaux'],['3 réseaux','Eau, électricité, télécom']],figs,mats,t,
+   ['Le raccordement au réseau public d’eaux usées nécessite l’accord de la commune : à demander dès le permis.','Sans réseau public, une installation autonome est contrôlée par le service d’assainissement non collectif avant les travaux.','Le test de perméabilité du sol décide de la solution pour les eaux de pluie.','Les frais de branchement facturés par les concessionnaires ne dépendent pas de Phénix et sont à prévoir à part.']);
+}
+function extPlan(){
+  var s='<svg viewBox="0 0 640 420" role="img" aria-label="Plan de masse des extérieurs">';
+  s+='<rect x="0" y="372" width="640" height="48" fill="var(--bg)"/><text class="svm" x="14" y="400">Voie publique</text>';
+  s+='<rect x="40" y="30" width="560" height="342" fill="var(--m-air)" opacity=".35" stroke="none"/>';
+  s+='<rect x="40" y="30" width="560" height="342" fill="none" stroke="var(--m-wood2)" stroke-width="3" stroke-dasharray="3 3"/>';
+  s+='<rect x="200" y="90" width="190" height="100" class="k-mort ol"/><text class="svt" x="295" y="145" text-anchor="middle">Maison</text>';
+  s+='<polygon points="400,372 460,372 460,300 520,230 520,195 440,195 440,290 400,330" class="k-conc ol"/><text class="svm" x="468" y="270">Allée</text>';
+  s+='<rect x="470" y="205" width="48" height="24" class="k-conc ol" opacity=".6"/><rect x="470" y="233" width="48" height="24" class="k-conc ol" opacity=".6"/><text class="svm" x="524" y="222">Stationnement</text>';
+  s+='<line x1="400" y1="372" x2="460" y2="372" stroke="var(--ink)" stroke-width="6"/><text class="svm" x="384" y="365" text-anchor="end">Portail 4 m</text>';
+  s+='<text class="svm" x="120" y="280">Pelouse</text><text class="svm" x="48" y="48">Clôture sur tout le pourtour</text>';
+  return s+'</svg>';
+}
+function alleeSvg(){
+  var s='<svg viewBox="0 0 380 230" role="img" aria-label="Coupe de l’allée">';
+  s+='<rect x="20" y="150" width="340" height="70" class="k-mort ol" opacity=".6"/>';
+  s+='<rect x="20" y="106" width="340" height="44" class="k-conc ol"/>';
+  s+='<rect x="20" y="86" width="340" height="20" style="fill:var(--ink)" opacity=".85"/>';
+  s+='<line x1="20" y1="150" x2="360" y2="150" stroke="var(--accent)" stroke-width="2" stroke-dasharray="5 3"/>';
+  s+='<text class="svm" x="26" y="80">Enrobé noir 5 cm</text><text class="svm" x="26" y="132">Grave 0/31,5 compactée, 20 cm</text><text class="svm" x="26" y="170">Géotextile</text><text class="svm" x="26" y="200">Terrain décaissé et compacté</text>';
+  return s+'</svg>';
+}
+function bExt(){
+  var t=table([
+   ['Décaissement et forme de l’allée : géotextile et grave 0/31,5, 20 cm',ALLEE,'m²',26],
+   ['Revêtement de l’allée et du stationnement : enrobé noir 5 cm',ALLEE,'m²',42],
+   ['Portail coulissant aluminium motorisé, 4 m, avec piliers',1,'forfait',5450],
+   ['Clôture : grillage rigide soudé h 1,50 m sur soubassement béton',CLOT,'ml',68],
+   ['Terre végétale, nivellement et engazonnement',JARDIN,'m²',4.5]]);
+  var figs=[
+   sec('Plan de masse des extérieurs','FIG. 1',figCard(extPlan(),'Schéma de principe : l’implantation exacte suit votre plan de masse du permis.')),
+   sec('Coupe de l’allée','FIG. 2',figCard(alleeSvg(),'Structure type d’une allée enrobée, pour des véhicules légers.')+keys(['Pente de 2 % au minimum pour que l’eau ne stagne pas.','Géotextile : empêche la grave de se mélanger au sol.','Grave compactée par couches : c’est elle qui porte les véhicules.','Revêtement posé en dernier, après la fin du gros chantier, pour ne pas être abîmé par les camions.'])),
+   sec('Séquence des travaux','',card(stepsOl(['<b>Forme de l’allée</b> : décaissement, géotextile et grave compactée, en fin de gros œuvre.','<b>Clôture</b> : plots béton, soubassement et grillage, selon le règlement de zone.','<b>Portail</b> : piliers, fondations, fourreaux et motorisation.','<b>Revêtement</b> de l’allée une fois les camions partis.','<b>Terre végétale</b> étalée et engazonnée en dernier.'])))];
+  var mats=[
+   ['Géotextile et grave 0/31,5','Allée et stationnement','Posée par couches de 10 cm, compactée à la plaque','Terrassier'],
+   ['Enrobé à chaud','Allée','5 cm, compacté au rouleau, pente de 2 %','Applicateur d’enrobé'],
+   ['Portail aluminium laqué','Entrée du terrain','Coulissant sur rail, motorisé, avec cellules de sécurité','Portailiste'],
+   ['Grillage rigide soudé','Pourtour du terrain','Plots béton, soubassement et poteaux tous les 2,50 m','Clôturier'],
+   ['Terre végétale','Jardin','Réutilisation de la terre décapée, nivelée puis semée','Paysagiste']];
+  return mkChap('ext','Allée, portail et clôture','L’accès à la maison et les limites du terrain : allée, stationnement, portail, clôture, et le jardin remis en état à la fin du chantier.',
+   [[dec(ALLEE,0)+' m²','Allée et stationnement'],['4 m','Largeur du portail'],[String(CLOT)+' ml','Clôture'],['2 %','Pente minimale de l’allée']],figs,mats,t,
+   ['La hauteur et la teinte de la clôture et du portail sont encadrées par le règlement du lotissement ou le PLU.','L’allée est réalisée en dernier pour éviter qu’elle soit abîmée par les camions.','Un portail motorisé demande des fourreaux posés avant le revêtement.','La terre végétale mise de côté au début du chantier sert pour le jardin.']);
+}
+
+/* Choix : assainissement, eaux de pluie, allée, portail, clôture */
+CGROUPS.push('Extérieurs et réseaux');
+CATS.push(
+ {id:'assain',g:'Extérieurs et réseaux',t:'Eaux usées',q:'Comment sont évacuées les eaux usées ? Ce choix dépend d’abord de votre commune.',ref:'collectif',tab:'vrd',metrics:['entret','vie','delai'],
+  opts:[
+   O('collectif','Raccordement au réseau public','Tuyau enterré jusqu’au regard de la rue.',3800,{entret:0,vie:50,delai:3},['Aucun entretien','Solution la plus simple'],['Impossible sans réseau devant le terrain','Participation de la commune à prévoir']),
+   O('micro','Micro-station d’épuration','Petite station biologique enterrée.',9800,{entret:250,vie:25,delai:6},['Autonome, rejet très propre','Peu d’emprise'],['Contrat d’entretien et électricité','Coût élevé']),
+   O('fosse','Fosse toutes eaux et épandage','Fosse enterrée puis tranchées d’épandage dans le sol.',8200,{entret:120,vie:30,delai:5},['Fonctionne sans électricité','Coût maîtrisé'],['Demande beaucoup de terrain','Sol perméable indispensable'])]},
+ {id:'pluvial',g:'Extérieurs et réseaux',t:'Eaux de pluie',q:'Où partent les eaux de toiture et de l’allée ?',ref:'infiltration',tab:'vrd',metrics:['vie','delai','entret'],
+  opts:[
+   O('infiltration','Puits d’infiltration','Anneaux béton qui rendent l’eau au sol.',2900,{vie:40,delai:1,entret:0},['Pas de rejet dans la rue','Simple et durable'],['Sol perméable nécessaire','Distance à respecter des fondations']),
+   O('reseau','Rejet au réseau pluvial','Branchement sur le réseau d’eaux pluviales de la rue.',1900,{vie:50,delai:1,entret:0},['Le moins cher','Aucun entretien'],['Souvent interdit ou limité par la commune','Peut être payant']),
+   O('cuve','Cuve enterrée de récupération','Cuve de 5 000 L avec trop-plein vers l’infiltration.',4900,{vie:30,delai:2,entret:40},['Eau gratuite pour le jardin et les WC','Tamponne les fortes pluies'],['Plus cher à l’installation','Pompe et filtre à entretenir']),
+   O('noue','Noue paysagère','Fossé végétalisé qui infiltre l’eau.',2300,{vie:40,delai:1,entret:60},['Joli et écologique','Peu coûteux'],['Occupe de la surface','Entretien du végétal'])]},
+ {id:'allee',g:'Extérieurs et réseaux',t:'Allée et stationnement',q:'Quel revêtement pour l’allée et les places de stationnement ?',ref:'enrobe',tab:'ext',metrics:['vie','delai','co2'],
+  opts:[
+   O('gravier','Gravier stabilisé en alvéoles','Alvéoles plastique remplies de gravier.',ALLEE*24,{vie:15,delai:1,co2:6},['Prix le plus bas','Perméable à l’eau'],['Gravier qui se déplace','Déneigement difficile']),
+   O('enrobe','Enrobé noir','Bitume à chaud compacté.',ALLEE*42,{vie:25,delai:1,co2:14},['Rapide et lisse','Déneigement facile'],['Chaud en été','Imperméable']),
+   O('beton','Béton balayé ou désactivé','Dalle béton avec finition de surface.',ALLEE*58,{vie:40,delai:3,co2:24},['Très durable','Beaucoup de finitions'],['Séchage de quelques jours','Fissures possibles']),
+   O('paves','Pavés béton','Pavés posés sur lit de sable.',ALLEE*74,{vie:40,delai:3,co2:22},['Esthétique, réparable','Perméable avec joints larges'],['Coût élevé','Mauvaises herbes dans les joints']),
+   O('gazon','Dalles alvéolées engazonnées','Dalles béton ou plastique avec gazon.',ALLEE*48,{vie:25,delai:2,co2:12},['Aspect vert','Eau de pluie infiltrée'],['À tondre','Peu adapté à un passage intensif'])]},
+ {id:'portail',g:'Extérieurs et réseaux',t:'Portail',q:'Quel portail pour l’entrée du terrain ?',ref:'coulissant',tab:'ext',metrics:['vie','delai'],
+  opts:[
+   O('coulissant','Alu coulissant motorisé','Vantail qui glisse sur rail devant la clôture.',5450,{vie:25,delai:2},['Pas de place nécessaire pour l’ouverture','Confort au quotidien'],['Rail à garder propre','Prix élevé']),
+   O('battant','Alu battant motorisé','Deux vantaux qui s’ouvrent vers l’intérieur.',4850,{vie:25,delai:2},['Esthétique','Moins cher que le coulissant'],['Place de dégagement nécessaire','Sensible au vent']),
+   O('battantman','Alu battant manuel','Deux vantaux à ouvrir à la main.',2950,{vie:25,delai:1},['Économique','Peu de pannes'],['Sortir de la voiture à chaque fois','Motorisation possible plus tard']),
+   O('acier','Acier galvanisé coulissant motorisé','Portail acier thermolaqué, plus robuste.',6250,{vie:30,delai:2},['Très solide','Large choix de teintes'],['Le plus cher','Plus lourd à motoriser']),
+   O('bois','Bois battant manuel','Portail bois à peindre ou lasurer.',3550,{vie:15,delai:2},['Chaleureux','Prix moyen'],['Entretien régulier','Se déforme avec le temps'])]},
+ {id:'cloture',g:'Extérieurs et réseaux',t:'Clôture',q:'Quelle clôture autour du terrain ? Le règlement de zone peut en fixer la hauteur et la teinte.',ref:'grillage',tab:'ext',metrics:['vie','entret','delai'],
+  opts:[
+   O('grillage','Grillage rigide soudé','Panneaux sur soubassement béton.',CLOT*68,{vie:25,entret:0,delai:3},['Bon rapport qualité-prix','Sans entretien'],['Aucune intimité','Aspect simple']),
+   O('haie','Grillage et haie vive','Grillage souple masqué par une haie.',CLOT*42,{vie:30,entret:90,delai:3},['Le moins cher','Intimité en quelques années'],['Taille de la haie','Pousse lente']),
+   O('alu','Panneaux alu occultants','Lames aluminium pleines.',CLOT*138,{vie:35,entret:0,delai:4},['Intimité totale','Durable'],['Prix élevé','Effet de mur']),
+   O('bahut','Mur bahut et grillage','Mur béton enduit surmonté d’un grillage.',CLOT*165,{vie:50,entret:20,delai:8},['Très durable','Belle finition'],['Le plus cher','Chantier plus long']),
+   O('claustra','Claustra composite','Lames composite ajourées.',CLOT*118,{vie:25,entret:0,delai:4},['Intimité douce','Peu d’entretien'],['Prix élevé','Prise au vent'])]}
+);
+function nTrades(){var m={};PLAN.forEach(function(p){if(p[0]!=='plan')m[p[1]]=1});return Object.keys(m).length}
+
+/* ---------------- Synthèse ---------------- */
+function renderSynth(res){
+  var lots=[['Fondations','fond'],['Terrassement et réseaux','vrd'],['Dalle et plancher bas','dalle'],['Murs périphériques','murs'],['Charpente, couverture, isolation des combles','toit'],['Menuiseries','menu'],['Électricité','elec'],['Plomberie','plomb'],['Chauffage et ventilation','chauf'],['Plâtrerie','plat'],['Peinture','pein'],['Revêtements de sol','sols'],['Cuisine et mobilier','cuis'],['Allée, portail et clôture','ext'],['Test, nettoyage et réception','plan']];
+  if(hasLots()){var r2={},l2=[];S.fiche.lots.forEach(function(l,i){r2['c'+i]={total:+l.montantHt||0};l2.push([(l.num?l.num+' — ':'')+l.nom,'c'+i,lotChap(l)])});res=r2;lots=l2}
+  var ext=0,adj=choixDelta(),tot=ext+adj,max=Math.max(ext,1);
+  lots.forEach(function(l){var v=res[l[1]].total;tot+=v;if(v>max)max=v});
+  var bars=lots.map(function(l){var v=res[l[1]].total;return '<div class="bar hl"><span class="lb" data-act="tab" data-id="'+(l[2]||l[1])+'" role="button" tabindex="0">'+l[0]+'</span><span class="tr"><i style="width:'+(v/max*100).toFixed(1)+'%"></i></span><span class="am">'+eur(v)+'</span></div>'}).join('')+
+   (Math.round(adj)!==0?'<div class="bar"><span class="lb" data-act="tab" data-id="choix" role="button" tabindex="0">Ajustements liés à vos choix</span><span class="tr"><i style="width:'+(Math.min(Math.abs(adj),max)/max*100).toFixed(1)+'%"></i></span><span class="am">'+(adj>0?'+ ':'− ')+eur(Math.abs(adj))+'</span></div>':'')+
+   (true?'':'<div class="bar"><span class="lb">Extérieurs et réseaux (forfait de maquette)</span><span class="tr"><i style="width:'+(ext/max*100).toFixed(1)+'%"></i></span><span class="am">'+eur(ext)+'</span></div>');
+  var ro=ROOFS[S.roof],wa=WALLS[S.wall];
+  $("p-synth").innerHTML=
+  '<div><h2>Votre maison en un coup d’œil</h2><p class="lead">Ce carnet suit votre maison lot par lot. Chaque chapitre explique ce qui est construit, avec quelles matières, comment c’est posé, par qui, et ce que cela coûte. Les chapitres sont rangés dans l’ordre du chantier.</p></div>'+
+  '<div class="grid"><div class="card fact"><b>'+(S.fiche.surface>0?dec(S.fiche.surface,0):dec(AREA,1))+' m²</b><span>Surface habitable</span></div>'+(S.fiche.fictif?'<div class="card fact"><b>Plain-pied</b><span>3 chambres, 1 cellier</span></div><div class="card fact"><b>38 semaines</b><span>Durée de chantier prévue</span></div>':'<div class="card fact"><b>'+(hasLots()?S.fiche.lots.length:0)+' lots</b><span>Chiffrage Phénix</span></div><div class="card fact"><b>'+nConf()+' / '+CATS.length+'</b><span>Choix confirmés</span></div>')+'<div class="card fact"><b>RE2020</b><span>Réglementation visée</span></div></div>'+
+  '<div class="sec"><h3>Comment lire un chapitre</h3><div class="legendrow"><div class="card"><b>Quoi</b><p>Le principe constructif, avec plan, coupe ou schéma.</p></div><div class="card"><b>Matières</b><p>Chaque matière, où elle se pose et comment.</p></div><div class="card"><b>Qui</b><p>Les intervenants et leurs semaines de chantier.</p></div><div class="card"><b>Prix</b><p>Le chiffrage du chapitre, ligne par ligne.</p></div><div class="card"><b>Vigilance</b><p>Les points qu’on oublie et qu’on regrette ensuite.</p></div></div></div>'+
+  ficheHtml()+'<div class="sec"><h3>Vos choix à ce stade</h3><div class="card">'+
+   '<div class="rowsel"><span><b>Configurateur</b> · '+nConf()+' choix confirmés sur '+CATS.length+'</span><button class="btn solid" data-act="cat" data-id="">Faire mes choix</button></div>'+
+   '<div class="rowsel"><span><b>Couverture</b> · '+ro.n+'</span><button class="btn" data-act="tab" data-id="toit">Voir la toiture</button></div>'+
+   '<div class="rowsel"><span><b>Murs</b> · '+wa.n+', épaisseur '+wallStats(wa).e+' mm</span><button class="btn" data-act="tab" data-id="murs">Voir les murs</button></div>'+
+   '<div class="rowsel"><span><b>Chauffage</b> · '+findOpt(catById('chauffage'),selId(catById('chauffage'))).n+', '+findOpt(catById('ventilation'),selId(catById('ventilation'))).n+'</span><button class="btn" data-act="tab" data-id="chauf">Voir le chauffage</button></div>'+
+   '<div class="rowsel"><span><b>Sols</b> · '+findOpt(catById('solsvie'),selId(catById('solsvie'))).n+' ; chambres : '+findOpt(catById('solsch'),selId(catById('solsch'))).n+'</span><button class="btn" data-act="tab" data-id="sols">Voir les sols</button></div></div></div>'+
+  '<div class="sec"><h3>Chiffrage par lot <small>HT</small></h3><div class="card"><div class="bars">'+bars+'</div>'+
+   '<div class="totals"><div><b>'+eur(tot)+'</b><span>Total HT</span></div><div><b>'+eur(tot*(TTC-1))+'</b><span>TVA '+nf0(Math.round((TTC-1)*100))+' %</span></div><div><b>'+eur(tot*TTC)+'</b><span>Total TTC</span></div><div><b>'+eur(tot/(S.fiche.surface>0?S.fiche.surface:AREA))+'</b><span>HT par m² habitable</span></div></div>'+
+   '<p class="cap">'+(hasLots()?'Chiffrage issu de Phénix Chiffrage, ajusté de vos choix.':'Tous les lots en bleu se recalculent depuis leur chapitre : touchez un lot pour l’ouvrir.')+'</p></div></div>'+
+  '<div class="sec"><h3>Chapitres à ajouter selon le projet</h3><div class="soon"><span>Escalier et garde-corps</span><span>Dossier des ouvrages exécutés</span></div></div>';
+}
+
+/* ---------------- Assemblage ---------------- */
+var TABS=[['synth','Synthèse'],['fiche','Fiche projet'],['choix','Mes choix'],['fond','Fondations'],['dalle','Dalle'],['vrd','Terrassement et réseaux'],['murs','Murs périphériques'],['toit','Toiture'],['menu','Menuiseries'],['elec','Électricité'],['plomb','Plomberie'],['chauf','Chauffage et ventilation'],['plat','Plâtrerie'],['pein','Peinture'],['sols','Sols intérieurs'],['cuis','Cuisine et mobilier'],['ext','Allée, portail, clôture'],['plan','Planning et réception'],['jrnl','Journal de chantier']];
+var CH_ORDER=["fond","vrd","dalle","murs","toit","menu","elec","plomb","chauf","plat","pein","sols","cuis","ext","plan"];
+var BUILD={fond:bFond,dalle:bDalle,vrd:bVrd,ext:bExt,murs:calcWalls,toit:calcRoof,menu:bMenu,elec:bElec,plomb:bPlomb,chauf:bChauf,plat:bPlat,pein:bPein,sols:calcFloors,cuis:bCuis,plan:bPlan};
+var NEWK=["fond","vrd","dalle","menu","elec","plomb","chauf","plat","pein","cuis","ext","plan"];
+function $(id){return document.getElementById(id)}
+function renderTabs(){
+  $("tabs").innerHTML=TABS.filter(function(t){return t[0]!=="fiche"||S.owner}).map(function(t){return '<button class="tab" role="tab" data-act="tab" data-id="'+t[0]+'" aria-selected="'+(t[0]===S.tab)+'">'+t[1]+'</button>'}).join('');
+}
+function renderAll(){
+  var res={};
+  applyFiche();TTC=1+((+S.fiche.tva)||20)/100;
+  Object.keys(BUILD).forEach(function(k){res[k]=BUILD[k]()});
+  S.grand=(hasLots()?lotsHT():Object.keys(res).reduce(function(s,k){return s+res[k].total},0))+choixDelta();
+  renderSynth(res);renderToit();renderMurs();renderSols();
+  NEWK.forEach(function(k){$("p-"+k).innerHTML=res[k].html});
+  ["murs","toit","sols"].concat(NEWK).forEach(function(k){var el=$("p-"+k);el.innerHTML=chapBanner(k)+el.innerHTML});
+  $("p-choix").innerHTML=renderChoix();$("p-fiche").innerHTML=renderFiche();$("p-jrnl").innerHTML=renderJrnl();renderCover();renderUbar();renderDock();saveLocal();
+  renderTabs();
+  TABS.forEach(function(t){$("p-"+t[0]).hidden=(t[0]!==S.tab)});
+}
+function setTab(id,scroll){
+  if(!$("p-"+id))return;
+  S.tab=id;renderAll();
+  try{history.replaceState(null,"","#"+id)}catch(e){}
+  if(scroll){var t=$("tabs");try{window.scrollTo({top:t.getBoundingClientRect().top+window.scrollY-4})}catch(e){}}
+  try{var b=document.querySelector('.tab[aria-selected="true"]');if(b&&b.scrollIntoView)b.scrollIntoView({inline:"center",block:"nearest"})}catch(e){}
+}
+function act(el){
+  var a=el.getAttribute("data-act"),id=el.getAttribute("data-id");
+  if(a==="tab")return setTab(id,true);
+  if(a==="roof")S.roof=id;
+  if(a==="wall")S.wall=id;
+  if(a==="floor")S.floor=id;
+  if(a==="part")S.part=id;
+  if(cfgAct(a,el))return;
+  renderAll();
+}
+document.addEventListener("click",function(e){var el=e.target.closest("[data-act]");if(el)act(el)});
+document.addEventListener("keydown",function(e){
+  if(e.key!=="Enter"&&e.key!==" ")return;
+  var el=e.target.closest&&e.target.closest("[data-act]");
+  if(el&&el.tagName!=="BUTTON"){e.preventDefault();act(el)}
+});
+document.addEventListener("change",function(e){var c=e.target.getAttribute&&e.target.getAttribute("data-chk");if(c)S.done[c]=e.target.checked});
+
+$("panels").innerHTML=TABS.map(function(t){return '<section class="panel" id="p-'+t[0]+'" role="tabpanel" hidden></section>'}).join('');
+var h=(location.hash||"").replace("#","");
+if($("p-"+h)&&h!=="fiche")S.tab=h;
+renderAll();bootFb();
+})();
+</script>
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js';
+import { getFirestore, doc, collection, onSnapshot, setDoc, addDoc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+
+// Même projet Firebase que le reste de la suite Phénix.
+const firebaseConfig = {
+  apiKey:            "AIzaSyCjNKNvS6p3nqE6-_Gw9I397ZtXm2FG1ew",
+  authDomain:        "phenix-architecte-9151b.firebaseapp.com",
+  projectId:         "phenix-architecte-9151b",
+  storageBucket:     "phenix-architecte-9151b.firebasestorage.app",
+  messagingSenderId: "811231684720",
+  appId:             "1:811231684720:web:413fa324ae43c07607acb5"
+};
+const app = initializeApp(firebaseConfig);
+try {
+  initializeAppCheck(app, { provider: new ReCaptchaV3Provider('6LeObWktAAAAAL9eyppDRtLp5yZTyBaF4ZNKXNIO'), isTokenAutoRefreshEnabled: true });
+} catch (e) { console.warn('App Check non initialisé :', e); }
+const db = getFirestore(app);
+const auth = getAuth(app);
+const P = 'phenix_portail';   // phenix_portail/{chantierId}/etat/{fiche|choix} et /journal/{id}
+
+window._fb = {
+  login:  (e, p) => signInWithEmailAndPassword(auth, e, p),
+  logout: () => signOut(auth),
+  resetPassword: (email) => sendPasswordResetEmail(auth, email),
+  onAuth: cb => onAuthStateChanged(auth, cb),
+  async getUser(email) { const s = await getDoc(doc(db, 'phenix_users', email)); return s.exists() ? s.data() : null; },
+  listProjets(cb, eb) { return onSnapshot(collection(db, 'phenix_projets'), s => cb(s.docs.map(d => d.data())), eb); },
+  listImports(cb, eb) { return onSnapshot(collection(db, 'phenix_chantier_import'), s => cb(s.docs.map(d => Object.assign({ _id: d.id }, d.data()))), eb); },
+  listIndex(cb, eb)   { return onSnapshot(collection(db, P), s => cb(s.docs.map(d => Object.assign({ _id: d.id }, d.data()))), eb); },
+  async getImport(pid) { const s = await getDoc(doc(db, 'phenix_chantier_import', String(pid))); return s.exists() ? s.data() : null; },
+  async getIndex(pid)  { const s = await getDoc(doc(db, P, String(pid))); return s.exists() ? s.data() : null; },
+  saveIndex(pid, data) { return setDoc(doc(db, P, String(pid)), data, { merge: true }); },
+  exportToChantier(pid, data) { return setDoc(doc(db, 'phenix_carnet_export', String(pid)), data); },
+  mkDb(cid) {
+    const ref = p => p === 'projet/fiche' ? doc(db, P, cid, 'etat', 'fiche') : doc(db, P, cid, 'etat', 'choix');
+    return {
+      doc: p => ({
+        set: d => setDoc(ref(p), d),
+        onSnapshot: (next, err) => onSnapshot(ref(p), s => next({ exists: s.exists(), id: s.id, data: () => s.data() }), err)
+      }),
+      collection: () => {
+        const c = collection(db, P, cid, 'journal');
+        return {
+          add: d => addDoc(c, d),
+          onSnapshot: (next, err) => onSnapshot(c, s => next({ docs: s.docs.map(x => ({ id: x.id, data: () => x.data() })) }), err)
+        };
+      }
+    };
+  }
+};
+window.dispatchEvent(new Event('fb-ready'));
+</script>
+
+
+</body></html>

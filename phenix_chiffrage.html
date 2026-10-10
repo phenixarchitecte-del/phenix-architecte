@@ -589,6 +589,7 @@ if (window.parent !== window) {
           <button class="btn btn-outline" onclick="exportDPGF()" style="border-color:#7DC6E8;color:#7DC6E8"><i class="ti ti-clipboard-list" aria-hidden="true"></i>DPGF consultation</button>
           <button class="btn btn-outline" onclick="openImportArtisanModalGlobal()" style="border-color:#e74c3c;color:#e74c3c"><i class="ti ti-file-import" aria-hidden="true"></i>Importer devis artisan (IA)</button>
           <button class="btn btn-outline" onclick="exportToFinancement()" style="border-color:#2D7A4F;color:#2D7A4F"><i class="ti ti-coin" aria-hidden="true"></i>Envoyer vers Financement</button>
+          <button class="btn btn-outline" onclick="exportToCarnet()" style="border-color:#E8833A;color:#E8833A" title="Envoie le dossier, les lots et l'accès client vers le Carnet de projet"><i class="ti ti-book-2" aria-hidden="true"></i>Envoyer vers Carnet</button>
           <button class="btn btn-outline" onclick="exportToChantier()" style="border-color:#4fa8f0;color:#4fa8f0"><i class="ti ti-building-factory-2" aria-hidden="true"></i>Envoyer vers Chantier</button>
           <button class="btn btn-outline" onclick="exportToAppelsOffres()" style="border-color:#1E5FAA;color:#1E5FAA"><i class="ti ti-send" aria-hidden="true"></i>Envoyer vers Appels d'offres</button>
           <button class="btn btn-outline" onclick="ouvrirModalRaccorderDossier()" id="btn-raccorder-dossier" style="border-color:#e6b95c;color:#e6b95c;display:none"><i class="ti ti-link" aria-hidden="true"></i>Raccorder à Phénix Dossier</button>
@@ -3958,6 +3959,62 @@ async function exportToChantier(){
   }
 }
 window.exportToChantier = exportToChantier;
+
+// ── Passerelle vers le Carnet de projet (portail client) ─────────────
+// Envoie : dossier (client, adresse, surface), lots chiffrés, et crée l'accès privé du client.
+async function exportToCarnet(){
+  const idx=state.currentChantier;
+  if(idx===null||!state.chantiers[idx]){ showToast('Sélectionnez un chantier d\'abord'); return; }
+  const c=state.chantiers[idx];
+  if(!c.projetId){ showToast('⚠️ Ce chantier n\'est pas lié à un projet Phénix Dossier — importez le projet depuis la fiche chantier avant l\'envoi'); return; }
+  const lots=sortLotsInPlace(c.lots||[]);
+  if(!lots.length){ showToast('Aucun lot à envoyer'); return; }
+
+  let email=(window.prompt('E-mail du client pour son accès privé au Carnet\n(laisser vide pour envoyer sans créer d\'accès) :', c.clientEmail||'')||'').trim().toLowerCase();
+  if(email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ showToast('⚠️ Adresse e-mail invalide'); return; }
+
+  let totalHt=0;
+  const lotsExport=lots.map(lot=>{
+    const { ht, ttc, tva }=computeLotAmounts(lot);
+    totalHt+=ht;
+    return { num: lot.num||'', nom: lot.nom||'', montantHt: Math.round(ht*100)/100, tva, montantTtc: Math.round(ttc*100)/100, statut: lot.statut||'Chiffrage' };
+  });
+  const pid=String(c.projetId);
+  const surface=parseFloat(c.surface)||0;
+  const payload={
+    chantierNom: c.nom||'', client: c.client||'', clientEmail: email,
+    adresse: c.adresse||'', surface, type: c.type||'', phase: c.phase||'',
+    lots: lotsExport, totalHt: Math.round(totalHt*100)/100,
+    exportedAt: new Date().toISOString(), source: 'phenix_chiffrage', cible: 'carnet'
+  };
+  try{
+    const r=await _phenixFbRefs();
+    await r.setDoc(r.doc(r.db,'phenix_chantier_import',pid), payload, {merge:true});
+    await r.setDoc(r.doc(r.db,'phenix_portail',pid), { nom: c.nom||'', clients: c.client||'', updatedAt: new Date().toISOString() }, {merge:true});
+    let acces='';
+    if(email){
+      const ref=r.doc(r.db,'phenix_users',email);
+      const snap=await r.getDoc(ref);
+      const cur=snap.exists()?snap.data():null;
+      if(cur && cur.role && cur.role!=='client'){
+        acces=' — accès client NON créé : cette adresse a déjà le rôle « '+cur.role+' »';
+      }else{
+        const idn=/^\d+$/.test(pid)?parseInt(pid,10):pid;
+        const ids=((cur&&cur.chantierIds)||[]).slice();
+        if(!ids.some(x=>String(x)===pid)) ids.push(idn);
+        await r.setDoc(ref,{ role:'client', actif:true, nom:c.client||email, chantierIds:ids }, {merge:true});
+        acces=' — accès client prêt pour '+email;
+      }
+      c.clientEmail=email;
+      if(typeof window.saveChantiers==='function') window.saveChantiers();
+    }
+    showToast('✅ '+lotsExport.length+' lot(s) envoyé(s) vers le Carnet'+acces);
+  }catch(e){
+    console.error('Export carnet error', e);
+    showToast('⚠️ Échec de l\'envoi vers le Carnet ('+((e&&e.code)||'erreur')+')');
+  }
+}
+window.exportToCarnet = exportToCarnet;
 
 // ── Passerelle vers Phénix Appels d'offres (pousser un DPGF pour chiffrage artisans) ──
 // ── Résolveur Firebase autonome ────────────────────────────────
