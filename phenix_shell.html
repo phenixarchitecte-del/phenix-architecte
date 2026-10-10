@@ -162,43 +162,17 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 </style>
 </head>
 <body>
+<script>try{['phenix_bio_creds','phenix_bio_credId','phenix_bio_email','phenix_bio_enroll_refuse'].forEach(function(k){localStorage.removeItem(k)})}catch(e){}</script>
+
 
 <!-- LOGIN -->
 <div id="login-overlay">
   <div class="login-box">
     <div style="display:flex;justify-content:center;margin-bottom:6px"><img src="data:image/png;base64,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" style="height:60px;width:auto" alt="Phénix"></div><div class="login-logo">Phénix<span>-Architecture</span></div>
-    <div class="login-sub">Espace collaborateur</div>
-    <div id="pl-bio-wrap" style="display:none;margin-bottom:16px">
-      <button id="pl-bio-btn" onclick="phenixBioLogin()" style="width:100%;padding:14px;border:2px solid rgba(77,184,232,.6);border-radius:9px;background:rgba(77,184,232,.12);color:#7DC6E8;font-size:15px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;font-family:inherit">
-        <span style="font-size:24px">☝️</span><span id="pl-bio-label">Se connecter avec empreinte</span>
-      </button>
-      <div style="display:flex;align-items:center;gap:10px;margin-top:14px;margin-bottom:14px">
-        <div style="flex:1;height:1px;background:rgba(255,255,255,.15)"></div>
-        <span style="font-size:11px;color:rgba(255,255,255,.35);letter-spacing:.08em">ou par mot de passe</span>
-        <div style="flex:1;height:1px;background:rgba(255,255,255,.15)"></div>
-      </div>
-    </div>
-    <input id="pl-email" type="email" autocomplete="username" placeholder="E-mail" class="login-input">
+    <div class="login-sub">Espace collaborateur</div><input id="pl-email" type="email" autocomplete="username" placeholder="E-mail" class="login-input">
     <input id="pl-pwd" type="password" autocomplete="current-password" placeholder="Mot de passe" class="login-input" onkeydown="if(event.key==='Enter')doLogin()">
     <button class="login-btn" id="pl-btn" onclick="doLogin()">Se connecter</button>
     <div class="login-err" id="pl-err"></div>
-    <div style="margin-top:14px;text-align:center">
-      <button onclick="phenixBioReset()" style="background:none;border:none;color:rgba(255,255,255,.25);font-size:11px;cursor:pointer;font-family:inherit;padding:6px">🔄 Réinitialiser l'empreinte enregistrée</button>
-    </div>
-  </div>
-</div>
-
-<!-- Proposition d'activation de l'empreinte — volontairement HORS de l'écran de
-     connexion : celui-ci se ferme dès que Firebase valide la connexion, souvent
-     avant que la vérification "cet appareil gère-t-il l'empreinte ?" ait fini de
-     répondre. En carte flottante indépendante, elle reste visible par-dessus le
-     tableau de bord le temps nécessaire. -->
-<div id="pl-enroll-wrap" style="display:none;position:fixed;right:12px;left:12px;bottom:96px;z-index:100000;max-width:340px;margin:0 auto;padding:16px;background:#12233F;box-shadow:0 8px 28px rgba(0,0,0,.45);border-radius:12px;border:1.5px solid rgba(77,184,232,.4)">
-  <div style="font-size:13px;color:#7DC6E8;font-weight:600;margin-bottom:6px">☝️ Activer la connexion par empreinte ?</div>
-  <div style="font-size:11px;color:rgba(255,255,255,.65);margin-bottom:12px">Votre empreinte restera stockée uniquement sur cet appareil.</div>
-  <div style="display:flex;gap:8px">
-    <button id="pl-enroll-btn" style="flex:1;padding:9px;border:none;border-radius:7px;background:linear-gradient(135deg,#4fa8f0,#2f6fc0);color:#fff;font-size:13px;font-weight:600;cursor:pointer">Activer</button>
-    <button onclick="phenixRefuserEnrolementBio()" style="flex:1;padding:9px;border:1.5px solid rgba(255,255,255,.2);border-radius:7px;background:transparent;color:rgba(255,255,255,.6);font-size:13px;cursor:pointer">Non merci</button>
   </div>
 </div>
 
@@ -220,6 +194,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
     <div class="shell-nav-item active" data-view="module" data-module="dossier" data-tip="Tableau de bord" onclick="shellOpenModule('dossier',this)"><i class="ti ti-layout-dashboard"></i><span class="lbl">Dossier</span></div>
     <div class="shell-nav-item" data-view="dashboard" data-tip="Suivi d'équipe" onclick="shellShowView('dashboard',this)"><i class="ti ti-list-check"></i><span class="lbl">Suivi</span></div>
     <div class="shell-nav-item" data-view="module" data-module="chiffrage" data-tip="Chiffrage" onclick="shellOpenModule('chiffrage',this)"><i class="ti ti-calculator"></i><span class="lbl">Chiffrage</span></div>
+    <div class="shell-nav-item" data-view="module" data-module="carnet" data-tip="Carnet de projet" onclick="shellOpenModule('carnet',this)"><i class="ti ti-book-2"></i><span class="lbl">Carnet</span></div>
     <div class="shell-nav-item" data-view="module" data-module="contrat" data-tip="Contrats" onclick="shellOpenModule('contrat',this)"><i class="ti ti-signature"></i><span class="lbl">Contrats</span></div>
     <div class="shell-nav-item" data-view="module" data-module="planning" data-tip="Planning de chantier" onclick="shellOpenModule('planning',this)"><i class="ti ti-calendar-time"></i><span class="lbl">Planning</span></div>
     <div class="shell-nav-item" data-view="module" data-module="chantier" data-tip="Chantier" onclick="shellOpenModule('chantier',this)"><i class="ti ti-building"></i><span class="lbl">Chantier</span></div>
@@ -331,36 +306,9 @@ onAuthStateChanged(auth, user => {
     ov.style.display = 'none';
     document.getElementById('shell-root').style.display = '';
     document.getElementById('main-content').style.display = '';
-    document.getElementById('userChip').textContent = me.split('@')[0];
-    // Session déjà active au chargement (reconnexion silencieuse de Firebase,
-    // sans repasser par l'écran de connexion) : le mot de passe n'a alors
-    // jamais été capturé en mémoire cette fois-ci. On le retrouve depuis les
-    // identifiants enregistrés pour l'empreinte (déjà mémorisés lors d'une
-    // connexion précédente), pour que la transmission automatique aux
-    // modules fonctionne quand même — sinon chaque module redemande une
-    // connexion à chaque changement, même après avoir déjà validé l'empreinte.
-    if (!window._phenixCreds) {
-      try {
-        const saved = localStorage.getItem('phenix_bio_creds');
-        if (saved) {
-          const parts = atob(saved).split('|||');
-          if (parts.length === 2) window._phenixCreds = { email: parts[0], password: parts[1] };
-        }
-      } catch(e) {}
-    }
-    startListeners();
+    document.getElementById('userChip').textContent = me.split('@')[0];startListeners();
     // Dossier = page d'accueil du shell, ouverte automatiquement à la connexion
-    shellOpenModule('dossier', document.querySelector('.shell-nav-item[data-module="dossier"]'));
-
-    // Proposition d'activation de l'empreinte — rattachée ICI (à l'événement de
-    // connexion) plutôt qu'à la fonction de login par mot de passe : elle se
-    // déclenche ainsi quel que soit le chemin de connexion, et après que l'écran
-    // de connexion a été refermé. Le contrôle (déjà activée ? déjà refusée ?)
-    // est centralisé dans phenixProposerEnrolementBio.
-    try {
-      if (window.phenixProposerEnrolementBio) window.phenixProposerEnrolementBio(user);
-    } catch(e) {}
-  } else {
+    shellOpenModule('dossier', document.querySelector('.shell-nav-item[data-module="dossier"]'));} else {
     ov.style.display = 'flex';
     document.getElementById('shell-root').style.display = 'none';
     document.getElementById('main-content').style.display = 'none';
@@ -377,25 +325,11 @@ window.doLogin = function() {
   err.textContent = '';
   btn.disabled = true; btn.textContent = 'Connexion…';
   signInWithEmailAndPassword(auth, email, pwd)
-    .then(cred => {
-      // Mémoriser les identifiants MAINTENANT, tant que le mot de passe est
-      // disponible : au moment de l'activation de l'empreinte, l'écran de
-      // connexion est déjà refermé et le champ vidé — c'est ce qui empêchait
-      // la connexion automatique de fonctionner ensuite.
-      try {
-        if (pwd) localStorage.setItem('phenix_bio_creds', btoa(email + '|||' + pwd));
-      } catch(e) {}
-      // Mémorisé aussi en mémoire pour être retransmis aux modules (voir
+    .then(cred => {// Mémorisé aussi en mémoire pour être retransmis aux modules (voir
       // _phenixBroadcastAutoLogin) : évite de redemander une connexion à
       // chaque changement de module.
       window._phenixCreds = { email: email, password: pwd };
-      window._phenixBroadcastAutoLogin();
-      // Proposition d'empreinte : contrôle centralisé (déjà activée ? refusée ?)
-      // dans phenixProposerEnrolementBio, appelée aussi depuis onAuthStateChanged.
-      try {
-        if (window.phenixProposerEnrolementBio) window.phenixProposerEnrolementBio(cred.user);
-      } catch(e) {}
-    })
+      window._phenixBroadcastAutoLogin();})
     .catch(e => {
       const c = e.code || '';
       err.textContent =
@@ -642,6 +576,7 @@ const MODULES = {
   dossier:      { src: 'phenix_dossier.html',           title: 'Dossiers — projets, devis, facturation' },
   comptabilite: { src: 'phenix_dossier.html',            title: 'Comptabilité', gotoPage: 'comptabilite' },
   chiffrage:    { src: 'phenix_chiffrage.html',          title: 'Chiffrage — métré & devis artisans' },
+  carnet:       { src: 'phenix_carnet.html',            title: 'Carnet — projet client et choix' },
   contrat:      { src: 'phenix_contrat.html',            title: 'Contrats — MOE / contractant général' },
   planning:     { src: 'phenix_planning.html',           title: 'Planning — Gantt de chantier' },
   chantier:     { src: 'phenix_chantier.html',           title: 'Chantier — suivi de travaux' },
@@ -754,222 +689,5 @@ window.addEventListener('message', (ev) => {
   }
 });
 </script>
-<script>
-// ════════════════════════════════════════════════════════════
-//  WEBAUTHN — Authentification biométrique (empreinte / Face ID)
-//  Même mécanisme que Dossier — la clé stockée est partagée
-//  (même origine) donc un enrôlement fait dans Dossier fonctionne ici aussi.
-// ════════════════════════════════════════════════════════════
-const BIO_KEY      = 'phenix_bio_credId';
-const BIO_EMAIL_KEY= 'phenix_bio_email';
-function _b64u(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,''); }
-function _fromb64u(s){ s=s.replace(/-/g,'+').replace(/_/g,'/'); while(s.length%4) s+='='; return Uint8Array.from(atob(s),c=>c.charCodeAt(0)).buffer; }
-
-async function phenixBioInit(){
-  if(!window.PublicKeyCredential) return;
-  const hasPlatform = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().catch(()=>false);
-  if(!hasPlatform) return;
-  const bioWrap = document.getElementById('pl-bio-wrap');
-  if(!bioWrap) return;
-  bioWrap.style.display = 'block';
-  const credId = localStorage.getItem(BIO_KEY);
-  if(!credId){
-    document.getElementById('pl-bio-label').textContent = 'Activer l\'empreinte après connexion';
-    document.getElementById('pl-bio-btn').onclick = () => { document.getElementById('pl-pwd').focus(); };
-  } else {
-    // Empreinte déjà activée : on la propose automatiquement, sans clic,
-    // dès l'arrivée sur l'écran de connexion.
-    // WebAuthn exige un vrai geste utilisateur (obligatoire sur mobile) : un simple délai
-    // programmé (setTimeout) ne suffit pas et échoue silencieusement, surtout sur téléphone.
-    // On déclenche donc dès le tout premier tap/clic de l'utilisateur n'importe où sur
-    // l'écran de connexion — ça reste un vrai geste, donc autorisé, tout en étant quasi
-    // automatique (pas besoin de viser le bouton précisément).
-    const _bioAutoTrigger = () => {
-      document.removeEventListener('pointerdown', _bioAutoTrigger);
-      document.removeEventListener('touchstart', _bioAutoTrigger);
-      try { phenixBioLogin(); } catch(e) {}
-    };
-    document.addEventListener('pointerdown', _bioAutoTrigger, { once: true, passive: true });
-    document.addEventListener('touchstart', _bioAutoTrigger, { once: true, passive: true });
-  }
-}
-
-function phenixBioReset(){
-  if(!confirm('Supprimer l\'empreinte enregistrée ? Vous devrez la ré-enregistrer après votre prochaine connexion.')) return;
-  localStorage.removeItem(BIO_KEY);
-  localStorage.removeItem(BIO_EMAIL_KEY);
-  localStorage.removeItem('phenix_bio_creds');
-  // Efface aussi un éventuel refus antérieur, sinon la proposition
-  // d'activation ne réapparaîtrait plus jamais après une réinitialisation.
-  localStorage.removeItem('phenix_bio_enroll_refuse');
-  _bioPropositionFaite = false;
-  const lbl = document.getElementById('pl-bio-label'); if(lbl) lbl.textContent = 'Activer l\'empreinte après connexion';
-  const btn = document.getElementById('pl-bio-btn'); if(btn) btn.onclick = () => document.getElementById('pl-pwd').focus();
-  const err = document.getElementById('pl-err');
-  if(err){ err.style.color = '#7DC6E8'; err.textContent = '✓ Empreinte supprimée — connectez-vous avec email/mdp pour la ré-activer.'; }
-}
-
-async function phenixBioLogin(){
-  const btn = document.getElementById('pl-bio-btn');
-  const err = document.getElementById('pl-err');
-  const credId = localStorage.getItem(BIO_KEY);
-  if(err){ err.textContent = ''; err.style.color = '#FFB4A8'; }
-  if(!credId){ document.getElementById('pl-pwd').focus(); return; }
-  btn.disabled = true;
-  btn.innerHTML = '<span style="font-size:18px">⏳</span> <span>Vérification empreinte…</span>';
-  try {
-    await navigator.credentials.get({
-      publicKey: {
-        challenge: crypto.getRandomValues(new Uint8Array(32)),
-        allowCredentials: [{ type: 'public-key', id: _fromb64u(credId), transports: ['internal'] }],
-        userVerification: 'required',
-        timeout: 60000
-      }
-    });
-    const savedCreds = localStorage.getItem('phenix_bio_creds');
-    if(savedCreds && window._auth){
-      const parts = atob(savedCreds).split('|||');
-      if(parts.length === 2){
-        err.style.color = '#4db8e8'; err.textContent = '✓ Connexion en cours…';
-        window._phenixCreds = { email: parts[0], password: parts[1] };
-        window._phenixBroadcastAutoLogin();
-        window._auth.login(parts[0], parts[1]).catch(() => {
-          err.style.color = '#FFB4A8';
-          err.textContent = 'Session expirée — saisissez votre mot de passe.';
-          const em = document.getElementById('pl-email');
-          em.value = parts[0]; em.style.background = 'rgba(46,150,100,.18)'; em.readOnly = true;
-          document.getElementById('pl-pwd').focus();
-        });
-        return;
-      }
-    }
-    const savedEmail = localStorage.getItem(BIO_EMAIL_KEY) || '';
-    document.getElementById('pl-email').value = savedEmail;
-    document.getElementById('pl-email').style.background = 'rgba(46,150,100,.18)';
-    document.getElementById('pl-email').readOnly = true;
-    err.style.color = '#4db8e8';
-    err.textContent = '✓ Empreinte reconnue — saisissez votre mot de passe cette fois, la connexion sera automatique ensuite.';
-    document.getElementById('pl-pwd').focus();
-  } catch(e){
-    err.style.color = '#E74C3C'; err.style.fontWeight = '600';
-    if(e.name === 'NotAllowedError') err.textContent = '⚠️ Reconnaissance refusée — vérifiez que Face ID/empreinte est bien activé pour ce navigateur dans les réglages de votre téléphone, puis réessayez avec le bouton.';
-    else if(e.name === 'InvalidStateError') err.textContent = '⚠️ Empreinte invalide — cliquez sur 🔄 Réinitialiser puis reconnectez-vous par mot de passe pour la ré-enregistrer.';
-    else err.textContent = '⚠️ Erreur : ' + e.name + ' — ' + e.message;
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = '<span style="font-size:24px">☝️</span> <span>Se connecter avec empreinte</span>';
-  }
-}
-
-// ════════════════════════════════════════════════════════════
-//  Proposition d'activation de l'empreinte — point d'entrée UNIQUE
-//  Trois endroits différents proposaient l'enrôlement, et « Plus tard »
-//  ne faisait que masquer la carte sans rien mémoriser : la proposition
-//  revenait donc à chaque connexion. Désormais, un seul contrôle
-//  centralisé, et un refus est retenu définitivement sur cet appareil.
-// ════════════════════════════════════════════════════════════
-const BIO_REFUS_KEY = 'phenix_bio_enroll_refuse';
-let _bioPropositionFaite = false; // évite aussi les doublons dans une même session
-
-function phenixRefuserEnrolementBio(){
-  try { localStorage.setItem(BIO_REFUS_KEY, '1'); } catch(e) {}
-  const wrap = document.getElementById('pl-enroll-wrap');
-  if (wrap) wrap.style.display = 'none';
-}
-window.phenixRefuserEnrolementBio = phenixRefuserEnrolementBio;
-
-function phenixProposerEnrolementBio(user){
-  if (_bioPropositionFaite) return;               // déjà proposé dans cette session
-  if (!user) return;
-  try {
-    if (localStorage.getItem('phenix_bio_credId')) return; // empreinte déjà active
-    if (localStorage.getItem(BIO_REFUS_KEY)) return;       // refus déjà exprimé
-  } catch(e) {}
-  if (!window.PublicKeyCredential) return;
-  _bioPropositionFaite = true;
-  PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(ok => {
-    if (!ok) return;
-    const wrap = document.getElementById('pl-enroll-wrap');
-    const bbtn = document.getElementById('pl-enroll-btn');
-    if (!wrap || !bbtn) return;
-    setTimeout(() => {
-      wrap.style.display = 'block';
-      bbtn.onclick = () => { if (window.phenixBioEnroll) window.phenixBioEnroll(user); };
-    }, 600);
-  }).catch(()=>{});
-}
-window.phenixProposerEnrolementBio = phenixProposerEnrolementBio;
-
-async function phenixBioEnroll(userOverride){
-  const err = document.getElementById('pl-err');
-  const wrap = document.getElementById('pl-enroll-wrap');
-  const user = userOverride || (window._auth && window._auth.current());
-  if(!user){ if(err) err.textContent = 'Session non reconnue — réessayez dans quelques secondes.'; return; }
-  try {
-    const encoder = new TextEncoder();
-    const credential = await navigator.credentials.create({
-      publicKey: {
-        challenge: crypto.getRandomValues(new Uint8Array(32)),
-        rp: { name: 'Phénix-Architecture', id: location.hostname },
-        user: { id: encoder.encode(user.uid), name: user.email, displayName: 'Phénix' },
-        pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
-        authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'discouraged', requireResidentKey: false },
-        excludeCredentials: [],
-        timeout: 60000,
-        attestation: 'none'
-      }
-    });
-    localStorage.setItem(BIO_KEY, _b64u(credential.rawId));
-    localStorage.setItem(BIO_EMAIL_KEY, user.email);
-    // Les identifiants ont normalement déjà été mémorisés au moment de la
-    // connexion (le champ mot de passe est vidé une fois l'écran refermé).
-    // On ne réécrit ici que si le champ est encore rempli, par sécurité.
-    const pwd = (document.getElementById('pl-pwd')||{}).value || '';
-    if(pwd) localStorage.setItem('phenix_bio_creds', btoa(user.email + '|||' + pwd));
-    const dejaMemorise = !!localStorage.getItem('phenix_bio_creds');
-    if(wrap){
-      wrap.innerHTML = dejaMemorise
-        ? '<div style="color:#7DC6E8;font-size:13px;font-weight:600">✓ Empreinte activée — connexion automatique dès maintenant !</div>'
-        : '<div style="color:#F5D97A;font-size:12.5px;font-weight:600;line-height:1.5">✓ Empreinte activée.<br><span style="font-weight:400">Déconnectez-vous puis reconnectez-vous une fois avec votre mot de passe pour activer la connexion automatique.</span></div>';
-      setTimeout(()=>{ wrap.style.display='none'; }, dejaMemorise ? 3000 : 8000);
-    }
-  } catch(e){
-    // L'erreur doit s'afficher dans la carte elle-même : pl-err appartient à
-    // l'écran de connexion, déjà masqué à ce stade — le message y serait invisible.
-    const msg = e.name === 'NotAllowedError'
-      ? 'Activation annulée ou refusée par l\'appareil.'
-      : ('Erreur : ' + (e.message || e.name));
-    if(wrap){
-      wrap.innerHTML = '<div style="color:#FFB4A8;font-size:12.5px;font-weight:600;margin-bottom:8px">⚠️ ' + msg + '</div>'
-        + '<button onclick="document.getElementById(\'pl-enroll-wrap\').style.display=\'none\'" style="width:100%;padding:8px;border:1.5px solid rgba(255,255,255,.2);border-radius:7px;background:transparent;color:rgba(255,255,255,.7);font-size:12.5px;cursor:pointer">Fermer</button>';
-    }
-    if(err) err.textContent = msg;
-  }
-}
-
-document.addEventListener('DOMContentLoaded', phenixBioInit);
-window.phenixBioLogin  = phenixBioLogin;
-window.phenixBioEnroll = phenixBioEnroll;
-window.phenixBioReset  = phenixBioReset;
-
-// Propose l'enrôlement après une connexion email réussie (le shell utilise doLogin, pas phenixDoLogin)
-const _origDoLogin_bio = window.doLogin;
-window.doLogin = function(){
-  const email = (document.getElementById('pl-email').value || '').trim();
-  const pwd   = document.getElementById('pl-pwd').value || '';
-  const err   = document.getElementById('pl-err'); if(err){ err.style.color='#FFB4A8'; err.textContent=''; }
-  const btn   = document.getElementById('pl-btn'); if(btn) btn.disabled = true;
-  window._auth.login(email, pwd).then((cred) => {
-    if (window.phenixProposerEnrolementBio) window.phenixProposerEnrolementBio(cred.user);
-  }).catch((e) => {
-    const c = (e && e.code) || '';
-    if(err) err.textContent =
-      c.indexOf('user-not-found')>=0 || c.indexOf('wrong-password')>=0 || c.indexOf('invalid-credential')>=0 ? 'Email ou mot de passe incorrect.' :
-      c.indexOf('network')>=0 ? 'Pas de connexion internet.' :
-      ('Erreur : ' + (c || (e && e.message) || ''));
-  }).finally(() => { if(btn) btn.disabled = false; });
-};
-</script>
-
 </body>
 </html>

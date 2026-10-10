@@ -1980,6 +1980,17 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const P = 'phenix_portail';   // phenix_portail/{chantierId}/etat/{fiche|choix} et /journal/{id}
 
+// Connexion automatique quand le carnet est ouvert dans le Shell (le Shell repasse les identifiants déjà validés).
+if (window.parent !== window) {
+  window.addEventListener('message', ev => {
+    const d = ev.data;
+    if (d && d.source === 'phenix-shell' && d.action === 'auto-login' && d.email && d.password && !auth.currentUser) {
+      signInWithEmailAndPassword(auth, d.email, d.password).catch(() => {});
+    }
+  });
+  try { window.parent.postMessage({ source: 'phenix-module', readyForLogin: true }, '*'); } catch (e) {}
+}
+
 window._fb = {
   login:  (e, p) => signInWithEmailAndPassword(auth, e, p),
   logout: () => signOut(auth),
