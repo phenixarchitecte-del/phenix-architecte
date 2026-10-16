@@ -1,6 +1,46 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
+<!--
+══════════════════════════════════════════════════════════════════════
+ HISTORIQUE DES MODIFICATIONS — phenix_dossier.html
+──────────────────────────────────────────────────────────────────────
+ 15/10/2026 — FUSION. Base = Dossier « -2 » (travail du 04/10/2026), qui
+ contient l'intégralité de la version « (3) » (vérifié ligne à ligne : seules
+ 14 lignes de (3) sont remplacées par leur version modifiée, aucune perdue).
+ Contenu des modifications du 04/10 :
+   1. Tâche récurrente cochée depuis le CALENDRIER : génère la prochaine
+      occurrence (toggleTacheFromCal).
+   2. Tâche VOCALE : étapes Catégorie (si « gestion ») et « Assigné à »,
+      tâche enregistrée avec type, categorie et assigneA ; assignation par
+      défaut à l'administrateur pour une tâche de gestion.
+   3. Devis SIGNÉ reçu de « Devis en cours » (ouvrirNouveauProjetDepuisDevis) :
+      « Nouveau projet » pré-rempli ; à la création, devis ajouté en
+      facturation et devis en cours marqué projetCree.
+   4. Enregistrement d'un devis : conserve le suivi de relance (dateEnvoi,
+      relanceNb, relanceDerniere, relanceProchaine, relanceHisto, …).
+ Pour retrouver le code : chercher ouvrirNouveauProjetDepuisDevis, _tvocalVisible,
+ creerTacheSuivante, relanceHisto.
+ 15/10/2026 (2) — PORTAIL « MON ESPACE » de l'assistante (module phenix_espace.html) :
+   5. COLLABORATEURS : ajout de l'assistante (⚠ mettre SON e-mail) → assignable
+      dans les tâches.
+   6. Tâches : conservation des notes de l'assistante (commentaires), de
+      creePar / terminePar / termineLe quand on modifie une tâche ; affichage
+      des notes dans la fenêtre de tâche et pastille 💬 sur la carte.
+   7. Fiche projet : nouvel onglet « Infos assistante » (état, prochaine étape,
+      ce qu'elle peut dire, à éviter, FAQ) + bouton de synchronisation.
+   8. Copie FILTRÉE des projets vers phenix_projets_assistante (syncAssistanteProjet) :
+      sans honoraires, commissions, budget, notes internes ni montants artisans.
+      Écrite à l'enregistrement d'un projet, toutes les 60 s, et à la demande.
+      Repérer : [Espace assistante].
+ 15/10/2026 (3) — JOURNAL D'ACTIVITÉ (module phenix_journal.html) :
+   9. window.phenixJournal(...) : chaque enregistrement / suppression de projet,
+      tâche, devis-facture, échéance, commission, charge ou revenu écrit une
+      ligne datée (qui, quand, quoi) dans phenix_historique — sans aucun montant.
+      Implémenté en enveloppant window._fb.* (aucune fonction existante modifiée).
+      Repérer : [Journal].
+══════════════════════════════════════════════════════════════════════
+-->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -70,10 +110,36 @@ const ECHEANCES_COL  = collection(db, 'phenix_echeances');
 const FACTURES_COL   = collection(db, 'phenix_factures');
 const TACHES_COL     = collection(db, 'phenix_taches');
 
+
+// ── [Journal] historique d'actions daté — collection phenix_historique ──
+//   Une ligne par action : qui (e-mail), quand (ts + jour), dans quel module, quoi.
+//   Jamais de montants ni de données sensibles : uniquement des libellés.
+//   Lecture : module « Journal » (phenix_journal.html), réservé à l'administrateur.
+window.phenixJournal = function(module, action, objet, libelle, extra){
+  try{
+    const u = auth.currentUser; if(!u || !u.email) return;
+    const now = new Date();
+    const jour = now.toLocaleDateString('sv-SE', { timeZone:'Europe/Paris' });   // AAAA-MM-JJ
+    const email = String(u.email).toLowerCase();
+    const lib = String(libelle == null ? '' : libelle).slice(0, 200);
+    const cle = [email, module, action, objet, lib].join('|');
+    window.__jrnLast = window.__jrnLast || {};
+    if(window.__jrnLast[cle] && now.getTime() - window.__jrnLast[cle] < 20000) return;   // anti-doublon (20 s)
+    window.__jrnLast[cle] = now.getTime();
+    const e = { ts: now.toISOString(), jour: jour, email: email, module: module, action: action, objet: objet || '', libelle: lib };
+    if(extra) Object.keys(extra).forEach(function(k){ if(extra[k] !== undefined && extra[k] !== null && extra[k] !== '') e[k] = typeof extra[k] === 'string' ? extra[k].slice(0, 200) : extra[k]; });
+    const id = now.getTime().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
+    setDoc(doc(db, 'phenix_historique', id), e).catch(function(){});
+  }catch(err){}
+};
+
 // ── Exposition globale pour le code non-module ci-dessous ──
 window._fb = {
   db, doc, setDoc, deleteDoc, getDoc,
   PROJETS_COL, ECHEANCES_COL,
+  // [Espace assistante] copie FILTRÉE des projets, lue par le portail « Mon espace »
+  async saveProjetAssistante(p) { await setDoc(doc(db, 'phenix_projets_assistante', String(p.id)), p); },
+  async deleteProjetAssistante(id) { await deleteDoc(doc(db, 'phenix_projets_assistante', String(id))); },
 
   // Sauvegarde un projet (crée ou met à jour)
   async saveProjet(p) {
@@ -420,6 +486,43 @@ const auth = getAuth(app);
 //  chaque changement de module. Sans effet si le fichier est
 //  ouvert seul (aucun message ne peut alors arriver).
 // ════════════════════════════════════════════════════════════
+
+// ── [Journal] enveloppes autour des écritures Firestore de Dossier ──────────
+(function(){
+  const fb = window._fb; if(!fb) return;
+  const S = () => (typeof stateDossier !== 'undefined') ? stateDossier : {};
+  const trouve = (tab, id) => ((S()[tab]) || []).find(x => String(x.id) === String(id)) || null;
+  const nomProjet = p => p ? [p.ref, p.nom || p.client].filter(Boolean).join(' · ') : '';
+  const ST = { todo:'à faire', doing:'en cours', done:'terminée' };
+  function env(nom, fn){
+    const orig = fb[nom]; if(typeof orig !== 'function') return;
+    fb[nom] = async function(){
+      let m = null; try{ m = fn.apply(null, arguments); }catch(e){}
+      const r = await orig.apply(this, arguments);
+      try{ if(m) window.phenixJournal(m[0], m[1], m[2], m[3], m[4]); }catch(e){}
+      return r;
+    };
+  }
+  env('saveProjet', p => ['dossier', 'enregistre', 'projet', nomProjet(p) || ('#' + p.id), { projetId:String(p.id), projetNom:nomProjet(p) }]);
+  env('deleteProjet', id => ['dossier', 'supprime', 'projet', nomProjet(trouve('projets', id)) || ('#' + id), { projetId:String(id) }]);
+  env('saveTache', t => {
+    const p = trouve('projets', t.projetId);
+    const act = t.statut === 'done' ? 'termine' : 'enregistre';
+    return ['dossier', act, 'tâche', t.titre || ('#' + t.id), { projetId:t.projetId ? String(t.projetId) : '', projetNom:nomProjet(p), detail:(ST[t.statut] || '') + (t.assigneA ? ' · assignée à ' + t.assigneA : '') }];
+  });
+  env('deleteTache', id => ['dossier', 'supprime', 'tâche', (trouve('taches', id) || {}).titre || ('#' + id)]);
+  env('saveFacture', f => ['dossier', 'enregistre', 'devis / facture', [f.type, f.numero || f.num || f.ref || f.id].filter(Boolean).join(' ') + (f.client ? ' — ' + f.client : ''), { detail:f.statut || '' }]);
+  env('deleteFacture', id => { const f = trouve('factures', id) || {}; return ['dossier', 'supprime', 'devis / facture', [f.type, f.numero || f.num || f.ref || id].filter(Boolean).join(' ')]; });
+  env('saveEcheance', e => ['dossier', 'enregistre', 'échéance', e.desc || ('#' + e.id), { projetNom:e.projet || '' }]);
+  env('deleteEcheance', id => ['dossier', 'supprime', 'échéance', (trouve('echeances', id) || {}).desc || ('#' + id)]);
+  env('saveCommission', c => ['dossier', 'enregistre', 'commission', c.nom || c.artisan || c.projet || ('#' + c.id)]);
+  env('deleteCommission', id => ['dossier', 'supprime', 'commission', '#' + id]);
+  env('saveCharge', c => ['compta', 'enregistre', 'charge', c.nom || c.libelle || c.desc || ('#' + c.id)]);
+  env('deleteCharge', id => ['compta', 'supprime', 'charge', '#' + id]);
+  env('saveRevenu', r => ['compta', 'enregistre', 'revenu', r.nom || r.libelle || r.desc || ('#' + r.id)]);
+  env('deleteRevenu', id => ['compta', 'supprime', 'revenu', '#' + id]);
+})();
+
 window.addEventListener('message', function(_pxEv){
   var _pxD = _pxEv.data;
   if(_pxD && _pxD.source === 'phenix-shell' && _pxD.action === 'auto-login' && _pxD.email && _pxD.password){
@@ -2196,6 +2299,7 @@ if (window.parent !== window) {
       <div class="modal-tab" id="tab-facturation-proj" onclick="switchModalTab('facturation-proj')"><i class="ti ti-receipt-2"></i> Facturation <span id="projFactCount" style="background:var(--accent-bg);color:var(--accent);font-size:10px;padding:1px 6px;border-radius:20px;margin-left:4px;font-weight:700">0</span></div>
       <div class="modal-tab" id="tab-historique" onclick="switchModalTab('historique')"><i class="ti ti-history"></i> Historique <span id="histCount" style="background:var(--accent-bg);color:var(--accent);font-size:10px;padding:1px 6px;border-radius:20px;margin-left:4px;font-weight:700">0</span></div>
       <div class="modal-tab" id="tab-marge" onclick="switchModalTab('marge')"><i class="ti ti-scale"></i> Marge</div>
+      <div class="modal-tab" id="tab-assistante" onclick="switchModalTab('assistante')"><i class="ti ti-headset"></i> Infos assistante</div>
     </div>
 
     <!-- Barre de progression de phase — fixe, visible en permanence sur l'onglet Fiche -->
@@ -2224,6 +2328,10 @@ if (window.parent !== window) {
       <!-- Contenu onglet Marge -->
       <div class="modal-tab-content" id="tabcontent-marge">
         <div id="projectMargeBody"></div>
+      </div>
+      <!-- [Espace assistante] Contenu onglet Infos assistante -->
+      <div class="modal-tab-content" id="tabcontent-assistante">
+        <div id="projectAssistanteBody"></div>
       </div>
     </div>
 
@@ -2361,6 +2469,7 @@ if (window.parent !== window) {
         <label>Description / Notes</label>
         <textarea id="tache-desc" rows="2" placeholder="Détails, contexte, pièces jointes…"></textarea>
       </div>
+      <div id="tache-commentaires"></div>
       <div class="form-group" style="margin-bottom:12px">
         <label>Rattachement</label>
         <div class="tache-modal-prio">
@@ -5004,7 +5113,8 @@ ${plansHtml}
 //  CR RÉUNION VOCAL — Mode mains libres (adapté de CRV chantier)
 // ═══════════════════════════════════════════════════════════
 const RVOCAL_STEPS = [
-  { id:'projet',     name:'Projet',      question:'Pour quel projet ?',                hint:'Dites le nom du projet. Ex : "Villa Dupont" ou "Maison Martin"',        type:'projet',    skippable:false },
+  { id:'projet',   name:'Projet',    question:'Pour quel projet ?',                   hint:'Dites le nom du projet, "gestion" pour une tâche de gestion d\'entreprise, ou "aucun"', type:'projet',   skippable:true },
+  { id:'categorie', name:'Catégorie', question:'Quelle catégorie de gestion ?',      hint:'Dites par ex. "compta", "commercial", "RH", "outils" ou "patrimoine"', type:'categorie', skippable:false, onlyIf:()=>_tvocal.data.projet==='__gestion__' },
   { id:'date',       name:'Date',        question:'Quelle est la date de la réunion ?', hint:'Dites "aujourd\'hui", "hier", ou une date précise',                      type:'date',      skippable:false },
   { id:'presents',   name:'Participants',question:'Qui était présent ?',               hint:'Listez les participants. Ex : "M. Dupont, architecte Martin, bureau d\'études"', type:'text', skippable:true },
   { id:'avancement', name:'Avancement',  question:'Quel est l\'avancement du projet ?', hint:'Décrivez librement l\'état d\'avancement général',                       type:'textarea',  skippable:true },
@@ -5291,13 +5401,16 @@ function _rvocalSetStatus(msg) { const el=document.getElementById('rvocal-status
 // ════════════════════════════════════════════════════════════
 const TVOCAL_STEPS = [
   { id:'titre',    name:'Titre',     question:'Quelle est la tâche à faire ?',        hint:'Décrivez la tâche en quelques mots. Ex : "Relancer le maçon pour le devis"', type:'text',     skippable:false },
-  { id:'projet',   name:'Projet',    question:'Pour quel projet ?',                   hint:'Dites le nom du projet, ou "aucun" si la tâche n\'est liée à aucun dossier', type:'projet',   skippable:true },
+  { id:'projet',   name:'Projet',    question:'Pour quel projet ?',                   hint:'Dites le nom du projet, "gestion" pour une tâche de gestion d\'entreprise, ou "aucun"', type:'projet',   skippable:true },
+  { id:'categorie', name:'Catégorie', question:'Quelle catégorie de gestion ?',      hint:'Dites par ex. "compta", "commercial", "RH", "outils" ou "patrimoine"', type:'categorie', skippable:false, onlyIf:()=>_tvocal.data.projet==='__gestion__' },
   { id:'date',     name:'Échéance',  question:'Pour quand ?',                         hint:'Dites "aujourd\'hui", "demain", "lundi", ou une date précise',              type:'date',     skippable:true },
   { id:'priorite', name:'Priorité',  question:'Quelle priorité ?',                    hint:'Dites "urgent", "haute" ou "normale"',                                      type:'priorite', skippable:true },
+  { id:'assigne',  name:'Assigné à', question:'À qui l\'assigner ?',                  hint:'Dites "moi", "Maxime", le nom d\'un collaborateur, ou "personne"', type:'assigne',  skippable:true },
   { id:'desc',     name:'Détails',   question:'Voulez-vous ajouter des détails ?',    hint:'Précisions utiles. Dites "aucun" s\'il n\'y en a pas',                       type:'textarea', skippable:true },
 ];
 
 let _tvocal = { step:0, data:{}, reco:null, listening:false, active:false };
+function _tvocalVisible(st) { return !st.onlyIf || st.onlyIf(); }
 
 function startTacheVocal() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -5320,9 +5433,13 @@ function _tvocalRenderStep() {
   const step = _tvocal.step;
   const isRecap = step >= TVOCAL_STEPS.length;
   const dots = document.getElementById('tvocal-step-dots');
-  dots.innerHTML = TVOCAL_STEPS.map((s,i)=>
-    `<div style="flex:1;height:4px;border-radius:2px;background:${i<step?'#2f6fc0':i===step?'#4fa8f0':'var(--border)'}"></div>`).join('');
-  document.getElementById('tvocal-step-label').textContent = isRecap ? 'Récapitulatif' : `Étape ${step+1}/${TVOCAL_STEPS.length}`;
+  const _vis = TVOCAL_STEPS.filter(_tvocalVisible);
+  dots.innerHTML = _vis.map(s=>{
+    const i = TVOCAL_STEPS.indexOf(s);
+    return `<div style="flex:1;height:4px;border-radius:2px;background:${i<step?'#2f6fc0':i===step?'#4fa8f0':'var(--border)'}"></div>`;
+  }).join('');
+  const _pos = TVOCAL_STEPS.slice(0,step).filter(_tvocalVisible).length + 1;
+  document.getElementById('tvocal-step-label').textContent = isRecap ? 'Récapitulatif' : `Étape ${_pos}/${_vis.length}`;
 
   document.getElementById('tvocal-transcript-wrap').style.display = 'none';
   document.getElementById('tvocal-answer-wrap').style.display     = 'none';
@@ -5343,11 +5460,14 @@ function _tvocalRenderRecap() {
   const recap = document.getElementById('tvocal-recap');
   const proj = _tvocal.data.projet ? stateDossier.projets.find(p=>String(p.id)===String(_tvocal.data.projet)) : null;
   const prioLabel = {urgent:'🔴 Urgent', haute:'🟡 Haute', normale:'🔵 Normale'}[_tvocal.data.priorite||'normale'];
+  const estGestion = _tvocal.data.projet === '__gestion__';
+  const collabRecap = COLLABORATEURS.find(c=>c.email===_tvocal.data.assigne);
   const rows = [
     { label:'📌 Tâche',    val: _tvocal.data.titre || '—' },
-    { label:'🏗 Projet',   val: proj ? (proj.nom||proj.ref) : 'Aucun' },
+    { label:'🏗 Projet',   val: estGestion ? ('🗂️ Gestion' + (_tvocal.data.categorie ? ' · '+_tvocal.data.categorie : '')) : (proj ? (proj.nom||proj.ref) : 'Aucun') },
     { label:'📅 Échéance', val: _tvocal.data.date ? new Date(_tvocal.data.date+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}) : '—' },
     { label:'⚡ Priorité', val: prioLabel },
+    { label:'👤 Assigné à', val: collabRecap ? collabRecap.nom : (estGestion ? 'Maxime (par défaut)' : '—') },
     { label:'📝 Détails',  val: _tvocal.data.desc || '—' },
   ];
   recap.innerHTML = rows.map(r => `
@@ -5426,7 +5546,7 @@ function _tvocalProcess(text) {
   }
 
   const s = TVOCAL_STEPS[_tvocal.step];
-  if (/^(passer|suivant|aucun|aucune|rien|non)$/.test(low) && s.skippable) {
+  if (/^(passer|suivant|aucun|aucune|rien|non|personne)$/.test(low) && s.skippable) {
     _tvocal.data[s.id] = ''; _tvocalNext(); return;
   }
 
@@ -5439,6 +5559,12 @@ function _tvocalProcess(text) {
     if (!val) { _tvocalSetStatus('Date non comprise — ex : "demain", "lundi", "15 juin"'); return; }
   } else if (s.type === 'priorite') {
     val = /urgent/.test(low) ? 'urgent' : /haute|élev|eleve|important/.test(low) ? 'haute' : 'normale';
+  } else if (s.type === 'categorie') {
+    val = _tvocalParseCategorie(low);
+    if (!val) { _tvocalSetStatus('Catégorie non reconnue — ex : "compta", "commercial", "RH", "outils", "patrimoine"'); return; }
+  } else if (s.type === 'assigne') {
+    val = _tvocalParseAssigne(low);
+    if (val === null) { _tvocalSetStatus('Personne non reconnue — dites "moi", un prénom, ou "personne"'); return; }
   }
 
   _tvocal.data[s.id] = val;
@@ -5446,8 +5572,32 @@ function _tvocalProcess(text) {
   setTimeout(_tvocalNext, 900);
 }
 
+function _tvocalNorm(t) { return (t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+function _tvocalParseCategorie(t) {
+  const n = _tvocalNorm(t);
+  let best = null, bestScore = 0;
+  tacheCategoriesGestion().forEach(c => {
+    const mots = _tvocalNorm(c).split(/[^a-z0-9]+/).filter(m => m.length > 1).map(m => m.length > 4 ? m.replace(/s$/,'') : m);
+    let score = 0;
+    mots.forEach(m => { if (m.length <= 3 ? new RegExp('\\b'+m+'\\b').test(n) : n.includes(m)) score++; });
+    if (score > bestScore) { bestScore = score; best = c; }
+  });
+  return best;
+}
+function _tvocalParseAssigne(t) {
+  const n = _tvocalNorm(t).trim();
+  if (/^(personne|aucun|aucune|non)$/.test(n)) return '';
+  if (/\b(moi|je)\b/.test(n)) {
+    const me = String((typeof emailUtilisateurCourant === 'function' ? emailUtilisateurCourant() : '') || '').toLowerCase();
+    const c = COLLABORATEURS.find(x => x.email.toLowerCase() === me) || COLLABORATEURS.find(x => x.role === 'admin');
+    return c ? c.email : null;
+  }
+  const found = COLLABORATEURS.find(c => _tvocalNorm(c.nom).split(/[^a-z0-9]+/).filter(m => m.length > 2).some(m => n.includes(m)));
+  return found ? found.email : null;
+}
 function _tvocalParseProjet(t) {
   if (/^(aucun|aucune|rien|pas de projet)$/.test(t)) return '';
+  if (/^(la |de la |en )?gestion( d.entreprise)?$|^t[aâ]che de gestion$/.test(t.trim())) return '__gestion__';
   let best = null, bestScore = 0;
   stateDossier.projets.forEach(p => {
     const cible = ((p.nom||'')+' '+(p.client||'')+' '+(p.ref||'')).toLowerCase();
@@ -5500,9 +5650,12 @@ function _tvocalShowAnswer(stepId, val) {
   const s = TVOCAL_STEPS.find(x=>x.id===stepId);
   if (s && s.type==='projet') {
     const p = stateDossier.projets.find(x=>String(x.id)===String(val));
-    aff = p ? (p.nom||p.ref) : 'Aucun projet';
+    aff = val==='__gestion__' ? '🗂️ Gestion' : (p ? (p.nom||p.ref) : 'Aucun projet');
   } else if (s && s.type==='date') {
     aff = new Date(val+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
+  } else if (s && s.type==='assigne') {
+    const cA = COLLABORATEURS.find(x=>x.email===val);
+    aff = cA ? cA.nom : '';
   } else if (s && s.type==='priorite') {
     aff = {urgent:'🔴 Urgent', haute:'🟡 Haute', normale:'🔵 Normale'}[val] || val;
   }
@@ -5513,20 +5666,28 @@ function _tvocalShowAnswer(stepId, val) {
 function _tvocalNext() {
   _tvocalStopListening();
   _tvocal.step++;
+  while (_tvocal.step < TVOCAL_STEPS.length && !_tvocalVisible(TVOCAL_STEPS[_tvocal.step])) _tvocal.step++;
   _tvocalRenderStep();
   if (_tvocal.step < TVOCAL_STEPS.length) {
-    setTimeout(()=>_tvocalSpeak(TVOCAL_STEPS[_tvocal.step].question), 400);
+    setTimeout(()=>{ const _st=TVOCAL_STEPS[_tvocal.step]; if(_st) _tvocalSpeak(_st.question); }, 400);
   }
 }
 
-function tvocalPrevStep() { _tvocalStopListening(); if(_tvocal.step>0)_tvocal.step--; _tvocalRenderStep(); if(_tvocal.step<TVOCAL_STEPS.length) setTimeout(()=>_tvocalSpeak(TVOCAL_STEPS[_tvocal.step].question),400); }
-function tvocalSkipStep() { _tvocalStopListening(); const s=TVOCAL_STEPS[_tvocal.step]; _tvocal.data[s.id]=''; _tvocalNext(); }
+function tvocalPrevStep() { _tvocalStopListening(); if(_tvocal.step>0)_tvocal.step--; while(_tvocal.step>0 && _tvocal.step<TVOCAL_STEPS.length && !_tvocalVisible(TVOCAL_STEPS[_tvocal.step])) _tvocal.step--; _tvocalRenderStep(); if(_tvocal.step<TVOCAL_STEPS.length) setTimeout(()=>{ const _st=TVOCAL_STEPS[_tvocal.step]; if(_st) _tvocalSpeak(_st.question); },400); }
+function tvocalSkipStep() { _tvocalStopListening(); const s=TVOCAL_STEPS[_tvocal.step]; if (!s) return; if (s.skippable===false) { _tvocalSetStatus('Cette étape est obligatoire.'); return; } _tvocal.data[s.id]=''; _tvocalNext(); }
 
 async function tvocalConfirmSave() {
   if (!_tvocal.data.titre) { toast_d('⚠️ Le titre de la tâche est obligatoire.'); _tvocal.step=0; _tvocalRenderStep(); return; }
   _tvocalStopListening();
   if (window.speechSynthesis) window.speechSynthesis.cancel();
 
+  const estGestion = _tvocal.data.projet === '__gestion__';
+  if (estGestion && !_tvocal.data.categorie) {
+    toast_d('⚠️ Choisissez une catégorie de gestion.');
+    _tvocal.step = TVOCAL_STEPS.findIndex(x=>x.id==='categorie'); _tvocalRenderStep(); return;
+  }
+  let assigneT = _tvocal.data.assigne || '';
+  if (estGestion && !assigneT) { const adm = COLLABORATEURS.find(c=>c.role==='admin'); if (adm) assigneT = adm.email; }
   const t = {
     id: 't-'+Date.now(),
     titre: _tvocal.data.titre,
@@ -5536,9 +5697,13 @@ async function tvocalConfirmSave() {
     duree: 60,
     statut: 'todo',
     priorite: _tvocal.data.priorite || 'normale',
-    projetId: _tvocal.data.projet || '',
+    type: estGestion ? 'gestion' : 'dossier',
+    categorie: estGestion ? _tvocal.data.categorie : '',
+    recurrence: null,
+    recurrenceGeneree: false,
+    projetId: estGestion ? '' : (_tvocal.data.projet || ''),
     phase: '',
-    assigneA: '',
+    assigneA: assigneT,
     dateLivraison: _tvocal.data.date || '',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -5636,6 +5801,7 @@ async function saveProjet(p) {
     setSyncStatus('sync','Enregistrement…');
     await window._fb.saveProjet(p);
     await window._fb.saveNextId(stateDossier.nextId);
+    try { syncAssistanteProjet(p); } catch(e) {}   // [Espace assistante]
     setSyncStatus('ok','Synchronisé ✓');
   } else { localSave(); }
 }
@@ -5643,6 +5809,7 @@ async function removeProjet(id) {
   if (firebaseReady && window._fb && !document.querySelector('script[type="module"]').textContent.includes('VOTRE_API_KEY')) {
     setSyncStatus('sync','Suppression…');
     await window._fb.deleteProjet(id);
+    try { if (window._fb.deleteProjetAssistante) await window._fb.deleteProjetAssistante(id); } catch(e) {}   // [Espace assistante]
     setSyncStatus('ok','Synchronisé ✓');
   } else { localSave(); }
 }
@@ -5967,8 +6134,95 @@ function openProjectModal(id) {
   document.getElementById('projectModal').classList.add('open');
 }
 
+// ═══════════════════════════════════════════════════════════════
+//  [Espace assistante] — infos pour répondre au client + copie filtrée
+//  du projet vers phenix_projets_assistante (lue par phenix_espace.html)
+//  Jamais copiés : honoraires, commissions, budget, notes internes,
+//  montants/taux des artisans, facturation, historique.
+// ═══════════════════════════════════════════════════════════════
+const ASSISTANTE_CHAMPS = [
+  { k:'etat',     label:'Où en est le dossier',      ph:'Ex. Plans APS envoyés au client le 3/10, en attente de son retour.' },
+  { k:'prochaine',label:'Prochaine étape',           ph:'Ex. Dépôt du permis de construire d\'ici fin octobre.' },
+  { k:'adire',    label:'Ce qu\'elle peut dire au client', ph:'Ex. Les artisans sont positionnés, le chantier démarre en janvier.' },
+  { k:'aeviter',  label:'À éviter de dire',          ph:'Ex. Ne pas annoncer de date de fin de chantier, ne pas évoquer les honoraires.' },
+  { k:'faq',      label:'Questions fréquentes',      ph:'Ex. « Quand aura lieu le prochain RDV ? » → voir échéances. « Puis-je modifier les plans ? » → renvoyer vers Maxime.' },
+];
+function renderProjectAssistante(id) {
+  const p = stateDossier.projets.find(x => x.id == id);
+  const el = document.getElementById('projectAssistanteBody');
+  if (!p || !el) return;
+  const inf = p.infosAssistante || {};
+  el.innerHTML = `
+    <div style="font-size:12.5px;color:var(--text2);margin-bottom:12px;line-height:1.5">
+      Ces informations apparaissent dans <strong>Mon espace</strong>, sur la fiche de ce projet, pour que l'assistante réponde correctement au client.
+      Elle y voit aussi : coordonnées du client, adresse, nature des travaux, phase et avancement, artisans (noms et métiers) et prochaines échéances.
+      <strong>Jamais</strong> les honoraires, commissions, budget, notes internes ni les montants des artisans.
+    </div>` +
+    ASSISTANTE_CHAMPS.map(c => `<div class="form-group" style="margin-bottom:12px"><label>${c.label}</label>
+      <textarea id="ass-${c.k}" rows="3" placeholder="${c.ph}">${esc(inf[c.k] || '')}</textarea></div>`).join('') +
+    `<div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="saveProjectAssistante()"><i class="ti ti-device-floppy"></i> Enregistrer pour l'assistante</button>
+      <button class="btn" onclick="syncAssistanteBouton()"><i class="ti ti-refresh"></i> Synchroniser tous les projets</button>
+    </div>`;
+}
+async function saveProjectAssistante() {
+  const p = stateDossier.projets.find(x => x.id == currentProjectId);
+  if (!p) return;
+  const inf = {};
+  ASSISTANTE_CHAMPS.forEach(c => { const el = document.getElementById('ass-' + c.k); inf[c.k] = el ? el.value.trim() : ''; });
+  p.infosAssistante = inf;
+  await saveProjet(p);              // déclenche aussi la synchronisation vers l'espace assistante
+  try { await syncAssistanteProjet(p, true); } catch(e) {}
+  toast_d('✅ Infos enregistrées pour l\'assistante.');
+}
+function projetPourAssistante(p) {
+  const artisans = [], vus = new Set();
+  (stateDossier.commissions || []).filter(c => String(c.projetId) === String(p.id)).forEach(c => {
+    const nom = String(c.artisanNom || '').trim(); if (!nom) return;
+    const k = nom.toLowerCase() + '|' + String(c.metier || '').toLowerCase();
+    if (vus.has(k)) return; vus.add(k);
+    artisans.push({ nom, metier: String(c.metier || '') });            // jamais de montant ni de taux
+  });
+  const nomP = String(p.nom || '').trim().toLowerCase(), refP = String(p.ref || '').trim().toLowerCase(), clP = String(p.client || '').trim().toLowerCase();
+  const auj = new Date(); const aujISO = auj.getFullYear() + '-' + String(auj.getMonth()+1).padStart(2,'0') + '-' + String(auj.getDate()).padStart(2,'0');
+  const echeances = (stateDossier.echeances || []).filter(e => {
+    const pr = String(e.projet || '').trim().toLowerCase(), cl = String(e.client || '').trim().toLowerCase();
+    return (pr && (pr === nomP || (refP && pr === refP))) || (!pr && cl && cl === clP);
+  }).filter(e => e.date && String(e.date).slice(0,10) >= aujISO)
+    .sort((a,b) => String(a.date) < String(b.date) ? -1 : 1).slice(0, 12)
+    .map(e => ({ date: String(e.date).slice(0,10), desc: e.desc || '', type: e.type || '', heure: e.heure || '' }));
+  const inf = p.infosAssistante || {};
+  return {
+    id: p.id, ref: p.ref || '', nom: p.nom || '', client: p.client || '', tel: p.tel || '', email: p.email || '', adresse: p.adresse || '',
+    type: p.type || '', mission: p.mission || '', phase: p.phase || '', statut: p.statut || '', avancement: parseFloat(p.avancement) || 0,
+    date: p.date || '', surface: p.surface || '', artisans, echeances,
+    infos: { etat: inf.etat || '', prochaine: inf.prochaine || '', adire: inf.adire || '', aeviter: inf.aeviter || '', faq: inf.faq || '' },
+  };
+}
+const _assistHash = {};
+async function syncAssistanteProjet(p, force) {
+  if (!p || !window._fb || !window._fb.saveProjetAssistante) return false;
+  if (typeof getCurrentUserRole === 'function' && getCurrentUserRole() !== 'admin') return false;   // seul le compte de Maxime écrit
+  const payload = projetPourAssistante(p), h = JSON.stringify(payload);
+  if (!force && _assistHash[p.id] === h) return false;
+  await window._fb.saveProjetAssistante(Object.assign({}, payload, { maj: new Date().toISOString() }));
+  _assistHash[p.id] = h;
+  return true;
+}
+async function syncAssistanteTout(force) {
+  let n = 0;
+  for (const p of (stateDossier.projets || [])) { try { if (await syncAssistanteProjet(p, force)) n++; } catch(e) { console.warn('Synchro assistante :', e); } }
+  return n;
+}
+async function syncAssistanteBouton() {
+  const n = await syncAssistanteTout(true);
+  toast_d('✅ ' + n + ' projet(s) synchronisé(s) pour l\'assistante.');
+}
+setTimeout(() => { syncAssistanteTout(false); }, 12000);
+setInterval(() => { syncAssistanteTout(false); }, 60000);
+
 function switchModalTab(tab) {
-  ['fiche','facturation-proj','historique','marge'].forEach(t=>{
+  ['fiche','facturation-proj','historique','marge','assistante'].forEach(t=>{
     const tabEl = document.getElementById('tab-'+t);
     const contentEl = document.getElementById('tabcontent-'+t);
     if (tabEl) tabEl.classList.toggle('active', t===tab);
@@ -5982,6 +6236,9 @@ function switchModalTab(tab) {
   }
   if (tab==='marge' && currentProjectId) {
     renderProjectMarge(currentProjectId);
+  }
+  if (tab==='assistante' && currentProjectId) {
+    renderProjectAssistante(currentProjectId);   // [Espace assistante]
   }
 }
 
@@ -7087,6 +7344,11 @@ async function createProject() {
     if (!devisCree.lignes.length) delete devisCree.lignes;
     stateDossier.factures.push(devisCree);
     await saveFactureDb(devisCree);
+    // Devis venu du module « Devis en cours » : on l'y marque comme converti (disparaît du bandeau « à transformer »)
+    if (_devisSigneEnAttente.decId && window._fb && window._fb.setDoc) {
+      try { await window._fb.setDoc(window._fb.doc(window._fb.db, 'phenix_devis_en_cours', String(_devisSigneEnAttente.decId)), { projetCree: true, projetId: id }, { merge: true }); }
+      catch (e) { console.warn('Marquage du devis en cours impossible :', e); }
+    }
     _devisSigneEnAttente = null;
   }
 
@@ -10027,8 +10289,10 @@ async function saveFacture_d() {
   };
   // Le détail relevé sur le devis (lignes, totaux imprimés) ne se modifie pas
   // dans ce formulaire : on le conserve tel quel à chaque enregistrement.
+  // Idem pour le suivi des relances (module Relances) : date d'envoi, nombre et
+  // historique des relances, clôture — sinon modifier un devis les effacerait.
   { const ancien = editingFactureId ? stateDossier.factures.find(x=>x.id===editingFactureId) : null;
-    if (ancien) ['lignes','montantTvaDevis','montantTtcDevis'].forEach(k => { if (ancien[k] !== undefined) f[k] = ancien[k]; }); }
+    if (ancien) ['lignes','montantTvaDevis','montantTtcDevis','dateEnvoi','relanceNb','relanceDerniere','relanceProchaine','relanceHisto','dateAcceptation','dateCloture','motifPerte'].forEach(k => { if (ancien[k] !== undefined) f[k] = ancien[k]; }); }
 
   // Une facture payée sans date de paiement fausse le rattachement comptable au
   // mois. On retombe sur la date d'émission (bien plus proche de la réalité que
@@ -10444,6 +10708,7 @@ function tacheItemHtml(t, today) {
         ${proj&&proj.phase?`<span class="tp-tag phase">${esc(proj.phase)}</span>`:''}
         ${collab?`<span class="tp-tag assignee">${esc(collab.nom)}</span>`:''}
         ${t.recurrence&&t.recurrence.freq?`<span class="tp-tag recur">🔁 ${esc(TACHE_FREQ_LABELS[t.recurrence.freq]||'Récurrente')}</span>`:''}
+        ${t.commentaires&&t.commentaires.length?`<span class="tp-tag">💬 ${t.commentaires.length}</span>`:''}
       </div>
     </div>
   </div>`;
@@ -10516,6 +10781,9 @@ let _tachePrioSelected = 'normale';
 const COLLABORATEURS = [
   { email: 'contact@phenixarchitecte.fr', nom: 'Maxime', role: 'admin' },
   { email: 'c.gironde@phenixarchitecte.fr', nom: 'C. Gironde', role: 'alternante' },
+  // [Espace assistante] Assistante administrative indépendante.
+  // ⚠ REMPLACER par SON e-mail Firebase (le même que dans phenix_shell.html › COMPTES_RELANCES_SEULES).
+  { email: 'assistante@exemple.fr', nom: 'Assistante', role: 'assistante' },
 ];
 // ── Rôles et restrictions d'accès ──────────────────────────
 // Rôle 'alternante' : accès limité à Projets / Checklist / Tâches, sans les
@@ -10567,6 +10835,17 @@ function fillAssigneSelect(selectedEmail) {
     COLLABORATEURS.map(c => `<option value="${c.email}" ${c.email===selectedEmail?'selected':''}>${c.nom}</option>`).join('');
 }
 
+// [Espace assistante] Notes laissées par l'assistante sur une tâche (lecture seule ici)
+function afficherCommentairesTache(t) {
+  const el = document.getElementById('tache-commentaires');
+  if (!el) return;
+  const nomDe = e => { const c = COLLABORATEURS.find(x => x.email === e); return c ? c.nom : String(e||'').split('@')[0]; };
+  const coms = (t && t.commentaires) || [];
+  const meta = t && t.creePar ? `<div style="font-size:12px;color:var(--text2);margin-bottom:6px">Créée par <strong>${esc(nomDe(t.creePar))}</strong></div>` : '';
+  if (!coms.length && !meta) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="form-group" style="margin-bottom:12px"><label>💬 Notes</label>${meta}` +
+    coms.map(c => `<div style="font-size:12.5px;color:var(--text);background:var(--bg);border-radius:var(--r-sm);padding:6px 10px;margin-bottom:5px"><strong>${esc(nomDe(c.par))}</strong> · ${esc(String(c.quand||'').slice(0,10).split('-').reverse().join('/'))} — ${esc(c.texte)}</div>`).join('') + `</div>`;
+}
 function openTacheModal(defaultStatut='todo') {
   _tacheEditId = null;
   _tachePrioSelected = 'normale';
@@ -10586,6 +10865,7 @@ function openTacheModal(defaultStatut='todo') {
     stateDossier.projets.map(p=>`<option value="${p.id}">${p.nom}</option>`).join('');
   fillAssigneSelect('');
   setPrio('normale');
+  afficherCommentairesTache(null);
   initTacheRattachement(tachePhaseFilter==='GESTION' ? 'gestion' : 'dossier', '', null);
   document.getElementById('tacheModal').classList.add('open');
 }
@@ -10610,6 +10890,7 @@ function openTacheEdit(id) {
     stateDossier.projets.map(p=>`<option value="${p.id}" ${p.id==t.projetId?'selected':''}>${p.nom}</option>`).join('');
   fillAssigneSelect(t.assigneA||'');
   setPrio(t.priorite||'normale');
+  afficherCommentairesTache(t);
   initTacheRattachement(t.type==='gestion' ? 'gestion' : 'dossier', t.categorie||'', t.recurrence||null);
   document.getElementById('tacheModal').classList.add('open');
 }
@@ -10752,6 +11033,11 @@ async function saveTache() {
     categorie: typeT==='gestion' ? categorieT : '',
     recurrence: recurT,
     recurrenceGeneree: !!(avant && avant.recurrenceGeneree),
+    // [Espace assistante] ne pas perdre les notes / traces laissées depuis « Mon espace »
+    commentaires: (avant && avant.commentaires) || [],
+    creePar: (avant && avant.creePar) || '',
+    terminePar: (avant && avant.terminePar) || '',
+    termineLe: (avant && avant.termineLe) || '',
     projetId: typeT==='gestion' ? '' : document.getElementById('tache-projet').value,
     phase:    typeT==='gestion' ? '' : document.getElementById('tache-phase').value,
     assigneA: document.getElementById('tache-assigne').value,
@@ -10953,9 +11239,12 @@ async function toggleTacheFromCal(id) {
   const t = stateDossier.taches[idx];
   t.statut = t.statut==='done'?'todo':'done';
   t.updatedAt = new Date().toISOString();
+  const suivante = t.statut === 'done' ? creerTacheSuivante(t) : null;
   await saveTacheDb(t);
+  if (suivante) await saveTacheDb(suivante);
   renderCalendrier();
   updateTachesBadge();
+  if (suivante) toast_d('✅ Tâche achevée — prochaine échéance le ' + _dateFr(suivante.date) + '.');
 }
 
 
@@ -11581,6 +11870,9 @@ window.addEventListener('message', (ev) => {
 
   if (msg.action === 'open-projet' && msg.id != null) {
     tryRun(() => { try { openProjectModal(msg.id); } catch(e) {} });
+  } else if (msg.action === 'nouveau-projet-devis' && msg.devis) {
+    // Devis signé suivi dans le module « Devis en cours » : on pré-remplit « Nouveau projet »
+    tryRun(() => { try { ouvrirNouveauProjetDepuisDevis(msg.devis); } catch(e) { console.warn('Devis → projet :', e); toast_d('⚠️ Impossible de pré-remplir le projet : ' + e.message); } });
   } else if (msg.action === 'goto-page' && msg.page) {
     tryRun(() => {
       try {
@@ -12815,6 +13107,31 @@ RÈGLES :
 
 // ── Import d'un devis signé : crée le projet ET le devis lié en une opération ──
 let _devisSigneEnAttente = null; // { numero, date, montantHt, tva, objet } — consommé par createProject()
+
+// Reprise d'un devis signé suivi dans le module « Devis en cours » (phenix_relances) :
+// même mécanique que « Importer devis signé → nouveau dossier », sans PDF à redéposer.
+// Le projet n'est créé qu'au clic sur « Créer le projet », après vérification de la fiche.
+function ouvrirNouveauProjetDepuisDevis(dv) {
+  show_d('new', document.querySelectorAll('.nav-item')[6]);
+  devisEffacerMarquesIA();
+  _devisSigneEnAttente = null;
+  ['np-nom','np-client','np-email','np-tel','np-adresse','np-ref'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const set = (id, v) => { const el = document.getElementById(id); if (el && v) { el.value = String(v); devisMarquerIA(el); } };
+  set('np-client', dv.client);
+  set('np-nom', dv.client);
+  set('np-adresse', dv.adresse);
+  set('np-email', dv.email);
+  set('np-tel', dv.tel);
+  const lignes = devisNettoyerLignes(dv.lignes || []);
+  let ht = parseFloat(dv.montantHt) || 0;
+  if (!ht && lignes.length) ht = Math.round(lignes.reduce((s, l) => s + (l.montantHt || 0), 0) * 100) / 100;
+  _devisSigneEnAttente = {
+    numero: dv.numero || '', date: dv.date || '', montantHt: ht, tva: parseFloat(dv.tva) || 20,
+    objet: dv.objet || '', lignes, montantTva: 0, montantTtc: 0, decId: dv.decId || '',
+  };
+  previewCA();
+  toast_d('✅ Devis signé repris — vérifiez la fiche (type, honoraires…) puis cliquez sur "Créer le projet".');
+}
 
 function openImportDevisSigneModal() {
   document.getElementById('devis-signe-file-input').value = '';

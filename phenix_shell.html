@@ -1,6 +1,42 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
+<!--
+══════════════════════════════════════════════════════════════════════
+ HISTORIQUE DES MODIFICATIONS — phenix_shell.html
+──────────────────────────────────────────────────────────────────────
+ 15/10/2026 — FUSION de deux versions du shell, sans perte :
+   • Base conservée = shell « (3) » : module Carnet, connexion SANS empreinte
+     (nettoyage des anciens identifiants biométriques au chargement).
+   • Repris du shell « -2 » (travail du 04/10/2026) : module « Devis en
+     cours & relances » (onglet Devis + badge rouge), notifications de
+     changement de statut (phenix_notifs), liste COMPTES_RELANCES_SEULES
+     (accès restreint), transmission « Signé » vers Dossier et ouverture de
+     dossier depuis Relances.
+   • NON repris volontairement : tout le code de connexion par empreinte
+     (présent seulement dans « -2 », retiré dans « (3) »).
+   Pour retrouver chaque ajout : chercher « [Fusion 15/10/2026] » ou les
+   noms COMPTES_RELANCES_SEULES, startNotifs, navBadgeDevis.
+ 15/10/2026 (2) — PORTAIL « MON ESPACE » de l'assistante (phenix_espace.html) :
+   • Onglet « Espace » (module espace). Pour un compte « Relances seulement »
+     (COMPTES_RELANCES_SEULES) : accès à Espace + Devis uniquement, Espace en
+     page d'accueil.
+   • Notifications de tâches (collection phenix_notifs_taches : tâche créée,
+     terminée ou commentée par l'assistante) : badge rouge sur « Dossier »
+     (navBadgeTaches), remis à zéro à l'ouverture de Dossier.
+   • Le portail peut ouvrir « Devis » (message phenix-espace / open-module).
+   Repérer : [Espace assistante].
+ 15/10/2026 (3) — JOURNAL D'ACTIVITÉ + NOTIFICATIONS CIBLÉES :
+   • Nouveau module « Journal » (phenix_journal.html), visible du seul
+     administrateur (SHELL_ADMIN_EMAIL) : qui a fait quoi, par jour et par personne.
+   • Le shell écrit dans phenix_historique : connexion (une fois par session de
+     navigateur) et ouverture de chaque module (au plus une fois / 30 min).
+   • Notifications de tâches ciblées : champ « pour » (personne à qui la tâche a été
+     assignée). Sans « pour » → l'administrateur. Chacun ne voit (et ne marque lues)
+     que ses propres notifications ; le message « vous a assigné » est ajouté.
+   Repérer : [Journal].
+══════════════════════════════════════════════════════════════════════
+-->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Phénix-Architecture — Suivi collaborateur</title>
@@ -29,6 +65,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 .shell-nav-item.active{background:rgba(74,156,199,.22);color:#fff}
 .shell-nav-item.active::before{content:'';position:absolute;top:-6px;left:50%;transform:translateX(-50%);width:20px;height:3px;background:#4fa8f0;border-radius:0 0 3px 3px}
 .shell-nav-item .ti{font-size:19px;flex-shrink:0}
+.nav-badge{position:absolute;top:-1px;left:calc(50% + 5px);min-width:16px;height:16px;padding:0 4px;border-radius:99px;background:#e0776c;color:#fff;font-size:10px;font-weight:700;line-height:16px;text-align:center;display:none;box-shadow:0 0 0 2px var(--navy)}
 .shell-nav-item span.lbl{display:block;font-size:10px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 
 @media(max-width:480px){
@@ -191,9 +228,11 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 
   <!-- SIDEBAR -->
   <div class="shell-nav">
-    <div class="shell-nav-item active" data-view="module" data-module="dossier" data-tip="Tableau de bord" onclick="shellOpenModule('dossier',this)"><i class="ti ti-layout-dashboard"></i><span class="lbl">Dossier</span></div>
+    <div class="shell-nav-item active" data-view="module" data-module="dossier" data-tip="Tableau de bord" onclick="shellOpenModule('dossier',this)"><i class="ti ti-layout-dashboard"></i><span class="lbl">Dossier</span><span class="nav-badge" id="navBadgeTaches">0</span></div>
     <div class="shell-nav-item" data-view="dashboard" data-tip="Suivi d'équipe" onclick="shellShowView('dashboard',this)"><i class="ti ti-list-check"></i><span class="lbl">Suivi</span></div>
     <div class="shell-nav-item" data-view="module" data-module="chiffrage" data-tip="Chiffrage" onclick="shellOpenModule('chiffrage',this)"><i class="ti ti-calculator"></i><span class="lbl">Chiffrage</span></div>
+    <div class="shell-nav-item" data-view="module" data-module="relances" data-tip="Devis en cours & relances" onclick="shellOpenModule('relances',this)"><i class="ti ti-file-invoice"></i><span class="lbl">Devis</span><span class="nav-badge" id="navBadgeDevis">0</span></div>
+    <div class="shell-nav-item" data-view="module" data-module="espace" data-tip="Espace assistante" onclick="shellOpenModule('espace',this)"><i class="ti ti-headset"></i><span class="lbl">Espace</span></div>
     <div class="shell-nav-item" data-view="module" data-module="carnet" data-tip="Carnet de projet" onclick="shellOpenModule('carnet',this)"><i class="ti ti-book-2"></i><span class="lbl">Carnet</span></div>
     <div class="shell-nav-item" data-view="module" data-module="contrat" data-tip="Contrats" onclick="shellOpenModule('contrat',this)"><i class="ti ti-signature"></i><span class="lbl">Contrats</span></div>
     <div class="shell-nav-item" data-view="module" data-module="planning" data-tip="Planning de chantier" onclick="shellOpenModule('planning',this)"><i class="ti ti-calendar-time"></i><span class="lbl">Planning</span></div>
@@ -201,6 +240,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
     <div class="shell-nav-item" data-view="module" data-module="permis" data-tip="Permis de construire" onclick="shellOpenModule('permis',this)"><i class="ti ti-clipboard-check"></i><span class="lbl">Permis</span></div>
     <div class="shell-nav-item" data-view="module" data-module="financement" data-tip="Financement" onclick="shellOpenModule('financement',this)"><i class="ti ti-building-bank"></i><span class="lbl">Financ.</span></div>
     <div class="shell-nav-item" data-view="module" data-module="annuaire" data-tip="Annuaire artisans" onclick="shellOpenModule('annuaire',this)"><i class="ti ti-address-book"></i><span class="lbl">Artisan</span></div>
+    <div class="shell-nav-item" data-view="module" data-module="journal" data-tip="Journal d'activité" onclick="shellOpenModule('journal',this)"><i class="ti ti-history"></i><span class="lbl">Journal</span></div>
     <div class="shell-nav-item" data-view="module" data-module="parametres" data-tip="Paramètres" onclick="shellOpenModule('parametres',this)"><i class="ti ti-settings"></i><span class="lbl">Paramètres</span></div>
   </div>
 
@@ -249,7 +289,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 
 <script type="module">
 import { initializeApp }   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-import { getFirestore, collection, onSnapshot, doc, updateDoc }
+import { getFirestore, collection, onSnapshot, doc, updateDoc, setDoc, query, where }
                            from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged }
                            from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
@@ -275,6 +315,29 @@ try {
 
 const db   = getFirestore(app);
 const auth = getAuth(app);
+const SHELL_ADMIN_EMAIL = 'contact@phenixarchitecte.fr';   // [Journal] seul compte qui voit le module Journal
+
+// ── [Journal] historique d'actions daté — collection phenix_historique ──
+//   Une ligne par action : qui (e-mail), quand (ts + jour), dans quel module, quoi.
+//   Jamais de montants ni de données sensibles : uniquement des libellés.
+//   Lecture : module « Journal » (phenix_journal.html), réservé à l'administrateur.
+window.phenixJournal = function(module, action, objet, libelle, extra){
+  try{
+    const u = auth.currentUser; if(!u || !u.email) return;
+    const now = new Date();
+    const jour = now.toLocaleDateString('sv-SE', { timeZone:'Europe/Paris' });   // AAAA-MM-JJ
+    const email = String(u.email).toLowerCase();
+    const lib = String(libelle == null ? '' : libelle).slice(0, 200);
+    const cle = [email, module, action, objet, lib].join('|');
+    window.__jrnLast = window.__jrnLast || {};
+    if(window.__jrnLast[cle] && now.getTime() - window.__jrnLast[cle] < 20000) return;   // anti-doublon (20 s)
+    window.__jrnLast[cle] = now.getTime();
+    const e = { ts: now.toISOString(), jour: jour, email: email, module: module, action: action, objet: objet || '', libelle: lib };
+    if(extra) Object.keys(extra).forEach(function(k){ if(extra[k] !== undefined && extra[k] !== null && extra[k] !== '') e[k] = typeof extra[k] === 'string' ? extra[k].slice(0, 200) : extra[k]; });
+    const id = now.getTime().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
+    setDoc(doc(db, 'phenix_historique', id), e).catch(function(){});
+  }catch(err){}
+};
 window._auth = { login:(e,p)=>signInWithEmailAndPassword(auth,e,p), current:()=>auth.currentUser };
 
 // ─── état global ───────────────────────────────────────────────
@@ -284,6 +347,8 @@ let me       = '';   // email du collaborateur connecté
 let curFilter = 'all';
 let unsubProjets = null;
 let unsubTaches  = null;
+let unsubNotifs  = null;
+let unsubNotifsT = null;   // [Espace assistante] notifications de tâches
 
 // ─── phases ────────────────────────────────────────────────────
 const PHASES = ['ESQ','APS','APD','PC','DCE','ACT','DET','AOR'];
@@ -306,14 +371,28 @@ onAuthStateChanged(auth, user => {
     ov.style.display = 'none';
     document.getElementById('shell-root').style.display = '';
     document.getElementById('main-content').style.display = '';
-    document.getElementById('userChip').textContent = me.split('@')[0];startListeners();
-    // Dossier = page d'accueil du shell, ouverte automatiquement à la connexion
-    shellOpenModule('dossier', document.querySelector('.shell-nav-item[data-module="dossier"]'));} else {
+    document.getElementById('userChip').textContent = me.split('@')[0];
+    // [Fusion 15/10/2026] Comptes « Relances seulement » : pas d'écouteurs Dossier,
+    // le module Relances est leur page d'accueil. Notifications pour le compte principal.
+    const _restreint = window.appliquerRestrictionsShell ? window.appliquerRestrictionsShell(me) : false;
+    { const nj = document.querySelector('.shell-nav-item[data-module="journal"]'); if (nj) nj.style.display = (me === SHELL_ADMIN_EMAIL.toLowerCase()) ? '' : 'none'; }   // [Journal]
+    try { if (!sessionStorage.getItem('phenix_jrn_conn')) { sessionStorage.setItem('phenix_jrn_conn', '1'); window.phenixJournal('shell', 'connexion', 'application', 'Connexion à Phénix'); } } catch (e) {}
+    if (!_restreint) { startListeners(); startNotifs(); startNotifsTaches(); }
+    // Dossier = page d'accueil du shell, ouverte automatiquement à la connexion (Relances pour un compte restreint)
+    const _accueil = _restreint ? 'espace' : 'dossier';
+    shellOpenModule(_accueil, document.querySelector('.shell-nav-item[data-module="' + _accueil + '"]'));
+    window._accueilFait = true;   // [Espace assistante] à partir d'ici, ouvrir Dossier = avoir vu les notifications de tâches
+  } else {
+    window._accueilFait = false;
     ov.style.display = 'flex';
     document.getElementById('shell-root').style.display = 'none';
     document.getElementById('main-content').style.display = 'none';
     if (unsubProjets) { unsubProjets(); unsubProjets = null; }
     if (unsubTaches)  { unsubTaches();  unsubTaches  = null; }
+    if (unsubNotifs)  { unsubNotifs();  unsubNotifs  = null; }
+    if (unsubNotifsT) { unsubNotifsT(); unsubNotifsT = null; }   // [Espace assistante]
+    { const b2 = document.getElementById('navBadgeTaches'); if (b2) b2.style.display = 'none'; }
+    { const b = document.getElementById('navBadgeDevis'); if (b) b.style.display = 'none'; }
   }
 });
 
@@ -344,6 +423,71 @@ window.doLogin = function() {
 window.doLogout = function() {
   signOut(auth);
 };
+
+// ─── Notifications : la secrétaire a changé le statut d'un devis ───
+// Badge rouge sur « Devis » + message à l'arrivée d'une nouvelle mise à jour.
+function startNotifs() {
+  if (unsubNotifs) { unsubNotifs(); unsubNotifs = null; }
+  let premier = true;
+  const LABEL = { en_attente:'En attente', refuse:'Refusé', accepte:'Accepté' };
+  try {
+    unsubNotifs = onSnapshot(query(collection(db, 'phenix_notifs'), where('lu', '==', false)), snap => {
+      const n = snap.size != null ? snap.size : snap.docs.length;
+      const b = document.getElementById('navBadgeDevis');
+      if (b) { b.textContent = n > 9 ? '9+' : String(n); b.style.display = n ? 'block' : 'none'; }
+      if (premier) {
+        if (n) toast('🔔 ' + n + ' changement' + (n > 1 ? 's' : '') + ' de statut de devis à consulter');
+      } else {
+        snap.docChanges().forEach(ch => {
+          if (ch.type !== 'added') return;
+          const d = ch.doc.data() || {};
+          const qui = String(d.par || '').split('@')[0] || 'La secrétaire';
+          toast('🔔 ' + qui + ' : ' + (d.client || 'Devis') + ' → ' + (LABEL[d.vers] || d.vers || ''));
+        });
+      }
+      premier = false;
+    }, err => console.warn('Notifications :', err && err.message));
+  } catch (e) { console.warn('Notifications :', e); }
+}
+
+// ─── [Espace assistante] Notifications de tâches ───
+// L'assistante crée / termine / commente une tâche : badge rouge sur « Dossier » + message.
+// Les notifications sont marquées lues à l'ouverture de Dossier (voir shellOpenModule).
+let _notifsTachesNonLues = [];
+function startNotifsTaches() {
+  if (unsubNotifsT) { unsubNotifsT(); unsubNotifsT = null; }
+  let premier = true;
+  const VERBE = { creee:'a créé la tâche', termine:'a terminé la tâche', note:'a commenté la tâche', assignee:'a assigné la tâche' };
+  // [Journal] une notification est pour la personne désignée (« pour ») ; sans « pour » : l'administrateur
+  const pourMoi = d => d.pour ? String(d.pour).toLowerCase() === me : me === SHELL_ADMIN_EMAIL.toLowerCase();
+  try {
+    unsubNotifsT = onSnapshot(query(collection(db, 'phenix_notifs_taches'), where('lu', '==', false)), snap => {
+      const docs = []; snap.forEach(d => { const x = { _id: d.id, ...(d.data() || {}) }; if (pourMoi(x)) docs.push(x); });
+      _notifsTachesNonLues = docs;
+      const n = docs.length;
+      const b = document.getElementById('navBadgeTaches');
+      if (b) { b.textContent = n > 9 ? '9+' : String(n); b.style.display = n ? 'block' : 'none'; }
+      if (premier) {
+        if (n) toast('🔔 ' + n + ' mise' + (n > 1 ? 's' : '') + ' à jour de tâches par l\'assistante');
+      } else {
+        snap.docChanges().forEach(ch => {
+          if (ch.type !== 'added') return;
+          const d = ch.doc.data() || {};
+          if (!pourMoi(d)) return;
+          const qui = String(d.par || '').split('@')[0] || 'L\'assistante';
+          toast('🔔 ' + qui + ' ' + (VERBE[d.type] || 'a modifié la tâche') + ' « ' + (d.titre || '') + ' »');
+        });
+      }
+      premier = false;
+    }, err => console.warn('Notifications tâches :', err && err.message));
+  } catch (e) { console.warn('Notifications tâches :', e); }
+}
+function marquerNotifsTachesLues() {
+  const l = _notifsTachesNonLues; _notifsTachesNonLues = [];
+  const b = document.getElementById('navBadgeTaches'); if (b) b.style.display = 'none';
+  l.forEach(n => { try { updateDoc(doc(db, 'phenix_notifs_taches', n._id), { lu: true }); } catch (e) {} });
+}
+window.marquerNotifsTachesLues = marquerNotifsTachesLues;
 
 // ─── listeners Firebase ─────────────────────────────────────────
 function startListeners() {
@@ -577,6 +721,9 @@ const MODULES = {
   comptabilite: { src: 'phenix_dossier.html',            title: 'Comptabilité', gotoPage: 'comptabilite' },
   chiffrage:    { src: 'phenix_chiffrage.html',          title: 'Chiffrage — métré & devis artisans' },
   carnet:       { src: 'phenix_carnet.html',            title: 'Carnet — projet client et choix' },
+  relances:     { src: 'phenix_relances.html',           title: 'Devis en cours — relances' },
+  journal:      { src: 'phenix_journal.html',            title: 'Journal d\'activité — qui a fait quoi' },
+  espace:       { src: 'phenix_espace.html',             title: 'Espace assistante — tâches et projets' },
   contrat:      { src: 'phenix_contrat.html',            title: 'Contrats — MOE / contractant général' },
   planning:     { src: 'phenix_planning.html',           title: 'Planning — Gantt de chantier' },
   chantier:     { src: 'phenix_chantier.html',           title: 'Chantier — suivi de travaux' },
@@ -584,6 +731,28 @@ const MODULES = {
   financement:  { src: 'phenix_financement.html',        title: 'Dossier de financement' },
   annuaire:     { src: 'Phenix_Annuaire_Artisans.html',  title: 'Annuaire artisans' },
   parametres:   { src: null,                              title: 'Paramètres' },
+};
+
+// ════════════════════════════════════════════════════════════
+//  COMPTES « RELANCES SEULEMENT » (ex. secrétaire indépendante)
+//  Ajoutez ici l'e-mail Firebase de la personne : elle ne voit alors que
+//  le module Relances (ni Dossier, ni compta, ni chiffrage, ni suivi).
+//  ⚠️ C'est une restriction d'AFFICHAGE, comme celle de l'alternante dans
+//  Dossier : elle ne remplace pas les règles de sécurité Firestore.
+// ════════════════════════════════════════════════════════════
+const COMPTES_MODULES_AUTORISES = ['espace', 'relances'];   // [Espace assistante] modules visibles pour ces comptes
+const COMPTES_RELANCES_SEULES = [
+  // 'secretaire@exemple.fr',
+];
+window._phenixRestreint = false;
+window.appliquerRestrictionsShell = function(email) {
+  const e = String(email || '').toLowerCase();
+  window._phenixRestreint = COMPTES_RELANCES_SEULES.map(x => String(x).toLowerCase()).indexOf(e) >= 0;
+  if (!window._phenixRestreint) return false;
+  document.querySelectorAll('.shell-nav-item').forEach(n => {
+    if (COMPTES_MODULES_AUTORISES.indexOf(n.getAttribute('data-module')) < 0) n.style.display = 'none';
+  });
+  return true;
 };
 
 let shellCurrentFrame = null;   // référence à l'iframe actuellement chargée
@@ -622,6 +791,7 @@ window._phenixBroadcastAutoLogin = function() {
 };
 
 window.shellShowView = function(view, el) {
+  if (window._phenixRestreint && view !== 'module') return;
   document.querySelectorAll('.shell-view').forEach(v => v.classList.remove('active'));
   document.querySelectorAll('.shell-nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('shell-view-' + view).classList.add('active');
@@ -631,6 +801,9 @@ window.shellShowView = function(view, el) {
 window.shellOpenModule = function(name, el, order) {
   const mod = MODULES[name];
   if (!mod) return;
+  if (window._phenixRestreint && COMPTES_MODULES_AUTORISES.indexOf(name) < 0) return;
+  if (name === 'journal' && me !== SHELL_ADMIN_EMAIL.toLowerCase()) return;   // [Journal]
+  if (name === 'dossier' && !window._phenixRestreint && window._accueilFait && window.marquerNotifsTachesLues) window.marquerNotifsTachesLues();   // [Espace assistante]
   shellShowView('module', el);
   const container = document.getElementById('module-frame-container');
 
@@ -642,9 +815,15 @@ window.shellOpenModule = function(name, el, order) {
 
   // Recharger l'iframe seulement si on change de module (évite de perdre l'état en cours)
   if (shellCurrentModule !== name || !shellCurrentFrame) {
-    container.innerHTML = `<iframe class="module-frame" id="module-iframe" src="${mod.src}"></iframe>`;
+    // Compte « Relances seulement » : le module le sait (pas de création de projet, pas d'accès à Dossier)
+    const _src = ((name === 'relances' || name === 'espace') && window._phenixRestreint) ? mod.src + '?restreint=1' : mod.src;
+    container.innerHTML = `<iframe class="module-frame" id="module-iframe" src="${_src}"></iframe>`;
     shellCurrentFrame = document.getElementById('module-iframe');
     shellCurrentModule = name;
+    try {   // [Journal] ouverture de module (au plus 1 fois / 30 min / module)
+      window.__jrnMod = window.__jrnMod || {};
+      if (!window.__jrnMod[name] || Date.now() - window.__jrnMod[name] > 1800000) { window.__jrnMod[name] = Date.now(); if (name !== 'journal') window.phenixJournal('shell', 'ouvre', 'module', mod.title); }
+    } catch (e) {}
     window._phenixBroadcastAutoLogin();
   }
 
@@ -686,6 +865,29 @@ window.addEventListener('message', (ev) => {
   if ((msg.source === 'phenix-dossier' || msg.source === 'phenix-chantier') && msg.action === 'open-module' && MODULES[msg.module]) {
     const navEl = document.querySelector('.shell-nav-item[data-module="' + msg.module + '"]');
     shellOpenModule(msg.module, navEl || null);
+  }
+  // Devis signé suivi dans « Devis en cours » : Dossier s'ouvre sur « Nouveau projet », pré-rempli
+  if (msg.source === 'phenix-relances' && msg.action === 'creer-projet-devis' && msg.devis && !window._phenixRestreint) {
+    const navEl = document.querySelector('.shell-nav-item[data-module="dossier"]');
+    const order = { source:'phenix-shell', action:'nouveau-projet-devis', devis: msg.devis };
+    const dejaDossier = shellCurrentModule === 'dossier' && shellCurrentFrame;
+    shellOpenModule('dossier', navEl, order);
+    if (dejaDossier) {
+      try { shellCurrentFrame.contentWindow.postMessage(order, '*'); } catch(e) {}
+      shellPendingOrder = null;
+    }
+    return;
+  }
+  // [Espace assistante] le portail demande à ouvrir le module Devis
+  if (msg.source === 'phenix-espace' && msg.action === 'open-module' && MODULES[msg.module] && (!window._phenixRestreint || COMPTES_MODULES_AUTORISES.indexOf(msg.module) >= 0)) {
+    const navEl = document.querySelector('.shell-nav-item[data-module="' + msg.module + '"]');
+    shellOpenModule(msg.module, navEl || null);
+    return;
+  }
+  // Relances demande à ouvrir le dossier d'un projet dans Dossier
+  if (msg.source === 'phenix-relances' && msg.action === 'open-projet' && msg.id && !window._phenixRestreint) {
+    shellOpenProjet(String(msg.id), '');
+    return;
   }
 });
 </script>

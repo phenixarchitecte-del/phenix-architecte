@@ -1,6 +1,12 @@
 <!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Phénix-Architecture · Carnet de projet</title>
+<!--
+ HISTORIQUE DES MODIFICATIONS — phenix_carnet.html
+ 15/10/2026 — JOURNAL D'ACTIVITÉ : enregistrement de la fiche, transfert vers
+ Chantier, choix du client et notes du carnet écrivent une ligne datée dans
+ phenix_historique (module Journal). Aucune autre modification. Repérer : [Journal].
+-->
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap">
 <style>
 /* Concept : un fascicule de chantier. Bandeau de couverture, onglets par lot, chaque onglet = quoi / comment / vigilance / prix. Bleu nuit Phénix, dessins techniques à l'échelle. */
@@ -2021,6 +2027,43 @@ window._fb = {
     };
   }
 };
+
+// ── [Journal] historique d'actions daté — collection phenix_historique ──
+//   Une ligne par action : qui (e-mail), quand (ts + jour), dans quel module, quoi.
+//   Jamais de montants ni de données sensibles : uniquement des libellés.
+//   Lecture : module « Journal » (phenix_journal.html), réservé à l'administrateur.
+window.phenixJournal = function(module, action, objet, libelle, extra){
+  try{
+    const u = auth.currentUser; if(!u || !u.email) return;
+    const now = new Date();
+    const jour = now.toLocaleDateString('sv-SE', { timeZone:'Europe/Paris' });   // AAAA-MM-JJ
+    const email = String(u.email).toLowerCase();
+    const lib = String(libelle == null ? '' : libelle).slice(0, 200);
+    const cle = [email, module, action, objet, lib].join('|');
+    window.__jrnLast = window.__jrnLast || {};
+    if(window.__jrnLast[cle] && now.getTime() - window.__jrnLast[cle] < 20000) return;   // anti-doublon (20 s)
+    window.__jrnLast[cle] = now.getTime();
+    const e = { ts: now.toISOString(), jour: jour, email: email, module: module, action: action, objet: objet || '', libelle: lib };
+    if(extra) Object.keys(extra).forEach(function(k){ if(extra[k] !== undefined && extra[k] !== null && extra[k] !== '') e[k] = typeof extra[k] === 'string' ? extra[k].slice(0, 200) : extra[k]; });
+    const id = now.getTime().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
+    setDoc(doc(db, 'phenix_historique', id), e).catch(function(){});
+  }catch(err){}
+};
+
+// ── [Journal] enveloppes autour des écritures du carnet ──
+(function(){
+  const fb = window._fb; if(!fb) return;
+  const si = fb.saveIndex, ex = fb.exportToChantier, mk = fb.mkDb;
+  fb.saveIndex = function(pid, data){ const r = si.apply(this, arguments); try{ window.phenixJournal('carnet', 'enregistre', 'carnet', (data && (data.nom || data.clients)) || ('#' + pid), { projetId:String(pid) }); }catch(e){} return r; };
+  fb.exportToChantier = function(pid, data){ const r = ex.apply(this, arguments); try{ window.phenixJournal('carnet', 'transfere', 'carnet → chantier', '#' + pid, { projetId:String(pid) }); }catch(e){} return r; };
+  fb.mkDb = function(cid){
+    const d = mk.apply(this, arguments);
+    const doc0 = d.doc, col0 = d.collection;
+    d.doc = function(p){ const o = doc0.apply(this, arguments); if(p === 'projet/choix'){ const s0 = o.set; o.set = function(){ const r = s0.apply(this, arguments); try{ window.phenixJournal('carnet', 'enregistre', 'choix du client', '#' + cid, { projetId:String(cid) }); }catch(e){} return r; }; } return o; };
+    d.collection = function(){ const o = col0.apply(this, arguments); const a0 = o.add; o.add = function(){ const r = a0.apply(this, arguments); try{ window.phenixJournal('carnet', 'note', 'journal du carnet', '#' + cid, { projetId:String(cid) }); }catch(e){} return r; }; return o; };
+    return d;
+  };
+})();
 window.dispatchEvent(new Event('fb-ready'));
 </script>
 

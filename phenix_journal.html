@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+<title>Phénix-Architecture · Journal d'activité</title>
+<!--
+══════════════════════════════════════════════════════════════════════
+ PHÉNIX — JOURNAL D'ACTIVITÉ
+──────────────────────────────────────────────────────────────────────
+ 15/10/2026 — Création.
+   Qui a fait quoi, et quand, dans toute la suite Phénix (Dossier, Chiffrage,
+   Chantier, Planning, Carnet, Devis en cours, Mon espace, connexions).
+   • Source : collection phenix_historique, alimentée par window.phenixJournal(...)
+     dans chaque module. Une ligne = une action : e-mail, date/heure, module, action,
+     objet, libellé, projet. AUCUN montant n'y est enregistré.
+   • Filtres : Aujourd'hui / Hier / Avant-hier / 7 jours / 30 jours / un jour précis,
+     par personne, par module, recherche libre. Export CSV de la vue affichée.
+   • Réservé à l'administrateur (ADMIN_EMAIL). C'est une restriction d'AFFICHAGE :
+     seules les règles Firestore protègent réellement la collection (voir les règles
+     proposées : lecture admin uniquement, écriture = création seule par tout compte connecté).
+ Réglages : constantes NOMS et ADMIN_EMAIL en haut du script.
+══════════════════════════════════════════════════════════════════════
+-->
+<script type="module">
+import { initializeApp }       from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getFirestore, collection, doc, onSnapshot, setDoc, query, where, orderBy, limit }
+                               from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged }
+                               from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { initializeAppCheck, ReCaptchaV3Provider }
+                               from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js';
+
+const firebaseConfig = {
+  apiKey:            "AIzaSyCjNKNvS6p3nqE6-_Gw9I397ZtXm2FG1ew",
+  authDomain:        "phenix-architecte-9151b.firebaseapp.com",
+  projectId:         "phenix-architecte-9151b",
+  storageBucket:     "phenix-architecte-9151b.firebasestorage.app",
+  messagingSenderId: "811231684720",
+  appId:             "1:811231684720:web:413fa324ae43c07607acb5"
+};
+const app  = initializeApp(firebaseConfig);
+const db   = getFirestore(app);
+const auth = getAuth(app);
+try {
+  initializeAppCheck(app, { provider: new ReCaptchaV3Provider('6LeObWktAAAAAL9eyppDRtLp5yZTyBaF4ZNKXNIO'), isTokenAutoRefreshEnabled: true });
+} catch (e) { console.warn('App Check non initialisé :', e); }
+
+// Connexion automatique transmise par le Shell
+window.addEventListener('message', function(ev){
+  var d = ev.data;
+  if (d && d.source === 'phenix-shell' && d.action === 'auto-login' && d.email && d.password) {
+    signInWithEmailAndPassword(auth, d.email, d.password).catch(function(){});
+  }
+});
+try { window.parent.postMessage({ source:'phenix-module', readyForLogin:true }, '*'); } catch(e) {}
+
+window.phenixDoLogin = function(){
+  const email = (document.getElementById('pl-email').value || '').trim();
+  const pwd   = document.getElementById('pl-pwd').value || '';
+  const err   = document.getElementById('pl-err'); if (err) err.textContent = '';
+  const btn   = document.getElementById('pl-btn'); if (btn) btn.disabled = true;
+  signInWithEmailAndPassword(auth, email, pwd).catch(e => {
+    const c = (e && e.code) || '';
+    if (err) err.textContent =
+      (c.indexOf('invalid-credential')>=0 || c.indexOf('wrong-password')>=0 || c.indexOf('user-not-found')>=0) ? 'E-mail ou mot de passe incorrect.' :
+      c.indexOf('too-many-requests')>=0 ? 'Trop de tentatives, réessayez plus tard.' :
+      ('Erreur : ' + (c || (e && e.message) || ''));
+  }).finally(() => { if (btn) btn.disabled = false; });
+};
+
+// Écoute de la fenêtre de dates demandée (champ « jour » ≥ depuis)
+let unsub = null;
+window._jr = {
+  ecouter(depuis, onData, onErr){
+    if (unsub) { unsub(); unsub = null; }
+    unsub = onSnapshot(query(collection(db, 'phenix_historique'), where('jour', '>=', depuis), orderBy('jour', 'desc'), limit(3000)),
+      snap => { const l = []; snap.forEach(d => { const x = d.data(); x._id = d.id; l.push(x); }); onData(l); },
+      err => onErr(err));
+  },
+  arreter(){ if (unsub) { unsub(); unsub = null; } },
+  logout: () => signOut(auth)
+};
+onAuthStateChanged(auth, user => {
+  const ov = document.getElementById('phenix-login');
+  if (user) { if (ov) ov.style.display = 'none'; window.J.setUser(user.email || ''); }
+  else { window._jr.arreter(); window.J.setUser(''); if (ov) ov.style.display = 'flex'; }
+});
+</script>
+<style>
+:root{
+  --bg:#0a1628; --bg2:#101f38; --bg3:#16283f; --card:rgba(16,31,56,.90);
+  --text:#e5ecf3; --text2:#9fb2c6; --text3:#66809e; --border:rgba(120,170,220,.18);
+  --accent:#4fa8f0; --accent2:#2f6fc0; --accent-bg:rgba(79,168,240,.14);
+  --green:#4fd18b; --green-bg:rgba(46,150,100,.20); --amber:#e6b95c; --amber-bg:rgba(200,150,60,.20);
+  --red:#e0776c; --red-bg:rgba(200,90,80,.20); --violet:#c9a8ff;
+  --font-serif:'DM Serif Display',Georgia,serif; --font-sans:'DM Sans',system-ui,sans-serif;
+  --r-sm:6px; --r-md:10px; --r-lg:14px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--font-sans);background:linear-gradient(180deg,#0a1628,#0d1c33);color:var(--text);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+button{font-family:inherit;cursor:pointer}
+.wrap{max-width:980px;margin:0 auto;padding:16px 14px 80px}
+.head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:14px}
+.head h1{font-family:var(--font-serif);font-weight:400;font-size:26px;color:#fff}.head h1 span{color:var(--accent)}
+.sub{font-size:12px;color:var(--text3);margin-top:2px}
+.icon-btn{width:40px;height:40px;border-radius:var(--r-md);border:1px solid var(--border);background:var(--card);color:var(--text2);font-size:18px;display:flex;align-items:center;justify-content:center}
+.icon-btn:hover{color:#fff;border-color:var(--accent)}
+.bar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;align-items:center}
+.opt{padding:8px 13px;border-radius:99px;border:1.5px solid var(--border);background:var(--bg2);color:var(--text2);font-size:13px;font-weight:600;min-height:36px;white-space:nowrap}
+.opt:hover{border-color:var(--accent)}
+.opt.sel{background:var(--accent-bg);border-color:var(--accent);color:#fff}
+.field{padding:8px 12px;border-radius:var(--r-md);border:1.5px solid var(--border);background:var(--bg2);color:var(--text);font-size:13px;font-family:inherit;min-height:36px}
+.field:focus{outline:none;border-color:var(--accent)}
+.lbl{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);margin:12px 0 5px;display:block}
+.people{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px;margin-bottom:14px}
+.pc{background:var(--card);border:1.5px solid var(--border);border-radius:var(--r-lg);padding:11px 13px;cursor:pointer;text-align:left;color:var(--text)}
+.pc:hover{border-color:var(--accent)} .pc.sel{border-color:var(--accent);background:#12233f}
+.pc .n{display:flex;align-items:center;gap:8px;font-weight:600;font-size:15px;color:#fff}
+.dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.pc .k{font-size:12px;color:var(--text2);margin-top:4px}
+.pc .t{font-size:11px;color:var(--text3);margin-top:3px}
+.day{margin-top:18px}
+.day h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);font-weight:600;padding-bottom:6px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;gap:8px}
+.day h2 b{color:#fff;font-weight:600}
+.row{display:grid;grid-template-columns:48px 1fr;gap:10px;padding:9px 0;border-bottom:1px solid rgba(120,170,220,.07)}
+.row .h{font-size:12px;color:var(--text3);font-variant-numeric:tabular-nums;padding-top:2px}
+.row .w{font-size:13px;color:var(--text)}
+.who{font-weight:600}
+.act{display:inline-block;font-size:11px;font-weight:700;padding:1px 8px;border-radius:99px;margin:0 4px 0 2px;background:rgba(255,255,255,.08);color:var(--text2)}
+.act.cree,.act.ajoute{background:var(--green-bg);color:var(--green)}
+.act.termine,.act.signe{background:var(--green-bg);color:var(--green)}
+.act.supprime,.act.refuse{background:var(--red-bg);color:var(--red)}
+.act.modifie,.act.enregistre,.act.statut,.act.assigne{background:var(--accent-bg);color:var(--accent)}
+.act.note,.act.relance{background:rgba(180,140,240,.18);color:var(--violet)}
+.act.consulte,.act.connexion,.act.ouvre{background:rgba(255,255,255,.06);color:var(--text3)}
+.lib{color:#fff}
+.det{color:var(--text3);font-size:12px}
+.tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}
+.tag{font-size:11px;padding:2px 8px;border-radius:99px;background:rgba(255,255,255,.07);color:var(--text2)}
+.tag.p{background:var(--accent-bg);color:var(--accent)}
+.empty{text-align:center;padding:40px 16px;color:var(--text3)}
+.banner{background:var(--amber-bg);border:1px solid rgba(230,185,92,.4);color:var(--amber);border-radius:var(--r-md);padding:10px 12px;font-size:12px;margin-bottom:12px}
+.banner.red{background:var(--red-bg);border-color:rgba(224,119,108,.5);color:#ffb3aa}
+@media(max-width:560px){.row{grid-template-columns:42px 1fr}}
+</style>
+</head>
+<body>
+
+<div id="phenix-login" style="display:flex;position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#0a1628,#12233f,#2f6fc0);align-items:center;justify-content:center;padding:20px;font-family:'DM Sans',sans-serif">
+  <div style="background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.18);border-radius:16px;padding:34px 28px;max-width:360px;width:100%;text-align:center">
+    <div style="font-family:'DM Serif Display',Georgia,serif;font-size:30px;color:#fff;margin-bottom:4px">Phénix<span style="color:#4fa8f0">-Architecture</span></div>
+    <div style="font-size:11px;color:rgba(255,255,255,.5);letter-spacing:.12em;text-transform:uppercase;margin-bottom:26px">Journal d'activité</div>
+    <input id="pl-email" type="email" autocomplete="username" placeholder="E-mail" style="width:100%;padding:12px 14px;margin-bottom:10px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;font-size:15px;font-family:inherit">
+    <input id="pl-pwd" type="password" autocomplete="current-password" placeholder="Mot de passe" onkeydown="if(event.key==='Enter')phenixDoLogin()" style="width:100%;padding:12px 14px;margin-bottom:10px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;font-size:15px;font-family:inherit">
+    <div id="pl-err" style="color:#ff9a8f;font-size:12px;min-height:16px;margin-bottom:8px"></div>
+    <button id="pl-btn" onclick="phenixDoLogin()" style="width:100%;padding:13px;border:none;border-radius:9px;background:#2f6fc0;color:#fff;font-size:15px;font-weight:600">Se connecter</button>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="head">
+    <div>
+      <h1>Journal <span>d'activité</span></h1>
+      <div class="sub" id="who">…</div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="icon-btn" title="Exporter la vue en CSV" onclick="J.csv()"><i class="ti ti-download"></i></button>
+      <button class="icon-btn" title="Se déconnecter" onclick="J.logout()"><i class="ti ti-logout"></i></button>
+    </div>
+  </div>
+
+  <div id="err"></div>
+  <div id="app"></div>
+</div>
+
+<script>
+(function(){
+'use strict';
+/* ═══════════ RÉGLAGES ═══════════ */
+var ADMIN_EMAIL = 'contact@phenixarchitecte.fr';
+// Noms affichés (e-mail en minuscules → nom). Les autres comptes s'affichent avec leur nom saisi ou la partie avant « @ ».
+var NOMS = {
+  'contact@phenixarchitecte.fr':   'Maxime',
+  'c.gironde@phenixarchitecte.fr': 'Cassandra'
+  // , 'assistante@exemple.fr': 'Assistante'
+  // , 'kevin@exemple.fr':      'Kévin'
+};
+var COULEURS = ['#4fa8f0','#4fd18b','#e6b95c','#e0776c','#c9a8ff','#5fd0d0','#f08fc0','#a8c46a'];
+var VERBES = { cree:'A créé', ajoute:'A ajouté', modifie:'A modifié', enregistre:'A enregistré', supprime:'A supprimé', termine:'A terminé', demarre:'A démarré',
+  rouvre:'A rouvert', assigne:'A assigné', note:'A ajouté une note', consulte:'A consulté', relance:'A relancé', signe:'Devis signé', refuse:'Devis perdu / refusé',
+  statut:'A changé le statut', exporte:'A exporté', transfere:'A transféré', connexion:'S\'est connecté(e)', ouvre:'A ouvert' };
+var MODULES = { dossier:'Dossier', compta:'Comptabilité', chiffrage:'Chiffrage', chantier:'Chantier', planning:'Planning', carnet:'Carnet',
+  relances:'Devis en cours', espace:'Mon espace', shell:'Phénix', contrat:'Contrats', permis:'Permis', financement:'Financement' };
+var BRUIT = ['consulte','connexion','ouvre'];
+
+var $ = function(id){ return document.getElementById(id); };
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function parisJour(d){ return d.toLocaleDateString('sv-SE', { timeZone:'Europe/Paris' }); }
+function addJours(j, n){ var d = new Date(j + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+function jourLong(j){ var d = new Date(j + 'T12:00:00Z'); var s = d.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long', year:'numeric', timeZone:'UTC' }); return s.charAt(0).toUpperCase() + s.slice(1); }
+function heure(ts){ var d = new Date(ts); return isNaN(d) ? '' : d.toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit', timeZone:'Europe/Paris' }); }
+function nomDe(e){ var m = String(e.email || '').toLowerCase(); return NOMS[m] || e.nom || (m.split('@')[0] || '?').replace(/^./, function(c){ return c.toUpperCase(); }); }
+function couleur(m){ var h = 0; String(m).split('').forEach(function(c){ h = (h * 31 + c.charCodeAt(0)) >>> 0; }); return COULEURS[h % COULEURS.length]; }
+
+var S = { user:'', admin:false, periode:'aujourdhui', jourPrecis:'', personne:'', module:'', q:'', masquer:false, data:[], depuis:'', pret:false };
+
+function bornes(){   // [du, au] inclus, au format AAAA-MM-JJ
+  var t = parisJour(new Date());
+  switch (S.periode) {
+    case 'aujourdhui': return [t, t];
+    case 'hier':       return [addJours(t, -1), addJours(t, -1)];
+    case 'avanthier':  return [addJours(t, -2), addJours(t, -2)];
+    case '7j':         return [addJours(t, -6), t];
+    case '30j':        return [addJours(t, -29), t];
+    case 'jour':       return S.jourPrecis ? [S.jourPrecis, S.jourPrecis] : [t, t];
+  }
+  return [t, t];
+}
+function charger(){
+  var b = bornes();
+  if (S.depuis && S.depuis <= b[0] && S.pret) return;     // fenêtre déjà couverte
+  var t = parisJour(new Date());
+  S.depuis = b[0] < addJours(t, -6) ? b[0] : addJours(t, -6);   // au moins 7 jours : bascule rapide entre les périodes
+  S.pret = false;
+  window._jr.ecouter(S.depuis, function(l){ S.data = l; S.pret = true; $('err').innerHTML = ''; render(); }, function(err){
+    var perm = err && err.code === 'permission-denied';
+    $('err').innerHTML = '<div class="banner red">⚠️ Lecture du journal impossible' + (perm ? ' : accès refusé par les règles Firestore (voir la règle à ajouter pour phenix_historique).' : ' : ' + esc((err && err.message) || err)) + '</div>';
+  });
+}
+function filtrees(sansPersonne){
+  var b = bornes(), q = S.q.toLowerCase();
+  return S.data.filter(function(e){
+    if (e.jour < b[0] || e.jour > b[1]) return false;
+    if (S.masquer && BRUIT.indexOf(e.action) >= 0) return false;
+    if (!sansPersonne && S.personne && String(e.email).toLowerCase() !== S.personne) return false;
+    if (S.module && e.module !== S.module) return false;
+    if (q && (nomDe(e) + ' ' + (e.libelle||'') + ' ' + (e.objet||'') + ' ' + (e.projetNom||'') + ' ' + (e.detail||'') + ' ' + (VERBES[e.action]||e.action)).toLowerCase().indexOf(q) < 0) return false;
+    return true;
+  }).sort(function(a, b){ return String(b.ts) < String(a.ts) ? -1 : 1; });
+}
+function resumePersonne(l){
+  var c = {};
+  l.forEach(function(e){ if (BRUIT.indexOf(e.action) >= 0) return; var k = (VERBES[e.action] || e.action).replace(/^A /, '').replace(/^S'est /, '') + ' · ' + (e.objet || ''); c[k] = (c[k] || 0) + 1; });
+  return Object.keys(c).sort(function(a, b){ return c[b] - c[a]; }).slice(0, 3).map(function(k){ return c[k] + '× ' + k.toLowerCase(); }).join(' · ');
+}
+
+function render(){
+  if (!S.user) { $('app').innerHTML = ''; return; }
+  if (!S.admin) { $('app').innerHTML = '<div class="empty">🔒<br>Le journal d\'activité est réservé à l\'administrateur.</div>'; return; }
+  var b = bornes();
+  var h = '<div class="bar">' + [['aujourdhui','Aujourd\'hui'],['hier','Hier'],['avanthier','Avant-hier'],['7j','7 jours'],['30j','30 jours']].map(function(p){
+    return '<button class="opt' + (S.periode === p[0] ? ' sel' : '') + '" onclick="J.periode(\'' + p[0] + '\')">' + p[1] + '</button>'; }).join('') +
+    '<input class="field" type="date" value="' + esc(S.periode === 'jour' ? S.jourPrecis : '') + '" onchange="J.jour(this.value)" title="Un jour précis"></div>';
+  var base = filtrees(true), parP = {};
+  base.forEach(function(e){ var m = String(e.email || '').toLowerCase(); (parP[m] = parP[m] || []).push(e); });
+  var mails = Object.keys(parP).sort(function(a, b){ return parP[b].length - parP[a].length; });
+  h += '<span class="lbl">Par personne</span><div class="people">' +
+    '<button class="pc' + (!S.personne ? ' sel' : '') + '" onclick="J.personne(\'\')"><div class="n"><span class="dot" style="background:#9fb2c6"></span>Tout le monde</div><div class="k">' + base.length + ' action' + (base.length > 1 ? 's' : '') + '</div></button>' +
+    mails.map(function(m){
+      var l = parP[m], ts = l.map(function(e){ return e.ts; }).sort();
+      var vraies = l.filter(function(e){ return BRUIT.indexOf(e.action) < 0; }).length;
+      return '<button class="pc' + (S.personne === m ? ' sel' : '') + '" onclick="J.personne(\'' + esc(m) + '\')"><div class="n"><span class="dot" style="background:' + couleur(m) + '"></span>' + esc(nomDe(l[0])) + '</div>' +
+        '<div class="k">' + vraies + ' action' + (vraies > 1 ? 's' : '') + (l.length > vraies ? ' · ' + (l.length - vraies) + ' consultation(s)/connexion(s)' : '') + '</div>' +
+        '<div class="t">' + (ts.length && l.every(function(e){ return e.jour === l[0].jour; }) ? 'de ' + heure(ts[0]) + ' à ' + heure(ts[ts.length - 1]) : (ts.length ? 'dernière action le ' + l.map(function(e){ return e.jour; }).sort().pop().split('-').reverse().join('/') + ' à ' + heure(l.slice().sort(function(a, b){ return a.ts < b.ts ? 1 : -1; })[0].ts) : '')) + '</div>' +
+        (resumePersonne(l) ? '<div class="t">' + esc(resumePersonne(l)) + '</div>' : '') + '</button>';
+    }).join('') + '</div>';
+  var mods = {}; S.data.forEach(function(e){ mods[e.module] = 1; });
+  h += '<div class="bar"><select class="field" onchange="J.module(this.value)"><option value="">Tous les modules</option>' +
+    Object.keys(mods).sort().map(function(m){ return '<option value="' + esc(m) + '"' + (S.module === m ? ' selected' : '') + '>' + esc(MODULES[m] || m) + '</option>'; }).join('') + '</select>' +
+    '<input class="field" style="flex:1;min-width:160px" placeholder="Rechercher (tâche, projet, personne…)" value="' + esc(S.q) + '" oninput="J.q(this.value)" id="q">' +
+    '<label style="font-size:12px;color:var(--text2);display:flex;gap:6px;align-items:center"><input type="checkbox" ' + (S.masquer ? 'checked' : '') + ' onchange="J.masquer(this.checked)"> Masquer consultations et connexions</label></div>';
+
+  var l = filtrees(false);
+  if (!S.pret) h += '<div class="empty">Chargement…</div>';
+  else if (!l.length) h += '<div class="empty">Aucune action enregistrée sur cette période' + (S.personne ? ' pour cette personne' : '') + '.</div>';
+  else {
+    var jours = {}; l.forEach(function(e){ (jours[e.jour] = jours[e.jour] || []).push(e); });
+    var t = parisJour(new Date());
+    Object.keys(jours).sort().reverse().forEach(function(j){
+      var rel = j === t ? 'Aujourd\'hui · ' : j === addJours(t, -1) ? 'Hier · ' : j === addJours(t, -2) ? 'Avant-hier · ' : '';
+      h += '<div class="day"><h2><span>' + rel + '<b>' + esc(jourLong(j)) + '</b></span><span>' + jours[j].length + ' ligne' + (jours[j].length > 1 ? 's' : '') + '</span></h2>';
+      jours[j].forEach(function(e){
+        var m = String(e.email || '').toLowerCase();
+        h += '<div class="row"><div class="h">' + esc(heure(e.ts)) + '</div><div class="w"><span class="who" style="color:' + couleur(m) + '">' + esc(nomDe(e)) + '</span> ' +
+          '<span class="act ' + esc(e.action) + '">' + esc(VERBES[e.action] || e.action) + '</span> ' + esc(e.objet || '') + (e.libelle ? ' <span class="lib">« ' + esc(e.libelle) + ' »</span>' : '') +
+          (e.detail ? ' <span class="det">— ' + esc(e.detail) + '</span>' : '') +
+          '<div class="tags"><span class="tag">' + esc(MODULES[e.module] || e.module) + '</span>' + (e.projetNom ? '<span class="tag p">🏗 ' + esc(e.projetNom) + '</span>' : '') + '</div></div></div>';
+      });
+      h += '</div>';
+    });
+  }
+  var q = document.activeElement && document.activeElement.id === 'q', pos = q ? document.activeElement.selectionStart : 0;
+  $('app').innerHTML = h;
+  if (q && $('q')) { $('q').focus(); try { $('q').setSelectionRange(pos, pos); } catch(e){} }
+}
+
+function csv(){
+  var l = filtrees(false);
+  if (!l.length) return;
+  var cell = function(v){ return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
+  var rows = [['Date', 'Heure', 'Personne', 'E-mail', 'Module', 'Action', 'Objet', 'Libellé', 'Projet', 'Détail']].concat(l.map(function(e){
+    return [e.jour, heure(e.ts), nomDe(e), e.email, MODULES[e.module] || e.module, VERBES[e.action] || e.action, e.objet, e.libelle, e.projetNom, e.detail];
+  }));
+  var blob = new Blob(['﻿' + rows.map(function(r){ return r.map(cell).join(';'); }).join('\n')], { type:'text/csv;charset=utf-8' });
+  var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'journal-' + bornes()[0] + '_' + bornes()[1] + '.csv';
+  document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+
+window.J = {
+  setUser: function(email){
+    S.user = String(email || '').toLowerCase(); S.admin = S.user === ADMIN_EMAIL.toLowerCase();
+    $('who').textContent = S.user ? (S.admin ? 'Qui a fait quoi, et quand — toute la suite Phénix' : S.user) : '…';
+    if (S.admin) charger(); else if (window._jr) window._jr.arreter();
+    render();
+  },
+  periode: function(p){ S.periode = p; charger(); render(); },
+  jour: function(v){ if (!v) return; S.periode = 'jour'; S.jourPrecis = v; charger(); render(); },
+  personne: function(m){ S.personne = m; render(); },
+  module: function(m){ S.module = m; render(); },
+  q: function(v){ S.q = v; render(); },
+  masquer: function(v){ S.masquer = !!v; render(); },
+  csv: csv,
+  logout: function(){ if (window._jr) window._jr.logout(); }
+};
+render();
+})();
+</script>
+</body>
+</html>

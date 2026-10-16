@@ -1,6 +1,27 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
+<!--
+══════════════════════════════════════════════════════════════════
+ HISTORIQUE DES MODIFICATIONS — phenix_chantier.html
+──────────────────────────────────────────────────────────────────
+ 15/10/2026 — Base : phenix_chantier_1.html (version fournie le 15/10).
+   1. « AUCUNE ENTREPRISE » : sur la page Lots, tout lot sans entreprise
+      (ni intervenant attribué, ni entreprise issue d'un devis artisan) affiche
+      une mention ROUGE « Aucune entreprise ». Elle disparaît dès qu'un
+      intervenant est attribué au lot ou qu'un devis artisan est importé.
+      Un indicateur « Sans entreprise » est ajouté aux compteurs de la page Lots.
+   2. Import depuis Chiffrage : reprend le nom de l'entreprise du devis artisan
+      (lot.entrepriseNom) et rattache l'intervenant du même nom s'il existe.
+   3. JOURNAL D'ACTIVITÉ : chaque création / modification / suppression de fiche
+      écrit aussi une ligne datée dans phenix_historique (module Journal), en plus
+      du journal propre à chaque chantier qui reste inchangé.
+   4. [Espace assistante] copie FILTRÉE du suivi (lots, statut, avancement, dates,
+      entreprise) vers phenix_chantier_assistante/{projetId} : sans montants,
+      sans honoraires ni commissions. Mise à jour à chaque enregistrement.
+   Repérer : [Journal], [Espace assistante], « Aucune entreprise ».
+══════════════════════════════════════════════════════════════════
+-->
 <script>try{Object.defineProperty(window,'PublicKeyCredential',{value:undefined,configurable:true});['phenix_bio_creds','phenix_bio_credId','phenix_bio_email','phenix_bio_enroll_refuse','chiffrage_bio_creds','chiffrage_bio_credId','chantier_bio_creds','chantier_bio_credId','chantier_bio_email'].forEach(function(k){localStorage.removeItem(k)})}catch(e){}</script>
 
 <meta charset="UTF-8">
@@ -396,6 +417,28 @@ window._fb = {
 //  AUTHENTIFICATION — l'appli ne charge les données qu'une fois connecté
 // ════════════════════════════════════════════════════════════
 const auth = getAuth(app);
+
+// ── [Journal] historique d'actions daté — collection phenix_historique ──
+//   Une ligne par action : qui (e-mail), quand (ts + jour), dans quel module, quoi.
+//   Jamais de montants ni de données sensibles : uniquement des libellés.
+//   Lecture : module « Journal » (phenix_journal.html), réservé à l'administrateur.
+window.phenixJournal = function(module, action, objet, libelle, extra){
+  try{
+    const u = auth.currentUser; if(!u || !u.email) return;
+    const now = new Date();
+    const jour = now.toLocaleDateString('sv-SE', { timeZone:'Europe/Paris' });   // AAAA-MM-JJ
+    const email = String(u.email).toLowerCase();
+    const lib = String(libelle == null ? '' : libelle).slice(0, 200);
+    const cle = [email, module, action, objet, lib].join('|');
+    window.__jrnLast = window.__jrnLast || {};
+    if(window.__jrnLast[cle] && now.getTime() - window.__jrnLast[cle] < 20000) return;   // anti-doublon (20 s)
+    window.__jrnLast[cle] = now.getTime();
+    const e = { ts: now.toISOString(), jour: jour, email: email, module: module, action: action, objet: objet || '', libelle: lib };
+    if(extra) Object.keys(extra).forEach(function(k){ if(extra[k] !== undefined && extra[k] !== null && extra[k] !== '') e[k] = typeof extra[k] === 'string' ? extra[k].slice(0, 200) : extra[k]; });
+    const id = now.getTime().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
+    setDoc(doc(db, 'phenix_historique', id), e).catch(function(){});
+  }catch(err){}
+};
 
 // ════════════════════════════════════════════════════════════
 //  AUTO-LOGIN VIA LE SHELL — si ce module est chargé en iframe
@@ -1790,6 +1833,12 @@ if (window.parent !== window) {
     '#phenix-login,#login-overlay{display:none!important}';
 }
 </script>
+<style>
+/* Mention « Aucune entreprise » (lot sans entreprise ni devis artisan) */
+.no-ent{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:#C0392B;background:#fdeceb;border:1px solid #f1b9b3;border-radius:10px;padding:2px 8px;white-space:nowrap}
+.ent-devis{font-size:12px;color:var(--navy)}
+.ent-devis small{color:#8BA5C0;font-size:10px}
+</style>
 </head>
 <body class="role-pending">
 <div id="phenix-login" style="display:flex;position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#0F1E3D,#1B2D5B,#2A5298);align-items:center;justify-content:center;padding:20px;font-family:'DM Sans',system-ui,sans-serif">
@@ -2852,7 +2901,41 @@ let _syncChain = Promise.resolve();
 function saveLocal() {
   _syncChain = _syncChain.then(_syncOnce).catch(e => console.error('Synchronisation :', e));
   _updateSyncLabel();
+  _planAssistante();
 }
+
+// ── [Espace assistante] copie FILTRÉE du suivi de chantier ──────────────────
+//  phenix_chantier_assistante/{projetId} : lots, statut, avancement, dates, entreprise.
+//  Jamais de montants, d'honoraires, de commissions ni de notes internes.
+let _assistHash = {}, _assistTimer = null, _assistIds = {};
+function _planAssistante(delay) { clearTimeout(_assistTimer); _assistTimer = setTimeout(_syncAssistante, delay || 5000); }
+async function _syncAssistante() {
+  try {
+    if (!_booted || !CH_ROLE || CH_ROLE === 'bloque' || IS_EXT()) return;
+    const f = window._fb; if (!f || !f.setDoc || !f.doc || !f.db) return;
+    const vus = {};
+    for (const ch of state.chantiers) {
+      if (!ch.projetId) continue;
+      const pid = String(ch.projetId); vus[pid] = 1;
+      const lots = state.lots.filter(l => l.chantierId == ch.id).map(l => {
+        const inv = l.interv ? state.intervenants.find(i => i.id == l.interv) : null;
+        return { nom: l.nom || '', statut: l.statut || '', av: l.av || 0, debut: l.debut || '', fin: l.fin || '',
+                 entreprise: inv ? inv.nom : (l.entrepriseNom || ''), metier: inv ? (inv.metier || '') : '', devisArtisan: !!l.devisArtisan, sansEntreprise: lotSansEntreprise(l) };
+      });
+      const payload = { projetId: pid, chantierNom: ch.nom || '', statut: ch.statut || '', debut: ch.debut || '', fin: ch.fin || '', lots };
+      const h = _stable(payload);
+      if (_assistHash[pid] === h) continue;
+      payload.updatedAt = new Date().toISOString();
+      await f.setDoc(f.doc(f.db, 'phenix_chantier_assistante', pid), payload);
+      _assistHash[pid] = h;
+    }
+    for (const pid of Object.keys(_assistIds)) {
+      if (!vus[pid] && f.deleteDoc) { try { await f.deleteDoc(f.doc(f.db, 'phenix_chantier_assistante', pid)); delete _assistHash[pid]; } catch (e) {} }
+    }
+    _assistIds = vus;
+  } catch (e) { console.warn('[Espace assistante] synchronisation chantier :', e && e.message); }
+}
+setInterval(() => _planAssistante(1), 90000);
 function _computeChanges() {
   const changed = [], removed = [];
   ENTITY_KEYS.forEach(key => {
@@ -2945,6 +3028,12 @@ function _logActivity(key, id, action, o) {
     const k = key + ':' + id + ':' + action, t = Date.now();
     if (action === 'update' && _actLast[k] && t - _actLast[k] < 45000) return;   // évite le bruit
     _actLast[k] = t;
+    try {   // [Journal] ligne globale datée (phenix_historique)
+      const _ch = state.chantiers.find(c => String(c.id) === String(cid)) || {};
+      if (window.phenixJournal) window.phenixJournal('chantier', action === 'create' ? 'cree' : action === 'delete' ? 'supprime' : 'modifie',
+        ENTITY_LABELS[key] || key, action === 'delete' ? (o._label || '') : _label(key, o),
+        { projetId: _ch.projetId ? String(_ch.projetId) : '', projetNom: _ch.nom || '', nom: CH_ME.nom || '' });
+    } catch (e) {}
     window._fbChantier.logActivity(cid, {
       at: new Date().toISOString(), by: CH_ME.email || '', byNom: CH_ME.nom || '',
       kind: ENTITY_LABELS[key] || key, action: action, entityId: String(id),
@@ -3183,6 +3272,7 @@ function _srvOk(tag) {
 }
 function _onBoot() {
   _updateSyncLabel();
+  _planAssistante(8000);
   if (IS_STAFF()) { _noUndo = true; if (loadSharedHonoraires()) { saveLocal(); _syncChain.then(() => { _noUndo = false; }); } else _noUndo = false; }
   refreshAll();
   if (IS_STAFF()) _reconcileCharges(true);
@@ -5170,6 +5260,15 @@ function mapStatutChiffrage(s) {
   return 'chiffrage';
 }
 
+// Rattache l'entreprise d'un devis artisan à un lot : intervenant du même nom s'il existe, sinon simple nom.
+function lierEntrepriseLot(lot, nom, devis) {
+  if (devis) lot.devisArtisan = true;
+  nom = String(nom || '').trim(); if (!nom || lot.interv) return;
+  const n = nom.toLowerCase();
+  const iv = state.intervenants.find(i => String(i.nom || '').trim().toLowerCase() === n);
+  if (iv) { lot.interv = iv.id; delete lot.entrepriseNom; } else lot.entrepriseNom = nom;
+}
+
 async function importFromChiffrage() {
   if (IS_EXT()) return;
   const filter = document.getElementById('lots-filter-ch')?.value || activeChantier;
@@ -5195,6 +5294,7 @@ async function importFromChiffrage() {
         existing.tva = item.tva;
         existing.statut = mapStatutChiffrage(item.statut);
         if (item.num && !existing.nom.startsWith(item.num)) existing.nom = composedNom;
+        if (item.entreprise || item.devisArtisan) lierEntrepriseLot(existing, item.entreprise, item.devisArtisan);
         updated++;
       } else {
         state.lots.push({
@@ -5203,6 +5303,7 @@ async function importFromChiffrage() {
           ht: item.montantHt, tva: item.tva, av: 0,
           debut: '', fin: '', notes: 'Importé depuis Phénix Chiffrage le ' + new Date().toLocaleDateString('fr-FR')
         });
+        if (item.entreprise || item.devisArtisan) lierEntrepriseLot(state.lots[state.lots.length - 1], item.entreprise, item.devisArtisan);
         created++;
       }
     });
@@ -5421,6 +5522,10 @@ function moveLot(id, dir){
   renderLots();
 }
 
+// ── Lot sans entreprise : ni intervenant attribué, ni devis artisan importé ──
+function lotSansEntreprise(l) { return !l.interv && !l.entrepriseNom && !l.devisArtisan; }
+function lotSansEntrepriseBadge() { return '<span class="no-ent" title="Aucun devis artisan importé et aucun intervenant attribué"><i class="ti ti-alert-triangle"></i> Aucune entreprise</span>'; }
+
 function renderLots() {
   const filter = document.getElementById('lots-filter-ch')?.value || activeChantier;
   const lots = sortLotsInPlace(filter ? state.lots.filter(l => l.chantierId == filter) : [...state.lots]);
@@ -5438,7 +5543,7 @@ function renderLots() {
       return `<tr>
         <td style="padding-left:16px"><div style="font-weight:600;color:var(--navy)">${esc(l.nom)}</div><div class="td-muted">${esc(l.cat)}</div></td>
         <td class="td-muted">${ch ? esc(ch.nom) : '—'}</td>
-        <td>${inv ? `<div style="display:flex;align-items:center;gap:6px"><div style="width:22px;height:22px;border-radius:50%;background:${safeColor(inv.color) || avatarColor(inv.nom)};color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center">${esc(initiales(inv.nom))}</div>${esc(inv.nom)}</div>` : '<span class="td-muted">—</span>'}</td>
+        <td>${inv ? `<div style="display:flex;align-items:center;gap:6px"><div style="width:22px;height:22px;border-radius:50%;background:${safeColor(inv.color) || avatarColor(inv.nom)};color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center">${esc(initiales(inv.nom))}</div>${esc(inv.nom)}</div>` : (l.entrepriseNom ? '<span class="ent-devis">' + esc(l.entrepriseNom) + ' <small>(devis)</small></span>' : (l.devisArtisan ? '<span class="no-ent" style="color:#B9770E;background:#fef5e7;border-color:#f5d9a8" title="Devis artisan importé, nom de l\'entreprise à préciser"><i class="ti ti-alert-circle"></i> Devis reçu — entreprise à préciser</span>' : lotSansEntrepriseBadge()))}</td>
         <td style="text-align:right;font-weight:600">${fmtEur(l.ht)}</td>
         <td class="td-muted">${l.tva}%</td>
         <td style="text-align:right;font-weight:700;color:var(--navy)">${fmtEur(ttc)}</td>
@@ -5462,7 +5567,9 @@ function renderLots() {
   const totalHT = lots.reduce((s, l) => s + l.ht, 0);
   const totalTTC = lots.reduce((s, l) => s + l.ht * (1 + l.tva / 100), 0);
   const termines = lots.filter(l => l.statut === 'termine').length;
+  const sansEnt = lots.filter(l => lotSansEntreprise(l)).length;
   document.getElementById('lots-kpi').innerHTML = `
+    <div class="metric" style="${sansEnt ? 'border-color:#f1b9b3' : ''}"><div class="metric-icon" style="${sansEnt ? 'background:#fdeceb;color:#C0392B' : ''}"><i class="ti ti-alert-triangle"></i></div><div class="metric-label">Sans entreprise</div><div class="metric-value" style="${sansEnt ? 'color:#C0392B' : ''}">${sansEnt}</div><div class="metric-sub">${sansEnt ? 'lot(s) à confier' : 'tous les lots sont attribués'}</div></div>
     <div class="metric"><div class="metric-icon"><i class="ti ti-list-check"></i></div><div class="metric-label">Nombre de lots</div><div class="metric-value">${lots.length}</div><div class="metric-sub">${termines} terminé(s)</div></div>
     <div class="metric"><div class="metric-icon"><i class="ti ti-cash"></i></div><div class="metric-label">Total HT</div><div class="metric-value" style="font-size:20px">${fmtEur(totalHT)}</div></div>
     <div class="metric m-green"><div class="metric-icon g"><i class="ti ti-receipt"></i></div><div class="metric-label">Total TTC</div><div class="metric-value" style="font-size:20px">${fmtEur(totalTTC)}</div></div>`;

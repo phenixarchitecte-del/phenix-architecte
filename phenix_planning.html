@@ -3,6 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<!--
+ HISTORIQUE DES MODIFICATIONS — phenix_planning.html
+ 15/10/2026 — JOURNAL D'ACTIVITÉ : chaque ajout / modification / suppression d'une
+ intervention du planning écrit une ligne datée dans phenix_historique (module
+ Journal). Repérer : [Journal].
+ [Espace assistante] copie FILTRÉE du planning (lot, entreprise, dates ; jamais les
+ notes) vers phenix_planning_assistante/{projetId}, à chaque enregistrement et une
+ fois après le chargement. Aucune autre modification.
+-->
 <title>Phénix Planning — Gantt de chantier</title>
 <script type="module">
 import { initializeApp }       from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
@@ -69,6 +78,69 @@ window._fbProjets = {
 };
 
 const auth = getAuth(app);
+
+// ── [Journal] historique d'actions daté — collection phenix_historique ──
+//   Une ligne par action : qui (e-mail), quand (ts + jour), dans quel module, quoi.
+//   Jamais de montants ni de données sensibles : uniquement des libellés.
+//   Lecture : module « Journal » (phenix_journal.html), réservé à l'administrateur.
+window.phenixJournal = function(module, action, objet, libelle, extra){
+  try{
+    const u = auth.currentUser; if(!u || !u.email) return;
+    const now = new Date();
+    const jour = now.toLocaleDateString('sv-SE', { timeZone:'Europe/Paris' });   // AAAA-MM-JJ
+    const email = String(u.email).toLowerCase();
+    const lib = String(libelle == null ? '' : libelle).slice(0, 200);
+    const cle = [email, module, action, objet, lib].join('|');
+    window.__jrnLast = window.__jrnLast || {};
+    if(window.__jrnLast[cle] && now.getTime() - window.__jrnLast[cle] < 20000) return;   // anti-doublon (20 s)
+    window.__jrnLast[cle] = now.getTime();
+    const e = { ts: now.toISOString(), jour: jour, email: email, module: module, action: action, objet: objet || '', libelle: lib };
+    if(extra) Object.keys(extra).forEach(function(k){ if(extra[k] !== undefined && extra[k] !== null && extra[k] !== '') e[k] = typeof extra[k] === 'string' ? extra[k].slice(0, 200) : extra[k]; });
+    const id = now.getTime().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
+    setDoc(doc(db, 'phenix_historique', id), e).catch(function(){});
+  }catch(err){}
+};
+
+// ── [Journal] différences d'interventions à chaque enregistrement du planning ──
+(function(){
+  const P = window._fbPlanning, PR = window._fbProjets;
+  if(!P) return;
+  let prev = null, noms = {};
+  const aplatir = s => { const m = {}; Object.keys((s && s.chantiers) || {}).forEach(cid => ((s.chantiers[cid] || {}).interventions || []).forEach(iv => { m[cid + ':' + iv.id] = { cid:cid, lot:iv.lot || '', art:iv.artisan || '', d:iv.dateDebut || '', f:iv.dateFin || '' }; })); return m; };
+  if(PR && PR.listen){ const l0 = PR.listen; PR.listen = function(cb){ return l0.call(PR, function(list){ try{ (list || []).forEach(p => { noms[String(p.id)] = p.nom || p.ref || ''; }); }catch(e){} cb(list); }); }; }
+  // [Espace assistante] copie FILTRÉE du planning : phenix_planning_assistante/{projetId} (lot, entreprise, dates — jamais les notes)
+  const plHash = {};
+  async function syncAssistantePlanning(s){
+    try{
+      if(!auth.currentUser || !s) return;
+      for(const cid of Object.keys(s.chantiers || {})){
+        const ivs = ((s.chantiers[cid] || {}).interventions || []).map(i => ({ lot:i.lot || '', artisan:i.artisan || '', dateDebut:i.dateDebut || '', dateFin:i.dateFin || '' }))
+          .sort((a, b) => String(a.dateDebut).localeCompare(String(b.dateDebut)));
+        const h = JSON.stringify(ivs); if(plHash[cid] === h) continue;
+        await setDoc(doc(db, 'phenix_planning_assistante', String(cid)), { projetId:String(cid), interventions:ivs, updatedAt:new Date().toISOString() });
+        plHash[cid] = h;
+      }
+    }catch(e){ console.warn('[Espace assistante] synchronisation planning :', e && e.message); }
+  }
+  let premierPlanning = true;
+  const l1 = P.listenState;
+  P.listenState = function(cb){ return l1.call(P, function(s){ try{ if(prev === null) prev = aplatir(s); if(premierPlanning && s){ premierPlanning = false; setTimeout(() => syncAssistantePlanning(s), 6000); } }catch(e){} cb(s); }); };
+  const s0 = P.saveState;
+  P.saveState = async function(stateObj){
+    const r = await s0.apply(this, arguments);
+    try{
+      const cur = aplatir(stateObj), avant = prev || {}, out = [];
+      Object.keys(cur).forEach(k => { const a = avant[k], c = cur[k]; const l = (c.lot || 'intervention') + (c.art ? ' — ' + c.art : '');
+        if(!a) out.push(['ajoute', l, c]); else if(a.lot !== c.lot || a.art !== c.art || a.d !== c.d || a.f !== c.f) out.push(['modifie', l, c]); });
+      Object.keys(avant).forEach(k => { if(!cur[k]) out.push(['supprime', (avant[k].lot || 'intervention') + (avant[k].art ? ' — ' + avant[k].art : ''), avant[k]]); });
+      prev = cur;
+      syncAssistantePlanning(stateObj);
+      if(out.length > 6) window.phenixJournal('planning', 'modifie', 'planning', out.length + ' interventions modifiées', {});
+      else out.forEach(o => window.phenixJournal('planning', o[0], 'intervention', o[1], { projetId:o[2].cid, projetNom:noms[o[2].cid] || '', detail:(o[2].d || '') + (o[2].f ? ' → ' + o[2].f : '') }));
+    }catch(e){}
+    return r;
+  };
+})();
 
 // ════════════════════════════════════════════════════════════
 //  AUTO-LOGIN VIA LE SHELL — si ce module est chargé en iframe

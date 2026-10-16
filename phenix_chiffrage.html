@@ -4,6 +4,33 @@
 <head>
 <script>try{Object.defineProperty(window,'PublicKeyCredential',{value:undefined,configurable:true});['phenix_bio_creds','phenix_bio_credId','phenix_bio_email','phenix_bio_enroll_refuse','chiffrage_bio_creds','chiffrage_bio_credId','chantier_bio_creds','chantier_bio_credId','chantier_bio_email'].forEach(function(k){localStorage.removeItem(k)})}catch(e){}</script>
 
+<!--
+══════════════════════════════════════════════════════════════════
+ HISTORIQUE DES MODIFICATIONS — phenix_chiffrage.html
+──────────────────────────────────────────────────────────────────
+ 15/10/2026 — Base : phenix_chiffrage.html fourni le 15/10 (rien retiré).
+   1. « AUCUNE ENTREPRISE » : chaque lot sans entreprise affiche une mention
+      ROUGE (liste des lots, cartes mobiles, fiche du lot). Tous les lots créés
+      par le chiffrage IA ou les métrés en portent une tant qu'aucune entreprise
+      n'est saisie. Elle disparaît dès qu'une entreprise est renseignée (champ
+      « Entreprise » de la fiche du lot, champ du formulaire d'import de devis
+      artisan, offre reçue des appels d'offres, contrat). Un lot dont un devis
+      artisan a été importé SANS nom d'entreprise passe en orange
+      « Devis reçu — entreprise à préciser ».
+   2. Import de devis artisan : nouveau champ « Entreprise » ; le lot garde
+      lot.entreprise et lot.devisArtisan.
+   3. Exports vers Chantier / Carnet : chaque lot transporte entreprise et
+      devisArtisan (la page Lots de Chantier affiche la même mention rouge).
+   4. [Espace assistante] copie FILTRÉE du chiffrage vers
+      phenix_chiffrage_assistante/{projetId} : lots, statut, entreprise, montants
+      CLIENT uniquement. JAMAIS de prix artisans, de marge ni d'achat.
+      Mise à jour à chaque enregistrement.
+   5. JOURNAL D'ACTIVITÉ : lots ajoutés / modifiés / supprimés, chantiers créés /
+      supprimés et exports écrivent une ligne datée dans phenix_historique
+      (sans montants).
+   Repérer : [Espace assistante], [Journal], lotEntrepriseHtml.
+══════════════════════════════════════════════════════════════════
+-->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
@@ -466,6 +493,13 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
 }
 * { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 
+
+/* [Aucune entreprise] */
+.no-ent{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;color:#ff8f84;background:rgba(200,60,50,.22);border:1px solid rgba(255,120,105,.55);border-radius:10px;padding:1px 8px;white-space:nowrap}
+.no-ent.devis{color:#ffc36b;background:rgba(230,150,40,.18);border-color:rgba(255,190,100,.5)}
+.ent-line{font-size:11px;color:var(--text2);margin-top:3px}
+.lot-ent-row{display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap}
+.lot-ent-row input{padding:5px 9px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:inherit;background:var(--surface2);color:var(--text);min-width:220px}
 </style>
 <style id="px-iframe-hide"></style>
 <script>
@@ -711,6 +745,7 @@ if (window.parent !== window) {
             <input type="text" id="detail-nom" class="lot-title-input lot-title-input-nom" placeholder="Désignation du lot" oninput="saveLotIdentity()">
           </div>
           <div style="font-size:12px;color:var(--text3)" id="detail-chantier-name"></div>
+          <div class="lot-ent-row"><label for="detail-entreprise" style="font-size:12px;color:var(--text2);font-weight:600">Entreprise</label><input type="text" id="detail-entreprise" placeholder="Entreprise retenue (devis artisan)" oninput="saveLotEntreprise()"><span id="detail-ent-badge"></span></div>
         </div>
         <div style="margin-left:auto;display:flex;gap:8px">
           <select id="detail-prestation" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;background:var(--surface2);color:var(--text)" onchange="onPrestationChange()">
@@ -2068,6 +2103,11 @@ if (window.parent !== window) {
         <input type="number" id="import-marge" value="20" min="0" max="200" step="1" style="width:70px;padding:5px 8px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:13px;font-family:var(--font-sans);background:var(--bg);text-align:right;color:var(--text)">
         <span style="font-size:12px;color:var(--text2)">→ PU client = PU artisan × (1 + marge%)</span>
       </div>
+      <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <label for="import-entreprise" style="font-size:12px;color:var(--text2);font-weight:600">Entreprise du devis</label>
+        <input type="text" id="import-entreprise" placeholder="Raison sociale de l'artisan" style="min-width:240px;padding:5px 8px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:13px;font-family:var(--font-sans);background:var(--bg);color:var(--text)">
+        <span style="font-size:12px;color:var(--text2)">→ retire la mention rouge « Aucune entreprise » du lot</span>
+      </div>
     </div>
 
     <div class="modal-actions" style="margin-top:16px">
@@ -2133,6 +2173,105 @@ try { window.parent.postMessage({source:'phenix-module', readyForLogin:true}, '*
 
 const db   = getFirestore(app);
 
+// ── [Journal] historique d'actions daté — collection phenix_historique ──
+//   Une ligne par action : qui (e-mail), quand (ts + jour), dans quel module, quoi.
+//   Jamais de montants ni de données sensibles : uniquement des libellés.
+//   Lecture : module « Journal » (phenix_journal.html), réservé à l'administrateur.
+window.phenixJournal = function(module, action, objet, libelle, extra){
+  try{
+    const u = auth.currentUser; if(!u || !u.email) return;
+    const now = new Date();
+    const jour = now.toLocaleDateString('sv-SE', { timeZone:'Europe/Paris' });   // AAAA-MM-JJ
+    const email = String(u.email).toLowerCase();
+    const lib = String(libelle == null ? '' : libelle).slice(0, 200);
+    const cle = [email, module, action, objet, lib].join('|');
+    window.__jrnLast = window.__jrnLast || {};
+    if(window.__jrnLast[cle] && now.getTime() - window.__jrnLast[cle] < 20000) return;   // anti-doublon (20 s)
+    window.__jrnLast[cle] = now.getTime();
+    const e = { ts: now.toISOString(), jour: jour, email: email, module: module, action: action, objet: objet || '', libelle: lib };
+    if(extra) Object.keys(extra).forEach(function(k){ if(extra[k] !== undefined && extra[k] !== null && extra[k] !== '') e[k] = typeof extra[k] === 'string' ? extra[k].slice(0, 200) : extra[k]; });
+    const id = now.getTime().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
+    setDoc(doc(db, 'phenix_historique', id), e).catch(function(){});
+  }catch(err){}
+};
+
+// ── [Espace assistante] copie FILTRÉE du chiffrage ───────────────────────────
+//  phenix_chiffrage_assistante/{projetId} — lots, statut, entreprise, montants CLIENT.
+//  JAMAIS de prix artisans, d'achat ni de marge.
+let _asHash = {}, _asTimer = null, _asIds = {};
+function planAssistanteChiffrage(d){ clearTimeout(_asTimer); _asTimer = setTimeout(syncAssistanteChiffrage, d || 4000); }
+async function syncAssistanteChiffrage(){
+  try{
+    if(!auth.currentUser || typeof state === 'undefined' || !Array.isArray(state.chantiers)) return;
+    const calc = window.computeLotAmounts, entNom = window.lotEntrepriseNom;
+    if(typeof calc !== 'function' || typeof entNom !== 'function') return;
+    const vus = {};
+    for(const c of state.chantiers){
+      if(!c.projetId) continue;
+      const pid = String(c.projetId);
+      const lots = (c.lots || []).filter(l => !l.exclu).map(l => {
+        const a = calc(l), nom = entNom(l);
+        return { num: l.num || '', nom: l.nom || '', statut: l.statut || 'Chiffrage', entreprise: nom, devisArtisan: !!l.devisArtisan,
+                 sansEntreprise: !nom && !l.devisArtisan, nbPostes: (l.postes || []).length,
+                 montantHt: Math.round(a.ht * 100) / 100, montantTtc: Math.round(a.ttc * 100) / 100, tva: a.tva };
+      });
+      const totalHt = Math.round(lots.reduce((s, l) => s + l.montantHt, 0) * 100) / 100;
+      const totalTtc = Math.round(lots.reduce((s, l) => s + l.montantTtc, 0) * 100) / 100;
+      const payload = { projetId: pid, chantierNom: c.nom || '', client: c.client || '', statut: c.statut || '', phase: c.phase || '', lots: lots,
+                        nbLots: lots.length, nbSansEntreprise: lots.filter(l => l.sansEntreprise).length, totalHt: totalHt, totalTtc: totalTtc };
+      vus[pid] = 1;
+      const h = JSON.stringify(payload);
+      if(_asHash[pid] === h) continue;
+      payload.updatedAt = new Date().toISOString();
+      await setDoc(doc(db, 'phenix_chiffrage_assistante', pid), payload);
+      _asHash[pid] = h;
+    }
+    for(const pid of Object.keys(_asIds)){
+      if(!vus[pid]){ try{ await deleteDoc(doc(db, 'phenix_chiffrage_assistante', pid)); delete _asHash[pid]; }catch(e){} }
+    }
+    _asIds = vus;
+  }catch(e){ console.warn('[Espace assistante] synchronisation chiffrage :', e && e.message); }
+}
+window.planAssistanteChiffrage = planAssistanteChiffrage;
+
+// ── [Journal] différences lot par lot à chaque enregistrement ──
+//  Chaque lot reçoit un identifiant discret (jid) pour qu'un renommage ne passe pas pour une suppression.
+let _jrnPrev = null;
+function _jrnSnap(){
+  const m = {}, ch = {};
+  (state.chantiers || []).forEach((c, ci) => {
+    const nom = c.nom || ('chantier ' + (ci + 1)); ch[nom] = c.projetId ? String(c.projetId) : '';
+    (c.lots || []).forEach(l => {
+      if(!l.jid) l.jid = Math.random().toString(36).slice(2, 9);
+      m[nom + '##' + l.jid] = { ch: nom, h: JSON.stringify(l), lib: [l.num, l.nom].filter(Boolean).join(' ') };
+    });
+  });
+  return { m: m, ch: ch };
+}
+function _jrnDiff(){
+  try{
+    const cur = _jrnSnap();
+    if(_jrnPrev === null){ _jrnPrev = cur; return; }
+    const out = [];
+    Object.keys(cur.ch).forEach(n => { if(!(n in _jrnPrev.ch)) out.push(['cree', 'chantier', n, n]); });
+    Object.keys(_jrnPrev.ch).forEach(n => { if(!(n in cur.ch)) out.push(['supprime', 'chantier', n, n]); });
+    Object.keys(cur.m).forEach(k => {
+      const c = cur.m[k], p = _jrnPrev.m[k];
+      if(!(c.ch in _jrnPrev.ch)) return;                     // nouveau chantier : une seule ligne
+      if(!p) out.push(['cree', 'lot', c.lib + ' (' + c.ch + ')', c.ch]);
+      else if(p.h !== c.h) out.push(['modifie', 'lot', c.lib + ' (' + c.ch + ')', c.ch]);
+    });
+    Object.keys(_jrnPrev.m).forEach(k => {
+      const p = _jrnPrev.m[k];
+      if(!(k in cur.m) && (p.ch in cur.ch)) out.push(['supprime', 'lot', p.lib + ' (' + p.ch + ')', p.ch]);
+    });
+    const ch = Object.assign({}, _jrnPrev.ch, cur.ch);
+    _jrnPrev = cur;
+    if(out.length > 6){ window.phenixJournal('chiffrage', 'modifie', 'chiffrage', out.length + ' éléments modifiés'); return; }
+    out.forEach(o => window.phenixJournal('chiffrage', o[0], o[1], o[2], { projetId: ch[o[3]] || '', projetNom: o[3] }));
+  }catch(e){}
+}
+
 // ── Auth gate ────────────────────────────────────────────────
 window._auth = {
   login:  (e,p) => signInWithEmailAndPassword(auth, e, p),
@@ -2181,6 +2320,8 @@ async function saveChantiers(){
   try{
     await setDoc(doc(db, COLL, user.uid), { chantiers: state.chantiers, updatedAt: Date.now() });
     updateSyncStatus('saved');
+    _jrnDiff();
+    planAssistanteChiffrage();
   }catch(e){ console.error('Save error', e); updateSyncStatus('err'); }
 }
 
@@ -2230,6 +2371,8 @@ async function loadChantiers(){
     }
     initUI();
     updateSyncStatus('ok');
+    _jrnPrev = _jrnSnap();
+    planAssistanteChiffrage(9000);
   }catch(e){
     console.error('[Chiffrage] Erreur chargement:', e);
     // Fallback localStorage si Firestore inaccessible
@@ -3491,6 +3634,7 @@ function renderChantierGrid(){
       <div class="chantier-info" style="margin-top:2px">${c.phase||''}</div>
       <div class="chantier-ht">${fmt(htClient)} € HT <span style="font-size:13px;color:var(--text3)">client</span></div>
       <div style="font-size:11px;color:var(--text3);margin-top:2px">${(c.lots||[]).length} lot(s) · Achat artisan : ${fmt(htArtisan)} € · Marge : <strong style="color:${margeEur>=0?'#2D7A4F':'#C0392B'}">${margePct}%</strong></div>
+      ${(()=>{const n=(c.lots||[]).filter(l=>!l.exclu&&lotEntrepriseEtat(l)==='aucune').length; return n?'<div style="margin-top:5px"><span class="no-ent"><i class="ti ti-alert-triangle" aria-hidden="true"></i> '+n+' lot'+(n>1?'s':'')+' sans entreprise</span></div>':'';})()}
       <div class="chantier-progress"><div class="chantier-progress-inner" style="width:${getProgress(c)}%"></div></div>
       <div style="display:flex;gap:8px;margin-top:14px">
         <button class="btn btn-sm btn-primary" onclick="selectChantier(${i})"><i class="ti ti-calculator" aria-hidden="true"></i>Chiffrer</button>
@@ -3822,6 +3966,16 @@ function margeBadgeHtml(margePct, extraStyle){
   return `<span class="marge-badge${cls}"${extraStyle?` style="${extraStyle}"`:''}>${icon}${margePct>=0?'+':''}${margePct}%</span>`;
 }
 
+// ── [Aucune entreprise] état d'un lot côté entreprise ──
+function lotEntrepriseNom(l){ return String((l && (l.entreprise || (l.contrat && l.contrat.entreprise))) || '').trim(); }
+function lotEntrepriseEtat(l){ return lotEntrepriseNom(l) ? 'ok' : (l && l.devisArtisan ? 'devis' : 'aucune'); }
+function lotEntrepriseHtml(l){
+  const e=lotEntrepriseEtat(l);
+  if(e==='ok') return '<div class="ent-line"><i class="ti ti-building" aria-hidden="true"></i> '+String(lotEntrepriseNom(l)).replace(/</g,'&lt;')+'</div>';
+  if(e==='devis') return '<div style="margin-top:3px"><span class="no-ent devis" title="Un devis artisan a été importé mais le nom de l\'entreprise n\'est pas renseigné"><i class="ti ti-alert-circle" aria-hidden="true"></i> Devis reçu — entreprise à préciser</span></div>';
+  return '<div style="margin-top:3px"><span class="no-ent" title="Aucun devis artisan importé pour ce lot"><i class="ti ti-alert-triangle" aria-hidden="true"></i> Aucune entreprise sur ce lot</span></div>';
+}
+
 function renderLotsTable(){
   const idx=state.currentChantier;
   if(idx===null)return;
@@ -3852,7 +4006,7 @@ function renderLotsTable(){
     tr.innerHTML=`
       <td style="text-align:center"><input type="checkbox" ${exclu?'':'checked'} title="Décocher pour exclure ce lot des totaux (comparaison entre artisans, par exemple)" onchange="toggleLotExclusion(${li},!this.checked)"></td>
       <td class="lot-num" style="${styleBarre}">${lot.num||''}</td>
-      <td style="${styleBarre}"><div class="lot-name">${lot.nom}${lot.cctp?' <span title="CCTP rédigé" style="font-size:9px;font-weight:700;color:#2E7D4F;border:1px solid #2E7D4F;border-radius:8px;padding:0 5px;vertical-align:middle">CCTP</span>':''}${lot.contrat?' <span title="Contrat d\'engagement" style="font-size:9px;font-weight:700;color:#1E5FAA;border:1px solid #1E5FAA;border-radius:8px;padding:0 5px;vertical-align:middle">'+(lot.contrat.statut==='signe'?'Contrat signé':'Contrat')+'</span>':''}</div><div style="font-size:10px;color:var(--text3)">Achat artisan : ${fmt(travArtisan)} € HT</div></td>
+      <td style="${styleBarre}"><div class="lot-name">${lot.nom}${lot.cctp?' <span title="CCTP rédigé" style="font-size:9px;font-weight:700;color:#2E7D4F;border:1px solid #2E7D4F;border-radius:8px;padding:0 5px;vertical-align:middle">CCTP</span>':''}${lot.contrat?' <span title="Contrat d\'engagement" style="font-size:9px;font-weight:700;color:#1E5FAA;border:1px solid #1E5FAA;border-radius:8px;padding:0 5px;vertical-align:middle">'+(lot.contrat.statut==='signe'?'Contrat signé':'Contrat')+'</span>':''}</div>${lotEntrepriseHtml(lot)}<div style="font-size:10px;color:var(--text3)">Achat artisan : ${fmt(travArtisan)} € HT</div></td>
       <td class="ht-val" style="${styleBarre}">${fmt(ht)} €<br>${margeBadgeHtml(margePct)}</td>
       <td class="ttc-val" style="${styleBarre}">${fmt(ttc)} €</td>
       <td><span class="status-badge ${sc}">${lot.statut||'Chiffrage'}</span>${exclu?'<div style="font-size:10px;color:var(--danger);margin-top:3px;font-weight:600">Exclu du total</div>':''}</td>
@@ -3923,6 +4077,7 @@ async function exportToFinancement(){
     if(typeof window.pushChiffrageToFinancement !== 'function'){ showToast('⚠️ Connexion Firebase indisponible'); return; }
     await window.pushChiffrageToFinancement(c.projetId, payload);
     showToast('✅ Synthèse envoyée vers Dossier Financement (' + fmt(totalTtc) + ' € TTC)');
+    try{ window.phenixJournal && window.phenixJournal('chiffrage','exporte','chiffrage → financement',c.nom||'',{projetId:String(c.projetId),projetNom:c.nom||''}); }catch(e){}
   }catch(e){
     console.error('Export financement error', e);
     showToast('⚠️ Échec de l\'envoi vers Financement');
@@ -3940,7 +4095,7 @@ async function exportToChantier(){
 
   const lotsExport = lots.map(lot=>{
     const { ht, ttc, tva } = computeLotAmounts(lot);
-    return { num: lot.num||'', nom: lot.nom||'', montantHt: Math.round(ht*100)/100, tva, montantTtc: Math.round(ttc*100)/100, statut: lot.statut||'Chiffrage' };
+    return { num: lot.num||'', nom: lot.nom||'', montantHt: Math.round(ht*100)/100, tva, montantTtc: Math.round(ttc*100)/100, statut: lot.statut||'Chiffrage', entreprise: lotEntrepriseNom(lot), devisArtisan: !!lot.devisArtisan };
   });
 
   const payload = {
@@ -3955,6 +4110,7 @@ async function exportToChantier(){
     if(typeof window.pushChiffrageToChantierImport !== 'function'){ showToast('⚠️ Connexion Firebase indisponible'); return; }
     await window.pushChiffrageToChantierImport(c.projetId, payload);
     showToast('✅ ' + lotsExport.length + ' lot(s) prêt(s) à importer dans Phénix Chantier');
+    try{ window.phenixJournal && window.phenixJournal('chiffrage','exporte','chiffrage → chantier',(c.nom||'')+' · '+lotsExport.length+' lots',{projetId:String(c.projetId),projetNom:c.nom||''}); }catch(e){}
   }catch(e){
     console.error('Export chantier error', e);
     showToast('⚠️ Échec de l\'envoi vers Chantier');
@@ -3979,7 +4135,7 @@ async function exportToCarnet(){
   const lotsExport=lots.map(lot=>{
     const { ht, ttc, tva }=computeLotAmounts(lot);
     totalHt+=ht;
-    return { num: lot.num||'', nom: lot.nom||'', montantHt: Math.round(ht*100)/100, tva, montantTtc: Math.round(ttc*100)/100, statut: lot.statut||'Chiffrage' };
+    return { num: lot.num||'', nom: lot.nom||'', montantHt: Math.round(ht*100)/100, tva, montantTtc: Math.round(ttc*100)/100, statut: lot.statut||'Chiffrage', entreprise: lotEntrepriseNom(lot), devisArtisan: !!lot.devisArtisan };
   });
   const pid=String(c.projetId);
   const surface=parseFloat(c.surface)||0;
@@ -4339,6 +4495,8 @@ function openLotDetail(li){
   const c=state.chantiers[state.currentChantier];
   document.getElementById('detail-num').value=lot.num||'';
   document.getElementById('detail-nom').value=lot.nom||'';
+  document.getElementById('detail-entreprise').value=lot.entreprise||'';
+  majBadgeEntrepriseDetail(lot);
   document.getElementById('detail-chantier-name').textContent=c.nom+(c.client?' — '+c.client:'');
   document.getElementById('param-statut').value=lot.statut||'Chiffrage';
   document.getElementById('param-notes').value=lot.notes||'';
@@ -4555,6 +4713,34 @@ function computeLotTotal(){
 // Sauvegarde le numéro et la désignation du lot, édités en direct
 // dans l'en-tête du détail (débounce léger pour ne pas spammer saveState).
 let _saveLotIdentityTimer = null;
+function majBadgeEntrepriseDetail(lot){
+  const b=document.getElementById('detail-ent-badge'); if(!b) return;
+  const e=lotEntrepriseEtat(lot);
+  b.innerHTML = e==='ok' ? '' : (e==='devis' ? '<span class="no-ent devis"><i class="ti ti-alert-circle" aria-hidden="true"></i> Devis reçu — entreprise à préciser</span>' : '<span class="no-ent"><i class="ti ti-alert-triangle" aria-hidden="true"></i> Aucune entreprise sur ce lot</span>');
+}
+let _saveLotEntTimer=null;
+function saveLotEntreprise(){
+  const li=state.currentLot;
+  if(li===null)return;
+  const lot=state.chantiers[state.currentChantier].lots[li];
+  lot.entreprise=document.getElementById('detail-entreprise').value.trim();
+  if(!lot.entreprise) delete lot.entreprise;
+  majBadgeEntrepriseDetail(lot);
+  clearTimeout(_saveLotEntTimer);
+  _saveLotEntTimer=setTimeout(()=>{
+    saveState();
+    if(typeof renderLotsTableOrCards === "function") renderLotsTableOrCards(); else renderLotsTable();
+    renderChantierGrid();
+    if(state.currentLot !== null){
+      const tableWrap = document.getElementById('lots-table-wrap');
+      const mobileCards = document.getElementById('lots-cards-mobile');
+      if(tableWrap) tableWrap.style.display = 'none';
+      if(mobileCards) mobileCards.style.display = 'none';
+    }
+  },500);
+}
+window.saveLotEntreprise = saveLotEntreprise;
+
 function saveLotIdentity(){
   const li=state.currentLot;
   if(li===null)return;
@@ -4606,6 +4792,7 @@ function openImportArtisanModalGlobal(){
   document.getElementById('import-preview').style.display='none';
   document.getElementById('btn-confirm-import').style.display='none';
   document.getElementById('import-txt-area').value='';
+  { const _ie=document.getElementById('import-entreprise'); if(_ie) _ie.value=''; }
   document.getElementById('file-artisan').value='';
   document.getElementById('pdf-artisan-status').style.display='none';
   document.getElementById('pdf-artisan-drop').innerHTML=`<i class="ti ti-file-type-pdf" style="font-size:28px;display:block;margin-bottom:8px;color:#e74c3c" aria-hidden="true"></i>Glissez le PDF du devis artisan ici<br><span style="font-size:11px;margin-top:4px;display:block">ou cliquez pour parcourir — l'IA détecte aussi le lot de chaque ligne</span>`;
@@ -4633,6 +4820,7 @@ function openImportArtisanModal(){
   document.getElementById('import-preview').style.display='none';
   document.getElementById('btn-confirm-import').style.display='none';
   document.getElementById('import-txt-area').value='';
+  { const _ie=document.getElementById('import-entreprise'); if(_ie) _ie.value=''; }
   document.getElementById('file-artisan').value='';
   document.getElementById('pdf-artisan-status').style.display='none';
   // Reset PDF drop zone
@@ -5013,6 +5201,8 @@ function confirmImportArtisan(){
   const marge=parseFloat(document.getElementById('import-marge').value)||20;
   const coef=1+(marge/100);
   const chantier=state.chantiers[state.currentChantier];
+  const entImport=((document.getElementById('import-entreprise')||{}).value||'').trim();
+  const marquerDevis=l=>{ l.devisArtisan=true; if(entImport) l.entreprise=entImport; };
 
   if(!importGlobalMode){
     const lot=chantier.lots[state.currentLot];
@@ -5023,6 +5213,9 @@ function confirmImportArtisan(){
       pu:r.puArtisan||0
     }));
     lot.postes=[...(lot.postes||[]),...newPostes];
+    marquerDevis(lot);
+    if(typeof majBadgeEntrepriseDetail==='function') majBadgeEntrepriseDetail(lot);
+    const _de=document.getElementById('detail-entreprise'); if(_de) _de.value=lot.entreprise||'';
     lot.marge=marge;
     document.getElementById('param-marge').value=marge;
     saveState();
@@ -5075,6 +5268,7 @@ function confirmImportArtisan(){
     }
     if(!chantier.lots[lotIdx].postes) chantier.lots[lotIdx].postes=[];
     chantier.lots[lotIdx].postes.push(poste);
+    marquerDevis(chantier.lots[lotIdx]);
     nbUpdated++;
   });
 
@@ -5571,6 +5765,7 @@ function renderLotsMobileCards(){
             <div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.06em;text-transform:uppercase">${lot.num||''}</div>
             <div style="font-size:16px;font-weight:600;color:var(--text);margin-top:2px;${styleBarreMobile}">${lot.nom}</div>
             ${exclu?'<div style="font-size:11px;color:var(--danger);font-weight:600;margin-top:2px">Exclu du total</div>':''}
+            ${lotEntrepriseHtml(lot)}
           </div>
         </label>
         <span class="status-badge ${sc}" style="font-size:10px">${lot.statut||'Chiffrage'}</span>
