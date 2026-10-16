@@ -3,6 +3,10 @@
 <head>
 <!--
  HISTORIQUE DES MODIFICATIONS — phenix_relances.html
+ 16/10/2026 (3) — Import PDF du devis : téléphone et e-mail du CLIENT relevés (coordonnées de Phénix écartées, numéro au format 06 12 34 56 78) ; alerte si ni l'un ni l'autre.
+ 16/10/2026 (2) — PORTAIL UNIQUE : bouton « Signé » (ex-« Accepté »). Un devis signé disparaît du fichier de l'assistante
+ (plus de bandeau « à transformer », absent de Clôturés et du bilan) ; le dossier est créé automatiquement par Dossier.
+ Saisie d'un devis depuis Dossier (message nouveau-devis). Repérer : [Portail].
  16/10/2026 — TRI AUTOMATIQUE : devis à rappeler maintenant en premier, puis le plus ancien (date du devis, ou du dernier appel) en haut. Voir ordre().
  16/10/2026 — TRI : uniquement par date, du plus ancien au plus récent (date du devis, ou date de la dernière relance une fois le devis relancé). Plus aucun tri par montant. Repérer : ordre().
  16/10/2026 — LIGNES DU DEVIS : bouton « Voir les lignes du devis » sur chaque carte, détail dépliable (lignes, totaux HT/TTC). Repérer : lignesHtml().
@@ -519,7 +523,7 @@ function render(){
   if (tab === 'bilan') { html = renderBilan(st); }
   else if (tab === 'clos') {
     var cl = clotures().filter(function(i){ return matchSearch(i, search); });
-    html = cl.length ? '<div class="note" style="margin:0 0 10px">Devis acceptés ou refusés depuis ce module. Un clic sur « En attente » remet le devis dans la file.</div>' + cl.map(cardClos).join('')
+    html = cl.length ? '<div class="note" style="margin:0 0 10px">Devis refusés depuis ce module. Un clic sur « En attente » remet le devis dans la file.</div>' + cl.map(cardClos).join('')
                      : '<div class="empty"><div class="big">📭</div>Aucun devis clôturé pour l\'instant.</div>';
   } else {
     var src = tab === 'todo' ? aFaire : tab === 'soon' ? soon : q;
@@ -626,7 +630,7 @@ function card(it){
 }
 
 /* ── Notifications : « la secrétaire a changé le statut d'un devis » ── */
-var STATUT_LABEL = { en_attente:'En attente', refuse:'Refusé', accepte:'Accepté' };
+var STATUT_LABEL = { en_attente:'En attente', refuse:'Refusé', accepte:'Signé' };
 function normStatut(src, s){
   if (src === 'dec') return s === 'signe' ? 'accepte' : s === 'perdu' ? 'refuse' : 'en_attente';
   return s || 'en_attente';
@@ -673,7 +677,7 @@ function marquerLu(ids){
 /* ── Statut du devis : En attente / Refusé / Accepté ── */
 function statutBtns(it){
   var cur = statutNorm(it), id = String(it.f.id);
-  return '<div class="seg">' + [['en_attente','En attente',''],['refuse','Refusé','r'],['accepte','Accepté','g']].map(function(x){
+  return '<div class="seg">' + [['en_attente','En attente',''],['refuse','Refusé','r'],['accepte','Signé','g']].map(function(x){
     return '<button class="opt ' + (cur === x[0] ? 'sel ' + x[2] : '') + '" data-act="setstatut" data-id="' + esc(id) + '" data-v="' + x[0] + '">' + x[1] + '</button>';
   }).join('') + '</div>';
 }
@@ -681,6 +685,7 @@ function clotures(){
   var key = function(it){ return normDate(it.f.dateAcceptation) || normDate(it.f.dateCloture) || normDate(it.f.dateEnvoi) || ''; };
   return allItems().filter(function(it){
     if (estEnAttente(it)) return false;
+    if (RESTREINT && statutNorm(it) === 'accepte') return false;   // [Portail] un devis signé disparaît du fichier de l'assistante
     if (it.src === 'fact') return (parseInt(it.f.relanceNb,10)||0) > 0 || !!normDate(it.f.dateAcceptation) || !!normDate(it.f.dateCloture);   // on ne liste pas tout l'historique de Dossier
     return true;
   }).sort(function(a,b){ return key(a) < key(b) ? 1 : -1; }).slice(0, 40);
@@ -690,7 +695,7 @@ function cardClos(it){
   var dt = normDate(ok ? f.dateAcceptation : f.dateCloture);
   return '<div class="card" style="border-left-color:' + (ok ? 'var(--green)' : 'var(--red)') + '"><div class="c-top"><div><div class="c-client" style="font-size:15px">' + esc(nomClient(it)) + '</div>' +
     '<div class="c-objet">' + esc(f.numero||'') + (f.objet ? ' · ' + esc(f.objet) : '') + '</div></div><div class="c-amt">' + euros(parseFloat(f.montantHt)||0) + '<small>HT</small></div></div>' +
-    '<div class="c-meta"><span class="chip ' + (ok ? 'green' : 'red') + '">' + (ok ? 'Accepté' : 'Refusé' + (f.motifPerte ? ' · ' + esc(f.motifPerte) : '')) + '</span>' +
+    '<div class="c-meta"><span class="chip ' + (ok ? 'green' : 'red') + '">' + (ok ? 'Signé' : 'Refusé' + (f.motifPerte ? ' · ' + esc(f.motifPerte) : '')) + '</span>' +
     '<span class="chip">Devis du ' + fmtDate(normDate(f.dateEnvoi) || normDate(f.dateEmission)) + '</span>' + (dt ? '<span class="chip">clôturé le ' + fmtDate(dt) + '</span>' : '') + '<span class="chip">' + (parseInt(f.relanceNb,10)||0) + ' relance(s)</span></div>' + statutBtns(it) + '</div>';
 }
 async function setStatut(id, v){
@@ -699,9 +704,9 @@ async function setStatut(id, v){
   var today = todayISO();
   var ST = it.src === 'dec' ? { ok:'signe', ko:'perdu', att:'en_cours' } : { ok:'accepte', ko:'refuse', att:'en_attente' };
   if (v === 'accepte') {
-    if (!confirm('Marquer ce devis comme ACCEPTÉ ?')) return;
-    var ok = await persist(it, { statut:ST.ok, dateAcceptation:today, dateCloture:'', motifPerte:'', relanceProchaine:'' }, '✅ Devis accepté — bravo !');
-    if (ok && it.src === 'dec') creerProjet(it);
+    if (!confirm('Marquer ce devis comme SIGNÉ ?' + (RESTREINT ? '\n\nIl disparaîtra de votre liste et le dossier sera créé automatiquement.' : ''))) return;
+    // [Portail] le dossier est créé automatiquement par Dossier (plus d'ouverture manuelle ici)
+    await persist(it, { statut:ST.ok, dateAcceptation:today, dateCloture:'', motifPerte:'', relanceProchaine:'' }, RESTREINT ? '✅ Devis signé — le dossier sera créé automatiquement.' : '✅ Devis signé — le dossier se crée à l\'ouverture de Dossier.');
   } else if (v === 'refuse') {
     sheetState = { kind:'refus', id:String(id), motif:MOTIFS[0] }; renderRefus();
   } else {
@@ -754,7 +759,7 @@ function bilan(){
     var tranche = statut === 'accepte' || statut === 'refuse' || diffDays(today, base) >= CFG.cloture;
     if (!tranche) return;
     g.n++; if (statut === 'accepte') g.signes++;
-    if (relance && (statut === 'accepte' || statut === 'refuse')) clos.push(it);
+    if (relance && ((statut === 'accepte' && !RESTREINT) || statut === 'refuse')) clos.push(it);
   });
   rel.taux = rel.n ? Math.round(rel.signes / rel.n * 100) : 0;
   non.taux = non.n ? Math.round(non.signes / non.n * 100) : 0;
@@ -851,10 +856,10 @@ async function saveConsigner(){
   if (res.k === 'signed') { patch.statut = ST.ok; patch.dateAcceptation = today; patch.relanceProchaine = ''; }
   if (res.k === 'lost')   { patch.statut = ST.ko; patch.dateCloture = today; patch.motifPerte = motif; patch.relanceProchaine = ''; }
   closeSheet();
-  var msgOk = res.k === 'signed' ? '✅ Devis signé — bravo !' : res.k === 'lost' ? 'Devis clôturé.' : '✅ Relance consignée.';
+  var msgOk = res.k === 'signed' ? (RESTREINT ? '✅ Devis signé — le dossier sera créé automatiquement.' : '✅ Devis signé — bravo !') : res.k === 'lost' ? 'Devis clôturé.' : '✅ Relance consignée.';
   var ok = await persist(it, patch, msgOk);
   // Devis signé issu de « devis en cours » : il n'existe pas encore de projet → on le crée dans Dossier
-  if (ok && res.k === 'signed' && it.src === 'dec') creerProjet(it);
+  // [Portail] devis signé : le dossier est créé automatiquement par Dossier
 }
 
 async function persist(it, patch, okMsg){
@@ -1033,6 +1038,19 @@ function renderDevisForm(){
   h += '<div class="row"><button class="btn ghost" data-act="closesheet">Annuler</button><button class="btn primary" data-act="d-save">Enregistrer</button></div>';
   openSheet(h);
 }
+function nettoyerEmail(v){
+  var m = String(v == null ? '' : v).toLowerCase().match(/[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}/);
+  if (!m) return '';
+  return /phenixarchitecte|phenix-architecte|phenix-architecture/.test(m[0]) ? '' : m[0];
+}
+function nettoyerTel(v){
+  var d = String(v == null ? '' : v).replace(/[^\d+]/g, '');
+  if (d.indexOf('+33') === 0) d = '0' + d.slice(3); else if (d.indexOf('0033') === 0) d = '0' + d.slice(4);
+  d = d.replace(/\D/g, '');
+  if (d.length === 9 && /^[1-9]/.test(d)) d = '0' + d;
+  if (!/^0[1-9]\d{8}$/.test(d) || d === '0473730059') return '';
+  return d.replace(/(\d{2})(?=\d)/g, '$1 ').trim();
+}
 function preparerFichier(file){
   return new Promise(function(resolve, reject){
     var pdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
@@ -1061,6 +1079,7 @@ var PROMPT_DEVIS = "Tu lis un devis émis par un maître d'œuvre (Phénix-Archi
   '{"client":"","adresse":"","email":"","tel":"","objet":"","numero":"","dateEmission":"AAAA-MM-JJ","montantHt":0,"tva":0,"lignes":[{"libelle":"","qte":0,"unite":"","puHt":0,"montantHt":0,"tva":0}]}. ' +
   "RÈGLES : ne renseigne que ce qui figure réellement sur le document, sinon \"\" ou 0 — n'invente rien. " +
   "client = prénom et nom du client SANS civilité (Madame, M., Mme) ; pour une société, sa raison sociale. adresse = adresse postale du client (numéro, rue, code postal, commune), sans « FRANCE ». " +
+  "email et tel = coordonnées du CLIENT, dans le cadre client (sous son nom et son adresse) ou sur une ligne « Email » / « Tél. » / « Mobile » à côté de ses coordonnées ; le mobile de préférence ; tel = 10 chiffres. Le devis est ÉMIS par Phénix-Architecture : ses propres coordonnées (contact@phenixarchitecte.fr, 04 73 73 00 59, SIRET, adresse de l'entreprise) ne sont JAMAIS celles du client ; si le client n'a pas de téléphone ou d'e-mail sur le devis, mets \"\". " +
   "objet = la nature de la mission en une courte phrase. numero = numéro du devis. montantHt = total HT du devis ; tva = taux de TVA global en %. " +
   "Nombres en décimal avec un point, sans espace ni symbole. Ignore les annotations manuscrites et la signature : lis uniquement le texte imprimé.";
 async function importerDevisIA(file){
@@ -1084,7 +1103,7 @@ async function importerDevisIA(file){
     var v = JSON.parse(text.slice(a, b + 1)); v = v.valeurs || v;
     var d = sheetState.d, n = 0;
     function put(k, val){ if (val !== undefined && val !== null && String(val).trim() !== '') { d[k] = String(val).trim(); n++; } }
-    put('client', v.client); put('adresse', v.adresse); put('email', v.email); put('tel', v.tel); put('objet', v.objet); put('numero', v.numero);
+    put('client', v.client); put('adresse', v.adresse); put('email', nettoyerEmail(v.email)); put('tel', nettoyerTel(v.tel)); put('objet', v.objet); put('numero', v.numero);
     if (parseFloat(v.montantHt) > 0) { d.montantHt = String(parseFloat(v.montantHt)); n++; }
     if (parseFloat(v.tva) > 0) d.tva = String(parseFloat(v.tva));
     var dt = normDate(v.dateEmission); if (dt) { d.dateEnvoi = dt; n++; }
@@ -1094,7 +1113,8 @@ async function importerDevisIA(file){
         .filter(function(l){ return l.libelle || l.montantHt; });
       if (d.lignes.length && !parseFloat(d.montantHt)) d.montantHt = String(Math.round(d.lignes.reduce(function(s2,l){ return s2 + l.montantHt; }, 0) * 100) / 100);
     }
-    sheetState.status = n ? '✅ ' + n + ' information(s) relevée(s) — vérifiez, puis complétez le téléphone / l\'e-mail si besoin.' : '⚠️ Rien de lisible sur ce document : remplissez à la main.';
+    var manque = [!d.tel ? 'téléphone' : '', !d.email ? 'e-mail' : ''].filter(Boolean).join(' et ');
+    sheetState.status = n ? '✅ ' + n + ' information(s) relevée(s) — vérifiez' + (manque ? ' ; ' + manque + ' du client non trouvé : à compléter pour pouvoir le relancer.' : '.') : '⚠️ Rien de lisible sur ce document : remplissez à la main.';
   } catch(err) {
     sheetState.status = '⚠️ Lecture impossible (' + (err && err.message ? err.message : err) + ') — remplissez à la main.';
   }
@@ -1113,6 +1133,7 @@ async function enregistrerDevis(){
     var dup = DEVIS.filter(function(x){ return String(x.numero || '').trim().toLowerCase() === numero.toLowerCase() && String(x.id) !== sheetState.id; })[0];
     if (dup && !confirm('Un devis « ' + numero + ' » existe déjà (' + (dup.client || '') + '). Enregistrer quand même ?')) return;
   }
+  if (!(d.tel || '').trim() && !(d.email || '').trim() && !confirm('Ni téléphone ni e-mail pour ce client : impossible de le relancer. Enregistrer quand même ?')) return;
   var tvaN = parseFloat(d.tva); var tva = isFinite(tvaN) ? tvaN : 20;
   var id = sheetState.id || ('dec-' + Date.now());
   var doc = { id:id, client:client, tel:(d.tel||'').trim(), email:(d.email||'').trim(), adresse:(d.adresse||'').trim(), objet:(d.objet||'').trim(), numero:numero,
@@ -1151,7 +1172,7 @@ function creerProjet(it){
 function aConvertir(){ return DEVIS.filter(function(d){ return d && d.statut === 'signe' && !d.projetCree; }); }
 function renderConv(){
   var l = aConvertir(), el = $('conv');
-  if (!l.length) { el.innerHTML = ''; return; }
+  if (RESTREINT || !l.length) { el.innerHTML = ''; return; }   // [Portail] rien à afficher pour l'assistante
   el.innerHTML = '<div class="banner" style="background:var(--green-bg);border-color:rgba(79,209,139,.4);color:var(--green)"><b>' + l.length + ' devis signé' + (l.length > 1 ? 's' : '') + ' à transformer en projet</b>' +
     l.map(function(d){
       return '<div class="row" style="margin-top:8px"><span style="color:var(--text);flex:1;min-width:140px">' + esc(d.client || '') + ' · ' + esc(d.numero || '') + ' · ' + euros(parseFloat(d.montantHt)||0) + ' HT</span>' +
@@ -1270,6 +1291,12 @@ window.R = {
   // exposé pour les tests
   _etat: etat, _gabarit: gabarit, _bilan: bilan, _cfg: function(){ return CFG; }
 };
+/* [Portail] ordres du Shell : « Nouveau devis » demandé depuis Dossier ; signal « prêt » pour recevoir l'ordre */
+window.addEventListener('message', function(ev){
+  var d = ev.data;
+  if (d && d.source === 'phenix-shell' && d.action === 'nouveau-devis' && !RESTREINT) openDevisForm('');
+});
+try { if (window.parent && window.parent !== window) window.parent.postMessage({ source:'phenix-relances', ready:true }, '*'); } catch(e) {}
 render();
 })();
 </script>

@@ -26,6 +26,9 @@
      (navBadgeTaches), remis à zéro à l'ouverture de Dossier.
    • Le portail peut ouvrir « Devis » (message phenix-espace / open-module).
    Repérer : [Espace assistante].
+ 16/10/2026 — PORTAIL UNIQUE DE L'ASSISTANTE : module « assistante » (phenix_assistante.html, 2 onglets : devis à relancer / tâches
+   à réaliser). Les comptes COMPTES_RELANCES_SEULES ne voient que ce module (page d'accueil). Dossier peut ouvrir « Devis » sur
+   un nouveau devis (ordre nouveau-devis). Repérer : [Portail].
  15/10/2026 (3) — JOURNAL D'ACTIVITÉ + NOTIFICATIONS CIBLÉES :
    • Nouveau module « Journal » (phenix_journal.html), visible du seul
      administrateur (SHELL_ADMIN_EMAIL) : qui a fait quoi, par jour et par personne.
@@ -233,6 +236,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
     <div class="shell-nav-item" data-view="module" data-module="chiffrage" data-tip="Chiffrage" onclick="shellOpenModule('chiffrage',this)"><i class="ti ti-calculator"></i><span class="lbl">Chiffrage</span></div>
     <div class="shell-nav-item" data-view="module" data-module="relances" data-tip="Devis en cours & relances" onclick="shellOpenModule('relances',this)"><i class="ti ti-file-invoice"></i><span class="lbl">Devis</span><span class="nav-badge" id="navBadgeDevis">0</span></div>
     <div class="shell-nav-item" data-view="module" data-module="espace" data-tip="Espace assistante" onclick="shellOpenModule('espace',this)"><i class="ti ti-headset"></i><span class="lbl">Espace</span></div>
+    <div class="shell-nav-item" data-view="module" data-module="assistante" data-tip="Espace assistante" style="display:none" onclick="shellOpenModule('assistante',this)"><i class="ti ti-headset"></i><span class="lbl">Mon espace</span></div>
     <div class="shell-nav-item" data-view="module" data-module="carnet" data-tip="Carnet de projet" onclick="shellOpenModule('carnet',this)"><i class="ti ti-book-2"></i><span class="lbl">Carnet</span></div>
     <div class="shell-nav-item" data-view="module" data-module="contrat" data-tip="Contrats" onclick="shellOpenModule('contrat',this)"><i class="ti ti-signature"></i><span class="lbl">Contrats</span></div>
     <div class="shell-nav-item" data-view="module" data-module="planning" data-tip="Planning de chantier" onclick="shellOpenModule('planning',this)"><i class="ti ti-calendar-time"></i><span class="lbl">Planning</span></div>
@@ -379,7 +383,7 @@ onAuthStateChanged(auth, user => {
     try { if (!sessionStorage.getItem('phenix_jrn_conn')) { sessionStorage.setItem('phenix_jrn_conn', '1'); window.phenixJournal('shell', 'connexion', 'application', 'Connexion à Phénix'); } } catch (e) {}
     if (!_restreint) { startListeners(); startNotifs(); startNotifsTaches(); }
     // Dossier = page d'accueil du shell, ouverte automatiquement à la connexion (Relances pour un compte restreint)
-    const _accueil = _restreint ? 'espace' : 'dossier';
+    const _accueil = _restreint ? 'assistante' : 'dossier';
     shellOpenModule(_accueil, document.querySelector('.shell-nav-item[data-module="' + _accueil + '"]'));
     window._accueilFait = true;   // [Espace assistante] à partir d'ici, ouvrir Dossier = avoir vu les notifications de tâches
   } else {
@@ -724,6 +728,7 @@ const MODULES = {
   relances:     { src: 'phenix_relances.html',           title: 'Devis en cours — relances' },
   journal:      { src: 'phenix_journal.html',            title: 'Journal d\'activité — qui a fait quoi' },
   espace:       { src: 'phenix_espace.html',             title: 'Espace assistante — tâches et projets' },
+  assistante:   { src: 'phenix_assistante.html',         title: 'Espace assistante — devis à relancer et tâches' },   // [Portail]
   contrat:      { src: 'phenix_contrat.html',            title: 'Contrats — MOE / contractant général' },
   planning:     { src: 'phenix_planning.html',           title: 'Planning — Gantt de chantier' },
   chantier:     { src: 'phenix_chantier.html',           title: 'Chantier — suivi de travaux' },
@@ -740,7 +745,7 @@ const MODULES = {
 //  ⚠️ C'est une restriction d'AFFICHAGE, comme celle de l'alternante dans
 //  Dossier : elle ne remplace pas les règles de sécurité Firestore.
 // ════════════════════════════════════════════════════════════
-const COMPTES_MODULES_AUTORISES = ['espace', 'relances'];   // [Espace assistante] modules visibles pour ces comptes
+const COMPTES_MODULES_AUTORISES = ['assistante'];   // [Portail] un seul portail (devis + tâches)   // [Espace assistante] modules visibles pour ces comptes
 const COMPTES_RELANCES_SEULES = [
   // 'secretaire@exemple.fr',
 ];
@@ -750,7 +755,8 @@ window.appliquerRestrictionsShell = function(email) {
   window._phenixRestreint = COMPTES_RELANCES_SEULES.map(x => String(x).toLowerCase()).indexOf(e) >= 0;
   if (!window._phenixRestreint) return false;
   document.querySelectorAll('.shell-nav-item').forEach(n => {
-    if (COMPTES_MODULES_AUTORISES.indexOf(n.getAttribute('data-module')) < 0) n.style.display = 'none';
+    const ok = COMPTES_MODULES_AUTORISES.indexOf(n.getAttribute('data-module')) >= 0;
+    n.style.display = ok ? '' : 'none';   // [Portail] l'entrée « Assistante » n'est visible que pour ces comptes
   });
   return true;
 };
@@ -844,7 +850,7 @@ window.shellOpenProjet = function(id, nom) {
 window.addEventListener('message', (ev) => {
   const msg = ev.data;
   if (!msg || !msg.source) return;
-  if (msg.source === 'phenix-dossier' && msg.ready && shellPendingOrder && shellCurrentFrame) {
+  if ((msg.source === 'phenix-dossier' || msg.source === 'phenix-relances') && msg.ready && shellPendingOrder && shellCurrentFrame) {
     try { shellCurrentFrame.contentWindow.postMessage(shellPendingOrder, '*'); } catch(e) {}
     shellPendingOrder = null;
   }
@@ -864,7 +870,11 @@ window.addEventListener('message', (ev) => {
   // Dossier ou Chantier demande à basculer vers un autre module
   if ((msg.source === 'phenix-dossier' || msg.source === 'phenix-chantier') && msg.action === 'open-module' && MODULES[msg.module]) {
     const navEl = document.querySelector('.shell-nav-item[data-module="' + msg.module + '"]');
-    shellOpenModule(msg.module, navEl || null);
+    // [Portail] un ordre peut accompagner l'ouverture (ex. nouveau devis demandé depuis Dossier)
+    const ord = (msg.order && msg.order.source === 'phenix-shell') ? msg.order : undefined;
+    const deja = ord && shellCurrentModule === msg.module && shellCurrentFrame;
+    shellOpenModule(msg.module, navEl || null, ord);
+    if (deja) { try { shellCurrentFrame.contentWindow.postMessage(ord, '*'); } catch(e) {} shellPendingOrder = null; }
   }
   // Devis signé suivi dans « Devis en cours » : Dossier s'ouvre sur « Nouveau projet », pré-rempli
   if (msg.source === 'phenix-relances' && msg.action === 'creer-projet-devis' && msg.devis && !window._phenixRestreint) {

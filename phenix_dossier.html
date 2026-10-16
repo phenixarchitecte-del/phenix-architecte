@@ -5,6 +5,11 @@
 ══════════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_dossier.html
 ──────────────────────────────────────────────────────────────────────
+ 16/10/2026 (2) — Import de devis : téléphone et e-mail du client relevés par défaut (règles réactivées une fois ; coordonnées de Phénix écartées).
+ Repérer : devisNettoyerEmail, devisNettoyerTel.
+ 16/10/2026 — PORTAIL UNIQUE : un devis marqué « Signé » par l'assistante crée AUTOMATIQUEMENT le projet + le devis accepté
+ (convertirDevisSignes, à l'ouverture de Dossier avec le compte administrateur). Bouton « Nouveau devis à relancer » sur la page
+ Devis & honoraires (ouvre la saisie dans le portail Devis). Repérer : [Portail].
  15/10/2026 — FUSION. Base = Dossier « -2 » (travail du 04/10/2026), qui
  contient l'intégralité de la version « (3) » (vérifié ligne à ligne : seules
  14 lignes de (3) sont remplacées par leur version modifiée, aucune perdue).
@@ -212,6 +217,14 @@ window._fb = {
       snap.forEach(d => list.push(d.data()));
       callback(list);
     });
+  },
+  // [Portail] devis envoyés pas encore signés (saisis dans le module Devis, relancés par l'assistante)
+  listenDevisEnCours(callback, onError) {
+    return onSnapshot(collection(db, 'phenix_devis_en_cours'), snap => {
+      const list = [];
+      snap.forEach(d => { const x = d.data(); if (x && x.id == null) x.id = d.id; list.push(x); });
+      callback(list);
+    }, err => { if (onError) onError(err); });
   },
   // Écoute les échéances en temps réel
   listenEcheances(callback) {
@@ -3232,6 +3245,7 @@ if (window.parent !== window) {
           <div style="display:flex;gap:8px">
             <button class="btn" onclick="openCalcModal()"><i class="ti ti-calculator"></i> Calculateur</button>
             <button class="btn" onclick="exportDevisHonorairesPDF()" style="border-color:#1E3A5F;color:#1E3A5F"><i class="ti ti-file-type-pdf"></i> Exporter PDF</button>
+            <button class="btn btn-primary" onclick="ouvrirNouveauDevisRelance()"><i class="ti ti-file-plus"></i> Nouveau devis à relancer</button>
             <button class="btn" onclick="openImportDevisSigneModal()" style="border-color:#27AE60;color:#27AE60"><i class="ti ti-file-import"></i> Importer devis signé → nouveau dossier</button>
             <button class="btn btn-primary" onclick="toggleAI_d();askAI('Génère un modèle de devis d\'honoraires d\'architecte pour une mission de maîtrise d\'œuvre complète, avec décomposition par phase.')">↗ Générer un devis IA</button>
           </div>
@@ -4442,6 +4456,12 @@ window.addEventListener('firebase-ready', async () => {
     // storageUrl) — se corrige tout seul en tâche de fond, rien à faire.
     if (typeof tvaMigrerJustificatifsLegacy === 'function') tvaMigrerJustificatifsLegacy(list);
   });
+
+  // [Portail] devis signés par l'assistante → dossier créé automatiquement
+  try {
+    window._fb.listenDevisEnCours(list => { try { convertirDevisSignes(list); } catch (e) { console.warn(e); } },
+      err => console.warn('Devis en cours non lisibles :', err && err.code));
+  } catch (e) { console.warn(e); }
 
   // Écoute temps réel : tâches
   window._fb.listenTaches(list => {
@@ -13133,6 +13153,88 @@ function ouvrirNouveauProjetDepuisDevis(dv) {
   toast_d('✅ Devis signé repris — vérifiez la fiche (type, honoraires…) puis cliquez sur "Créer le projet".');
 }
 
+
+// ══ [Portail] DEVIS SIGNÉ → DOSSIER CRÉÉ AUTOMATIQUEMENT ══════════════
+// L'assistante clique sur « Signé » dans son portail (phenix_devis_en_cours.statut = 'signe').
+// Dès que Dossier est ouvert avec le compte administrateur, chaque devis signé non encore converti
+// devient un projet + un devis « accepté » dans sa facturation, sans ressaisie.
+const _convDevisEnCours = new Set();
+function _devisTypeProjet(objet) {
+  const o = String(objet || '').toLowerCase();
+  if (/extension|sur[ée]l[ée]v/.test(o)) return 'Extension / Surélévation';
+  if (/neuf|construction|maison individuelle|villa/.test(o)) return 'Logement individuel neuf';
+  if (/bureau|local pro|commerc/.test(o)) return 'Bureau / Local professionnel';
+  if (/collectif|immeuble/.test(o)) return 'Logement collectif';
+  if (/erp|recevant/.test(o)) return 'ERP';
+  if (/agricole|industri|hangar/.test(o)) return 'Industriel / Agricole';
+  return 'Rénovation / Réhabilitation';
+}
+async function convertirDevisSignes(list) {
+  if (typeof getCurrentUserRole === 'function' && getCurrentUserRole() !== 'admin') return;   // jamais depuis le compte de l'assistante
+  if (!window._fb || !Array.isArray(list)) return;
+  for (const dec of list) {
+    if (!dec || dec.statut !== 'signe' || dec.projetCree) continue;
+    const id = String(dec.id);
+    if (_convDevisEnCours.has(id)) continue;
+    const t0 = dec.conversionDebut ? Date.parse(dec.conversionDebut) : 0;
+    if (t0 && Date.now() - t0 < 120000) continue;   // un autre onglet est déjà en train de le convertir
+    _convDevisEnCours.add(id);
+    try { await convertirDevisSigneAuto(dec); }
+    catch (e) { console.warn('Conversion du devis signé impossible :', e); try { toast_d('⚠️ Devis signé ' + (dec.numero || id) + ' : dossier non créé (' + (e && e.message || e) + ')'); } catch (e2) {} }
+    finally { _convDevisEnCours.delete(id); }
+  }
+}
+async function convertirDevisSigneAuto(dec) {
+  const fb = window._fb;
+  const ref_ = () => fb.doc(fb.db, 'phenix_devis_en_cours', String(dec.id));
+  await fb.setDoc(ref_(), { conversionDebut: new Date().toISOString() }, { merge: true });   // verrou anti-doublon (autre onglet)
+  const lignes = (typeof devisNettoyerLignes === 'function') ? devisNettoyerLignes(dec.lignes || []) : (dec.lignes || []);
+  let ht = parseFloat(dec.montantHt) || 0;
+  if (!ht && lignes.length) ht = Math.round(lignes.reduce((s, l) => s + (l.montantHt || 0), 0) * 100) / 100;
+  const tva = parseFloat(dec.tva) || 20;
+  const num = dec.numero || '';
+  const today = new Date().toISOString().split('T')[0];
+  const client = String(dec.client || '').trim() || 'Client sans nom';
+  const id = stateDossier.nextId++;
+  const year = new Date().getFullYear();
+  const p = {
+    id, ref: year + '-' + String(id).padStart(3, '0'), nom: client, client,
+    type: _devisTypeProjet(dec.objet), mission: 'Complète (ESQ → AOR)',
+    email: dec.email || '', tel: dec.tel || '',
+    ctype: /(^|\s)(sci|sarl|sas|sasu|eurl|soci[ée]t[ée]|ste)(\s|$)/i.test(client) ? 'Société / SCI' : 'Particulier',
+    adresse: dec.adresse || '', budget: '', date: '', surface: '',
+    phase: 'ESQ', statut: 'actif', honoraires: ht ? String(ht) : '', commissions: '', avancement: 0,
+    notes: 'Dossier créé automatiquement le ' + new Date().toLocaleDateString('fr-FR') + ' à la signature du devis ' + (num || '(sans numéro)') +
+           '. À vérifier : type de projet, mission, honoraires.',
+    historique: [],
+  };
+  p.historique = [createHistEntry('creation', [], 'Projet créé automatiquement — devis ' + (num || '') + ' signé', p)];
+  stateDossier.projets.push(p);
+  await saveProjet(p);
+  const devisCree = {
+    id: 'fact-' + Date.now(), type: 'devis', numero: num || autoNumero('devis'), projetId: id, phase: p.phase,
+    objet: dec.objet || 'Devis initial', dateEmission: dec.dateEmission || dec.dateEnvoi || today, dateEcheance: '', datePaiement: '',
+    montantHt: ht, tva, montantPaye: 0, lignes, montantTvaDevis: 0, montantTtcDevis: 0, statut: 'accepte',
+    notes: 'Créé automatiquement à la signature du devis (portail assistante).',
+  };
+  if (!devisCree.lignes.length) delete devisCree.lignes;
+  stateDossier.factures.push(devisCree);
+  await saveFactureDb(devisCree);
+  await fb.setDoc(ref_(), { projetCree: true, projetId: id, conversionAuto: true, convertiLe: new Date().toISOString() }, { merge: true });
+  try { if (window.phenixJournal) window.phenixJournal('dossier', 'cree', 'projet', client, { detail: 'création automatique — devis ' + num + ' signé' }); } catch (e) {}
+  try { refreshAllViews(); } catch (e) {}
+  toast_d('✅ Devis signé : dossier « ' + client + ' » créé automatiquement — vérifiez le type et les honoraires.');
+}
+// Bouton « Nouveau devis à relancer » (page Devis & honoraires) : ouvre la saisie du devis dans le portail Devis,
+// d'où il apparaît aussitôt chez l'assistante — le devis n'est saisi qu'une seule fois.
+function ouvrirNouveauDevisRelance() {
+  try {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ source: 'phenix-dossier', action: 'open-module', module: 'relances', order: { source: 'phenix-shell', action: 'nouveau-devis' } }, '*');
+    } else toast_d('Ouvrez Phénix depuis le Shell pour saisir un devis à relancer.');
+  } catch (e) { toast_d('⚠️ ' + e.message); }
+}
+
 function openImportDevisSigneModal() {
   document.getElementById('devis-signe-file-input').value = '';
   document.getElementById('devis-signe-status').style.display = 'none';
@@ -13202,10 +13304,10 @@ const DEVIS_CIBLES = [
    consigne:"Nom de famille seul du client (sans civilité ni prénom), tel qu'écrit dans le cadre client : il sert de nom à la fiche dossier. Pour une société : sa raison sociale."},
   {g:'Fiche projet — Client & adresse', cible:'np-adresse', label:'Adresse', type:'texte', actif:true,
    consigne:"Adresse postale du cadre client, sous le nom : numéro et rue, code postal, commune — sans la ligne « FRANCE »."},
-  {g:'Fiche projet — Client & adresse', cible:'np-email', label:'Email du client', type:'texte', actif:false,
-   consigne:"Adresse e-mail du client, si elle figure sur le devis."},
-  {g:'Fiche projet — Client & adresse', cible:'np-tel', label:'Téléphone du client', type:'texte', actif:false,
-   consigne:"Numéro de téléphone du client, s'il figure sur le devis (mobile de préférence)."},
+  {g:'Fiche projet — Client & adresse', cible:'np-email', label:'Email du client', type:'texte', actif:true,
+   consigne:"Adresse e-mail du CLIENT, dans le cadre client (sous son nom et son adresse) ou sur une ligne « Email » / « Courriel » à côté de ses coordonnées. Jamais l'adresse de Phénix-Architecture (contact@phenixarchitecte.fr, en-tête ou pied de page)."},
+  {g:'Fiche projet — Client & adresse', cible:'np-tel', label:'Téléphone du client', type:'texte', actif:true,
+   consigne:"Numéro de téléphone du CLIENT, dans le cadre client ou sur une ligne « Tél. » / « Mobile » à côté de ses coordonnées (le mobile de préférence). Jamais le numéro de Phénix-Architecture (04 73 73 00 59, en-tête ou pied de page). Format : 10 chiffres, ex. 06 12 34 56 78."},
   {g:'Fiche projet — Client & adresse', cible:'np-ctype', label:'Type de client', type:'choix', actif:false,
    consigne:"Particulier si le client est une personne physique ; sinon Société / SCI, Promoteur ou Collectivité selon le cas."},
   {g:'Fiche projet — Dossier', cible:'np-ref', label:'Référence dossier', type:'texte', actif:true,
@@ -13248,6 +13350,21 @@ const DEVIS_CIBLES = [
    consigne:"Total TTC : bloc de totaux en bas à droite, ligne « Total TTC »."},
 ];
 
+// ── [Portail] contrôle des coordonnées lues par l'IA : celles de Phénix ne sont jamais celles du client ──
+function devisNettoyerEmail(v) {
+  const m = String(v == null ? '' : v).toLowerCase().match(/[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}/);
+  if (!m) return '';
+  return /phenixarchitecte|phenix-architecte|phenix-architecture/.test(m[0]) ? '' : m[0];
+}
+function devisNettoyerTel(v) {
+  let d = String(v == null ? '' : v).replace(/[^\d+]/g, '');
+  if (d.indexOf('+33') === 0) d = '0' + d.slice(3); else if (d.indexOf('0033') === 0) d = '0' + d.slice(4);
+  d = d.replace(/\D/g, '');
+  if (d.length === 9 && /^[1-9]/.test(d)) d = '0' + d;
+  if (!/^0[1-9]\d{8}$/.test(d) || d === '0473730059') return '';
+  return d.replace(/(\d{2})(?=\d)/g, '$1 ').trim();
+}
+
 function devisReglesFusion(saved) {
   const map = new Map((Array.isArray(saved) ? saved : []).map(r => [r.cible, r]));
   return DEVIS_CIBLES.map(d => {
@@ -13274,6 +13391,19 @@ async function devisReglesCharger() {
       }
     }
   } catch (e) { /* hors-ligne : on garde la copie locale */ }
+  // [Portail] une seule fois : réactive la lecture du téléphone et de l'e-mail du client (désactivées à l'origine).
+  try {
+    if (!localStorage.getItem('phenix_devis_regles_contact_v1')) {
+      regles = regles.map(r => {
+        if (r.cible !== 'np-email' && r.cible !== 'np-tel') return r;
+        const def = DEVIS_CIBLES.find(x => x.cible === r.cible);
+        return { cible: r.cible, actif: true, consigne: def.consigne };
+      });
+      localStorage.setItem(DEVIS_REGLES_LS, JSON.stringify(regles));
+      localStorage.setItem('phenix_devis_regles_contact_v1', '1');
+      if (window._fb && typeof window._fb.saveDevisRegles === 'function') Promise.resolve(window._fb.saveDevisRegles(regles)).catch(() => {});
+    }
+  } catch (e) { /* non bloquant */ }
   return regles;
 }
 
@@ -13350,6 +13480,7 @@ RÈGLES STRICTES :
 - Ne renseigne que ce qui figure réellement sur le document. Si une donnée est absente ou incertaine, mets "" (texte) ou 0 (nombre) : n'invente jamais et ne déduis rien qui ne soit pas écrit.
 - N'ajoute aucune clé qui ne figure pas dans la liste ci-dessus.
 - Nombres : décimaux avec un point, sans espace ni symbole € (« 2 100,00 € » → 2100). Dates : AAAA-MM-JJ.
+- Le devis est ÉMIS par Phénix-Architecture : ses propres coordonnées (contact@phenixarchitecte.fr, 04 73 73 00 59, SIRET, adresse de l'entreprise) ne sont JAMAIS celles du client. Pour le téléphone et l'e-mail, ne regarde que le cadre client ; s'ils n'y figurent pas, mets "".
 - Le document peut être une photo ou un scan, signé et parfois annoté à la main (cercles, flèches, mots écrits en rouge) : ignore les annotations manuscrites et la signature, ne lis que le texte imprimé du devis.`;
 }
 
@@ -13397,6 +13528,8 @@ function devisAppliquerValeurs(valeurs, regles) {
       if (opt) el.value = opt.value; else ok = false;
     }
     else if (d.type === 'nombre') el.value = String(parseFloat(v));
+    else if (d.cible === 'np-email') { const e = devisNettoyerEmail(v); if (e) el.value = e; else ok = false; }
+    else if (d.cible === 'np-tel')   { const t = devisNettoyerTel(v);   if (t) el.value = t; else ok = false; }
     else el.value = String(v).trim();
     if (ok) { devisMarquerIA(el); trouves.push(d); } else absents.push(d);
   });
