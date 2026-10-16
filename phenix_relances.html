@@ -3,6 +3,10 @@
 <head>
 <!--
  HISTORIQUE DES MODIFICATIONS — phenix_relances.html
+ 16/10/2026 — TRI : uniquement par date, du plus ancien au plus récent (date du devis, ou date de la dernière relance une fois le devis relancé). Plus aucun tri par montant. Repérer : ordre().
+ 16/10/2026 — LIGNES DU DEVIS : bouton « Voir les lignes du devis » sur chaque carte, détail dépliable (lignes, totaux HT/TTC). Repérer : lignesHtml().
+ 16/10/2026 — TRI ET DATE : la file est triée par date du devis (le plus ancien en premier) et la date du devis
+ (« Devis du JJ/MM/AAAA ») apparaît sur chaque carte. Repérer : ordre(), card(), cardClos().
  15/10/2026 — JOURNAL D'ACTIVITÉ : chaque relance consignée, changement de statut
  (signé / perdu / accepté / refusé), ajout, modification ou suppression de devis
  écrit une ligne datée dans phenix_historique (module Journal). Rien d'autre n'est
@@ -251,6 +255,18 @@ a{color:inherit;text-decoration:none}
 .histo{list-style:none;font-size:12px;color:var(--text2);margin:6px 0 10px}
 .histo li{padding:5px 0;border-bottom:1px solid rgba(120,170,220,.08)}
 .histo li b{color:var(--text)}
+.dl{margin:4px 0 14px;border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden}
+.dl-row{display:flex;justify-content:space-between;gap:12px;padding:8px 10px;border-bottom:1px solid rgba(120,170,220,.08);font-size:13px}
+.dl-row:last-child{border-bottom:none}
+.dl-row .lib{flex:1;min-width:0;color:var(--text);overflow-wrap:anywhere;white-space:pre-line}
+.dl-row .det{display:block;font-size:11px;color:var(--text3);margin-top:2px;white-space:normal}
+.dl-row .mt{white-space:nowrap;text-align:right;font-weight:600;color:#fff}
+.dl-row.titre{background:rgba(79,168,240,.10);font-weight:600;color:var(--accent)}
+.dl-row.titre .lib{color:var(--accent)}
+.dl-tot{background:rgba(255,255,255,.04)}
+.dl-tot .lib{color:var(--text2);text-align:right}
+.lignes-btn{background:none;border:none;color:var(--accent);font-size:12px;font-weight:600;padding:6px 0 0;text-align:left}
+.lignes-btn:hover{text-decoration:underline}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
 .c-actions .btn{flex-shrink:0}.c-actions .btn.primary{flex-shrink:1}
 .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);margin-bottom:5px;display:block}
@@ -447,10 +463,16 @@ function queue(){
   });
 }
 function ordre(a, b){
-  // en retard le plus ancien d'abord, puis aujourd'hui, puis à venir ; à égalité le plus gros montant
-  var ra = a.e.type==='completer' ? 99999 : a.e.jours, rb = b.e.type==='completer' ? 99999 : b.e.jours;
-  if (ra !== rb) return ra - rb;
-  return (parseFloat(b.f.montantHt)||0) - (parseFloat(a.f.montantHt)||0);
+  // Tri uniquement par date, du plus ancien au plus récent (jamais par montant) :
+  //  - devis pas encore relancé : date du devis
+  //  - devis déjà relancé (en attente de réponse) : date de sa dernière relance
+  // → un devis appelé repart donc après ceux qui n'ont pas encore été contactés,
+  //   puis se retrie avec les autres selon sa date de relance.
+  var da = a.e.der || a.e.base || '', db = b.e.der || b.e.base || '';
+  if (da !== db) { if (!da) return 1; if (!db) return -1; return da < db ? -1 : 1; }
+  var ba = a.e.base || '', bb = b.e.base || '';
+  if (ba !== bb) { if (!ba) return 1; if (!bb) return -1; return ba < bb ? -1 : 1; }
+  return 0;
 }
 function nomClient(it){
   if (it.src === 'dec') return it.f.client || 'Client sans nom';
@@ -514,6 +536,32 @@ function render(){
 function kpi(v, l, cls){ return '<div class="kpi ' + (cls||'') + '"><div class="v">' + esc(v) + '</div><div class="l">' + esc(l) + '</div></div>'; }
 function tabBtn(k, l, n){ return '<button class="tab ' + (tab===k?'active':'') + '" data-act="tab" data-tab="' + k + '">' + l + (n===null?'':'<span class="n">'+n+'</span>') + '</button>'; }
 
+/* ── Lignes du devis (dépliable) ── */
+function lignesDe(f){ return Array.isArray(f.lignes) ? f.lignes.filter(function(l){ return l && typeof l === 'object'; }) : []; }
+function numL(x){ var n = parseFloat(String(x == null ? '' : x).replace(',', '.')); return isFinite(n) ? n : 0; }
+function qteFmt(n){ return (Math.round(n * 100) / 100).toLocaleString('fr-FR'); }
+function eur2(n){ return (Math.round(n * 100) / 100).toLocaleString('fr-FR', { minimumFractionDigits:2, maximumFractionDigits:2 }) + ' €'; }
+function lignesHtml(f){
+  var L = lignesDe(f);
+  if (!L.length) return '<span class="lbl">Contenu du devis</span><div class="note" style="margin:0 0 14px">Aucune ligne enregistrée pour ce devis' + (RESTREINT ? '.' : ' : modifiez le devis et importez le PDF pour les relever.') + '</div>';
+  var h = '<span class="lbl">Contenu du devis · ' + L.length + ' ligne' + (L.length > 1 ? 's' : '') + '</span><div class="dl">';
+  L.forEach(function(l){
+    var lib = String(l.libelle || l.designation || l.description || l.label || l.titre || '').trim();
+    var qte = numL(l.qte != null ? l.qte : l.quantite), pu = numL(l.puHt != null ? l.puHt : (l.pu != null ? l.pu : l.prixUnitaire));
+    var mt = numL(l.montantHt != null ? l.montantHt : (l.totalHt != null ? l.totalHt : l.total));
+    if (!mt && qte && pu) mt = qte * pu;
+    var unite = String(l.unite || l.unit || '').trim();
+    if (!lib && !mt) return;
+    if (!mt && !qte && !pu) { h += '<div class="dl-row titre"><div class="lib">' + esc(lib) + '</div></div>'; return; }
+    var det = (qte ? qteFmt(qte) + (unite ? ' ' + esc(unite) : '') : '') + (qte && pu ? ' × ' + eur2(pu) : '');
+    h += '<div class="dl-row"><div class="lib">' + esc(lib || '—') + (det ? '<span class="det">' + det + '</span>' : '') + '</div><div class="mt">' + (mt ? eur2(mt) : '') + '</div></div>';
+  });
+  var ht = numL(f.montantHt), t = ttc(f);
+  h += '<div class="dl-row dl-tot"><div class="lib">Total HT</div><div class="mt">' + eur2(ht) + '</div></div>' +
+       '<div class="dl-row dl-tot"><div class="lib">Total TTC</div><div class="mt">' + eur2(t) + '</div></div></div>';
+  return h;
+}
+
 function card(it){
   var f = it.f, p = it.p, e = it.e;
   var id = String(f.id);
@@ -528,7 +576,8 @@ function card(it){
     else chips += '<span class="chip">Prévue le ' + fmtDateShort(e.due) + '</span>';
     if (e.type === 'cloture') chips += '<span class="chip violet">Dernière relance ou clôture</span>';
     else chips += '<span class="chip blue">Relance n°' + (e.nb + 1) + '</span>';
-    chips += '<span class="chip">Envoyé ' + ago(e.age) + '</span>';
+    chips += '<span class="chip">Devis du ' + fmtDate(e.base) + ' · ' + ago(e.age) + '</span>';
+    if (e.der) chips += '<span class="chip">Dernière relance le ' + fmtDate(e.der) + '</span>';
   }
   var histo = Array.isArray(f.relanceHisto) ? f.relanceHisto : [];
   var last = histo.length ? histo[histo.length-1] : null;
@@ -541,7 +590,7 @@ function card(it){
   var ct = contact(it);
   var tel = ct.tel ? String(ct.tel).replace(/[^\d+]/g, '') : '';
   var mail = ct.email || '';
-  var det = '';
+  var det = lignesHtml(f);
   det += '<span class="lbl">Historique des relances</span>';
   det += histo.length ? '<ul class="histo">' + histo.slice().reverse().map(function(h){
     var d = normDate(h.d);
@@ -560,6 +609,7 @@ function card(it){
       '<div class="c-objet">' + esc(f.numero || '') + (f.objet ? ' · ' + esc(f.objet) : '') + '</div></div>' +
       '<div class="c-amt">' + euros(parseFloat(f.montantHt)||0) + '<small>HT</small></div></div>' +
     '<div class="c-meta">' + chips + '</div>' + lastTxt +
+    '<button class="lignes-btn" data-act="more" data-id="' + esc(id) + '">' + (isOpen ? '▲ Masquer le détail du devis' : '▼ Voir les lignes du devis' + (lignesDe(f).length ? ' (' + lignesDe(f).length + ')' : '')) + '</button>' +
     '<div class="c-actions">' +
       (tel ? '<a class="btn" href="tel:' + esc(tel) + '" title="Appeler" aria-label="Appeler">📞</a>' : '<span class="btn off" title="Pas de téléphone">📞</span>') +
       '<button class="btn" data-act="msg" data-id="' + esc(id) + '">✉️ Message</button>' +
@@ -635,7 +685,7 @@ function cardClos(it){
   return '<div class="card" style="border-left-color:' + (ok ? 'var(--green)' : 'var(--red)') + '"><div class="c-top"><div><div class="c-client" style="font-size:15px">' + esc(nomClient(it)) + '</div>' +
     '<div class="c-objet">' + esc(f.numero||'') + (f.objet ? ' · ' + esc(f.objet) : '') + '</div></div><div class="c-amt">' + euros(parseFloat(f.montantHt)||0) + '<small>HT</small></div></div>' +
     '<div class="c-meta"><span class="chip ' + (ok ? 'green' : 'red') + '">' + (ok ? 'Accepté' : 'Refusé' + (f.motifPerte ? ' · ' + esc(f.motifPerte) : '')) + '</span>' +
-    (dt ? '<span class="chip">le ' + fmtDate(dt) + '</span>' : '') + '<span class="chip">' + (parseInt(f.relanceNb,10)||0) + ' relance(s)</span></div>' + statutBtns(it) + '</div>';
+    '<span class="chip">Devis du ' + fmtDate(normDate(f.dateEnvoi) || normDate(f.dateEmission)) + '</span>' + (dt ? '<span class="chip">clôturé le ' + fmtDate(dt) + '</span>' : '') + '<span class="chip">' + (parseInt(f.relanceNb,10)||0) + ' relance(s)</span></div>' + statutBtns(it) + '</div>';
 }
 async function setStatut(id, v){
   var it = findItem(id); if (!it) return;
