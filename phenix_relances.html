@@ -3,6 +3,7 @@
 <head>
 <!--
  HISTORIQUE DES MODIFICATIONS — phenix_relances.html
+ 16/10/2026 — TRI AUTOMATIQUE : devis à rappeler maintenant en premier, puis le plus ancien (date du devis, ou du dernier appel) en haut. Voir ordre().
  16/10/2026 — TRI : uniquement par date, du plus ancien au plus récent (date du devis, ou date de la dernière relance une fois le devis relancé). Plus aucun tri par montant. Repérer : ordre().
  16/10/2026 — LIGNES DU DEVIS : bouton « Voir les lignes du devis » sur chaque carte, détail dépliable (lignes, totaux HT/TTC). Repérer : lignesHtml().
  16/10/2026 — TRI ET DATE : la file est triée par date du devis (le plus ancien en premier) et la date du devis
@@ -463,11 +464,16 @@ function queue(){
   });
 }
 function ordre(a, b){
-  // Tri uniquement par date, du plus ancien au plus récent (jamais par montant) :
-  //  - devis pas encore relancé : date du devis
-  //  - devis déjà relancé (en attente de réponse) : date de sa dernière relance
-  // → un devis appelé repart donc après ceux qui n'ont pas encore été contactés,
-  //   puis se retrie avec les autres selon sa date de relance.
+  // Tri automatique, uniquement par date (jamais par montant), du plus ancien au plus récent.
+  // 1) les devis À RAPPELER maintenant (relance due ou en retard) passent en premier ;
+  //    puis ceux dont la relance est à venir ; puis ceux sans date d'envoi.
+  // 2) à l'intérieur de chaque groupe : par date de référence, la plus ancienne en haut :
+  //    - devis jamais relancé : date du devis
+  //    - devis déjà appelé (en attente de réponse) : date de son dernier appel → il redescend
+  //      derrière les devis pas encore contactés, puis remonte au fil des jours
+  var rk = function(x){ return x.e.type === 'completer' ? 2 : (x.e.bucket === 'retard' || x.e.bucket === 'today') ? 0 : 1; };
+  var ga = rk(a), gb = rk(b);
+  if (ga !== gb) return ga - gb;
   var da = a.e.der || a.e.base || '', db = b.e.der || b.e.base || '';
   if (da !== db) { if (!da) return 1; if (!db) return -1; return da < db ? -1 : 1; }
   var ba = a.e.base || '', bb = b.e.base || '';
