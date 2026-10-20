@@ -12534,30 +12534,38 @@ async function declencherContratDepuisDevis(p, dev, opts) {
     if (!p || !window._fb || !window._fb.getDoc || !window._fb.setDoc) return false;
     if (typeof getCurrentUserRole === 'function' && getCurrentUserRole() !== 'admin') return false;
     const fb = window._fb, pid = String(p.id);
-    for (const t of ['moe', 'cg']) {
-      const sn = await fb.getDoc(fb.doc(fb.db, 'phenix_contrats', pid + '_' + t));
-      if (sn.exists()) return false;   // un contrat existe déjà : on ne l'écrase jamais
-    }
+    let existe = false, brouillonOk = false;
+    try {
+      for (const t of ['moe', 'cg']) {
+        const sn = await fb.getDoc(fb.doc(fb.db, 'phenix_contrats', pid + '_' + t));
+        if (sn.exists()) existe = true;   // un contrat existe déjà : on ne l'écrase jamais (mais on l'ouvre)
+      }
+    } catch (e) { console.warn('Contrat : lecture impossible', e); toast_d('⚠️ Contrats illisibles (règles Firestore : phenix_contrats ?) — ouverture sans brouillon.'); }
     const ht = parseFloat(dev && dev.montantHt) || parseFloat(p.honoraires) || 0;
     const devis = { numero: String((dev && dev.numero) || ''), date: String((dev && (dev.dateEmission || dev.dateAcceptation)) || ''), montantHt: ht };
     const projet = { projetId: pid, nom: p.nom || '', client: p.client || '', adresse: p.adresse || '', surface: p.surface || '', ref: p.ref || '', email: p.email || '', tel: p.tel || '', type: p.type || '' };
     const now = new Date().toISOString();
-    await fb.setDoc(fb.doc(fb.db, 'phenix_contrats', pid + '_moe'), {
-      projetId: pid, projet, devis, contractType: 'moe',
-      nature: _contratNatureDepuisType(p.type),
-      date: now.slice(0, 10), montant: ht ? String(ht) : '', lieu: '',
-      statut: 'brouillon', dateSignature: '',
-      phases: _contratPhasesDepuisMission(p.mission),
-      source: 'devis-signe', createdAt: now, updatedAt: now,
-    });
-    try { if (window.phenixJournal) window.phenixJournal('dossier', 'cree', 'contrat', p.client || p.nom || '', { detail: 'brouillon préparé — devis ' + (devis.numero || '') + ' signé' }); } catch (e) {}
+    if (!existe) {
+      try {
+        await fb.setDoc(fb.doc(fb.db, 'phenix_contrats', pid + '_moe'), {
+          projetId: pid, projet, devis, contractType: 'moe',
+          nature: _contratNatureDepuisType(p.type),
+          date: now.slice(0, 10), montant: ht ? String(ht) : '', lieu: '',
+          statut: 'brouillon', dateSignature: '',
+          phases: _contratPhasesDepuisMission(p.mission),
+          source: 'devis-signe', createdAt: now, updatedAt: now,
+        });
+        brouillonOk = true;
+        try { if (window.phenixJournal) window.phenixJournal('dossier', 'cree', 'contrat', p.client || p.nom || '', { detail: 'brouillon préparé — devis ' + (devis.numero || '') + ' signé' }); } catch (e) {}
+      } catch (e) { console.warn('Contrat : brouillon non enregistré', e); toast_d('⚠️ Brouillon de contrat non enregistré (' + (e && e.code || e && e.message || e) + ') — Contrat s\'ouvre quand même, prérempli.'); }
+    }
     const payload = Object.assign({}, projet, { honoraires: ht ? String(ht) : '', budget: p.budget || '', phase: p.phase || '', devis, _source: 'phenix_dossier', _ts: Date.now() });
     let ouvrir = opts.ouvrir !== false;
     if (ouvrir && opts.confirmer) ouvrir = confirm('Devis ' + (devis.numero || '') + ' signé — « ' + (p.client || p.nom) + ' ».\n\nLe contrat est prêt : l\'ouvrir maintenant dans Phénix Contrat ?');
     if (ouvrir && window.parent && window.parent !== window) {
       try { localStorage.setItem('phenix-open-in-contrat', JSON.stringify(payload)); } catch (e) {}
       window.parent.postMessage({ source: 'phenix-dossier', action: 'open-module', module: 'contrat', order: { source: 'phenix-shell', action: 'ouvrir-contrat', projet: payload } }, '*');
-      toast_d('📝 Contrat préparé à partir du devis signé — vérifiez les articles avant envoi au client.');
+      toast_d(existe ? '📝 Contrat existant ouvert.' : '📝 Contrat préparé à partir du devis signé — vérifiez les articles avant envoi au client.');
       return true;
     }
     toast_d('📝 Contrat préparé (menu Contrats) pour « ' + (p.client || p.nom) + ' ».');

@@ -1222,7 +1222,8 @@ async function setStatut(id, v){
   if (v === 'accepte') {
     if (!confirm('Marquer ce devis comme SIGNÉ ?' + (RESTREINT ? '\n\nIl disparaîtra de votre liste et le dossier sera créé automatiquement.' : ''))) return;
     // [Portail] le dossier est créé automatiquement par Dossier (plus d'ouverture manuelle ici)
-    await persist(it, { statut:ST.ok, dateAcceptation:today, dateCloture:'', motifPerte:'', relanceProchaine:'' }, RESTREINT ? '✅ Devis signé — le dossier sera créé automatiquement.' : '✅ Devis signé — le dossier se crée à l\'ouverture de Dossier.');
+    await persist(it, { statut:ST.ok, dateAcceptation:today, dateCloture:'', motifPerte:'', relanceProchaine:'' }, RESTREINT ? '✅ Devis signé — le dossier sera créé automatiquement.' : '✅ Devis signé — création du dossier…');
+    if (it.src === 'dec') ouvrirDossierConversion();
   } else if (v === 'refuse') {
     sheetState = { kind:'refus', id:String(id), motif:MOTIFS[0] }; renderRefus();
   } else {
@@ -1374,10 +1375,17 @@ async function saveConsigner(){
   closeSheet();
   var msgOk = res.k === 'signed' ? (RESTREINT ? '✅ Devis signé — le dossier sera créé automatiquement.' : '✅ Devis signé — bravo !') : res.k === 'lost' ? 'Devis clôturé.' : '✅ Relance consignée.';
   var ok = await persist(it, patch, msgOk);
+  if (ok !== false && res.k === 'signed' && it.src === 'dec') ouvrirDossierConversion();   // [Contrat] le dossier (puis le contrat) se crée aussitôt, sans recharger
   // Devis signé issu de « devis en cours » : il n'existe pas encore de projet → on le crée dans Dossier
   // [Portail] devis signé : le dossier est créé automatiquement par Dossier
 }
 
+// Devis signé (compte admin) : la conversion en dossier + contrat est faite par Dossier ; on l'ouvre tout de suite,
+// pour ne pas avoir à le recharger. L'assistante, elle, n'ouvre rien : la conversion se fait à l'ouverture de Dossier par Maxime.
+function ouvrirDossierConversion(){
+  if (RESTREINT) return;
+  try { if (window.parent && window.parent !== window) setTimeout(function(){ window.parent.postMessage({ source:'phenix-espace', action:'open-module', module:'dossier' }, '*'); }, 900); } catch(e) {}
+}
 async function persist(it, patch, okMsg){
   var f = it.f, avant = {};
   Object.keys(patch).forEach(function(k){ avant[k] = f[k]; });

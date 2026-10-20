@@ -245,8 +245,8 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
   <!-- SIDEBAR -->
   <div class="shell-nav">
     <div class="shell-nav-item active" data-view="module" data-module="dossier" data-tip="Tableau de bord" onclick="shellOpenModule('dossier',this)"><i class="ti ti-layout-dashboard"></i><span class="lbl">Dossier</span><span class="nav-badge" id="navBadgeTaches">0</span></div>
-    <div class="shell-nav-item" data-view="module" data-module="chiffrage" data-tip="Chiffrage" onclick="shellOpenModule('chiffrage',this)"><i class="ti ti-calculator"></i><span class="lbl">Chiffrage</span></div>
     <div class="shell-nav-item" data-view="module" data-module="contrat" data-tip="Contrats" onclick="shellOpenModule('contrat',this)"><i class="ti ti-signature"></i><span class="lbl">Contrats</span></div>
+    <div class="shell-nav-item" data-view="module" data-module="chiffrage" data-tip="Chiffrage" onclick="shellOpenModule('chiffrage',this)"><i class="ti ti-calculator"></i><span class="lbl">Chiffrage</span></div>
     <div class="shell-nav-item" data-view="module" data-module="chantier" data-tip="Chantier" onclick="shellOpenModule('chantier',this)"><i class="ti ti-building"></i><span class="lbl">Chantier</span></div>
     <div class="shell-nav-item" data-view="module" data-module="espace" data-tip="Mon espace — devis à relancer, tâches, projets" onclick="shellOpenModule('espace',this)"><i class="ti ti-headset"></i><span class="lbl">Espace</span><span class="nav-badge" id="navBadgeDevis">0</span></div>
     <div class="shell-nav-item" data-view="module" data-module="annuaire" data-tip="Annuaire artisans" onclick="shellOpenModule('annuaire',this)"><i class="ti ti-address-book"></i><span class="lbl">Annuaire</span></div>
@@ -458,18 +458,22 @@ window._NC = NC;
 function renderNC() {
   const bell = document.getElementById('ncBell'), cnt = document.getElementById('ncCount'), pan = document.getElementById('ncPanel'); if (!bell || !pan) return;
   const items = [];
-  NC.cli.forEach(x => items.push({ ico: '👤', t: x.t, h: 'Client · ' + (x.nom || 'projet'), txt: (x.who ? x.who + ' : ' : '') + (x.text || ''), go: 'msg', conv: 'cli|' + x.pid }));
-  NC.art.forEach(x => items.push({ ico: '🧱', t: x.date, h: 'Message d\'artisan', txt: x.texte || '', go: 'msg', conv: x.chantierId + '|' + x.intervenantId }));
-  NC.devis.forEach(x => items.push({ ico: '📄', t: x.date || x.at, h: 'Devis · ' + (x.client || ''), txt: 'statut → ' + (x.vers || ''), go: 'espace' }));
-  NC.taches.forEach(x => items.push({ ico: '✅', t: x.quand || x.date, h: 'Tâche', txt: (String(x.par || '').split('@')[0] || 'L\'assistante') + ' · « ' + (x.titre || '') + ' »', go: 'dossier' }));
+  NC.cli.forEach(x => items.push({ ico: '👤', t: x.t, h: 'Client · ' + (x.nom || 'projet'), txt: (x.who ? x.who + ' : ' : '') + (x.text || ''), go: 'msg', conv: 'cli|' + x.pid, col: 'phenix_notifs_client', id: x._id, patch: { lu: true } }));
+  NC.art.forEach(x => items.push({ ico: '🧱', t: x.date, h: 'Message d\'artisan', txt: x.texte || '', go: 'msg', conv: x.chantierId + '|' + x.intervenantId, col: 'phenix_ch_messages', id: x._id, patch: { luPhenix: true } }));
+  NC.devis.forEach(x => items.push({ ico: '📄', t: x.date || x.at, h: 'Devis · ' + (x.client || ''), txt: 'statut → ' + (x.vers || ''), go: 'espace', col: 'phenix_notifs', id: x._id, patch: { lu: true } }));
+  NC.taches.forEach(x => items.push({ ico: '✅', t: x.quand || x.date, h: 'Tâche', txt: (String(x.par || '').split('@')[0] || 'L\'assistante') + ' · « ' + (x.titre || '') + ' »', go: 'dossier', col: 'phenix_notifs_taches', id: x._id, patch: { lu: true } }));
   items.sort((a, b) => String(b.t || '').localeCompare(String(a.t || '')));
   const n = items.length;
   bell.style.display = ''; cnt.textContent = n > 9 ? '9+' : String(n); cnt.style.display = n ? 'flex' : 'none';
-  pan.innerHTML = '<div class="nc-h"><span>Notifications</span><span>' + n + '</span></div>' + (n ? items.slice(0, 40).map((x, i) => '<div class="nc-i" onclick="ncOpen(' + i + ')"><span>' + x.ico + '</span><div style="min-width:0"><b>' + _ncEsc(x.h) + '</b>' + _ncEsc(String(x.txt).slice(0, 140)) + '</div></div>').join('') : '<div class="nc-e">Rien de nouveau.</div>');
+  pan.innerHTML = '<div class="nc-h"><span>Notifications</span><span>' + (n ? '<a href="#" onclick="ncToutLu(event)" style="color:#2f6fc0;font-weight:600;text-decoration:none">Tout marquer lu</a>' : '') + '</span></div>' + (n ? items.slice(0, 40).map((x, i) => '<div class="nc-i" onclick="ncOpen(' + i + ')"><span>' + x.ico + '</span><div style="min-width:0;flex:1"><b>' + _ncEsc(x.h) + '</b>' + _ncEsc(String(x.txt).slice(0, 140)) + '</div><button title="Marquer comme lu" aria-label="Marquer comme lu" onclick="ncLu(event,' + i + ')" style="border:1px solid #cfd8ea;background:#fff;color:#2f6fc0;border-radius:7px;padding:3px 8px;cursor:pointer;font-size:12px;font-weight:700;flex:none">✓ Lu</button></div>').join('') : '<div class="nc-e">Rien de nouveau.</div>');
   NC._items = items;
 }
 window.toggleNC = function(ev) { if (ev) ev.stopPropagation(); document.getElementById('ncPanel').classList.toggle('open'); };
 document.addEventListener('click', ev => { const p = document.getElementById('ncPanel'); if (p && p.classList.contains('open') && !p.contains(ev.target)) p.classList.remove('open'); });
+// Marquer lu : met le drapeau « lu » dans Firestore, la notification disparaît aussitôt (l'écoute ne renvoie que les non lues)
+function _ncMarquer(x) { if (x && x.col && x.id) { try { updateDoc(doc(db, x.col, String(x.id)), x.patch || { lu: true }).catch(e => console.warn('Marquer lu :', e && e.message)); } catch (e) {} } }
+window.ncLu = function(ev, i) { if (ev) { ev.stopPropagation(); ev.preventDefault(); } _ncMarquer((NC._items || [])[i]); };
+window.ncToutLu = function(ev) { if (ev) { ev.stopPropagation(); ev.preventDefault(); } (NC._items || []).forEach(_ncMarquer); };
 window.ncOpen = function(i) {
   const x = (NC._items || [])[i]; if (!x) return; document.getElementById('ncPanel').classList.remove('open');
   const mod = x.go === 'msg' ? 'chantier' : x.go;
@@ -481,8 +485,8 @@ function startNotifsCentre(estAdmin) {
   unsubNC.forEach(u => { try { u(); } catch (e) {} }); unsubNC = [];
   if (!estAdmin) return;   // messages artisans / client : compte administrateur
   try {
-    unsubNC.push(onSnapshot(query(collection(db, 'phenix_ch_messages'), where('de', '==', 'artisan'), where('luPhenix', '==', false)), snap => { NC.art = snap.docs.map(d => d.data() || {}); renderNC(); }, err => console.warn('Messages artisans :', err && err.message)));
-    unsubNC.push(onSnapshot(query(collection(db, 'phenix_notifs_client'), where('lu', '==', false)), snap => { NC.cli = snap.docs.map(d => d.data() || {}); renderNC(); }, err => console.warn('Messages client :', err && err.message)));
+    unsubNC.push(onSnapshot(query(collection(db, 'phenix_ch_messages'), where('de', '==', 'artisan'), where('luPhenix', '==', false)), snap => { NC.art = snap.docs.map(d => ({ _id: d.id, ...(d.data() || {}) })); renderNC(); }, err => console.warn('Messages artisans :', err && err.message)));
+    unsubNC.push(onSnapshot(query(collection(db, 'phenix_notifs_client'), where('lu', '==', false)), snap => { NC.cli = snap.docs.map(d => ({ _id: d.id, ...(d.data() || {}) })); renderNC(); }, err => console.warn('Messages client :', err && err.message)));
   } catch (e) { console.warn('Centre de notifications :', e); }
 }
 
