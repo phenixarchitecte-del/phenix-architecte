@@ -4890,9 +4890,10 @@ async function analyzePdfArtisan(base64){
         system:`Tu es un assistant spécialisé dans l'analyse de devis du bâtiment français.
 Analyse le devis artisan fourni et extrais TOUTES les lignes de prestations.
 Retourne UNIQUEMENT un JSON valide, sans markdown, sans texte avant ou après :
-{"totalHtDevis":13595.82,"postes":[{"n":"Désignation complète de la prestation","q":1.0,"u":"m²","pu":150.00${lotFieldSchema}},...]}
+{"entreprise":"RAISON SOCIALE DE L'ARTISAN","totalHtDevis":13595.82,"postes":[{"n":"Désignation complète de la prestation","q":1.0,"u":"m²","pu":150.00${lotFieldSchema}},...]}
 
 RÈGLES STRICTES :
+- "entreprise" : raison sociale de l'ENTREPRISE QUI ÉMET le devis (l'artisan/prestataire : bloc « Émetteur », en-tête ou pied de page avec SIRET/SIREN/capital), ex. "BK FINITIONS". Ce n'est JAMAIS le client (le bloc « Client » / « Destinataire », ici le maître d'ouvrage ou Phénix-Architecture). Si introuvable, mettre "".
 - "totalHtDevis" : le TOTAL HT tel qu'imprimé sur le devis (dans le récapitulatif en fin de document). Recopie-le exactement, ne le recalcule pas. Si absent, mettre 0.
 - "n" : désignation complète (libellé de la ligne), SANS puce ni tiret de liste en début de texte (retire tout "-", "•", "*" placé au début, même si le devis source les affiche ainsi)
 - "q" : quantité numérique (ex: 80, 12.5) — si non trouvée mettre 1
@@ -4936,6 +4937,9 @@ RÈGLES STRICTES :
     }
     if(!parsed.postes||!parsed.postes.length)throw new Error('Aucun poste détecté dans le PDF');
     status.style.display='none';
+    // Entreprise émettrice du devis : pré-remplit le champ (sans écraser une saisie manuelle)
+    { const _ie=document.getElementById('import-entreprise'), _nom=String(parsed.entreprise||'').trim();
+      if(_ie && _nom && !_ie.value.trim()) _ie.value=_nom; }
     // Filet de sécurité : retire toute puce/tiret de liste résiduel en tête de désignation
     // (ex: "-Prise de courant" → "Prise de courant"), même si l'IA ne l'a pas fait.
     const nettoyerDesignation = s => String(s||'').replace(/^[\s]*[-•*–—]+[\s]*/, '').trim();
@@ -5243,6 +5247,18 @@ function confirmImportArtisan(){
     let lotIdx;
     if(choice.startsWith('idx:')){
       lotIdx = parseInt(choice.split(':')[1]);
+      // Nouvelle entreprise : si le lot existant appartient déjà à une AUTRE entreprise,
+      // on ne mélange pas les devis — on crée un lot distinct pour cette entreprise.
+      const _lotEx = chantier.lots[lotIdx], _entEx = lotEntrepriseNom(_lotEx);
+      if(entImport && _entEx && _entEx.toLowerCase()!==entImport.toLowerCase()){
+        const nom = (_lotEx.nom||'Lot importé').replace(/\s+—\s+.*$/,'') + ' — ' + entImport;
+        if(newLotCache[nom]!==undefined){ lotIdx = newLotCache[nom]; }
+        else {
+          const num='LOT '+(chantier.lots.length+1).toString().padStart(2,'0');
+          chantier.lots.push({num,nom,postes:[],tva:20,statut:'Chiffrage',prestation:'std',notes:'Créé automatiquement : nouvelle entreprise ('+entImport+') sur un lot déjà attribué à '+_entEx,marge:marge});
+          lotIdx = chantier.lots.length-1; newLotCache[nom]=lotIdx; nbCreated++;
+        }
+      }
     } else if(choice.startsWith('new:')){
       // Nom de lot explicite (affectation groupée) — on prend tout ce qui suit
       // "new:" tel quel (au cas où le nom contiendrait lui-même un ":").
