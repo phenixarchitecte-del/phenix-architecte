@@ -5,6 +5,9 @@
 ══════════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_dossier.html
 ──────────────────────────────────────────────────────────────────────
+ 20/10/2026 — CONTRAT : un devis signé (signature par l'assistante, import de devis signé ou devis passé à « Accepté »)
+ prépare automatiquement un contrat brouillon (collection phenix_contrats, id projet_moe) et ouvre Phénix Contrat
+ (declencherContratDepuisDevis). Jamais d'écrasement d'un contrat existant. Repérer : [Contrat].
  16/10/2026 (2) — Import de devis : téléphone et e-mail du client relevés par défaut (règles réactivées une fois ; coordonnées de Phénix écartées).
  Repérer : devisNettoyerEmail, devisNettoyerTel.
  16/10/2026 — PORTAIL UNIQUE : un devis marqué « Signé » par l'assistante crée AUTOMATIQUEMENT le projet + le devis accepté
@@ -6520,9 +6523,16 @@ function openInContrat(id) {
     type: p.type || '',
     phase: p.phase || '',
     ref: p.ref || '',
+    email: p.email || '',
+    tel: p.tel || '',
     _source: 'phenix_dossier',
     _ts: Date.now(),
   };
+  // [Contrat] devis accepté le plus récent du projet : n° et date repris dans le contrat
+  try {
+    const _dv = stateDossier.factures.filter(f => f.projetId == p.id && f.type === 'devis' && f.statut === 'accepte').pop();
+    if (_dv) payload.devis = { numero: String(_dv.numero || ''), date: String(_dv.dateEmission || ''), montantHt: parseFloat(_dv.montantHt) || 0 };
+  } catch (e) {}
   localStorage.setItem('phenix-open-in-contrat', JSON.stringify(payload));
   const contratUrl = 'phenix_contrat.html?projet=' + encodeURIComponent(p.id);
   toast_d('📝 Ouverture du Générateur de Contrats…');
@@ -7374,7 +7384,9 @@ async function createProject() {
 
   toast_d(devisCree ? '✅ Projet "'+nom+'" créé, avec son devis signé prêt à facturer.' : '✅ Projet "'+nom+'" créé et synchronisé !');
   if (devisCree) {
-    setTimeout(()=>{ openProjectModal(id); switchModalTab('facturation-proj'); }, 800);
+    // [Contrat] le devis signé déclenche la mise en contrat ; à défaut (hors shell), on garde l'ouverture de la facturation
+    const _ctOk = await declencherContratDepuisDevis(p, devisCree, { ouvrir: true });
+    if (!_ctOk) setTimeout(()=>{ openProjectModal(id); switchModalTab('facturation-proj'); }, 800);
   } else {
     setTimeout(()=>show_d('projets',document.querySelectorAll('.nav-item')[1]),800);
   }
@@ -10329,6 +10341,7 @@ async function saveFacture_d() {
     }
   }
 
+  const _statutAvant = editingFactureId ? ((stateDossier.factures.find(x=>x.id===editingFactureId) || {}).statut || '') : '';   // [Contrat]
   if (editingFactureId) {
     const idx = stateDossier.factures.findIndex(x=>x.id===editingFactureId);
     if (idx>=0) stateDossier.factures[idx]=f; else stateDossier.factures.push(f);
@@ -10348,6 +10361,11 @@ async function saveFacture_d() {
     document.getElementById('projFactCount').textContent = stateDossier.factures.filter(x=>x.projetId==currentProjectId).length;
   }
   toast_d('✅ '+(f.type==='devis'?'Devis':'Facture')+' enregistré'+(f.type==='devis'?'':'e')+'.');
+  // [Contrat] devis marqué « Accepté » à la main : mise en contrat, comme pour un devis signé importé
+  if (f.type==='devis' && f.statut==='accepte' && _statutAvant!=='accepte') {
+    const _pj = stateDossier.projets.find(x=>x.id==f.projetId);
+    if (_pj) { try { await declencherContratDepuisDevis(_pj, f, { ouvrir:true }); } catch(e) {} }
+  }
 
   } finally {
     _savingFacture = false;
@@ -13224,6 +13242,69 @@ async function convertirDevisSigneAuto(dec) {
   try { if (window.phenixJournal) window.phenixJournal('dossier', 'cree', 'projet', client, { detail: 'création automatique — devis ' + num + ' signé' }); } catch (e) {}
   try { refreshAllViews(); } catch (e) {}
   toast_d('✅ Devis signé : dossier « ' + client + ' » créé automatiquement — vérifiez le type et les honoraires.');
+  // [Contrat] la signature déclenche la mise en contrat (une seule ouverture automatique par lot de devis, avec confirmation)
+  await declencherContratDepuisDevis(p, devisCree, { ouvrir: !window._contratAutoOuvert, confirmer: true });
+  window._contratAutoOuvert = true;
+}
+// ══ [Contrat 20/10/2026] DEVIS SIGNÉ → CONTRAT ═══════════════════════
+// Dès qu'un devis est signé, un contrat « brouillon » est préparé dans phenix_contrats (MOE par défaut,
+// phases déduites de la mission, honoraires et n° de devis repris) et Phénix Contrat s'ouvre dessus.
+// Ne touche jamais à un contrat déjà existant pour ce projet.
+function _contratNatureDepuisType(t) {
+  const x = String(t || '');
+  if (/neuf/i.test(x)) return 'maison_individuelle';
+  if (/collectif/i.test(x)) return 'collectif';
+  if (/bureau|erp|industriel|agricole/i.test(x)) return 'professionnel';
+  return 'renovation';
+}
+function _contratPhasesDepuisMission(m) {
+  const x = String(m || '');
+  const toutes = ['ESQ','APS','APD','PC','DCE','ACT','DET','AOR'];
+  let l = [];
+  if (/compl[èe]te/i.test(x)) l = toutes;
+  else if (/[ée]tudes seules/i.test(x)) l = ['ESQ','APS','APD'];
+  else if (/DET/.test(x)) l = ['DET'];
+  const o = {}; l.forEach(k => { o[k] = true; }); return o;
+}
+async function declencherContratDepuisDevis(p, dev, opts) {
+  opts = opts || {};
+  try {
+    if (!p || !window._fb || !window._fb.getDoc || !window._fb.setDoc) return false;
+    if (typeof getCurrentUserRole === 'function' && getCurrentUserRole() !== 'admin') return false;
+    const fb = window._fb, pid = String(p.id);
+    for (const t of ['moe', 'cg']) {
+      const sn = await fb.getDoc(fb.doc(fb.db, 'phenix_contrats', pid + '_' + t));
+      if (sn.exists()) return false;   // un contrat existe déjà : on ne l'écrase jamais
+    }
+    const ht = parseFloat(dev && dev.montantHt) || parseFloat(p.honoraires) || 0;
+    const devis = { numero: String((dev && dev.numero) || ''), date: String((dev && (dev.dateEmission || dev.dateAcceptation)) || ''), montantHt: ht };
+    const projet = { projetId: pid, nom: p.nom || '', client: p.client || '', adresse: p.adresse || '', surface: p.surface || '', ref: p.ref || '', email: p.email || '', tel: p.tel || '', type: p.type || '' };
+    const now = new Date().toISOString();
+    await fb.setDoc(fb.doc(fb.db, 'phenix_contrats', pid + '_moe'), {
+      projetId: pid, projet, devis, contractType: 'moe',
+      nature: _contratNatureDepuisType(p.type),
+      date: now.slice(0, 10), montant: ht ? String(ht) : '', lieu: '',
+      statut: 'brouillon', dateSignature: '',
+      phases: _contratPhasesDepuisMission(p.mission),
+      source: 'devis-signe', createdAt: now, updatedAt: now,
+    });
+    try { if (window.phenixJournal) window.phenixJournal('dossier', 'cree', 'contrat', p.client || p.nom || '', { detail: 'brouillon préparé — devis ' + (devis.numero || '') + ' signé' }); } catch (e) {}
+    const payload = Object.assign({}, projet, { honoraires: ht ? String(ht) : '', budget: p.budget || '', phase: p.phase || '', devis, _source: 'phenix_dossier', _ts: Date.now() });
+    let ouvrir = opts.ouvrir !== false;
+    if (ouvrir && opts.confirmer) ouvrir = confirm('Devis ' + (devis.numero || '') + ' signé — « ' + (p.client || p.nom) + ' ».\n\nLe contrat est prêt : l\'ouvrir maintenant dans Phénix Contrat ?');
+    if (ouvrir && window.parent && window.parent !== window) {
+      try { localStorage.setItem('phenix-open-in-contrat', JSON.stringify(payload)); } catch (e) {}
+      window.parent.postMessage({ source: 'phenix-dossier', action: 'open-module', module: 'contrat', order: { source: 'phenix-shell', action: 'ouvrir-contrat', projet: payload } }, '*');
+      toast_d('📝 Contrat préparé à partir du devis signé — vérifiez les articles avant envoi au client.');
+      return true;
+    }
+    toast_d('📝 Contrat préparé (menu Contrats) pour « ' + (p.client || p.nom) + ' ».');
+    return ouvrir && !(window.parent && window.parent !== window) ? false : true;
+  } catch (e) {
+    console.warn('Contrat automatique impossible :', e);
+    try { toast_d('⚠️ Contrat non préparé automatiquement : ' + (e && e.message || e)); } catch (e2) {}
+    return false;
+  }
 }
 // Bouton « Nouveau devis à relancer » (page Devis & honoraires) : ouvre la saisie du devis dans le portail Devis,
 // d'où il apparaît aussitôt chez l'assistante — le devis n'est saisi qu'une seule fois.

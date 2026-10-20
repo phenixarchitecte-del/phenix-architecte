@@ -5,6 +5,8 @@
 ══════════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_shell.html
 ──────────────────────────────────────────────────────────────────────
+ 20/10/2026 — CONTRAT : le module Contrat signale « prêt » (phenix-contrat) pour recevoir l'ordre « ouvrir-contrat » envoyé par Dossier
+   à la signature d'un devis (bascule automatique vers Phénix Contrat).
  15/10/2026 — FUSION de deux versions du shell, sans perte :
    • Base conservée = shell « (3) » : module Carnet, connexion SANS empreinte
      (nettoyage des anciens identifiants biométriques au chargement).
@@ -850,7 +852,7 @@ window.shellOpenProjet = function(id, nom) {
 window.addEventListener('message', (ev) => {
   const msg = ev.data;
   if (!msg || !msg.source) return;
-  if ((msg.source === 'phenix-dossier' || msg.source === 'phenix-relances') && msg.ready && shellPendingOrder && shellCurrentFrame) {
+  if ((msg.source === 'phenix-dossier' || msg.source === 'phenix-relances' || msg.source === 'phenix-contrat') && msg.ready && shellPendingOrder && shellCurrentFrame) {   // [Contrat 20/10/2026] Contrat signale aussi qu'il est prêt
     try { shellCurrentFrame.contentWindow.postMessage(shellPendingOrder, '*'); } catch(e) {}
     shellPendingOrder = null;
   }
