@@ -4902,7 +4902,9 @@ RÈGLES STRICTES :
 - Inclure TOUTES les lignes de prestations, même celles sans prix
 - Si une ligne a un montant total mais pas de PU : diviser montant/qté pour obtenir PU
 - Utiliser le point comme séparateur décimal
-- ATTENTION AUX RÉPÉTITIONS : ce type de devis contient souvent des dizaines de lignes quasi identiques (même libellé, même prix, sur des pièces différentes). Recopie le tableau ligne par ligne dans l'ordre exact, sans jamais dupliquer une ligne ni en inventer. Le nombre de lignes que tu produis doit correspondre exactement au nombre de lignes du tableau.${lotRules}`,
+- ATTENTION AUX RÉPÉTITIONS : ce type de devis contient souvent des dizaines de lignes quasi identiques (même libellé, même prix, sur des pièces différentes). Recopie le tableau ligne par ligne dans l'ordre exact, sans jamais dupliquer une ligne ni en inventer. Le nombre de lignes que tu produis doit correspondre exactement au nombre de lignes du tableau.
+- SOUS-TOTAUX AVEC QUANTITÉ > 1 (section répétée) : certains devis affichent une ligne "Sous-total <section>" avec une quantité (ex. 2,00), un prix unitaire (= somme des lignes de la section) et un montant = quantité × prix unitaire. Cela signifie que TOUTE la section est facturée plusieurs fois (ex. 2 salles de bain identiques). Dans ce cas, MULTIPLIE la quantité "q" de CHAQUE ligne de cette section par ce multiplicateur (ex. ligne q=1 → q=2 ; ligne q=3 → q=6), en gardant le même "pu". Ne crée PAS de ligne pour le sous-total lui-même. Ainsi la somme des lignes de la section doit être égale au montant du sous-total (quantité × sous-total unitaire). Exemple : "Sous-total SALLE DE BAIN : 2,00 × 902,00 = 1 804,00" → les lignes de cette section totalisent 1 804,00 et non 902,00.
+- VÉRIFICATION FINALE : avant de répondre, vérifie que la somme des (q × pu) de tes lignes est égale au "totalHtDevis" lu sur le devis. Si ce n'est pas le cas, cherche les sections répétées (sous-totaux avec quantité > 1) ou les lignes oubliées, puis corrige.${lotRules}`,
         messages:[{
           role:'user',
           content:[
@@ -4961,7 +4963,7 @@ RÈGLES STRICTES :
           ⚠️ <strong>Écart détecté avec le devis</strong><br>
           Total du devis : <strong>${fmt(totalDevis)} €</strong> — somme des lignes extraites : <strong>${fmt(totalExtrait)} €</strong>
           (${ecart>0?'+':''}${fmt(ecart)} €).<br>
-          Des lignes ont pu être dupliquées ou oubliées : vérifiez l'aperçu ci-dessus avant d'importer.
+          Des lignes ont pu être dupliquées ou oubliées, ou une section répétée (sous-total avec quantité ×2, ex. 2 salles de bain) n'a pas été multipliée : vérifiez l'aperçu ci-dessus avant d'importer.
         </div>`;
       } else if(totalDevis>0){
         zoneAlerte.style.display='';
