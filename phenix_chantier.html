@@ -19,10 +19,20 @@
    4. [Espace assistante] copie FILTRÉE du suivi (lots, statut, avancement, dates,
       entreprise) vers phenix_chantier_assistante/{projetId} : sans montants,
       sans honoraires ni commissions. Mise à jour à chaque enregistrement.
+   5. [Étape réelle] 17/10/2026 — chaque chantier porte une ÉTAPE RÉELLE (1 à 26, la même échelle que la
+      maquette 3D du Carnet), regroupée en 6 phases : Préparation, Gros œuvre, Hors d'eau, Second œuvre,
+      Finitions, Réception. Tableau de bord : carte « Étape des chantiers » (frise + choix de l'étape,
+      modifiable par l'agence ET par le suivi de chantier). Une copie sans montants est publiée dans
+      phenix_chantier_client/{projetId} pour la maquette client. Repérer : [Étape réelle].
+   6. [Pilotage] 17/10/2026 — tableau de bord : bloc « À traiter / Sur le chantier / Points de vigilance »
+      (réserves et lots en retard, lots sans entreprise, étape non renseignée, comptes rendus, prochaine réunion).
+      Les pointages artisans y apparaîtront dès l'ouverture de l'accès artisan. Repérer : [Pilotage].
+   7. [Plans] 17/10/2026 — page « Plans & pastilles » : bibliothèque de plans par chantier (PDF ou image), versions
+      successives, pastilles (à photographier / information / question) avec note et photos, marquage « vérifié »,
+      visibilité par entreprise et par client (client : non par défaut). Collection phenix_ch_plans. Repérer : [Plans].
    Repérer : [Journal], [Espace assistante], « Aucune entreprise ».
 ══════════════════════════════════════════════════════════════════
 -->
-<script>try{Object.defineProperty(window,'PublicKeyCredential',{value:undefined,configurable:true});['phenix_bio_creds','phenix_bio_credId','phenix_bio_email','phenix_bio_enroll_refuse','chiffrage_bio_creds','chiffrage_bio_credId','chantier_bio_creds','chantier_bio_credId','chantier_bio_email'].forEach(function(k){localStorage.removeItem(k)})}catch(e){}</script>
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -325,7 +335,8 @@ window._fb = {
     factures:       'phenix_ch_factures',
     comptes_rendus: 'phenix_ch_crs',
     missions:       'phenix_ch_missions',
-    reserves:       'phenix_ch_reserves'
+    reserves:       'phenix_ch_reserves',
+    plans:          'phenix_ch_plans'      // [Plans]
   };
   const CH_PRIVE_COL = 'phenix_ch_prive';   // honoraires / commissions : réservé à l'agence
   const CH_USERS_COL = 'phenix_users';      // rôles et chantiers accessibles
@@ -375,6 +386,20 @@ window._fb = {
     },
     savePrive(id, data) { return setDoc(doc(db, CH_PRIVE_COL, String(id)), data); },
     deletePrive(id) { return deleteDoc(doc(db, CH_PRIVE_COL, String(id))); },
+
+    // ── [Artisan] collections vivantes : pointages, messages, plans vus ──
+    listenCol(name, onChange, onErr) {
+      return onSnapshot(collection(db, name), snap => { const a = []; snap.forEach(d => a.push(d.data())); onChange(a); }, err => (onErr || console.warn)(err));
+    },
+    saveDoc(name, id, data) { return setDoc(doc(db, name, String(id)), data); },
+    // [Canal client] collection avec identifiant de document, et sous-collections (journal du carnet)
+    listenColId(name, onChange, onErr) {
+      return onSnapshot(collection(db, name), snap => { const a = []; snap.forEach(d => a.push(Object.assign({ _id: d.id }, d.data()))); onChange(a); }, err => (onErr || console.warn)(err));
+    },
+    listenSub(path, onChange, onErr) {
+      return onSnapshot(collection(db, ...path), snap => { const a = []; snap.forEach(d => a.push(Object.assign({ _id: d.id }, d.data()))); onChange(a); }, err => (onErr || console.warn)(err));
+    },
+    saveSub(path, id, data) { return setDoc(doc(db, ...path, String(id)), data, { merge: true }); },
 
     // ── Médias ──────────────────────────────────────────────────
     ensureMedia: ensureMediaStoredEntity,
@@ -450,8 +475,15 @@ window.phenixJournal = function(module, action, objet, libelle, extra){
 // ════════════════════════════════════════════════════════════
 window.addEventListener('message', function(_pxEv){
   var _pxD = _pxEv.data;
-  if(_pxD && _pxD.source === 'phenix-shell' && _pxD.action === 'auto-login' && _pxD.email && _pxD.password){
+  if(_pxD && _pxD.source === 'phenix-shell' && _pxD.action === 'auto-login' && _pxD.email && _pxD.password && _pxEv.source === window.parent){
+    window._pxCreds = _pxD;   // gardé pour le Carnet client intégré (page « Carnet client »)
     signInWithEmailAndPassword(auth, _pxD.email, _pxD.password).catch(function(){});
+    try { var _cf = document.getElementById('carnet-frame'); if (_cf && _cf.contentWindow) _cf.contentWindow.postMessage(_pxD, '*'); } catch(e) {}
+  }
+  // le Carnet intégré demande la connexion automatique : on lui redonne les identifiants déjà validés par le Shell
+  var _cf2 = document.getElementById('carnet-frame');
+  if(_pxD && _pxD.readyForLogin && _cf2 && _pxEv.source === _cf2.contentWindow && window._pxCreds){
+    try { _cf2.contentWindow.postMessage(window._pxCreds, (location.origin && location.origin !== 'null' ? location.origin : '*')); } catch(e) {}
   }
 });
 // Signale au Shell que ce module est prêt à recevoir l'auto-login — le Shell
@@ -464,32 +496,6 @@ window._auth = {
   login:  (e, p) => signInWithEmailAndPassword(auth, e, p),
   logout: () => signOut(auth),
   current: () => auth.currentUser
-};
-window.phenixDoLogin = function(){
-  const email = (document.getElementById('pl-email').value || '').trim();
-  const pwd   = document.getElementById('pl-pwd').value || '';
-  const err   = document.getElementById('pl-err'); if(err){err.style.color='#FFB4A8';err.textContent='';}
-  const btn   = document.getElementById('pl-btn'); if(btn) btn.disabled = true;
-  window._auth.login(email, pwd).then(cred => {
-    if(pwd) localStorage.setItem('chantier_bio_creds', btoa(email+'|||'+pwd));
-    if(!localStorage.getItem('chantier_bio_credId') && window.PublicKeyCredential){
-      PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(ok=>{
-        if(ok){
-          const wrap=document.getElementById('pl-enroll-wrap');
-          if(wrap){wrap.style.display='block';document.getElementById('pl-enroll-btn').onclick=()=>chantierBioEnroll(cred.user);}
-        }
-      });
-    }
-  }).catch(e => {
-    const c = (e && e.code) || '';
-    if(err) err.textContent =
-      (c.indexOf('invalid-credential')>=0||c.indexOf('wrong-password')>=0||c.indexOf('user-not-found')>=0) ? 'E-mail ou mot de passe incorrect.' :
-      c.indexOf('operation-not-allowed')>=0 ? "Activez E-mail/Mot de passe dans Firebase." :
-      c.indexOf('invalid-email')>=0 ? 'E-mail invalide.' :
-      c.indexOf('too-many-requests')>=0 ? 'Trop de tentatives, réessayez plus tard.' :
-      c.indexOf('network')>=0 ? 'Pas de connexion internet.' :
-      ('Erreur : '+(c||(e&&e.message)||''));
-  }).finally(()=>{ if(btn) btn.disabled=false; });
 };
 let _phenixDispatched = false;
 onAuthStateChanged(auth, user => {
@@ -560,13 +566,6 @@ body{font-family:var(--font-sans);background-color:var(--bg);background-image:li
   border-bottom:1px solid rgba(74,156,199,.18);
   display:flex;align-items:center;gap:10px;
 }
-.logo-icon{
-  width:38px;height:38px;border-radius:8px;
-  background:linear-gradient(135deg,#4A9CC7,#1B2D5B);
-  display:flex;align-items:center;justify-content:center;
-  flex-shrink:0;font-size:20px;color:#fff;
-}
-.logo-phoenix{font-family:var(--font-serif);font-size:15px;color:#fff;letter-spacing:.02em;line-height:1.1}
 .logo-sub{font-size:9.5px;color:rgba(74,156,199,.85);letter-spacing:.12em;text-transform:uppercase;margin-top:2px}
 
 .nav-section{font-size:9.5px;letter-spacing:.12em;color:rgba(74,156,199,.5);padding:1.3rem 1.25rem .35rem;text-transform:uppercase;font-weight:600}
@@ -634,7 +633,6 @@ body{font-family:var(--font-sans);background-color:var(--bg);background-image:li
 .card-title{font-size:14px;font-weight:700;color:var(--navy)}
 .card-subtitle{font-size:12px;color:var(--text2);margin-top:1px}
 .two-col{display:grid;grid-template-columns:1.6fr 1fr;gap:1rem}
-.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem}
 
 /* ── TABLES ──────────────────────────────────────────────── */
 table{width:100%;border-collapse:collapse;font-size:13px}
@@ -690,20 +688,6 @@ tr:last-child td{border-bottom:none} tr:hover td{background:var(--accent-bg)}
 
 /* ── GANTT ───────────────────────────────────────────────── */
 .gantt-wrap{overflow-x:auto;padding-bottom:.5rem}
-.gantt-header{display:flex;font-size:11px;font-weight:700;color:var(--text3);border-bottom:2px solid #4A9CC7;margin-bottom:.25rem}
-.gantt-label-col{width:200px;flex-shrink:0;padding:6px 8px 6px 0;color:var(--navy);font-size:10px;text-transform:uppercase;letter-spacing:.07em}
-.gantt-months{flex:1;display:flex}
-.gantt-month{flex:1;text-align:center;font-size:10px;font-weight:600;padding:6px 2px;border-left:1px solid var(--border);color:var(--text3);text-transform:uppercase;letter-spacing:.05em}
-.gantt-row{display:flex;align-items:center;border-bottom:1px solid var(--bg2);min-height:38px}
-.gantt-row:hover{background:var(--accent-bg)}
-.gantt-row-label{width:200px;flex-shrink:0;padding:6px 8px 6px 0;font-size:12px}
-.gantt-row-name{font-weight:500;color:var(--navy)}
-.gantt-row-sub{font-size:11px;color:var(--text3)}
-.gantt-track{flex:1;position:relative;height:22px;background:var(--bg2);border-radius:3px;overflow:hidden}
-.gantt-bar{position:absolute;height:100%;border-radius:3px;background:linear-gradient(90deg,#4A9CC7,#2A5298);display:flex;align-items:center;padding:0 6px;font-size:10px;color:#fff;font-weight:600;white-space:nowrap;overflow:hidden}
-.gantt-bar.done{background:linear-gradient(90deg,#2D7A4F,#5DBF88)}
-.gantt-bar.late{background:linear-gradient(90deg,#C0392B,#E74C3C)}
-.gantt-bar.todo{background:linear-gradient(90deg,#8BA5C0,#6A90B0)}
 
 /* ── INTERVENANTS CARDS ──────────────────────────────────── */
 .interv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:1rem}
@@ -738,7 +722,6 @@ tr:last-child td{border-bottom:none} tr:hover td{background:var(--accent-bg)}
 .cr-photo-wrap{position:relative;flex-shrink:0}
 .cr-photo-del{position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:var(--red);color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;font-weight:700;line-height:1}
 .plan-wrap{position:relative;border:1.5px solid var(--border);border-radius:var(--r-lg);overflow:hidden;margin-bottom:10px;background:var(--bg)}
-.plan-canvas-wrap{position:relative;cursor:crosshair;display:block}
 .plan-annotation{position:absolute;transform:translate(-50%,-50%);width:24px;height:24px;border-radius:50%;background:var(--red);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3);z-index:10;transition:transform .15s}
 .plan-annotation:hover{transform:translate(-50%,-50%) scale(1.2)}
 .plan-toolbar{padding:8px 12px;background:var(--bg);display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);flex-wrap:wrap}
@@ -747,11 +730,6 @@ tr:last-child td{border-bottom:none} tr:hover td{background:var(--accent-bg)}
 .color-swatch{display:inline-block;width:28px;height:28px;border-radius:50%;cursor:pointer;border:2.5px solid transparent;transition:transform .15s,border-color .15s;flex-shrink:0}
 .color-swatch:hover{transform:scale(1.18)}
 .color-swatch.selected{border-color:#fff;box-shadow:0 0 0 2px var(--navy);transform:scale(1.12)}
-
-/* ── MISC ────────────────────────────────────────────────── */
-.field-box{background:var(--bg);border-radius:var(--r-sm);padding:10px 14px;margin-bottom:.75rem}
-.field-label{font-size:11px;color:var(--text2);margin-bottom:3px}
-.field-val{font-size:13px;font-weight:500;color:var(--text)}
 .search-bar{display:flex;align-items:center;gap:8px;background:var(--bg2);border:1.5px solid var(--border);border-radius:var(--r-md);padding:7px 12px;max-width:260px}
 .search-bar input{border:none;background:transparent;font-size:13px;color:var(--text);font-family:var(--font-sans);flex:1;outline:none}
 .search-bar:focus-within{border-color:#4A9CC7}
@@ -772,7 +750,6 @@ tr:last-child td{border-bottom:none} tr:hover td{background:var(--accent-bg)}
   .sidebar{display:none}.metrics{grid-template-columns:1fr}
   .content{padding:1rem}
 }
-
 
 /* Module Gestion de Dossier — classes additionnelles */
 /* ═══════════════════════════════════════════════════════════════
@@ -812,347 +789,8 @@ tr:last-child td{border-bottom:none} tr:hover td{background:var(--accent-bg)}
   --shadow:0 1px 4px rgba(15,30,61,.07),0 1px 2px rgba(15,30,61,.04);
   --shadow-md:0 4px 16px rgba(15,30,61,.1),0 2px 6px rgba(15,30,61,.06);
 }
-#app-dossier *{box-sizing:border-box;margin:0;padding:0}
-#app-dossier body{font-family:var(--font-sans);background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
-#app-dossier .app{display:flex;height:100vh;overflow:hidden}
-
-/* ── SIDEBAR ─────────────────────────────────────────────── */
-#app-dossier .sidebar{
-  width:250px;
-  background:linear-gradient(180deg,#0F1E3D 0%,#1B2D5B 60%,#1a3060 100%);
-  display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;
-  border-right:1px solid rgba(74,156,199,.15);
-}
-#app-dossier .main-area{flex:1;display:flex;flex-direction:column;overflow:hidden}
-#app-dossier .content{flex:1;overflow-y:auto;padding:2rem}
-
-/* Logo sidebar avec image */
-#app-dossier .sidebar-logo{
-  padding:1.4rem 1.25rem 1.2rem;
-  border-bottom:1px solid rgba(74,156,199,.18);
-  display:flex;align-items:center;gap:10px;
-}
-#app-dossier .sidebar-logo-img{
-  width:38px;height:38px;border-radius:6px;
-  background:#000;
-  object-fit:contain;flex-shrink:0;
-}
-#app-dossier .logo-text-block{display:flex;flex-direction:column}
-#app-dossier .logo-phoenix{
-  font-family:var(--font-serif);font-size:15px;
-  color:#FFFFFF;letter-spacing:.02em;line-height:1.1;
-}
-#app-dossier .logo-sub{font-size:9.5px;color:rgba(74,156,199,.85);letter-spacing:.12em;text-transform:uppercase;margin-top:2px}
-
-/* Nav */
-#app-dossier .nav-section{
-  font-size:9.5px;letter-spacing:.12em;color:rgba(74,156,199,.5);
-  padding:1.3rem 1.25rem .35rem;text-transform:uppercase;font-weight:600;
-}
-#app-dossier .nav-item{
-  display:flex;align-items:center;gap:10px;padding:9px 1.25rem;
-  font-size:13px;color:rgba(255,255,255,.5);cursor:pointer;
-  border-left:2.5px solid transparent;transition:all .15s;
-}
-#app-dossier .nav-item:hover{background:rgba(74,156,199,.1);color:rgba(255,255,255,.85)}
-#app-dossier .nav-item.active{
-  color:#FFFFFF;border-left-color:#4A9CC7;
-  background:rgba(74,156,199,.18);font-weight:600;
-}
-#app-dossier .nav-item .ti{font-size:16px;opacity:.75}
-#app-dossier .nav-item.active .ti{opacity:1;color:#4A9CC7}
-#app-dossier .nav-badge{
-  margin-left:auto;font-size:10px;
-  background:rgba(74,156,199,.25);color:#7DC6E8;
-  padding:1px 7px;border-radius:20px;font-weight:600;
-}
-#app-dossier .sidebar-bottom{
-  margin-top:auto;padding:1rem 1.25rem;
-  border-top:1px solid rgba(74,156,199,.15);
-}
-#app-dossier .user-chip{display:flex;align-items:center;gap:10px}
-#app-dossier .user-avatar{
-  width:30px;height:30px;border-radius:50%;
-  background:linear-gradient(135deg,#4A9CC7,#2A5298);
-  display:flex;align-items:center;justify-content:center;
-  font-size:11px;font-weight:700;color:#fff;flex-shrink:0;
-}
-#app-dossier .user-name{font-size:12px;color:rgba(255,255,255,.6)}
-
-/* sync badge */
-#app-dossier .sync-dot{width:8px;height:8px;border-radius:50%;background:#4A6080;display:inline-block;margin-right:6px;transition:background .3s}
-#app-dossier .sync-dot.ok{background:#2D7A4F} #app-dossier .sync-dot.err{background:#C0392B} #app-dossier .sync-dot.sync{background:#4A9CC7;animation:pulse 1s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-
-/* config banner */
-#app-dossier .config-banner{background:rgba(200,150,60,.15);border:1.5px solid #e6b95c;border-radius:var(--r-lg);padding:1.25rem 1.5rem;margin-bottom:1.5rem;display:flex;gap:1rem;align-items:flex-start}
-#app-dossier .config-banner.hidden{display:none}
-#app-dossier .config-banner-icon{font-size:28px;flex-shrink:0}
-#app-dossier .config-banner-text h3{font-size:15px;font-weight:700;color:#8A6020;margin-bottom:4px}
-#app-dossier .config-banner-text p{font-size:13px;color:var(--text2);line-height:1.6}
-#app-dossier .config-banner-text code{background:rgba(0,0,0,.25);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-family:monospace;font-size:12px}
-
-/* ── TOPBAR ──────────────────────────────────────────────── */
-#app-dossier .topbar{
-  height:56px;
-  background:rgba(9,18,34,.75);
-  border-bottom:1px solid var(--border);
-  display:flex;align-items:center;
-  padding:0 1.75rem;gap:12px;flex-shrink:0;
-  box-shadow:0 1px 4px rgba(15,30,61,.05);
-}
-#app-dossier .topbar-title{
-  font-family:var(--font-serif);font-size:19px;
-  color:var(--navy);flex:1;
-  /* Petite ligne décorative sous le titre — identité Phénix */
-}
-#app-dossier .topbar-title::after{
-  content:'';display:block;width:32px;height:2px;
-  background:linear-gradient(90deg,#4A9CC7,#2A5298);
-  border-radius:2px;margin-top:1px;
-}
-#app-dossier .topbar-actions{display:flex;align-items:center;gap:8px}
-#app-dossier .sync-status{font-size:12px;color:var(--text2);display:flex;align-items:center}
-
-/* ── BOUTONS ─────────────────────────────────────────────── */
-#app-dossier .btn{
-  display:inline-flex;align-items:center;gap:6px;
-  padding:7px 14px;font-size:13px;font-family:var(--font-sans);
-  border-radius:var(--r-md);cursor:pointer;
-  border:1.5px solid var(--border);background:var(--card);
-  color:var(--text);transition:all .15s;font-weight:500;white-space:nowrap;
-}
-#app-dossier .btn:hover{background:var(--bg);border-color:#4A9CC7;color:var(--navy)}
-#app-dossier .btn-primary{
-  background:linear-gradient(135deg,#1B2D5B,#2A5298);
-  color:#fff;border-color:#1B2D5B;
-}
-#app-dossier .btn-primary:hover{
-  background:linear-gradient(135deg,#4A9CC7,#2A5298);
-  border-color:#4A9CC7;
-}
-#app-dossier .btn-danger{background:var(--red-bg);color:var(--red);border-color:var(--red)}
-#app-dossier .btn-sm{padding:4px 10px;font-size:12px} #app-dossier .btn-icon{padding:7px}
-
-/* ── PAGES ───────────────────────────────────────────────── */
-#app-dossier .page{display:none} #app-dossier .page.active{display:block}
-#app-dossier .page-header{margin-bottom:1.75rem;display:flex;align-items:flex-start;justify-content:space-between;gap:1rem}
-#app-dossier .page-title{font-family:var(--font-serif);font-size:26px;color:var(--navy)}
-#app-dossier .page-subtitle{font-size:13px;color:var(--text2);margin-top:2px}
-
-/* Fil décoratif sous titre de page */
-#app-dossier .page-title-line{width:40px;height:3px;background:linear-gradient(90deg,#4A9CC7,#1B2D5B);border-radius:2px;margin-top:6px}
-
-/* ── MÉTRIQUES ───────────────────────────────────────────── */
-#app-dossier .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:1.5rem}
-#app-dossier .metric{
-  background:var(--card);border:1.5px solid var(--border);
-  border-radius:var(--r-lg);padding:1.1rem 1.25rem;
-  box-shadow:var(--shadow);
-  border-top:3px solid #4A9CC7;
-  transition:box-shadow .2s;
-}
-#app-dossier .metric:hover{box-shadow:var(--shadow-md)}
-#app-dossier .metric-icon{
-  width:32px;height:32px;border-radius:var(--r-sm);
-  background:var(--accent-bg);display:flex;align-items:center;
-  justify-content:center;margin-bottom:.75rem;
-  color:var(--accent);font-size:16px;
-}
-#app-dossier .metric-label{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
-#app-dossier .metric-value{font-family:var(--font-serif);font-size:26px;color:var(--navy);line-height:1.1}
-#app-dossier .metric-sub{font-size:11px;color:var(--text2);margin-top:4px}
-#app-dossier .metric-up{color:var(--green)} #app-dossier .metric-down{color:var(--red)}
-
-/* ── CARTES ──────────────────────────────────────────────── */
-#app-dossier .card{
-  background:var(--card);border:1.5px solid var(--border);
-  border-radius:var(--r-lg);padding:1.25rem;
-  box-shadow:var(--shadow);margin-bottom:1rem;
-}
-#app-dossier .card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}
-#app-dossier .card-title{font-size:14px;font-weight:700;color:var(--navy)}
-#app-dossier .card-subtitle{font-size:12px;color:var(--text2);margin-top:1px}
-#app-dossier .two-col{display:grid;grid-template-columns:1.6fr 1fr;gap:1rem}
-
-/* ── TABLES ──────────────────────────────────────────────── */
-#app-dossier table{width:100%;border-collapse:collapse;font-size:13px}
-#app-dossier th{
-  text-align:left;font-size:10px;font-weight:700;color:var(--navy);
-  padding:0 8px 8px 0;border-bottom:2px solid #4A9CC7;
-  letter-spacing:.07em;text-transform:uppercase;
-}
-#app-dossier td{padding:10px 8px 10px 0;border-bottom:1px solid var(--bg2);color:var(--text);vertical-align:middle}
-#app-dossier tr:last-child td{border-bottom:none} #app-dossier tr:hover td{background:var(--accent-bg)}
-#app-dossier .td-muted{color:var(--text2);font-size:12px}
-
-/* ── PROGRESS ────────────────────────────────────────────── */
-#app-dossier .progress-bar{height:5px;background:var(--bg2);border-radius:3px;overflow:hidden;width:80px}
-#app-dossier .progress-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,#4A9CC7,#1B2D5B)}
-
-/* ── BADGES ──────────────────────────────────────────────── */
-#app-dossier .badge{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600;letter-spacing:.02em}
-#app-dossier .badge-green{background:var(--green-bg);color:var(--green)}
-#app-dossier .badge-amber{background:var(--amber-bg);color:var(--amber)}
-#app-dossier .badge-purple{background:var(--accent-bg);color:var(--accent2)}
-#app-dossier .badge-gray{background:var(--bg2);color:var(--text2)}
-#app-dossier .badge-red{background:var(--red-bg);color:var(--red)}
-
-/* ── TIMELINE ────────────────────────────────────────────── */
-#app-dossier .timeline{display:flex;flex-direction:column}
-#app-dossier .tl-item{display:flex;gap:12px;padding-bottom:16px;position:relative}
-#app-dossier .tl-item:last-child{padding-bottom:0}
-#app-dossier .tl-dot{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px;margin-top:1px}
-#app-dossier .tl-done{background:var(--green-bg);color:var(--green)}
-#app-dossier .tl-active{background:var(--accent-bg);color:var(--accent)}
-#app-dossier .tl-todo{background:var(--bg2);color:var(--text3)}
-#app-dossier .tl-line{position:absolute;left:14px;top:32px;bottom:0;width:1px;background:var(--border)}
-#app-dossier .tl-item:last-child .tl-line{display:none}
-#app-dossier .tl-content{flex:1} #app-dossier .tl-title{font-size:13px;font-weight:500;color:var(--text)} #app-dossier .tl-sub{font-size:12px;color:var(--text2);margin-top:2px}
-
-/* ── FORMULAIRES ─────────────────────────────────────────── */
-#app-dossier .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
-#app-dossier .form-group{display:flex;flex-direction:column;gap:5px}
-#app-dossier .form-group label{font-size:11px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.06em}
-#app-dossier .form-group input,#app-dossier .form-group select,#app-dossier .form-group textarea{
-  font-size:13px;padding:8px 10px;border-radius:var(--r-sm);
-  border:1.5px solid var(--border);background:var(--bg);
-  color:var(--text);font-family:var(--font-sans);transition:border-color .15s;
-}
-#app-dossier .form-group input:focus,#app-dossier .form-group select:focus,#app-dossier .form-group textarea:focus{
-  outline:none;border-color:#4A9CC7;background:var(--card);
-  box-shadow:0 0 0 3px rgba(74,156,199,.12);
-}
-#app-dossier .form-section{
-  font-size:11px;font-weight:700;color:var(--accent2);
-  text-transform:uppercase;letter-spacing:.09em;
-  padding:1rem 0 .75rem;border-top:1px solid var(--border);margin-top:.5rem;
-}
-#app-dossier .form-section:first-child{border-top:none;padding-top:0;margin-top:0}
-
-/* ── PROJECT GRID ────────────────────────────────────────── */
-#app-dossier .project-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
-#app-dossier .project-card{
-  background:var(--card);border:1.5px solid var(--border);
-  border-radius:var(--r-lg);padding:1.25rem;
-  box-shadow:var(--shadow);cursor:pointer;
-  transition:box-shadow .2s,transform .15s,border-color .15s;
-  border-top:3px solid transparent;
-}
-#app-dossier .project-card:hover{
-  box-shadow:var(--shadow-md);transform:translateY(-2px);
-  border-top-color:#4A9CC7;
-}
-#app-dossier .pc-ref{font-size:11px;color:var(--accent);margin-bottom:4px;font-weight:600;letter-spacing:.04em}
-#app-dossier .pc-name{font-family:var(--font-serif);font-size:17px;color:var(--navy);margin-bottom:2px}
-#app-dossier .pc-client{font-size:12px;color:var(--text2);margin-bottom:12px}
-#app-dossier .pc-meta{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
-#app-dossier .pc-progress-label{display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-bottom:5px}
-#app-dossier .pc-progress-bar{height:4px;background:var(--bg2);border-radius:2px;overflow:hidden}
-#app-dossier .pc-progress-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,#4A9CC7,#1B2D5B)}
-
-/* ── MODALS ──────────────────────────────────────────────── */
-#app-dossier .modal-overlay{position:fixed;inset:0;background:rgba(15,30,61,.55);z-index:100;display:none;align-items:center;justify-content:center;backdrop-filter:blur(3px)}
-#app-dossier .modal-overlay.open{display:flex}
-#app-dossier .modal{background:var(--card);border-radius:var(--r-lg);width:680px;max-width:95vw;max-height:90vh;overflow:hidden;box-shadow:var(--shadow-md);border-top:3px solid #4A9CC7;display:flex;flex-direction:column}
-#app-dossier .modal-header{
-  padding:1.25rem 1.5rem;border-bottom:1px solid var(--border);
-  display:flex;justify-content:space-between;align-items:center;
-  flex-shrink:0;background:var(--card);
-}
-#app-dossier .modal-title{font-family:var(--font-serif);font-size:18px;color:var(--navy)}
-#app-dossier .modal-body{padding:1.5rem;overflow-y:auto;flex:1} #app-dossier .modal-footer{padding:1rem 1.5rem;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;flex-shrink:0}
-
-/* ── AI PANEL ────────────────────────────────────────────── */
-#app-dossier .ai-panel{
-  position:fixed;right:0;top:0;bottom:0;width:400px;
-  background:var(--card);border-left:1px solid var(--border);
-  z-index:50;display:flex;flex-direction:column;
-  transform:translateX(100%);transition:transform .25s cubic-bezier(.4,0,.2,1);
-  box-shadow:-6px 0 24px rgba(15,30,61,.12);
-}
-#app-dossier .ai-panel.open{transform:translateX(0)}
-#app-dossier .ai-header{
-  padding:1rem 1.25rem;
-  background:linear-gradient(135deg,#0F1E3D,#1B2D5B);
-  border-bottom:1px solid rgba(74,156,199,.2);
-  display:flex;align-items:center;gap:10px;flex-shrink:0;
-}
-#app-dossier .ai-header-icon{
-  width:30px;height:30px;border-radius:var(--r-sm);
-  background:rgba(74,156,199,.25);
-  display:flex;align-items:center;justify-content:center;
-  color:#4A9CC7;font-size:16px;flex-shrink:0;
-}
-#app-dossier .ai-header-title{font-weight:600;font-size:14px;flex:1;color:#fff}
-#app-dossier .ai-header .btn{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2);color:#fff}
-#app-dossier .ai-header .btn:hover{background:rgba(255,255,255,.2)}
-#app-dossier .ai-messages{flex:1;overflow-y:auto;padding:1rem 1.25rem;display:flex;flex-direction:column;gap:12px}
-#app-dossier .ai-msg{display:flex;gap:8px;align-items:flex-start}
-#app-dossier .ai-msg-user{flex-direction:row-reverse}
-#app-dossier .ai-msg-avatar{width:26px;height:26px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-top:2px}
-#app-dossier .ai-avatar-ai{background:linear-gradient(135deg,#1B2D5B,#4A9CC7);color:#fff}
-#app-dossier .ai-avatar-user{background:var(--bg2);color:var(--text2)}
-#app-dossier .ai-msg-bubble{max-width:85%;padding:9px 12px;border-radius:12px;font-size:13px;line-height:1.55}
-#app-dossier .ai-bubble-ai{background:var(--bg);border:1px solid var(--border);border-radius:12px 12px 12px 2px}
-#app-dossier .ai-bubble-user{background:linear-gradient(135deg,#1B2D5B,#2A5298);color:#fff;border-radius:12px 12px 2px 12px}
-#app-dossier .ai-input-area{padding:1rem 1.25rem;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0}
-#app-dossier .ai-input{flex:1;padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:var(--font-sans);background:var(--bg);color:var(--text);resize:none;height:38px}
-#app-dossier .ai-input:focus{outline:none;border-color:#4A9CC7;background:var(--card)}
-#app-dossier .ai-suggestions{padding:0 1.25rem .75rem;display:flex;flex-direction:column;gap:6px}
-#app-dossier .ai-suggestion{
-  padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);
-  font-size:12px;color:var(--text2);cursor:pointer;background:var(--bg);
-  transition:all .15s;text-align:left;font-family:var(--font-sans);
-}
-#app-dossier .ai-suggestion:hover{border-color:#4A9CC7;color:var(--navy);background:var(--accent-bg)}
-#app-dossier .ai-suggestions-title{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:6px;padding:0 1.25rem}
-#app-dossier .ai-loading{display:flex;gap:4px;align-items:center;padding:4px 0}
-#app-dossier .ai-dot{width:6px;height:6px;border-radius:50%;background:#4A9CC7;animation:bounce 1.2s infinite}
-#app-dossier .ai-dot:nth-child(2){animation-delay:.2s} #app-dossier .ai-dot:nth-child(3){animation-delay:.4s}
 @keyframes bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-6px)}}
-
-/* ── TOAST ───────────────────────────────────────────────── */
-#app-dossier .toast{
-  position:fixed;bottom:1.5rem;right:1.5rem;
-  background:rgba(9,18,34,.92);color:#fff;padding:10px 16px;
-  border-radius:var(--r-md);font-size:13px;z-index:200;
-  transform:translateY(80px);opacity:0;transition:all .3s;
-  pointer-events:none;max-width:320px;
-  border-left:3px solid #4A9CC7;
-}
-#app-dossier .toast.show{transform:translateY(0);opacity:1}
-
-/* ── MISC ────────────────────────────────────────────────── */
-#app-dossier .tabs{display:flex;border-bottom:2px solid var(--border);margin-bottom:1.25rem}
-#app-dossier .tab{padding:8px 16px;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;border-bottom:2.5px solid transparent;margin-bottom:-2px;transition:all .15s}
-#app-dossier .tab:hover{color:var(--navy)}
-#app-dossier .tab.active{color:var(--accent);border-bottom-color:#4A9CC7;font-weight:700}
-#app-dossier .search-bar{
-  display:flex;align-items:center;gap:8px;
-  background:var(--bg2);border:1.5px solid var(--border);
-  border-radius:var(--r-md);padding:7px 12px;flex:1;max-width:280px;
-}
-#app-dossier .search-bar input{border:none;background:transparent;font-size:13px;color:var(--text);font-family:var(--font-sans);flex:1;outline:none}
-#app-dossier .search-bar .ti{color:var(--text3);font-size:15px}
-#app-dossier .search-bar:focus-within{border-color:#4A9CC7}
-#app-dossier .empty-state{text-align:center;padding:3rem 2rem;color:var(--text2)}
-#app-dossier .empty-icon{font-size:40px;color:var(--accent);margin-bottom:12px;opacity:.5}
-#app-dossier .empty-title{font-size:15px;font-weight:500;color:var(--navy);margin-bottom:6px}
-#app-dossier .empty-sub{font-size:13px}
-#app-dossier .horiz-bar{display:flex;align-items:center;gap:10px;margin-bottom:10px}
-#app-dossier .horiz-bar-label{width:120px;font-size:12px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#app-dossier .horiz-bar-track{flex:1;height:8px;background:var(--bg2);border-radius:4px;overflow:hidden}
-#app-dossier .horiz-bar-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,#4A9CC7,#1B2D5B)}
-#app-dossier .horiz-bar-val{width:40px;text-align:right;font-size:12px;font-weight:500;color:var(--navy)}
-#app-dossier ::-webkit-scrollbar{width:5px;height:5px} #app-dossier ::-webkit-scrollbar-track{background:transparent} #app-dossier ::-webkit-scrollbar-thumb{background:#4A9CC7;border-radius:3px;opacity:.5}
-
-/* ═══════════════════════════════════════════════
-   RESPONSIVE MOBILE — Sidebar drawer
-   ═══════════════════════════════════════════════ */
-#app-dossier .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(15,30,61,.6);z-index:90;backdrop-filter:blur(2px)}
-#app-dossier .sidebar-overlay.open{display:block}
-#app-dossier .btn-hamburger{display:none;align-items:center;justify-content:center;width:38px;height:38px;border-radius:var(--r-md);border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:20px;color:var(--text);flex-shrink:0;margin-right:4px}
 
 @media (max-width: 768px){
   /* Bouton hamburger visible */
@@ -1229,219 +867,7 @@ tr:last-child td{border-bottom:none} tr:hover td{background:var(--accent-bg)}
   #app-dossier .metric-value{font-size:18px}
   #app-dossier .topbar-title{font-size:15px}
 }
-
-/* ═══════════════════════════════════════════════
-   HISTORIQUE — Timeline des modifications
-   ═══════════════════════════════════════════════ */
-
-/* Onglets dans la modal projet */
-#app-dossier .modal-tabs{ display:flex; border-bottom:2px solid var(--border); padding:0 1.5rem; flex-shrink:0; background:var(--card); }
-#app-dossier .modal-tab{ padding:10px 16px; font-size:13px; font-weight:500; color:var(--text2); cursor:pointer; border-bottom:2.5px solid transparent; margin-bottom:-2px; transition:all .15s; }
-#app-dossier .modal-tab:hover{ color:var(--navy); }
-#app-dossier .modal-tab.active{ color:var(--accent); border-bottom-color:#4A9CC7; font-weight:700; }
-#app-dossier .modal-tab-content{ display:none; }
-#app-dossier .modal-tab-content.active{ display:block; }
-
-/* Timeline historique */
-#app-dossier .hist-timeline{ display:flex; flex-direction:column; gap:0; }
-#app-dossier .hist-item{ display:flex; gap:14px; position:relative; padding-bottom:0; }
-#app-dossier .hist-item:not(:last-child)::before{
-  content:''; position:absolute; left:16px; top:34px; bottom:0;
-  width:2px; background:linear-gradient(to bottom, #C8D8E8 0%, transparent 100%);
-  z-index:0;
-}
-#app-dossier .hist-spine{ display:flex; flex-direction:column; align-items:center; flex-shrink:0; z-index:1; }
-#app-dossier .hist-dot{
-  width:34px; height:34px; border-radius:50%; display:flex; align-items:center;
-  justify-content:center; font-size:14px; flex-shrink:0;
-  border:2px solid transparent; transition:all .2s;
-}
-#app-dossier .hist-dot-creation{ background:linear-gradient(135deg,#1B2D5B,#2A5298); color:#fff; border-color:#1B2D5B; }
-#app-dossier .hist-dot-phase{ background:linear-gradient(135deg,#4A9CC7,#2A5298); color:#fff; border-color:#4A9CC7; }
-#app-dossier .hist-dot-statut{ background:linear-gradient(135deg,#2D7A4F,#1a5c38); color:#fff; border-color:#2D7A4F; }
-#app-dossier .hist-dot-finances{ background:linear-gradient(135deg,#8A6020,#b07a30); color:#fff; border-color:#8A6020; }
-#app-dossier .hist-dot-edition{ background:var(--bg2); color:var(--text2); border-color:var(--border); }
-#app-dossier .hist-dot-avancement{ background:linear-gradient(135deg,#5b4fc7,#7c6fd4); color:#fff; border-color:#5b4fc7; }
-
-#app-dossier .hist-body{
-  flex:1; background:var(--card); border:1.5px solid var(--border);
-  border-radius:var(--r-md); padding:12px 14px; margin-bottom:10px;
-  transition:box-shadow .15s;
-}
-#app-dossier .hist-body:hover{ box-shadow:var(--shadow-md); }
-#app-dossier .hist-body-top{ display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px; }
-#app-dossier .hist-action{ font-size:13px; font-weight:600; color:var(--navy); }
-#app-dossier .hist-date{ font-size:11px; color:var(--text3); white-space:nowrap; margin-left:8px; flex-shrink:0; }
-#app-dossier .hist-details{ display:flex; flex-direction:column; gap:4px; }
-#app-dossier .hist-change{ display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text2); }
-#app-dossier .hist-change-label{ font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--text3); width:80px; flex-shrink:0; }
-#app-dossier .hist-change-from{ background:var(--red-bg); color:var(--red); padding:1px 7px; border-radius:3px; text-decoration:line-through; font-size:11px; }
-#app-dossier .hist-change-to{ background:var(--green-bg); color:var(--green); padding:1px 7px; border-radius:3px; font-weight:600; font-size:11px; }
-#app-dossier .hist-change-arrow{ color:var(--text3); font-size:12px; }
-#app-dossier .hist-note{ font-size:12px; color:var(--text2); font-style:italic; margin-top:4px; padding-top:4px; border-top:1px solid var(--border); }
-#app-dossier .hist-badge-phase{
-  display:inline-flex; align-items:center; gap:5px;
-  background:var(--accent-bg); color:var(--accent);
-  padding:3px 10px; border-radius:20px; font-size:11px; font-weight:700;
-  border:1px solid #C8D8E8;
-}
-#app-dossier .hist-empty{ text-align:center; padding:2rem; color:var(--text3); font-size:13px; }
-
-/* Bouton "Avancer la phase" dans la modal */
-#app-dossier .phase-advance-bar{
-  background:linear-gradient(135deg,var(--accent-bg),#f0f8ff);
-  border:1.5px solid #4A9CC7; border-radius:var(--r-md);
-  padding:12px 16px; margin-bottom:1rem;
-  display:flex; align-items:center; gap:12px;
-}
-#app-dossier .phase-advance-label{ flex:1; font-size:13px; color:var(--navy); }
-#app-dossier .phase-advance-label strong{ font-weight:700; }
-#app-dossier .phase-chain-bar{ display:flex; align-items:center; gap:4px; flex-wrap:wrap; margin-top:6px; }
-#app-dossier .pch{ padding:3px 9px; border-radius:20px; font-size:11px; font-weight:600; border:1.5px solid var(--border); color:var(--text3); background:var(--bg); cursor:pointer; transition:all .15s; }
-#app-dossier .pch:hover{ border-color:#4A9CC7; color:var(--accent); }
-#app-dossier .pch.current{ background:var(--accent); color:#fff; border-color:var(--accent); cursor:default; }
-#app-dossier .pch.done{ background:var(--green-bg); color:var(--green); border-color:var(--green); }
-
-/* Formulaire note dans édition */
-#app-dossier .note-field{ background:var(--accent-bg); border:1.5px solid #4A9CC7; border-radius:var(--r-md); padding:10px 12px; margin-top:10px; }
-#app-dossier .note-field label{ font-size:11px; font-weight:700; color:var(--accent); text-transform:uppercase; letter-spacing:.06em; display:block; margin-bottom:5px; }
-#app-dossier .note-field textarea{ width:100%; border:none; background:transparent; font-size:13px; font-family:var(--font-sans); color:var(--text); resize:none; outline:none; }
-
-/* ═══════════════════════════════════════════════
-   FACTURATION — Devis & Factures
-   ═══════════════════════════════════════════════ */
-#app-dossier .fact-status-bar{ display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:1.5rem; }
-#app-dossier .fact-kpi{ background:var(--card); border:1.5px solid var(--border); border-radius:var(--r-lg); padding:1rem 1.25rem; flex:1; min-width:140px; box-shadow:var(--shadow); border-top:3px solid #4A9CC7; }
-#app-dossier .fact-kpi-label{ font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:.05em; margin-bottom:4px; }
-#app-dossier .fact-kpi-value{ font-family:var(--font-serif); font-size:22px; color:var(--navy); }
-#app-dossier .fact-kpi-sub{ font-size:11px; color:var(--text3); margin-top:2px; }
-#app-dossier .fact-kpi.kpi-green{ border-top-color:var(--green); }
-#app-dossier .fact-kpi.kpi-amber{ border-top-color:#F5A623; }
-#app-dossier .fact-kpi.kpi-red{ border-top-color:var(--red); }
-
-/* Tableau factures */
-#app-dossier .fact-table-wrap{ overflow-x:auto; }
-#app-dossier .fact-table{ width:100%; border-collapse:collapse; font-size:13px; }
-#app-dossier .fact-table th{ text-align:left; font-size:10px; font-weight:700; color:var(--text3); padding:10px 10px 10px 0; border-bottom:1.5px solid var(--border); letter-spacing:.06em; text-transform:uppercase; white-space:nowrap; }
-#app-dossier .fact-table td{ padding:11px 10px 11px 0; border-bottom:1px solid var(--bg2); vertical-align:middle; }
-#app-dossier .fact-table tr:last-child td{ border-bottom:none; }
-#app-dossier .fact-table tr:hover td{ background:var(--bg); }
-#app-dossier .fact-num{ font-weight:700; color:var(--navy); font-size:12px; }
-#app-dossier .fact-montant{ font-weight:700; color:var(--navy); }
-#app-dossier .fact-progress-wrap{ display:flex; align-items:center; gap:6px; }
-
-/* Badges statuts devis */
-#app-dossier .badge-devis-att{ background:rgba(120,170,220,.12); color:var(--text2); border:1.5px solid var(--border); }
-#app-dossier .badge-devis-ok{ background:var(--green-bg); color:var(--green); border:1.5px solid transparent; }
-#app-dossier .badge-devis-non{ background:var(--red-bg); color:var(--red); border:1.5px solid transparent; }
-/* Badges statuts factures */
-#app-dossier .badge-fact-brouillon{ background:rgba(120,170,220,.12); color:var(--text2); border:1.5px solid var(--border); }
-#app-dossier .badge-fact-emise{ background:rgba(79,168,240,.14); color:var(--accent); border:1.5px solid var(--accent); }
-#app-dossier .badge-fact-payee{ background:var(--green-bg); color:var(--green); border:1.5px solid transparent; }
-#app-dossier .badge-fact-retard{ background:var(--red-bg); color:var(--red); border:1.5px solid transparent; }
-#app-dossier .badge-fact-partiel{ background:var(--amber-bg); color:var(--amber); border:1.5px solid transparent; }
-
-/* Barre de progression paiement */
-#app-dossier .pay-bar{ height:6px; background:var(--bg2); border-radius:3px; overflow:hidden; width:80px; flex-shrink:0; }
-#app-dossier .pay-fill{ height:100%; border-radius:3px; }
-#app-dossier .pay-fill-green{ background:linear-gradient(90deg,var(--green),#5DBF88); }
-#app-dossier .pay-fill-amber{ background:linear-gradient(90deg,#F5A623,#F5C623); }
-#app-dossier .pay-fill-blue{ background:linear-gradient(90deg,var(--accent),var(--accent2)); }
-
-/* Modal facture */
-#app-dossier .fact-modal-section{ font-size:11px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:.08em; padding:1rem 0 .5rem; border-top:1px solid var(--border); margin-top:.5rem; }
-#app-dossier .fact-modal-section:first-child{ border-top:none; padding-top:0; margin-top:0; }
-
-/* Fiche projet : onglet facturation */
-#app-dossier .proj-fact-item{ display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--bg2); font-size:13px; }
-#app-dossier .proj-fact-item:last-child{ border-bottom:none; }
-#app-dossier .proj-fact-num{ width:100px; font-weight:600; color:var(--navy); font-size:12px; flex-shrink:0; }
-#app-dossier .proj-fact-desc{ flex:1; color:var(--text2); font-size:12px; }
-#app-dossier .proj-fact-montant{ font-weight:700; color:var(--navy); text-align:right; flex-shrink:0; width:90px; }
-
-/* ═══════════════════════════════════════════════════════════
-   TÂCHES — Kanban + Agenda calendrier
-   ═══════════════════════════════════════════════════════════ */
-#app-dossier .taches-layout{ display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; align-items:start; }
 @media(max-width:900px){ #app-dossier .taches-layout{grid-template-columns:1fr} }
-#app-dossier .kanban-col{ background:var(--bg2); border-radius:var(--r-lg); padding:.75rem; min-height:200px; }
-#app-dossier .kanban-col-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:.75rem; padding:0 .25rem; }
-#app-dossier .kanban-col-title{ font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; display:flex; align-items:center; gap:7px; }
-#app-dossier .kanban-dot{ width:9px; height:9px; border-radius:50%; flex-shrink:0; }
-#app-dossier .kd-todo{background:#8BA5C0} #app-dossier .kd-doing{background:#F5A623} #app-dossier .kd-done{background:var(--green)}
-#app-dossier .kanban-count{ font-size:11px; font-weight:700; background:rgba(0,0,0,.08); padding:1px 8px; border-radius:20px; }
-#app-dossier .kanban-add{ width:26px; height:26px; border-radius:50%; border:1.5px dashed var(--text3); background:transparent; cursor:pointer; display:flex; align-items:center; justify-content:center; color:var(--text3); font-size:16px; transition:all .15s; }
-#app-dossier .kanban-add:hover{ border-color:var(--accent); color:var(--accent); background:var(--accent-bg); }
-#app-dossier .tache-card{ background:var(--card); border:1px solid var(--border); border-radius:var(--r-md); padding:10px 12px; margin-bottom:8px; cursor:pointer; transition:box-shadow .15s,transform .12s; border-left:3px solid transparent; position:relative; }
-#app-dossier .tache-card:hover{ box-shadow:var(--shadow-md); transform:translateY(-1px); }
-#app-dossier .tache-card.prio-haute{border-left-color:#F5A623} #app-dossier .tache-card.prio-urgent{border-left-color:var(--red)} #app-dossier .tache-card.prio-normale{border-left-color:var(--accent)}
-#app-dossier .tache-card-title{ font-size:13px; font-weight:600; color:var(--navy); margin-bottom:5px; line-height:1.35; }
-#app-dossier .tache-card-meta{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
-#app-dossier .tache-tag{ font-size:10px; padding:2px 7px; border-radius:20px; font-weight:600; }
-#app-dossier .tache-date{ font-size:11px; color:var(--text3); display:flex; align-items:center; gap:3px; }
-#app-dossier .tache-date.late{ color:var(--red); font-weight:600; }
-#app-dossier .tache-proj{ font-size:11px; color:var(--accent); background:var(--accent-bg); padding:1px 7px; border-radius:20px; }
-#app-dossier .tache-card-actions{ position:absolute; top:8px; right:8px; display:flex; gap:4px; opacity:0; transition:opacity .15s; }
-#app-dossier .tache-card:hover .tache-card-actions{ opacity:1; }
-#app-dossier .tache-move-btn{ width:22px; height:22px; border-radius:4px; border:1px solid var(--border); background:var(--bg); cursor:pointer; font-size:11px; display:flex; align-items:center; justify-content:center; color:var(--text2); transition:all .15s; }
-#app-dossier .tache-move-btn:hover{ background:var(--accent); color:white; border-color:var(--accent); }
-#app-dossier .agenda-cal-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; }
-#app-dossier .agenda-cal-nav{ display:flex; align-items:center; gap:10px; }
-#app-dossier .agenda-cal-title{ font-family:var(--font-serif); font-size:20px; color:var(--navy); }
-#app-dossier .agenda-week-grid{ display:grid; grid-template-columns:52px repeat(7,1fr); gap:0; border:1px solid var(--border); border-radius:var(--r-lg); overflow:hidden; background:var(--card); }
-#app-dossier .week-day-header{ background:var(--bg); padding:8px 4px; text-align:center; border-bottom:1.5px solid var(--border); font-size:11px; font-weight:700; color:var(--text2); border-right:1px solid var(--border); }
-#app-dossier .week-day-header.today-col{ background:var(--accent-bg); color:var(--accent); }
-#app-dossier .week-day-header .day-num{ font-size:18px; font-family:var(--font-serif); color:var(--navy); display:block; line-height:1.2; }
-#app-dossier .week-day-header.today-col .day-num{ color:var(--accent); }
-#app-dossier .week-hour-label{ font-size:10px; color:var(--text3); text-align:right; padding:0 6px 0 4px; height:72px; display:flex; align-items:flex-start; padding-top:4px; border-right:1px solid var(--border); background:var(--bg); border-bottom:1px solid var(--bg2); white-space:nowrap; }
-#app-dossier .week-cell{ height:72px; border-right:1px solid var(--border); border-bottom:1px solid var(--bg2); position:relative; overflow:hidden; background:var(--card); }
-#app-dossier .week-cell:last-child{ border-right:none; }
-#app-dossier .week-cell.today-col{ background:#F5FBFF; }
-#app-dossier .week-cell.past-cell{ background:#FAFBFC; }
-#app-dossier .cal-event{ position:relative; left:0; right:0; margin:1px 2px; border-radius:4px; padding:2px 5px; font-size:10px; font-weight:600; line-height:1.3; overflow:hidden; cursor:pointer; z-index:2; white-space:nowrap; text-overflow:ellipsis; border-left:2.5px solid transparent; transition:opacity .15s; }
-#app-dossier .cal-event:hover{ opacity:.85; z-index:10; white-space:normal; height:auto; }
-#app-dossier .cal-ev-tache{background:rgba(79,168,240,.16);color:#e5ecf3;border-left-color:#4fa8f0}
-#app-dossier .cal-ev-echeance{background:rgba(200,150,60,.18);color:#e6b95c;border-left-color:#F5A623}
-#app-dossier .cal-ev-urgent{background:rgba(200,90,80,.20);color:#e0776c;border-left-color:#e0776c}
-#app-dossier .today-tasks{ background:var(--card); border:1px solid var(--border); border-radius:var(--r-lg); padding:1.25rem; }
-#app-dossier .today-task-item{ display:flex; align-items:flex-start; gap:10px; padding:8px 0; border-bottom:1px solid var(--bg2); }
-#app-dossier .today-task-item:last-child{ border-bottom:none; }
-#app-dossier .today-task-check{ width:18px; height:18px; border-radius:4px; border:2px solid var(--border); flex-shrink:0; margin-top:1px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all .15s; }
-#app-dossier .today-task-check.checked{ background:var(--green); border-color:var(--green); }
-#app-dossier .today-task-check.checked::after{ content:'\2713'; color:white; font-size:10px; font-weight:700; }
-#app-dossier .today-task-text{ flex:1; font-size:13px; color:var(--text); line-height:1.4; }
-#app-dossier .today-task-text.done{ text-decoration:line-through; color:var(--text3); }
-#app-dossier .tache-modal-prio{ display:flex; gap:8px; }
-#app-dossier .prio-btn{ flex:1; padding:7px; border-radius:var(--r-sm); border:1.5px solid var(--border); background:var(--bg); cursor:pointer; font-size:12px; font-weight:600; text-align:center; transition:all .15s; color:var(--text2); }
-#app-dossier .prio-btn.active-normale{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
-#app-dossier .prio-btn.active-haute{background:rgba(200,150,60,.18);border-color:#F5A623;color:#e6b95c}
-#app-dossier .prio-btn.active-urgent{background:var(--red-bg);border-color:var(--red);color:var(--red)}
-
-/* Couleurs échéances */
-#app-dossier .color-swatch{ width:24px; height:24px; border-radius:50%; border:2px solid transparent; cursor:pointer; transition:all .15s; flex-shrink:0; }
-#app-dossier .color-swatch:hover{ transform:scale(1.2); border-color:white; box-shadow:0 0 0 2px var(--navy); }
-#app-dossier .color-swatch.selected{ border-color:white; box-shadow:0 0 0 2px var(--navy); transform:scale(1.15); }
-
-
-
-/* ── PHÉNIX SUITE — conteneurs ─────────────────────────────── */
-#app-chantier, #app-dossier {
-  position: fixed;
-  inset: 0;
-  overflow: hidden;
-}
-/* Sidebar logo hover */
-#app-chantier .sidebar-logo,
-#app-dossier .sidebar-logo {
-  cursor: pointer;
-  transition: background .18s;
-}
-#app-chantier .sidebar-logo:hover,
-#app-dossier .sidebar-logo:hover {
-  background: rgba(74,156,199,.18) !important;
-}
-
-
 
 @media (max-width: 768px) {
   /* Tableaux facturation et comptabilité en scroll horizontal */
@@ -1468,7 +894,6 @@ tr:last-child td{border-bottom:none} tr:hover td{background:var(--accent-bg)}
   #app-dossier .main-area { width: 100%; }
   #app-dossier 
 }
-
 
 /* ══ MOBILE — Navigation hamburger + sidebar drawer ════════ */
 
@@ -1538,31 +963,9 @@ tr:last-child td{border-bottom:none} tr:hover td{background:var(--accent-bg)}
   #app-chantier .metrics { grid-template-columns: 1fr !important; }
   #app-dossier  .fact-kpis { grid-template-columns: 1fr 1fr !important; }
 }
-
-/* ── Logo sidebar = bouton switch ──────────────────────────── */
-#app-chantier .sidebar-logo,
-#app-dossier .sidebar-logo {
-  cursor: pointer;
-  transition: background .15s;
-  border-radius: var(--r-md);
-  margin: 4px;
-}
-#app-chantier .sidebar-logo:hover,
-#app-dossier .sidebar-logo:hover {
-  background: rgba(74,156,199,.18);
-}
 /* Badge "→ switch" visible dans la sidebar */
 #app-chantier .sidebar-logo::after {
   content: '→ Dossier';
-  display: block;
-  font-size: 9px;
-  color: rgba(74,156,199,.7);
-  letter-spacing: .06em;
-  margin-top: 1px;
-  font-family: var(--font-sans);
-}
-#app-dossier .sidebar-logo::after {
-  content: '→ Chantier';
   display: block;
   font-size: 9px;
   color: rgba(74,156,199,.7);
@@ -1594,233 +997,43 @@ tr:last-child td{border-bottom:none} tr:hover td{background:var(--accent-bg)}
 }
 .plan-annotation:hover { transform: translate(-50%,-50%) scale(1.25); }
 @keyframes spin { to { transform: rotate(360deg); } }
-
-/* ══ MODULE VOCAL ══════════════════════════════════════════ */
-#vocal-fab {
-  position: fixed;
-  bottom: 24px;
-  left: 24px;
-  width: 58px;
-  height: 58px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #1B2D5B, #4A9CC7);
-  border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 22px;
-  color: #fff;
-  box-shadow: 0 4px 18px rgba(27,45,91,.35);
-  z-index: 300;
-  transition: all .2s;
-}
-#vocal-fab:hover { transform: scale(1.08); box-shadow: 0 6px 24px rgba(74,156,199,.5); }
-#vocal-fab.listening {
-  background: linear-gradient(135deg, #C0392B, #E74C3C);
-  animation: vocal-pulse 1.2s infinite;
+@keyframes vocal-pulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(192,57,43,.5); }
+  50%      { box-shadow: 0 0 0 14px rgba(192,57,43,0); }
 }
 @keyframes vocal-pulse {
   0%,100% { box-shadow: 0 0 0 0 rgba(192,57,43,.5); }
   50%      { box-shadow: 0 0 0 14px rgba(192,57,43,0); }
 }
-/* Panel vocal */
-#vocal-panel {
-  position: fixed;
-  bottom: 96px;
-  left: 24px;
-  width: 340px;
-  max-width: calc(100vw - 48px);
-  background: var(--card);
-  border: 1.5px solid var(--border);
-  border-radius: var(--r-lg);
-  box-shadow: var(--shadow-md);
-  z-index: 300;
-  display: none;
-  flex-direction: column;
-  overflow: hidden;
-  border-top: 3px solid #4A9CC7;
-}
-#vocal-panel.open { display: flex; }
-.vocal-header {
-  padding: 12px 16px;
-  background: linear-gradient(135deg, #0F1E3D, #1B2D5B);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: #fff;
-}
-.vocal-header-icon { font-size: 18px; color: #4A9CC7; }
-.vocal-header-title { font-size: 14px; font-weight: 600; flex: 1; }
-.vocal-close { background: none; border: none; color: rgba(255,255,255,.6); font-size: 18px; cursor: pointer; padding: 0; line-height: 1; }
-.vocal-close:hover { color: #fff; }
-.vocal-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
-.vocal-status {
-  text-align: center;
-  padding: 14px;
-  background: var(--bg);
-  border-radius: var(--r-md);
-  font-size: 13px;
-  color: var(--text2);
-  min-height: 52px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.vocal-status.active { color: var(--red); font-weight: 600; }
-.vocal-transcript {
-  background: var(--bg);
-  border: 1.5px solid var(--border);
-  border-radius: var(--r-md);
-  padding: 10px 12px;
-  font-size: 13px;
-  color: var(--text);
-  min-height: 60px;
-  max-height: 100px;
-  overflow-y: auto;
-  font-style: italic;
-  display: none;
-}
-.vocal-preview {
-  background: var(--accent-bg);
-  border: 1.5px solid #4A9CC7;
-  border-radius: var(--r-md);
-  padding: 12px;
-  font-size: 12px;
-  display: none;
-}
-.vocal-preview-title { font-weight: 700; color: var(--navy); margin-bottom: 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
-.vocal-preview-row { display: flex; gap: 6px; margin-bottom: 5px; align-items: flex-start; }
-.vocal-preview-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: .05em; width: 60px; flex-shrink: 0; margin-top: 2px; }
-.vocal-preview-val { font-size: 12px; color: var(--text); font-weight: 500; flex: 1; }
-.vocal-actions { display: flex; gap: 8px; }
-.vocal-hint {
-  font-size: 11px;
-  color: var(--text3);
-  text-align: center;
-  padding: 0 4px 4px;
-  line-height: 1.5;
-}
-
-/* ══ MODULE VOCAL ══════════════════════════════════════════ */
-#vocal-fab {
-  position: fixed;
-  bottom: 24px;
-  left: 24px;
-  width: 58px;
-  height: 58px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #1B2D5B, #4A9CC7);
-  border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 22px;
-  color: #fff;
-  box-shadow: 0 4px 18px rgba(27,45,91,.35);
-  z-index: 300;
-  transition: all .2s;
-}
-#vocal-fab:hover { transform: scale(1.08); box-shadow: 0 6px 24px rgba(74,156,199,.5); }
-#vocal-fab.listening {
-  background: linear-gradient(135deg, #C0392B, #E74C3C);
-  animation: vocal-pulse 1.2s infinite;
-}
-@keyframes vocal-pulse {
-  0%,100% { box-shadow: 0 0 0 0 rgba(192,57,43,.5); }
-  50%      { box-shadow: 0 0 0 14px rgba(192,57,43,0); }
-}
-/* Panel vocal */
-#vocal-panel {
-  position: fixed;
-  bottom: 96px;
-  left: 24px;
-  width: 340px;
-  max-width: calc(100vw - 48px);
-  background: var(--card);
-  border: 1.5px solid var(--border);
-  border-radius: var(--r-lg);
-  box-shadow: var(--shadow-md);
-  z-index: 300;
-  display: none;
-  flex-direction: column;
-  overflow: hidden;
-  border-top: 3px solid #4A9CC7;
-}
-#vocal-panel.open { display: flex; }
-.vocal-header {
-  padding: 12px 16px;
-  background: linear-gradient(135deg, #0F1E3D, #1B2D5B);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: #fff;
-}
-.vocal-header-icon { font-size: 18px; color: #4A9CC7; }
-.vocal-header-title { font-size: 14px; font-weight: 600; flex: 1; }
-.vocal-close { background: none; border: none; color: rgba(255,255,255,.6); font-size: 18px; cursor: pointer; padding: 0; line-height: 1; }
-.vocal-close:hover { color: #fff; }
-.vocal-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
-.vocal-status {
-  text-align: center;
-  padding: 14px;
-  background: var(--bg);
-  border-radius: var(--r-md);
-  font-size: 13px;
-  color: var(--text2);
-  min-height: 52px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.vocal-status.active { color: var(--red); font-weight: 600; }
-.vocal-transcript {
-  background: var(--bg);
-  border: 1.5px solid var(--border);
-  border-radius: var(--r-md);
-  padding: 10px 12px;
-  font-size: 13px;
-  color: var(--text);
-  min-height: 60px;
-  max-height: 100px;
-  overflow-y: auto;
-  font-style: italic;
-  display: none;
-}
-.vocal-preview {
-  background: var(--accent-bg);
-  border: 1.5px solid #4A9CC7;
-  border-radius: var(--r-md);
-  padding: 12px;
-  font-size: 12px;
-  display: none;
-}
-.vocal-preview-title { font-weight: 700; color: var(--navy); margin-bottom: 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
-.vocal-preview-row { display: flex; gap: 6px; margin-bottom: 5px; align-items: flex-start; }
-.vocal-preview-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: .05em; width: 60px; flex-shrink: 0; margin-top: 2px; }
-.vocal-preview-val { font-size: 12px; color: var(--text); font-weight: 500; flex: 1; }
-.vocal-actions { display: flex; gap: 8px; }
-.vocal-hint {
-  font-size: 11px;
-  color: var(--text3);
-  text-align: center;
-  padding: 0 4px 4px;
-  line-height: 1.5;
-}
-
 
 /* ── Anti-scintillement mobile ─────────────────────────── */
 * { -webkit-tap-highlight-color: transparent; }
 button, .btn, .nav-item, .tab, .card { touch-action: manipulation; }
-#chantierSidebar, #sidebar_d { will-change: transform; -webkit-backface-visibility: hidden; }
-
 
 /* ── Rôles (v2 multi-utilisateur) ── */
 body.role-pending .staff-only, body.role-pending .admin-only { display:none !important; }
 body.role-chantier .staff-only, body.role-chantier .admin-only { display:none !important; }
 body.role-equipe .admin-only { display:none !important; }
 #chUserChip { font-size:11px; color:rgba(255,255,255,.7); margin-top:6px; display:flex; align-items:center; gap:5px; }
+/* ── Planning Gantt (barres déplaçables) ── */
+.pg-card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--r-md);overflow:hidden}
+.pg-scroll{overflow:auto;max-height:70vh}.pg-flow{display:inline-block;min-width:100%}
+.pg-head{display:flex;position:sticky;top:0;z-index:6;background:var(--card)}
+.pg-corner{width:230px;flex:0 0 230px;position:sticky;left:0;z-index:7;background:var(--card);border-right:2px solid var(--border);border-bottom:2px solid var(--accent);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);padding:8px 10px;display:flex;align-items:flex-end}
+.pg-timehead{position:relative;border-bottom:2px solid var(--accent)}.pg-months{position:relative;height:22px}.pg-days{position:relative}
+.pg-month{position:absolute;top:0;height:22px;line-height:22px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent2);border-left:1px solid var(--border);padding-left:6px;overflow:hidden;white-space:nowrap}
+.pg-tick{position:absolute;top:0;bottom:0;border-left:1px solid var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:9px;color:var(--text3);line-height:1.15}
+.pg-tick b{font-size:11px;color:var(--text)}.pg-tick.we{background:rgba(0,0,0,.035)}.pg-tick.ws{border-left-color:var(--accent)}
+.pg-body{display:flex}.pg-sidebar{width:230px;flex:0 0 230px;position:sticky;left:0;z-index:5;background:var(--card);border-right:2px solid var(--border)}
+.pg-side{height:44px;padding:5px 10px;border-left:4px solid var(--accent);border-bottom:1px solid var(--border);cursor:pointer;overflow:hidden}
+.pg-side:hover{background:var(--accent-bg)}.pg-side .t{font-size:12px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pg-side .s{font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pg-plot{position:relative}.pg-plotbg{position:absolute;inset:0}.pg-weband{position:absolute;top:0;bottom:0;background:rgba(0,0,0,.035)}.pg-line{position:absolute;left:0;right:0;height:1px;background:var(--border)}
+.pg-today{position:absolute;top:0;bottom:0;width:2px;background:#c0392b;z-index:3;pointer-events:none}.pg-today i{position:absolute;top:0;left:3px;font-size:9px;font-style:normal;background:#c0392b;color:#fff;padding:1px 5px;border-radius:3px;white-space:nowrap}
+.pg-bar{position:absolute;height:30px;border-radius:5px;z-index:4;display:flex;align-items:center;color:#fff;font-size:11px;font-weight:600;padding:0 10px;cursor:grab;touch-action:none;user-select:none;box-shadow:0 1px 3px rgba(0,0,0,.25);overflow:hidden}
+.pg-bar span{pointer-events:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;position:relative}.pg-bar.late{outline:2px solid #e74c3c}.pg-bar.drag{cursor:grabbing;opacity:.85;box-shadow:0 4px 12px rgba(0,0,0,.35)}
+.pg-av{position:absolute;left:0;top:0;bottom:0;background:rgba(0,0,0,.28);pointer-events:none}.pg-h{position:absolute;top:0;bottom:0;width:9px;cursor:ew-resize;z-index:2}.pg-h.l{left:0}.pg-h.r{right:0}
+.pg-h:hover{background:rgba(255,255,255,.35)}.pg-sans{margin-top:10px;font-size:12px;color:var(--text2);padding:8px 10px;background:var(--bg);border-radius:var(--r-md)}.pg-sans a{color:var(--accent2);font-weight:600}
+.pg-zoom button{border:1.5px solid var(--border);background:var(--card);color:var(--text2);padding:6px 12px;font-size:12px;cursor:pointer;font-family:inherit}.pg-zoom button:first-child{border-radius:7px 0 0 7px}.pg-zoom button:last-child{border-radius:0 7px 7px 0;border-left:0}.pg-zoom button.pg-on{background:var(--accent);border-color:var(--accent);color:#fff}
 </style>
 <style id="px-iframe-hide"></style>
 <script>
@@ -1841,42 +1054,34 @@ if (window.parent !== window) {
 </style>
 </head>
 <body class="role-pending">
-<div id="phenix-login" style="display:flex;position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#0F1E3D,#1B2D5B,#2A5298);align-items:center;justify-content:center;padding:20px;font-family:'DM Sans',system-ui,sans-serif">
+<div id="phenix-login" style="display:none;position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#0a1628,#12233f,#2f6fc0);align-items:center;justify-content:center;padding:20px;font-family:'DM Sans',system-ui,sans-serif">
   <div style="background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.18);border-radius:16px;padding:34px 28px;max-width:360px;width:100%;text-align:center">
-    <div style="font-family:'DM Serif Display',Georgia,serif;font-size:30px;color:#fff;margin-bottom:4px">Phénix<span style="color:#7DC6E8">-Architecture</span></div>
-    <div style="font-size:11px;color:rgba(255,255,255,.5);letter-spacing:.12em;text-transform:uppercase;margin-bottom:26px">Connexion sécurisée</div>
-    <div id="pl-bio-wrap" style="display:none;margin-bottom:16px">
-      <button id="pl-bio-btn" onclick="chantierBioLogin()" style="width:100%;padding:14px;border:2px solid rgba(77,184,232,.6);border-radius:9px;background:rgba(77,184,232,.12);color:#7DC6E8;font-size:15px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px">
-        <span style="font-size:24px">☝️</span><span id="pl-bio-label">Se connecter avec empreinte</span>
-      </button>
-      <div style="display:flex;align-items:center;gap:10px;margin:14px 0">
-        <div style="flex:1;height:1px;background:rgba(255,255,255,.15)"></div>
-        <span style="font-size:11px;color:rgba(255,255,255,.35)">ou par mot de passe</span>
-        <div style="flex:1;height:1px;background:rgba(255,255,255,.15)"></div>
-      </div>
-    </div>
-    <input id="pl-email" type="email" autocomplete="username" placeholder="E-mail" style="width:100%;padding:12px 14px;margin-bottom:10px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.95);font-size:14px;outline:none">
-    <input id="pl-pwd" type="password" autocomplete="current-password" placeholder="Mot de passe" onkeydown="if(event.key===&quot;Enter&quot;)phenixDoLogin()" style="width:100%;padding:12px 14px;margin-bottom:14px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.95);font-size:14px;outline:none">
-    <button id="pl-btn" onclick="phenixDoLogin()" style="width:100%;padding:12px;border:none;border-radius:9px;background:linear-gradient(135deg,#4A9CC7,#2A5298);color:#fff;font-size:15px;font-weight:600;cursor:pointer">Se connecter</button>
-    <div id="pl-err" style="color:#FFB4A8;font-size:12.5px;margin-top:12px;min-height:16px"></div>
-    <button onclick="chantierBioReset()" style="margin-top:12px;background:none;border:none;color:rgba(255,255,255,.22);font-size:11px;cursor:pointer;font-family:inherit;padding:6px;width:100%">🔄 Réinitialiser l&apos;empreinte</button>
+    <div style="font-family:'DM Serif Display',Georgia,serif;font-size:30px;color:#fff;margin-bottom:4px">Phénix<span style="color:#4fa8f0">-Architecture</span></div>
+    <div style="font-size:14px;color:rgba(255,255,255,.75);margin:18px 0 22px;line-height:1.5">Session fermée ou expirée.<br>La connexion se fait depuis Phénix.</div>
+    <a href="phenix_shell.html" style="display:block;padding:13px;border-radius:9px;background:#2f6fc0;color:#fff;font-size:15px;font-weight:600;text-decoration:none">Ouvrir Phénix</a>
   </div>
 </div>
-    <div id="pl-enroll-wrap" style="display:none;position:fixed;right:16px;bottom:16px;z-index:100000;max-width:320px;box-shadow:0 8px 28px rgba(0,0,0,.35);margin-top:16px;padding:14px;background:rgba(77,184,232,.1);border:1.5px solid rgba(77,184,232,.3);border-radius:9px;text-align:left">
-      <div style="font-size:13px;color:#7DC6E8;font-weight:600;margin-bottom:6px">☝️ Activer la connexion par empreinte ?</div>
-      <div style="font-size:11px;color:rgba(255,255,255,.55);margin-bottom:12px">Votre empreinte restera stockée uniquement sur cet appareil.</div>
-      <div style="display:flex;gap:8px">
-        <button id="pl-enroll-btn" style="flex:1;padding:9px;border:none;border-radius:7px;background:linear-gradient(135deg,#4A9CC7,#2A5298);color:#fff;font-size:13px;font-weight:600;cursor:pointer">Activer</button>
-        <button onclick="document.getElementById(&quot;pl-enroll-wrap&quot;).style.display=&quot;none&quot;" style="flex:1;padding:9px;border:1.5px solid rgba(255,255,255,.2);border-radius:7px;background:transparent;color:rgba(255,255,255,.6);font-size:13px;cursor:pointer">Plus tard</button>
-      </div>
-    </div>
-<div id="app-chantier">
-
+    <div id="app-chantier">
 
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
 <!-- ══ MODALS ════════════════════════════════════════════════ -->
+
+<!-- Modal : Plan [Plans] -->
+<div class="modal-overlay" id="pl-modal">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title" id="pl-title">Ajouter un plan</div><button class="btn btn-sm btn-icon" onclick="closeModal('pl-modal')"><i class="ti ti-x"></i></button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Nom du plan *</label><input id="pl-nom" placeholder="Ex. : Alimentation et plomberie R+1"></div>
+      <div class="form-group"><label>Type</label><select id="pl-type"></select></div>
+      <div class="form-group"><label>Fichier (PDF ou image) *</label><input id="pl-file" type="file" accept="application/pdf,image/*"></div>
+      <div class="form-group"><label>Entreprises qui voient ce plan</label><div id="pl-intervs" style="display:flex;flex-direction:column;gap:4px"></div></div>
+      <div class="form-group"><label style="display:flex;gap:8px;align-items:center"><input id="pl-client" type="checkbox"> Visible du client (par défaut : non)</label></div>
+    </div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('pl-modal')">Annuler</button><button class="btn btn-primary" onclick="savePlanModal()">Publier</button></div>
+  </div>
+</div>
 
 <!-- Modal : Chantier -->
 <div class="modal-overlay" id="modalChantier">
@@ -2133,6 +1338,7 @@ if (window.parent !== window) {
     </div>
     <div class="modal-body">
       <div class="form-grid">
+        <div class="form-group" style="grid-column:1/-1"><label>Retrouver dans l'Annuaire des artisans</label><input id="int-ann" list="int-ann-list" placeholder="Tapez un nom d'entreprise pour reprendre sa fiche…" autocomplete="off" oninput="annPick(this.value)"><datalist id="int-ann-list"></datalist><div id="int-ann-lien" style="font-size:11px;color:var(--text3);margin-top:3px"></div></div>
         <div class="form-group"><label>Raison sociale *</label><input id="int-nom" placeholder="Ex: Dupont Maçonnerie SARL"></div>
         <div class="form-group"><label>Corps de métier</label>
           <select id="int-metier"><option>Maçonnerie / Gros œuvre</option><option>Charpente</option><option>Couverture</option><option>Menuiserie</option><option>Électricité</option><option>Plomberie</option><option>CVC / Chauffage</option><option>Carrelage</option><option>Peinture</option><option>VRD</option><option>Coordination SPS</option><option>Bureau d'études</option><option>Contrôle technique</option><option>Autre</option></select>
@@ -2165,7 +1371,7 @@ if (window.parent !== window) {
         </div>
       </div>
       <div class="form-group"><label>Observations</label><textarea id="int-notes" rows="2" placeholder="Qualité du travail, ponctualité, à recontacter…"></textarea></div>
-      <input type="hidden" id="int-edit-id">
+      <input type="hidden" id="int-edit-id"><input type="hidden" id="int-art-id">
     </div>
     <div class="modal-footer">
       <button class="btn btn-danger btn-sm" id="int-del-btn" style="display:none;margin-right:auto" onclick="deleteInterv()"><i class="ti ti-trash"></i> Supprimer</button>
@@ -2405,10 +1611,13 @@ if (window.parent !== window) {
         <div class="form-group"><label>Rôle</label>
           <select id="usr-role" onchange="usrRoleChanged()">
             <option value="chantier">Suivi de chantier (externe, chantiers choisis)</option>
-            <option value="equipe">Équipe agence (accès complet)</option>
+            <option value="equipe">Équipe agence — ses tâches uniquement (ex. alternante)</option>
             <option value="admin">Administrateur</option>
             <option value="client">Client (carnet de projet uniquement)</option>
+            <option value="artisan">Artisan (accès mobile : pointage, plans, photos)</option>
+            <option value="assistante">Assistante administrative (devis et tâches uniquement)</option>
           </select></div>
+        <div class="form-group" style="grid-column:1/-1;display:none" id="usr-interv-wrap"><label>Entreprise (intervenant) de cet artisan</label><select id="usr-interv"></select></div>
         <div class="form-group" style="grid-column:1/-1" id="usr-chantiers-wrap"><label>Chantiers accessibles</label>
           <div id="usr-chantiers" style="display:flex;flex-direction:column;gap:6px;max-height:200px;overflow:auto;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px"></div></div>
         <div class="form-group" style="grid-column:1/-1"><label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0"><input id="usr-actif" type="checkbox" checked style="width:auto"> Accès actif (décocher pour suspendre sans supprimer)</label></div>
@@ -2445,14 +1654,20 @@ if (window.parent !== window) {
     <div class="nav-section">Navigation</div>
     <div class="nav-item active" onclick="show('dashboard',this)"><i class="ti ti-layout-dashboard"></i> Tableau de bord</div>
     <div class="nav-item" onclick="show('chantiers',this)"><i class="ti ti-building-factory-2"></i> Chantiers <span class="nav-badge" id="nb-chantiers">0</span></div>
-    <div class="nav-item" onclick="show('lots',this)"><i class="ti ti-list-check"></i> Lots & Chiffrage <span class="nav-badge" id="nb-lots">0</span></div>
-    <div class="nav-item" onclick="show('intervenants',this)"><i class="ti ti-users"></i> Intervenants <span class="nav-badge" id="nb-interv">0</span></div>
-    <div class="nav-item" onclick="show('planning',this)"><i class="ti ti-calendar-stats"></i> Planning Gantt</div>
-    <div class="nav-item" onclick="show('financier',this)"><i class="ti ti-report-money"></i> Suivi Financier</div>
+    <div class="nav-item staff-only" onclick="show('carnet',this)"><i class="ti ti-book-2"></i> Carnet client</div>
+    <div class="nav-item" onclick="show('plans',this)"><i class="ti ti-map-2"></i> Plans &amp; pastilles</div><!-- [Plans] -->
+    <div class="nav-item" onclick="show('messages',this)"><i class="ti ti-message-circle"></i> Messages <span class="badge badge-red" id="msg-badge" style="display:none;margin-left:6px"></span></div><!-- [Artisan] -->
     <div class="nav-item" onclick="show('comptes_rendus',this)"><i class="ti ti-file-description"></i> Comptes Rendus <span class="nav-badge" id="nb-cr">0</span></div>
     <div class="nav-item" onclick="show('reserves',this)"><i class="ti ti-alert-octagon"></i> Réserves &amp; actions <span class="nav-badge" id="nb-res">0</span></div>
+    <div class="nav-item" onclick="show('lots',this)"><i class="ti ti-list-check"></i> Lots <span class="nav-badge" id="nb-lots">0</span></div>
+    <div class="nav-item" onclick="show('intervenants',this)"><i class="ti ti-users"></i> Intervenants <span class="nav-badge" id="nb-interv">0</span></div>
+    <div class="nav-item" onclick="show('planning',this)"><i class="ti ti-calendar-stats"></i> Planning Gantt</div>
+    <div class="nav-item nav-toggle" id="navMoreBtn" onclick="toggleNavMore()"><i class="ti ti-adjustments-horizontal"></i> Gestion &amp; suivi <i class="ti ti-chevron-down" id="navMoreChev" style="margin-left:auto;transition:transform .15s"></i></div><!-- [Menu] -->
+    <div id="nav-more" style="display:none;padding-left:10px">
+    <div class="nav-item" onclick="show('financier',this)"><i class="ti ti-report-money"></i> Suivi Financier</div>
     <div class="nav-item" onclick="show('activite',this)"><i class="ti ti-history"></i> Journal d'activité</div>
     <div class="nav-item admin-only" onclick="show('equipe',this)"><i class="ti ti-user-shield"></i> Équipe &amp; accès</div>
+    </div>
 
     <div class="nav-section">Historique</div>
     <div class="nav-item" id="undoBtn" onclick="undoAction()" style="opacity:.4;pointer-events:none"><i class="ti ti-arrow-back-up"></i> Annuler <span class="nav-badge" id="undoCount"></span></div>
@@ -2501,6 +1716,8 @@ if (window.parent !== window) {
           <button class="btn btn-primary staff-only" onclick="openModalChantier()"><i class="ti ti-plus"></i> Nouveau chantier</button>
         </div>
 
+        <div id="db-etapes"></div><!-- [Étape réelle] -->
+        <div id="db-pilotage"></div><!-- [Pilotage] -->
         <div class="metrics" id="db-metrics">
           <div class="metric"><div class="metric-icon"><i class="ti ti-building-factory-2"></i></div><div class="metric-label">Chantiers actifs</div><div class="metric-value" id="db-nb-chantiers">0</div><div class="metric-sub" id="db-nb-chantiers-sub">—</div></div>
           <div class="metric"><div class="metric-icon"><i class="ti ti-cash"></i></div><div class="metric-label">Budget total TTC</div><div class="metric-value" id="db-budget">—</div><div class="metric-sub" id="db-budget-sub">—</div></div>
@@ -2517,7 +1734,7 @@ if (window.parent !== window) {
         <div class="two-col">
           <div>
             <div class="card">
-              <div class="card-header"><div><div class="card-title">Avancement par chantier</div></div><button class="btn btn-sm" onclick="show('chantiers',document.querySelectorAll('.nav-item')[1])">Voir tout <i class="ti ti-arrow-right"></i></button></div>
+              <div class="card-header"><div><div class="card-title">Avancement par chantier</div></div><button class="btn btn-sm" onclick="show('chantiers',navEl('chantiers'))">Voir tout <i class="ti ti-arrow-right"></i></button></div>
               <div id="db-avancement"><div class="empty-state"><div class="empty-icon"><i class="ti ti-building-factory-2"></i></div><div class="empty-title">Aucun chantier</div></div></div>
             </div>
             <div class="card">
@@ -2527,7 +1744,7 @@ if (window.parent !== window) {
           </div>
           <div>
             <div class="card">
-              <div class="card-header"><div class="card-title">Réserves à traiter</div><button class="btn btn-sm" onclick="show('reserves',document.querySelectorAll('.nav-item')[7])">Voir tout <i class="ti ti-arrow-right"></i></button></div>
+              <div class="card-header"><div class="card-title">Réserves à traiter</div><button class="btn btn-sm" onclick="show('reserves',navEl('reserves'))">Voir tout <i class="ti ti-arrow-right"></i></button></div>
               <div id="db-reserves"><div style="color:var(--text3);font-size:13px;padding:.5rem 0">Aucune réserve à traiter.</div></div>
             </div>
             <div class="card">
@@ -2559,7 +1776,7 @@ if (window.parent !== window) {
       <!-- ═══ LOTS ═══ -->
       <div class="page" id="page-lots">
         <div class="page-header">
-          <div><div class="page-title">Lots & Chiffrage</div><div class="page-subtitle">Décomposition par corps d'état</div><div class="page-title-line"></div></div>
+          <div><div class="page-title">Lots</div><div class="page-subtitle">Décomposition par corps d'état</div><div class="page-title-line"></div></div>
           <div style="display:flex;gap:8px">
             <select class="btn" id="lots-filter-ch" onchange="renderLots()" style="padding:7px 12px;font-size:13px">
               <option value="">Tous les chantiers</option>
@@ -2602,16 +1819,18 @@ if (window.parent !== window) {
       <!-- ═══ PLANNING ═══ -->
       <div class="page" id="page-planning">
         <div class="page-header">
-          <div><div class="page-title">Planning Gantt</div><div class="page-subtitle">Vue temporelle des lots</div><div class="page-title-line"></div></div>
+          <div><div class="page-title">Planning Gantt</div><div class="page-subtitle">Glissez une barre pour décaler un lot, tirez ses bords pour changer le début ou la fin</div><div class="page-title-line"></div></div>
           <div style="display:flex;gap:8px">
             <select class="btn" id="planning-filter-ch" onchange="renderPlanning()" style="padding:7px 12px;font-size:13px">
               <option value="">Tous les chantiers</option>
             </select>
+            <span class="pg-zoom"><button id="pg-zoom-jour" class="pg-on" onclick="pgSetZoom('jour')">Jour</button><button id="pg-zoom-semaine" onclick="pgSetZoom('semaine')">Semaine</button></span>
+            <button class="btn" onclick="openModalLot()"><i class="ti ti-plus"></i> Lot</button>
             <button class="btn" onclick="exportPlanningPDF()"><i class="ti ti-file-export"></i> Export PDF</button>
           </div>
         </div>
         <div class="card">
-          <div class="card-header"><div class="card-title">Diagramme de Gantt</div><div style="font-size:12px;color:var(--text3)"><span style="display:inline-block;width:12px;height:12px;background:#4A9CC7;border-radius:2px;margin-right:4px;vertical-align:middle"></span>En cours <span style="display:inline-block;width:12px;height:12px;background:#2D7A4F;border-radius:2px;margin-right:4px;margin-left:12px;vertical-align:middle"></span>Terminé <span style="display:inline-block;width:12px;height:12px;background:#C0392B;border-radius:2px;margin-right:4px;margin-left:12px;vertical-align:middle"></span>En attente</div></div>
+          <div class="card-header"><div class="card-title">Diagramme de Gantt</div><div style="font-size:12px;color:var(--text3)">Couleur = métier · zone sombre = avancement · contour rouge = en retard</div></div>
           <div class="gantt-wrap" id="gantt-content">
             <div class="empty-state"><div class="empty-icon"><i class="ti ti-calendar-stats"></i></div><div class="empty-title">Aucun lot avec dates</div><div class="empty-sub">Ajoutez des dates début/fin aux lots</div></div>
           </div>
@@ -2740,6 +1959,33 @@ if (window.parent !== window) {
         </div>
       </div>
 
+      <!-- ═══ MESSAGES ARTISANS [Artisan] ═══ -->
+      <div class="page" id="page-messages">
+        <div class="page-header"><div><div class="page-title">Messages</div><div class="page-subtitle">Les artisans écrivent à Phénix, jamais au client. Vous répondez ou vous transmettez.</div><div class="page-title-line"></div></div></div>
+        <div id="msg-box"></div>
+      </div>
+
+      <!-- ═══ PLANS & PASTILLES [Plans] ═══
+      <div class="page" id="page-plans">
+        <div class="page-header">
+          <div><div class="page-title">Plans &amp; pastilles</div><div class="page-subtitle">Plans du chantier, versions, pastilles et photos — qui voit quoi se règle plan par plan</div><div class="page-title-line"></div></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <select class="btn" id="plans-filter-ch" onchange="planCur=null;renderPlansPage()" style="padding:7px 12px;font-size:13px"><option value="">Tous les chantiers</option></select>
+            <button class="btn btn-primary" onclick="openPlanModal()"><i class="ti ti-plus"></i> Ajouter un plan</button>
+          </div>
+        </div>
+        <div id="plans-list"></div>
+        <div id="plans-viewer"></div>
+      </div>
+
+      <!-- ═══ CARNET CLIENT (ex-module Carnet, intégré) ═══ -->
+      <div class="page" id="page-carnet">
+        <div class="page-header">
+          <div><div class="page-title">Carnet client</div><div class="page-subtitle">Le carnet de projet du chantier sélectionné : ce que voit le client, et ses choix</div><div class="page-title-line"></div></div>
+        </div>
+        <div id="carnet-wrap" style="height:calc(100vh - 150px);min-height:480px;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:#EDF0F6"></div>
+      </div>
+
       <!-- ═══ JOURNAL D'ACTIVITÉ ═══ -->
       <div class="page" id="page-activite">
         <div class="page-header">
@@ -2831,13 +2077,13 @@ function esc(s) {
 const ADMIN_EMAILS = ['contact@phenixarchitecte.fr'];
 // ▲▲▲
 
-const ENTITY_KEYS = ['chantiers', 'lots', 'intervenants', 'factures', 'comptes_rendus', 'missions', 'reserves'];
+const ENTITY_KEYS = ['chantiers', 'lots', 'intervenants', 'factures', 'comptes_rendus', 'missions', 'reserves', 'plans'];
 const ENTITY_LABELS = { chantiers: 'chantier', lots: 'lot', intervenants: 'intervenant', factures: 'situation',
-                        comptes_rendus: 'compte rendu', missions: 'mission', reserves: 'réserve' };
+                        comptes_rendus: 'compte rendu', missions: 'mission', reserves: 'réserve', plans: 'plan' };
 
 let state = {
   chantiers: [], lots: [], intervenants: [], factures: [],
-  comptes_rendus: [], missions: [], reserves: [], nextId: 1
+  comptes_rendus: [], missions: [], reserves: [], plans: [], nextId: 1
 };
 let activeChantier = ''; // '' = tous
 
@@ -2847,6 +2093,7 @@ let activeChantier = ''; // '' = tous
 //  chantier: intervenant externe — uniquement les chantiers qui lui sont attribués
 let CH_ROLE = null;
 const CH_ME = { email: '', nom: '', chantierIds: [] };
+const LIVE = { pointages: [], messages: [], vus: [], cli: {}, cliNotifs: [], cliOn: {}, started: false };   // [Artisan] pointages / messages / plans vus (déclaré ici : utilisé très tôt)
 let _legacyMode = false;
 function IS_EXT()   { return CH_ROLE === 'chantier'; }
 function IS_STAFF() { return CH_ROLE !== 'chantier'; }
@@ -2908,32 +2155,45 @@ function saveLocal() {
 //  phenix_chantier_assistante/{projetId} : lots, statut, avancement, dates, entreprise.
 //  Jamais de montants, d'honoraires, de commissions ni de notes internes.
 let _assistHash = {}, _assistTimer = null, _assistIds = {};
-function _planAssistante(delay) { clearTimeout(_assistTimer); _assistTimer = setTimeout(_syncAssistante, delay || 5000); }
-async function _syncAssistante() {
+function _planAssistante(delay) { clearTimeout(_assistTimer); _assistTimer = setTimeout(function () { _syncClientCopy(); }, delay || 5000); }   // [Accès] l'assistante n'a plus de copie chantier : devis et tâches seulement
+
+// ── [Étape réelle] copie publique SANS montants pour la maquette client : phenix_chantier_client/{projetId} ──
+let _cliHash = {};
+async function _syncClientCopy() {
   try {
-    if (!_booted || !CH_ROLE || CH_ROLE === 'bloque' || IS_EXT()) return;
+    if (!_booted || !CH_ROLE || CH_ROLE === 'bloque') return;
     const f = window._fb; if (!f || !f.setDoc || !f.doc || !f.db) return;
-    const vus = {};
     for (const ch of state.chantiers) {
       if (!ch.projetId) continue;
-      const pid = String(ch.projetId); vus[pid] = 1;
-      const lots = state.lots.filter(l => l.chantierId == ch.id).map(l => {
-        const inv = l.interv ? state.intervenants.find(i => i.id == l.interv) : null;
-        return { nom: l.nom || '', statut: l.statut || '', av: l.av || 0, debut: l.debut || '', fin: l.fin || '',
-                 entreprise: inv ? inv.nom : (l.entrepriseNom || ''), metier: inv ? (inv.metier || '') : '', devisArtisan: !!l.devisArtisan, sansEntreprise: lotSansEntreprise(l) };
-      });
-      const payload = { projetId: pid, chantierNom: ch.nom || '', statut: ch.statut || '', debut: ch.debut || '', fin: ch.fin || '', lots };
-      const h = _stable(payload);
-      if (_assistHash[pid] === h) continue;
-      payload.updatedAt = new Date().toISOString();
-      await f.setDoc(f.doc(f.db, 'phenix_chantier_assistante', pid), payload);
-      _assistHash[pid] = h;
+      const pid = String(ch.projetId);
+      if (ch.etape) {
+        const n = ch.etape, pi = etapePhaseIdx(n);
+        const payload = { projetId: pid, chantierNom: ch.nom || '', etape: n, nbEtapes: ETAPES_CH.length, etapeNom: ETAPES_CH[n - 1] || '',
+                          phase: pi + 1, phaseNom: pi >= 0 ? PHASES_CH[pi][0] : '', statut: ch.statut || '', fin: ch.fin || '', etapeMaj: ch.etapeMaj || '' };
+        const h = _stable(payload);
+        if (_cliHash[pid] !== h) {
+          payload.updatedAt = new Date().toISOString();
+          await f.setDoc(f.doc(f.db, 'phenix_chantier_client', pid), payload);
+          _cliHash[pid] = h;
+        }
+      }
+      // [Plans] seuls les plans cochés « visible du client » (dernière version) : nom, type, version, référence du fichier — jamais les pastilles ni les photos internes
+      const pub = planGroupLatest(ch.id).filter(p => p.visibleClient && p.plans && p.plans[0] && p.plans[0].mediaId);
+      const keep = {};
+      for (const p of pub) {
+        keep[p.id] = 1;
+        const d = { id: String(p.id), groupe: String(p.groupe || p.id), version: p.version || 1, nom: p.nom || '', type: p.type || '', mediaId: p.plans[0].mediaId, publieLe: p.publieLe || '' };
+        const h = _stable(d), key = 'pl' + pid + '_' + p.id;
+        if (_cliHash[key] !== h) { await f.setDoc(f.doc(f.db, 'phenix_chantier_client', pid, 'plans', String(p.id)), d); _cliHash[key] = h; }
+      }
+      // retirer du carnet client ce qui n'est plus publié (plan masqué, remplacé par une version plus récente, supprimé)
+      for (const key of Object.keys(_cliHash)) {
+        if (key.indexOf('pl' + pid + '_') !== 0) continue;
+        const id = key.slice(('pl' + pid + '_').length);
+        if (!keep[id]) { try { await f.deleteDoc(f.doc(f.db, 'phenix_chantier_client', pid, 'plans', id)); delete _cliHash[key]; } catch (e) {} }
+      }
     }
-    for (const pid of Object.keys(_assistIds)) {
-      if (!vus[pid] && f.deleteDoc) { try { await f.deleteDoc(f.doc(f.db, 'phenix_chantier_assistante', pid)); delete _assistHash[pid]; } catch (e) {} }
-    }
-    _assistIds = vus;
-  } catch (e) { console.warn('[Espace assistante] synchronisation chantier :', e && e.message); }
+  } catch (e) { console.warn('[Étape réelle] copie client :', e && e.message); }
 }
 setInterval(() => _planAssistante(1), 90000);
 function _computeChanges() {
@@ -3068,12 +2328,12 @@ async function _reloadEntity(key, id) {
 function _fromDoc(key, data) {
   const e = Object.assign({}, data);
   if (key === 'chantiers' && _prive[e.id]) Object.assign(e, _prive[e.id]);
-  if (window._fbChantier && (key === 'comptes_rendus' || key === 'reserves')) window._fbChantier.hydrateFromCache(e);
+  if (window._fbChantier && (key === 'comptes_rendus' || key === 'reserves' || key === 'plans')) window._fbChantier.hydrateFromCache(e);
   return e;
 }
 function _applyChanges(key, changes) {
   let touched = false;
-  const arr = state[key];
+  const arr = state[key] || (state[key] = []);
   changes.forEach(ch => {
     const id = ch.id, idx = arr.findIndex(x => String(x.id) === id);
     if (ch.type === 'removed') {
@@ -3095,7 +2355,7 @@ function _applyChanges(key, changes) {
     if (idx >= 0) arr[idx] = ent; else arr.push(ent);
     _shadow[key][id] = incoming;
     touched = true;
-    if (key === 'comptes_rendus' || key === 'reserves') {
+    if (key === 'comptes_rendus' || key === 'reserves' || key === 'plans') {
       window._fbChantier.rehydrate(ent).then(() => _scheduleRefresh()).catch(() => {});
     }
   });
@@ -3205,10 +2465,10 @@ async function _resolveRole() {
   const admins = ADMIN_EMAILS.map(x => String(x).toLowerCase());
   const configured = admins.some(x => x && x.indexOf('remplacer') < 0);
   if (denied || (udoc && udoc.actif === false)) CH_ROLE = 'bloque';   // lecture refusée = compte non autorisé
-  else if (udoc && udoc.role === 'client') CH_ROLE = 'bloque';   // les clients n'ont accès qu'au carnet de projet
+  else if (udoc && (udoc.role === 'client' || udoc.role === 'artisan' || udoc.role === 'assistante')) CH_ROLE = 'bloque';   // les clients n'ont accès qu'au carnet de projet
   else if (udoc && ['admin', 'equipe', 'chantier'].indexOf(udoc.role) >= 0) CH_ROLE = udoc.role;
   else if (admins.indexOf(email) >= 0) CH_ROLE = 'admin';
-  else CH_ROLE = configured ? 'equipe' : 'admin';
+  else CH_ROLE = configured ? 'bloque' : 'admin';   // [Accès] seul Maxime a tout : un compte sans fiche n'a plus aucun accès
   _legacyMode = !configured;
   CH_ME.nom = (udoc && udoc.nom) || email.split('@')[0] || 'Utilisateur';
   CH_ME.chantierIds = ((udoc && udoc.chantierIds) || []).map(Number).filter(n => !isNaN(n));
@@ -3379,7 +2639,7 @@ async function _applyRecord(rec, dir) {
         const ent = _fromDoc(it.key, JSON.parse(JSON.stringify(target)));
         const m = _meta[it.key][it.id]; if (m) { ent.updatedAt = m.updatedAt; ent.updatedBy = m.updatedBy; }
         if (idx >= 0) arr[idx] = ent; else arr.push(ent);
-        if (window._fbChantier && (it.key === 'comptes_rendus' || it.key === 'reserves')) window._fbChantier.rehydrate(ent).then(_scheduleRefresh).catch(() => {});
+        if (window._fbChantier && (it.key === 'comptes_rendus' || it.key === 'reserves' || it.key === 'plans')) window._fbChantier.rehydrate(ent).then(_scheduleRefresh).catch(() => {});
       }
     }
     const pv = dir === 'undo' ? it.priveBefore : it.priveAfter;
@@ -3451,7 +2711,6 @@ const RES_PRIO = { normale: ['Normale', 'badge-gray'], haute: ['Haute', 'badge-a
 function _todayISO() { return new Date().toISOString().slice(0, 10); }
 function resIsOpen(r) { return r.statut === 'ouverte' || r.statut === 'en_cours'; }
 function resIsLate(r) { return resIsOpen(r) && r.echeance && r.echeance < _todayISO(); }
-function resBadge(statut) { const s = RES_STATUTS[statut] || [statut, 'badge-gray']; return '<span class="badge ' + s[1] + '">' + esc(s[0]) + '</span>'; }
 function resPrioBadge(p) { const s = RES_PRIO[p] || RES_PRIO.normale; return '<span class="badge ' + s[1] + '">' + esc(s[0]) + '</span>'; }
 
 function nextReserveRef(chantierId) {
@@ -3730,7 +2989,7 @@ async function renderActivite() {
 //  ÉQUIPE & ACCÈS (administrateur)
 // ═══════════════════════════════════════════════════════════
 let _users = [], _usersListening = false;
-const ROLE_LABELS = { admin: 'Administrateur', equipe: 'Équipe agence', chantier: 'Suivi de chantier', client: 'Client (carnet)' };
+const ROLE_LABELS = { admin: 'Administrateur', equipe: 'Équipe agence', chantier: 'Suivi de chantier', client: 'Client (carnet)', artisan: 'Artisan (accès mobile)', assistante: 'Assistante administrative' };
 function renderEquipe() {
   const al = document.getElementById('eq-alert');
   if (al) al.style.display = _legacyMode ? '' : 'none';
@@ -3746,7 +3005,7 @@ function _renderEquipeTable() {
   if (!tb) return;
   if (!_users.length) { tb.innerHTML = '<tr><td colspan="6" style="padding:1.5rem;text-align:center;color:var(--text3)">Aucun accès enregistré. Vous (administrateur) êtes reconnu automatiquement.</td></tr>'; return; }
   tb.innerHTML = _users.slice().sort((a, b) => String(a.nom || a._id).localeCompare(String(b.nom || b._id))).map(u => {
-    const names = (u.role === 'chantier' || u.role === 'client')
+    const names = (u.role === 'chantier' || u.role === 'client' || u.role === 'artisan')
       ? (u.chantierIds || []).map(id => { const c = state.chantiers.find(x => x.id == id); return c ? esc(c.nom) : ('#' + id); }).join(', ') || '<aucun>'
       : 'Tous';
     return '<tr><td style="padding-left:16px;font-weight:600">' + esc( esc(u.nom) || '—') + '</td><td style="font-size:12px">' + esc(u._id) + '</td>' +
@@ -3756,7 +3015,8 @@ function _renderEquipeTable() {
   }).join('');
 }
 function usrRoleChanged() {
-  document.getElementById('usr-chantiers-wrap').style.display = ['chantier', 'client'].indexOf(document.getElementById('usr-role').value) >= 0 ? '' : 'none';
+  document.getElementById('usr-chantiers-wrap').style.display = ['chantier', 'client', 'artisan'].indexOf(document.getElementById('usr-role').value) >= 0 ? '' : 'none';
+  document.getElementById('usr-interv-wrap').style.display = document.getElementById('usr-role').value === 'artisan' ? '' : 'none';
 }
 function openModalUser(emailId) {
   const u = emailId ? _users.find(x => x._id === emailId) : null;
@@ -3767,6 +3027,7 @@ function openModalUser(emailId) {
   document.getElementById('mUserTitle').textContent = u ? 'Modifier un accès' : 'Ajouter une personne';
   document.getElementById('usr-email').value = u ? u._id : '';
   document.getElementById('usr-email').disabled = !!u;
+  document.getElementById('usr-interv').innerHTML = '<option value="">— choisir —</option>' + state.intervenants.map(i => '<option value="' + esc(i.id) + '"' + (u && String(u.intervenantId) === String(i.id) ? ' selected' : '') + '>' + esc(i.nom) + (i.metier ? ' · ' + esc(i.metier) : '') + '</option>').join('');
   document.getElementById('usr-nom').value = u ? (u.nom || '') : '';
   document.getElementById('usr-role').value = u ? u.role : 'chantier';
   document.getElementById('usr-actif').checked = u ? u.actif !== false : true;
@@ -3782,12 +3043,15 @@ async function saveUserAccess() {
   const actif = document.getElementById('usr-actif').checked;
   if (email === CH_ME.email && (role !== 'admin' || !actif)) { toast('⚠️ Vous ne pouvez pas retirer vos propres droits d\'administrateur.'); return; }
   const ids = Array.prototype.slice.call(document.querySelectorAll('.usr-ch:checked')).map(x => Number(x.value));
-  if ((role === 'chantier' || role === 'client') && !ids.length && !confirm('Aucun chantier coché : cette personne ne verra rien. Continuer ?')) return;
+  const intervId = document.getElementById('usr-interv').value;
+  if (role === 'artisan' && !intervId) { toast('⚠️ Choisissez l\'entreprise de cet artisan.'); return; }
+  if ((role === 'chantier' || role === 'client' || role === 'artisan') && !ids.length && !confirm('Aucun chantier coché : cette personne ne verra rien. Continuer ?')) return;
   const prev = _users.find(x => x._id === email);
   try {
     await window._fbChantier.saveUser(email, {
       email: email, nom: document.getElementById('usr-nom').value.trim(), role: role, actif: actif,
-      chantierIds: (role === 'chantier' || role === 'client') ? ids : [], createdAt: (prev && prev.createdAt) || new Date().toISOString(),
+      intervenantId: role === 'artisan' ? (isNaN(Number(intervId)) ? intervId : Number(intervId)) : null,
+      chantierIds: (role === 'chantier' || role === 'client' || role === 'artisan') ? ids : [], createdAt: (prev && prev.createdAt) || new Date().toISOString(),
       updatedAt: new Date().toISOString(), updatedBy: CH_ME.email
     });
     closeModal('modalUser'); toast('✅ Accès enregistré.');
@@ -3814,6 +3078,25 @@ async function deleteUserAccess() {
 }
 
 // ── Navigation ─────────────────────────────────────────────
+function navEl(id) { return document.querySelector('#chantierSidebar .nav-item[onclick*="show(\'' + id + '\'"]'); }
+// [Carnet] page « Carnet client » : le carnet de projet est affiché ici (le client, lui, n'a accès qu'à son carnet, à son adresse)
+function openCarnetClient() {
+  const wrap = document.getElementById('carnet-wrap'); if (!wrap) return;
+  try {
+    const ch = (state.chantiers || []).find(c => String(c.id) === String(activeChantier));
+    if (ch && ch.projetId) localStorage.setItem('phenix-carnet-last', String(ch.projetId));   // le carnet s'ouvre sur le projet du chantier actif
+  } catch (e) {}
+  let fr = document.getElementById('carnet-frame');
+  const cible = 'phenix_carnet.html', last = String(localStorage.getItem('phenix-carnet-last'));
+  if (!fr) { wrap.innerHTML = '<iframe id="carnet-frame" src="' + cible + '" style="width:100%;height:100%;border:0" title="Carnet client"></iframe>'; }
+  else if (fr.dataset.last !== last) { fr.src = cible; }
+  fr = document.getElementById('carnet-frame'); if (fr) fr.dataset.last = last;
+}
+function toggleNavMore(force) {
+  const m = document.getElementById('nav-more'), c = document.getElementById('navMoreChev'); if (!m) return;
+  const open = typeof force === 'boolean' ? force : m.style.display === 'none';
+  m.style.display = open ? '' : 'none'; if (c) c.style.transform = open ? 'rotate(180deg)' : '';
+}
 function show(id, el) {
   // Scoper UNIQUEMENT au module Chantier pour ne pas toucher le module Dossier
   const _chRoot = document.getElementById('app-chantier') || document;
@@ -3822,9 +3105,11 @@ function show(id, el) {
   const pageEl = _chRoot.querySelector('#page-' + id);
   if (pageEl) pageEl.classList.add('active');
   if (el) el.classList.add('active');
-  const titles = { dashboard:'Tableau de bord', chantiers:'Chantiers', lots:'Lots & Chiffrage', intervenants:'Intervenants', planning:'Planning Gantt', financier:'Suivi Financier', comptes_rendus:'Comptes Rendus de Chantier', reserves:'Réserves & actions', activite:'Journal d\'activité', equipe:'Équipe & accès', comptabilite:'Comptabilité' };
+  if (el && el.closest && el.closest('#nav-more')) toggleNavMore(true);   // [Menu] la page ouverte reste visible dans le menu
+  const titles = { carnet:'Carnet client', dashboard:'Tableau de bord', plans:'Plans & pastilles', messages:'Messages', chantiers:'Chantiers', lots:'Lots', intervenants:'Intervenants', planning:'Planning Gantt', financier:'Suivi Financier', comptes_rendus:'Comptes Rendus de Chantier', reserves:'Réserves & actions', activite:'Journal d\'activité', equipe:'Équipe & accès', comptabilite:'Comptabilité' };
   const titleEl = document.getElementById('topbarTitle');
   if (titleEl) titleEl.textContent = titles[id] || '';
+  if (id === 'carnet') openCarnetClient();
   if (id === 'dashboard') { renderDashboard(); renderDashboardReserves(); }
   if (id === 'chantiers') renderChantiers();
   if (id === 'lots') renderLots();
@@ -3833,6 +3118,8 @@ function show(id, el) {
   if (id === 'financier') renderFinancier();
   if (id === 'comptes_rendus') renderCR();
   if (id === 'reserves') renderReserves();
+  if (id === 'plans') renderPlansPage();   // [Plans]
+  if (id === 'messages') { liveStart(); openMsgConv(); }   // [Artisan]
   if (id === 'activite') renderActivite();
   if (id === 'equipe') renderEquipe();
   if (id === 'comptabilite') renderComptabilite();
@@ -4300,8 +3587,6 @@ function printMission() {
   </body></html>`);
   win.document.close();
 }
-
-
 
 // ═══════════════════════════════════════════════════════════
 //  MODULE CR VOCAL — Compte Rendu mains libres
@@ -4978,7 +4263,7 @@ function updateSidebarSelect() {
 
 function updateFilters() {
   const opts = '<option value="">Tous les chantiers</option>' + state.chantiers.map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join('');
-  ['lots-filter-ch','planning-filter-ch','fin-filter-ch','cr-filter-ch','interv-filter-ch','res-filter-ch','act-filter-ch'].forEach(id => {
+  ['lots-filter-ch','planning-filter-ch','fin-filter-ch','cr-filter-ch','interv-filter-ch','res-filter-ch','act-filter-ch','plans-filter-ch'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     const v = el.value;
@@ -5126,6 +4411,7 @@ function deleteChantier(id) {
   state.factures = state.factures.filter(f => f.chantierId != id);
   state.comptes_rendus = state.comptes_rendus.filter(c => c.chantierId != id);
   state.reserves = state.reserves.filter(r => r.chantierId != id);
+  state.plans = (state.plans || []).filter(p => p.chantierId != id);
   state.missions = state.missions.filter(m => m.chantierId != id);
   saveLocal(); refreshAll(); toast('🗑️ Chantier supprimé.');
 }
@@ -5168,7 +4454,7 @@ function renderChantiers() {
         </div>` : ''}
         <div style="display:flex;gap:6px;margin-top:10px">
           <button class="btn btn-sm staff-only" onclick="openModalChantier(${c.id})"><i class="ti ti-edit"></i> Modifier</button>
-          <button class="btn btn-sm" onclick="show('lots',document.querySelectorAll('.nav-item')[2]);document.getElementById('lots-filter-ch').value='${c.id}';renderLots()"><i class="ti ti-list-check"></i> Lots</button>
+          <button class="btn btn-sm" onclick="show('lots',navEl('lots'));document.getElementById('lots-filter-ch').value='${c.id}';renderLots()"><i class="ti ti-list-check"></i> Lots</button>
           <button class="btn btn-sm btn-danger staff-only" onclick="deleteChantier(${c.id})"><i class="ti ti-trash"></i></button>
         </div>
       </div>`;
@@ -5266,7 +4552,14 @@ function lierEntrepriseLot(lot, nom, devis) {
   nom = String(nom || '').trim(); if (!nom || lot.interv) return;
   const n = nom.toLowerCase();
   const iv = state.intervenants.find(i => String(i.nom || '').trim().toLowerCase() === n);
-  if (iv) { lot.interv = iv.id; delete lot.entrepriseNom; } else lot.entrepriseNom = nom;
+  if (iv) { lot.interv = iv.id; delete lot.entrepriseNom; return; }
+  const an = annFind(nom);   // fiche de l'Annuaire : on crée l'intervenant lié au lieu d'un simple nom
+  if (an) {
+    let nv = state.intervenants.find(i => i.artId && i.artId == an.id);
+    if (!nv) { nv = { id: uid(), nom: annName(an), metier: an.metier || '', contact: an.entreprise && an.nom && an.nom !== an.entreprise ? an.nom : '', tel: an.tel || '', email: an.email || '', siret: an.siret || '', assurance: an.assurance || '', assuranceDate: an.assuranceDate || '', note: an.note || '', notes: '', color: AVATAR_COLORS_EXT[Math.floor(Math.random() * AVATAR_COLORS_EXT.length)], artId: an.id }; state.intervenants.push(nv); }
+    lot.interv = nv.id; delete lot.entrepriseNom; return;
+  }
+  lot.entrepriseNom = nom;
 }
 
 async function importFromChiffrage() {
@@ -5286,14 +4579,21 @@ async function importFromChiffrage() {
     if (!items.length) { toast('La synthèse Chiffrage est vide.'); return; }
 
     let created = 0, updated = 0;
+    // Les lots sont numérotés automatiquement dans Chiffrage : un lot qui change de rang change de numéro.
+    // On rapproche donc par nom SANS le préfixe « LOT nn — » (exact d'abord), pour ne jamais créer de doublon.
+    const _nu = x => String(x || '').replace(/^\s*LOT\s*\d+[A-Za-z]?\s*[—–-]\s*/i, '').trim().toLowerCase();
+    const _pris = new Set();
     items.forEach(item => {
       const composedNom = (item.num ? item.num + ' — ' : '') + item.nom;
-      const existing = state.lots.find(l => l.chantierId == chantier.id && (l.nom === composedNom || l.nom === item.nom));
+      const _cand = state.lots.filter(l => l.chantierId == chantier.id && !_pris.has(l.id));
+      const existing = _cand.find(l => l.nom === composedNom || l.nom === item.nom) || _cand.find(l => _nu(l.nom) === _nu(item.nom));
+      if (existing) _pris.add(existing.id);
       if (existing) {
         existing.ht = item.montantHt;
         existing.tva = item.tva;
         existing.statut = mapStatutChiffrage(item.statut);
-        if (item.num && !existing.nom.startsWith(item.num)) existing.nom = composedNom;
+        if (item.debut && item.fin && (!existing.datesManuelles || !(existing.debut && existing.fin))) { existing.debut = item.debut; existing.fin = item.fin; }
+        if (existing.nom !== composedNom) existing.nom = composedNom;
         if (item.entreprise || item.devisArtisan) lierEntrepriseLot(existing, item.entreprise, item.devisArtisan);
         updated++;
       } else {
@@ -5301,7 +4601,7 @@ async function importFromChiffrage() {
           id: uid(), chantierId: chantier.id, nom: composedNom, cat: 'Autre',
           interv: null, statut: mapStatutChiffrage(item.statut),
           ht: item.montantHt, tva: item.tva, av: 0,
-          debut: '', fin: '', notes: 'Importé depuis Phénix Chiffrage le ' + new Date().toLocaleDateString('fr-FR')
+          debut: item.debut || '', fin: item.fin || '', notes: 'Importé depuis Phénix Chiffrage le ' + new Date().toLocaleDateString('fr-FR')
         });
         if (item.entreprise || item.devisArtisan) lierEntrepriseLot(state.lots[state.lots.length - 1], item.entreprise, item.devisArtisan);
         created++;
@@ -5355,7 +4655,7 @@ async function importFromCarnet() {
   }
 }
 
-// ── Export PDF mis en page — page Lots & Chiffrage ───────────
+// ── Export PDF mis en page — page Lots ───────────
 function exportLotsPDF() {
   const filter = document.getElementById('lots-filter-ch')?.value || activeChantier;
   const chantiersList = filter
@@ -5457,7 +4757,7 @@ function exportLotsPDF() {
   const fullHtml = `<!DOCTYPE html>
 <html lang="fr"><head>
 <meta charset="UTF-8">
-<title>Lots & Chiffrage — Phénix-Architecture</title>
+<title>Lots — Phénix-Architecture</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,600&display=swap" rel="stylesheet">
 <style>${CSS}</style></head><body>
 <div class="wrap">
@@ -5466,7 +4766,7 @@ function exportLotsPDF() {
 </div>
 <div class="cover">
   <div class="cover-brand">🏛 Phénix-Architecture · Maître d'Œuvre</div>
-  <div class="cover-title">Lots & Chiffrage ${chantiersList.length>1?'— '+chantiersList.length+' chantiers':'— '+esc(chantiersList[0].nom)}</div>
+  <div class="cover-title">Lots ${chantiersList.length>1?'— '+chantiersList.length+' chantiers':'— '+esc(chantiersList[0].nom)}</div>
   <div class="cover-date">Généré le ${today}</div>
   <div class="cover-stats">
     <div class="cstat"><label>Lots</label><span>${allLots.length}</span></div>
@@ -5578,6 +4878,54 @@ function renderLots() {
 // ═══════════════════════════════════════════════════════════
 //  INTERVENANTS
 // ═══════════════════════════════════════════════════════════
+/* ── [Artisan unique] l'Annuaire (phenix_artisans) est la fiche de référence ──
+   Un intervenant de chantier = un artisan de l'Annuaire (lien artId) + ses réglages propres au projet
+   (couleur, note, observations). Identité (raison sociale, contact, tél, e-mail, SIRET, assurance) :
+   modifiée ici ou dans l'Annuaire, elle reste identique partout. */
+const ANN = { list: [], started: false };
+function annStart() {
+  if (ANN.started || !window._fbChantier || !window._fbChantier.listenCol || CH_ROLE === 'bloque' || CH_ROLE === 'pending') return;
+  ANN.started = true;
+  setTimeout(annSync, 4000); setTimeout(annSync, 12000);
+  window._fbChantier.listenCol('phenix_artisans', a => { ANN.list = a || []; annFillList(); annSync(); }, e => console.warn('Annuaire illisible', e));
+}
+function annName(a) { return (a.entreprise || a.nom || '').trim(); }
+function annFillList() { const d = document.getElementById('int-ann-list'); if (d) d.innerHTML = ANN.list.slice().sort((x, y) => annName(x).localeCompare(annName(y))).map(a => '<option value="' + esc(annName(a)) + '">' + esc(a.metier || '') + (a.ville ? ' · ' + esc(a.ville) : '') + '</option>').join(''); }
+function annFind(name) { const n = String(name || '').trim().toLowerCase(); if (!n) return null; return ANN.list.find(a => annName(a).toLowerCase() === n) || null; }
+function annLien(id) { const e = document.getElementById('int-ann-lien'); if (!e) return; const a = id && ANN.list.find(x => x.id == id); e.textContent = a ? '🔗 Lié à la fiche Annuaire « ' + annName(a) + ' » : les modifications sont partagées.' : 'Non lié : à l\'enregistrement, la fiche est créée (ou retrouvée) dans l\'Annuaire.'; if (a && a.alerte) { const w = document.createElement('div'); w.style.cssText = 'color:#c0262b;font-weight:700;font-size:12.5px;margin-top:4px'; w.textContent = '⚠️ ' + a.alerte; e.appendChild(w); } }
+function annPick(v) {
+  const a = annFind(v); if (!a) return;
+  const set = (id, val) => { const e = document.getElementById(id); if (e && val != null) e.value = val; };
+  set('int-nom', annName(a)); set('int-contact', a.entreprise && a.nom && a.nom !== a.entreprise ? a.nom : ''); set('int-tel', a.tel || ''); set('int-email', a.email || '');
+  set('int-siret', a.siret || ''); set('int-assurance', a.assurance || ''); set('int-assurance-date', a.assuranceDate || '');
+  const sel = document.getElementById('int-metier'); if (sel && a.metier && [...sel.options].some(o => o.value === a.metier || o.text === a.metier)) sel.value = a.metier;
+  if (a.note != null && a.note !== '' && !document.getElementById('int-note').value) set('int-note', a.note);
+  document.getElementById('int-art-id').value = a.id; annLien(a.id);
+}
+function annWriteThrough(iv) {
+  if (!window._fbChantier || !window._fbChantier.saveDoc || CH_ROLE !== 'admin') return;
+  let a = iv.artId ? ANN.list.find(x => x.id == iv.artId) : annFind(iv.nom);
+  const rec = Object.assign({}, a || { id: 'art-' + Date.now(), favori: 0, note: iv.note || '', dispo: 'contactez' }, {
+    entreprise: iv.nom, nom: iv.contact || (a && a.nom) || iv.nom, metier: (a && a.metier) || iv.metier || '', tel: iv.tel, email: iv.email,
+    siret: iv.siret, assurance: iv.assurance, assuranceDate: iv.assuranceDate, updatedAt: new Date().toISOString() });
+  iv.artId = rec.id;
+  window._fbChantier.saveDoc('phenix_artisans', rec.id, rec).catch(e => console.warn('Annuaire : écriture refusée', e));
+}
+/* l'Annuaire fait foi : on rafraîchit l'identité des intervenants liés */
+function annSync() {
+  if (!state || !state.intervenants) return; let ch = false;
+  state.intervenants.forEach(iv => {
+    const a = iv.artId && ANN.list.find(x => x.id == iv.artId); if (!a) return;
+    const v = { nom: annName(a), contact: a.entreprise && a.nom && a.nom !== a.entreprise ? a.nom : (iv.contact || ''), tel: a.tel || '', email: a.email || '', siret: a.siret || '', assurance: a.assurance || '', assuranceDate: a.assuranceDate || '' };
+    Object.keys(v).forEach(k => { if ((iv[k] || '') !== v[k] && v[k] !== '') { iv[k] = v[k]; ch = true; } });
+  });
+  if (ch) { try { saveLocal(); renderIntervenants(); } catch (e) {} }
+}
+/* [Centre de notifications] le shell peut ouvrir directement une page (et une conversation) de Chantier */
+window.addEventListener('message', ev => {
+  const d = ev.data; if (!d || d.source !== 'phenix-shell' || d.action !== 'goto-page' || !d.page) return;
+  try { show(d.page, null); if (d.conv) { msgConv = d.conv; openMsgConv(); } } catch (e) {}
+});
 function openModalInterv(id) {
   _setBase('intervenants', id || null);
   if (id) {
@@ -5597,6 +4945,7 @@ function openModalInterv(id) {
     const col = safeColor(i.color) || '#4A9CC7';
     setIntervColor(col);
     document.getElementById('int-edit-id').value = id;
+    document.getElementById('int-art-id').value = i.artId || ''; annLien(i.artId);
     document.getElementById('int-del-btn').style.display = '';
   } else {
     document.getElementById('mIntervTitle').textContent = 'Nouvel intervenant';
@@ -5607,8 +4956,10 @@ function openModalInterv(id) {
     const randColor = AVATAR_COLORS_EXT[Math.floor(Math.random() * AVATAR_COLORS_EXT.length)];
     setIntervColor(randColor);
     document.getElementById('int-edit-id').value = '';
+    document.getElementById('int-art-id').value = ''; annLien('');
     document.getElementById('int-del-btn').style.display = 'none';
   }
+  document.getElementById('int-ann').value = ''; annFillList();
   openModal('modalInterv');
 }
 
@@ -5628,8 +4979,10 @@ function saveInterv() {
     assuranceDate: document.getElementById('int-assurance-date').value,
     note: document.getElementById('int-note').value,
     notes: document.getElementById('int-notes').value,
-    color: document.getElementById('int-color').value || '#4A9CC7'
+    color: document.getElementById('int-color').value || '#4A9CC7',
+    artId: document.getElementById('int-art-id').value || ''
   };
+  try { annWriteThrough(interv); } catch (e) { console.warn('Annuaire :', e); }
   if (editId) { const i = state.intervenants.findIndex(x => x.id == editId); if (i >= 0) state.intervenants[i] = Object.assign({}, state.intervenants[i], interv); else state.intervenants.push(interv); }
   else state.intervenants.push(interv);
   saveLocal(); closeModal('modalInterv'); toast('✅ Intervenant enregistré.'); renderIntervenants(); updateBadges();
@@ -5718,122 +5071,184 @@ function getWeekNumber(d) {
   return { week: Math.ceil((((date - yearStart) / 86400000) + 1) / 7), year: date.getUTCFullYear() };
 }
 
-function getMondayOfWeek(year, week) {
-  const simple = new Date(year, 0, 1 + (week - 1) * 7);
-  const dow = simple.getDay();
-  const monday = new Date(simple);
-  if (dow <= 4) monday.setDate(simple.getDate() - simple.getDay() + 1);
-  else monday.setDate(simple.getDate() + 8 - simple.getDay());
-  return monday;
+// ═════════════════════════════════════════════
+//  PLANNING GANTT — barres déplaçables (intégré depuis l'ancien module « Planning »)
+//  Une barre = un lot (dates debut / fin, entreprise = intervenant attribué).
+//  Glisser la barre = décaler ; tirer un bord = changer le début ou la fin ; clic = ouvrir le lot.
+// ═════════════════════════════════════════════
+const PG_DAY = 86400000;
+const PG_MOIS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+const PG_JOURS = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+let _pgZoom = 'jour';          // 'jour' | 'semaine'
+let _pgDrag = null;
+function pgDate(iso) { return new Date(iso + 'T00:00:00'); }
+function pgISO(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function pgAdd(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+function pgDiff(a, b) { return Math.round((b - a) / PG_DAY); }
+function pgShort(iso) { if (!iso) return ''; const d = pgDate(iso); return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0'); }
+function pgLong(iso) { return iso ? pgDate(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : ''; }
+function pgMonday(d) { const x = new Date(d); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; }
+// Couleur par métier (d'après le nom ou la catégorie du lot)
+function pgColor(l) {
+  const t = ((l.nom || '') + ' ' + (l.cat || '')).toLowerCase();
+  const T = [[/ma[cç]onn|gros ?[œo]uvre/, '#8a5a3c'], [/charpente|couverture|toiture|zinguerie/, '#c1652f'], [/menuiseries? ext|fen[êe]tre|volet/, '#2f6f8f'],
+    [/menuiseries? int|porte/, '#4a5fc1'], [/isolation|pl[âa]tr|cloison|placo/, '#6b8f4e'], [/[ée]lectri/, '#c98a2c'], [/plomb|sanitaire/, '#2f8f82'],
+    [/chauff|vmc|cvc|clim|pompe/, '#7a5296'], [/rev[êe]tement|carrelage|sol|parquet/, '#b1567a'], [/peinture|finition/, '#55708c'], [/fa[çc]ade|enduit|ravalement/, '#9c6b30'],
+    [/vrd|terrassement|espaces? verts/, '#3c7a4e']];
+  for (const [re, c] of T) if (re.test(t)) return c;
+  return '#5b6270';
 }
+function pgLabel(l) {
+  const inv = l.interv ? state.intervenants.find(i => i.id == l.interv) : null;
+  const ent = inv ? inv.nom : (l.entrepriseNom || '');
+  return ent ? ent + ' (' + l.nom + ')' : l.nom;
+}
+function pgSetZoom(z) { _pgZoom = z; renderPlanning(); }
 
 function renderPlanning() {
-  const filter = document.getElementById('planning-filter-ch')?.value || activeChantier;
-  const lots = (filter ? state.lots.filter(l => l.chantierId == filter) : state.lots).filter(l => l.debut && l.fin);
   const cont = document.getElementById('gantt-content');
+  if (!cont) return;
+  const filter = document.getElementById('planning-filter-ch')?.value || activeChantier;
+  const tous = filter ? state.lots.filter(l => l.chantierId == filter) : state.lots;
+  const lots = tous.filter(l => l.debut && l.fin).sort((a, b) => String(a.debut).localeCompare(String(b.debut)));
+  const sans = tous.filter(l => !(l.debut && l.fin));
+  const zb = document.getElementById('pg-zoom-jour'), zs = document.getElementById('pg-zoom-semaine');
+  if (zb) zb.classList.toggle('pg-on', _pgZoom === 'jour'); if (zs) zs.classList.toggle('pg-on', _pgZoom === 'semaine');
+  const sansHtml = sans.length ? `<div class="pg-sans"><b>${sans.length} lot${sans.length > 1 ? 's' : ''} sans dates</b> (cliquer pour planifier) : ` +
+    sans.map(l => `<a href="#" onclick="openModalLot(${l.id});return false">${esc(l.nom)}</a>`).join(' · ') + '</div>' : '';
   if (!lots.length) {
-    cont.innerHTML = '<div class="empty-state"><div class="empty-icon"><i class="ti ti-calendar-stats"></i></div><div class="empty-title">Aucun lot avec dates</div><div class="empty-sub">Ajoutez des dates début/fin aux lots pour afficher le Gantt</div></div>';
+    cont.innerHTML = '<div class="empty-state"><div class="empty-icon"><i class="ti ti-calendar-stats"></i></div><div class="empty-title">Aucun lot avec dates</div><div class="empty-sub">Donnez une date de début et de fin aux lots (fiche du lot), ou envoyez les contrats depuis Chiffrage.</div></div>' + sansHtml;
     return;
   }
-
-  const allDates = lots.flatMap(l => [new Date(l.debut), new Date(l.fin)]);
-  let minD = new Date(Math.min(...allDates));
-  let maxD = new Date(Math.max(...allDates));
-
-  // Caler sur lundi/dimanche
-  const minDay = minD.getDay() || 7;
-  minD.setDate(minD.getDate() - minDay + 1);
-  const maxDay = maxD.getDay() || 7;
-  maxD.setDate(maxD.getDate() + (7 - maxDay));
-
-  const totalDays = Math.max(1, (maxD - minD) / 86400000);
-
-  // Construire la liste des semaines
-  const weeks = [];
-  let cur = new Date(minD);
-  while (cur <= maxD) {
-    const { week, year } = getWeekNumber(cur);
-    weeks.push({ date: new Date(cur), week, year });
-    cur.setDate(cur.getDate() + 7);
+  const dw = _pgZoom === 'jour' ? 34 : 12;
+  let minD = pgDate(lots[0].debut), maxD = pgDate(lots[0].fin);
+  lots.forEach(l => { const a = pgDate(l.debut), b = pgDate(l.fin); if (a < minD) minD = a; if (b > maxD) maxD = b; });
+  minD = pgAdd(minD, -3); maxD = pgAdd(maxD, 4);
+  if (_pgZoom === 'semaine') minD = pgMonday(minD);
+  const totalDays = Math.max(pgDiff(minD, maxD), 14), W = totalDays * dw, rowH = 44;
+  const off = iso => pgDiff(minD, pgDate(iso)) * dw;
+  let months = '';
+  for (let cur = new Date(minD.getFullYear(), minD.getMonth(), 1); cur < maxD;) {
+    const next = new Date(cur.getFullYear(), cur.getMonth() + 1, 1), s = cur < minD ? minD : cur, e = next > maxD ? maxD : next;
+    months += `<div class="pg-month" style="left:${pgDiff(minD, s) * dw}px;width:${pgDiff(s, e) * dw}px">${PG_MOIS[cur.getMonth()]} ${cur.getFullYear()}</div>`;
+    cur = next;
   }
-
-  // Construire la liste des mois pour le header supérieur
-  const monthSpans = [];
-  let mCur = new Date(minD);
-  while (mCur <= maxD) {
-    const mStart = new Date(mCur);
-    const mEnd = new Date(mCur.getFullYear(), mCur.getMonth() + 1, 0);
-    const effectiveEnd = mEnd > maxD ? maxD : mEnd;
-    const daysInRange = (effectiveEnd - mStart) / 86400000 + 1;
-    const pct = daysInRange / totalDays * 100;
-    monthSpans.push({ label: mStart.toLocaleString('fr-FR', { month:'long', year:'numeric' }), pct });
-    mCur = new Date(mCur.getFullYear(), mCur.getMonth() + 1, 1);
+  let ticks = '', bg = '';
+  for (let i = 0; i < totalDays; i++) {
+    const d = pgAdd(minD, i), dow = d.getDay(), we = dow === 0 || dow === 6;
+    if (_pgZoom === 'jour') {
+      ticks += `<div class="pg-tick${we ? ' we' : ''}${dow === 1 ? ' ws' : ''}" style="left:${i * dw}px;width:${dw}px"><span>${PG_JOURS[dow]}</span><b>${d.getDate()}</b></div>`;
+      if (we) bg += `<div class="pg-weband" style="left:${i * dw}px;width:${dw}px"></div>`;
+    } else if (dow === 1 || i === 0) {
+      ticks += `<div class="pg-tick ws" style="left:${i * dw}px;width:${dw * 7}px"><b>S${getWeekNumber(d).week}</b></div>`;
+    }
   }
-
-  const ROW_LABEL_W = 210;
-  const now = new Date();
-
-  let html = `<div style="min-width:${ROW_LABEL_W + weeks.length * 52}px;font-size:12px">`;
-
-  // ── Ligne mois ──
-  html += `<div style="display:flex;margin-left:${ROW_LABEL_W}px;border-bottom:1px solid var(--border)">`;
-  monthSpans.forEach(m => {
-    html += `<div style="flex:0 0 ${m.pct}%;text-align:center;font-size:10px;font-weight:700;color:var(--accent2);text-transform:uppercase;letter-spacing:.07em;padding:4px 2px;background:var(--bg);border-left:1px solid var(--border);overflow:hidden;white-space:nowrap">${esc(m.label)}</div>`;
+  const now = new Date(); now.setHours(0, 0, 0, 0);
+  let side = '', bars = '', lines = '';
+  lots.forEach((l, idx) => {
+    const top = idx * rowH, col = pgColor(l), lab = pgLabel(l);
+    const late = pgDate(l.fin) < now && l.statut !== 'termine';
+    const ch = !filter ? state.chantiers.find(c => c.id == l.chantierId) : null;
+    side += `<div class="pg-side" style="border-left-color:${col}" onclick="openModalLot(${l.id})"><div class="t">${esc(lab)}</div><div class="s">${pgShort(l.debut)} → ${pgShort(l.fin)}${ch ? ' · ' + esc(ch.nom) : ''}${l.statut === 'termine' ? ' · ✓ terminé' : late ? ' · ⚠ en retard' : ''}</div></div>`;
+    lines += `<div class="pg-line" style="top:${top + rowH}px"></div>`;
+    const left = off(l.debut), width = Math.max(off(l.fin) - left, dw * 0.6), av = Math.max(0, Math.min(100, l.av || 0));
+    bars += `<div class="pg-bar${late ? ' late' : ''}" data-id="${l.id}" style="top:${top + 7}px;left:${left}px;width:${width}px;background:${col}" title="${esc(lab)} — ${pgShort(l.debut)} → ${pgShort(l.fin)}">` +
+      (av ? `<div class="pg-av" style="width:${av}%"></div>` : '') + '<div class="pg-h l" data-edge="start"></div><span>' + esc(lab) + '</span><div class="pg-h r" data-edge="end"></div></div>';
   });
-  html += '</div>';
+  const today = pgDate(pgISO(new Date()));
+  const todayHtml = (today >= minD && today <= maxD) ? `<div class="pg-today" style="left:${pgDiff(minD, today) * dw}px"><i>Aujourd'hui</i></div>` : '';
+  cont.innerHTML = `<div class="pg-card"><div class="pg-scroll"><div class="pg-flow">
+    <div class="pg-head"><div class="pg-corner">Entreprise (lot)</div><div class="pg-timehead" style="width:${W}px"><div class="pg-months">${months}</div><div class="pg-days" style="height:${_pgZoom === 'jour' ? 34 : 26}px">${ticks}</div></div></div>
+    <div class="pg-body"><div class="pg-sidebar">${side}</div><div class="pg-plot" style="width:${W}px;height:${lots.length * rowH}px"><div class="pg-plotbg">${bg}${lines}</div>${todayHtml}${bars}</div></div>
+  </div></div></div>` + sansHtml;
+  pgAttach(dw, minD);
+}
 
-  // ── Ligne semaines ──
-  html += `<div style="display:flex;margin-left:${ROW_LABEL_W}px;border-bottom:2px solid var(--accent)">`;
-  weeks.forEach(w => {
-    const isCurrentWeek = getWeekNumber(now).week === w.week && getWeekNumber(now).year === w.year;
-    const isOdd = w.week % 2 === 1;
-    html += `<div style="flex:0 0 ${100/weeks.length}%;text-align:center;font-size:10px;font-weight:${isCurrentWeek?'800':'600'};color:${isCurrentWeek?'var(--accent)':'var(--text3)'};padding:5px 1px;background:${isCurrentWeek?'var(--accent-bg)':isOdd?'var(--bg)':'var(--bg2)'};border-left:1px solid var(--border);white-space:nowrap;overflow:hidden">S${w.week}</div>`;
+function pgAttach(dw, minD) {
+  document.querySelectorAll('#gantt-content .pg-bar').forEach(bar => {
+    const id = bar.dataset.id;
+    bar.addEventListener('pointerdown', e => {
+      e.stopPropagation(); bar.setPointerCapture(e.pointerId);
+      _pgDrag = { id, edge: e.target.dataset.edge || null, x0: e.clientX, moved: 0, left: parseFloat(bar.style.left), width: parseFloat(bar.style.width) };
+      bar.classList.add('drag');
+    });
+    bar.addEventListener('pointermove', e => {
+      if (!_pgDrag || _pgDrag.id !== id) return;
+      const dx = e.clientX - _pgDrag.x0; _pgDrag.moved = Math.max(_pgDrag.moved, Math.abs(dx));
+      if (_pgDrag.edge === 'start') {
+        let nl = _pgDrag.left + dx, nw = _pgDrag.width - dx;
+        if (nw < dw * 0.6) { nw = dw * 0.6; nl = _pgDrag.left + _pgDrag.width - nw; }
+        bar.style.left = nl + 'px'; bar.style.width = nw + 'px';
+      } else if (_pgDrag.edge === 'end') {
+        bar.style.width = Math.max(dw * 0.6, _pgDrag.width + dx) + 'px';
+      } else bar.style.left = (_pgDrag.left + dx) + 'px';
+    });
+    bar.addEventListener('pointerup', () => {
+      if (!_pgDrag || _pgDrag.id !== id) return;
+      bar.classList.remove('drag');
+      const d = _pgDrag; _pgDrag = null;
+      if (d.moved < 4) { if (!d.edge) openModalLot(id); return; }
+      const l = state.lots.find(x => String(x.id) === String(id)); if (!l) return;
+      const lp = parseFloat(bar.style.left), wp = parseFloat(bar.style.width);
+      const s = Math.round(lp / dw), e2 = Math.round((lp + wp) / dw);
+      l.debut = pgISO(pgAdd(minD, s)); l.fin = pgISO(pgAdd(minD, Math.max(e2, s + 1)));
+      l.datesManuelles = true;       // une importation depuis Chiffrage n'écrasera plus ces dates
+      l.updatedAt = new Date().toISOString();
+      saveLocal(); renderPlanning(); updateBadges();
+    });
   });
-  html += '</div>';
+}
 
-  // ── Ligne "Aujourd'hui" overlay + header label ──
-  const todayOffset = (now - minD) / 86400000;
-  const todayPct = (todayOffset / totalDays * 100).toFixed(2);
-
-  // ── Lignes lots ──
-  html += lots.map(l => {
-    const ch = state.chantiers.find(c => c.id == l.chantierId);
-    const inv = l.interv ? state.intervenants.find(i => i.id == l.interv) : null;
-    const startOff = Math.max(0, (new Date(l.debut) - minD) / 86400000 / totalDays * 100);
-    const widthPct = Math.max(0.5, ((new Date(l.fin) - new Date(l.debut)) / 86400000) / totalDays * 100);
-    const isLate = new Date(l.fin) < now && l.statut !== 'termine';
-    const barClass = l.statut === 'termine' ? 'done' : isLate ? 'late' : '';
-    const invColor = inv ? (safeColor(inv.color) || avatarColor(inv.nom)) : '#4A9CC7';
-
-    return `<div class="gantt-row" style="position:relative">
-      <div class="gantt-row-label" style="width:${ROW_LABEL_W}px;flex-shrink:0;display:flex;flex-direction:column;justify-content:center;padding:6px 8px 6px 0;border-right:2px solid var(--border)">
-        <div class="gantt-row-name" style="font-size:12px">${esc(l.nom)}</div>
-        <div class="gantt-row-sub" style="font-size:10px">${inv ? esc(inv.nom) : (ch ? esc(ch.nom) : '—')}</div>
-      </div>
-      <div style="flex:1;position:relative;height:32px;display:flex;align-items:center">
-        <!-- Bandes semaines alternées -->
-        ${weeks.map((w, idx) => `<div style="position:absolute;left:${idx/weeks.length*100}%;width:${100/weeks.length}%;height:100%;background:${idx%2===0?'transparent':'rgba(0,0,0,.025)'}"></div>`).join('')}
-        <!-- Ligne aujourd'hui -->
-        <div style="position:absolute;left:${todayPct}%;width:2px;height:100%;background:rgba(74,156,199,.6);z-index:2"></div>
-        <!-- Barre du lot -->
-        <div class="gantt-bar ${barClass}" style="position:absolute;left:${startOff.toFixed(2)}%;width:${widthPct.toFixed(2)}%;height:22px;border-radius:4px;z-index:3;${barClass===''?`background:linear-gradient(90deg,${invColor},${invColor}cc)`:''}display:flex;align-items:center;padding:0 6px;font-size:10px;color:#fff;font-weight:700;white-space:nowrap;overflow:hidden" title="${fmtDate(l.debut)} → ${fmtDate(l.fin)} · ${l.av||0}%">
-          ${widthPct > 4 ? `${l.av||0}%` : ''}
-        </div>
-      </div>
-    </div>`;
+// ── Export PDF : page 1 = vue d'ensemble, page 2 = détail par lot ──
+function exportPlanningPDF() {
+  const filter = document.getElementById('planning-filter-ch')?.value || activeChantier;
+  const tous = filter ? state.lots.filter(l => l.chantierId == filter) : state.lots;
+  const lots = tous.filter(l => l.debut && l.fin).sort((a, b) => String(a.debut).localeCompare(String(b.debut)));
+  if (!lots.length) { toast('⚠️ Aucun lot avec dates à exporter.'); return; }
+  const ch = filter ? state.chantiers.find(c => c.id == filter) : null;
+  const titre = ch ? ch.nom : 'Tous les chantiers';
+  const today = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
+  let minD = pgDate(lots[0].debut), maxD = pgDate(lots[0].fin);
+  lots.forEach(l => { const a = pgDate(l.debut), b = pgDate(l.fin); if (a < minD) minD = a; if (b > maxD) maxD = b; });
+  minD = pgAdd(minD, -2); maxD = pgAdd(maxD, 2);
+  const total = Math.max(pgDiff(minD, maxD), 7), LW = 210, TW = 760, dw = TW / total, rh = 22;
+  const off = iso => pgDiff(minD, pgDate(iso)) * dw;
+  let mt = '';
+  for (let cur = new Date(minD.getFullYear(), minD.getMonth(), 1); cur < maxD;) {
+    const next = new Date(cur.getFullYear(), cur.getMonth() + 1, 1), s = cur < minD ? minD : cur, e = next > maxD ? maxD : next, w = pgDiff(s, e) * dw;
+    mt += `<div style="position:absolute;left:${LW + pgDiff(minD, s) * dw}px;top:0;width:${w}px;height:16px;font-size:9px;font-weight:700;color:#0d1b3e;border-left:1px solid #dde4ee;padding-left:4px;box-sizing:border-box;overflow:hidden;white-space:nowrap">${w >= 34 ? PG_MOIS[cur.getMonth()].slice(0, 3) + ' ' + cur.getFullYear() : ''}</div>`;
+    cur = next;
+  }
+  let rows = '';
+  lots.forEach((l, i) => {
+    const top = 16 + i * rh, col = pgColor(l), lab = pgLabel(l), left = off(l.debut), w = Math.max(off(l.fin) - left, 3);
+    rows += `<div style="position:absolute;left:0;top:${top}px;width:${LW - 8}px;height:${rh}px;line-height:${rh}px;font-size:9.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(lab)}</div>` +
+      `<div style="position:absolute;top:${top + 4}px;left:${LW + left}px;width:${w}px;height:${rh - 8}px;border-radius:3px;background:${col}"></div>`;
+  });
+  const th = 16 + lots.length * rh + 6, td = pgDate(pgISO(new Date()));
+  const todayLine = (td >= minD && td <= maxD) ? `<div style="position:absolute;top:0;bottom:0;left:${LW + pgDiff(minD, td) * dw}px;width:1px;background:#c0392b"></div>` : '';
+  const head = `<div class="hd"><div class="br">Phénix<span>-Architecture</span></div><div class="mt"><b>${esc(titre)}</b>Planning de chantier — édité le ${today}</div></div>`;
+  const cards = lots.map(l => {
+    const col = pgColor(l), inv = l.interv ? state.intervenants.find(i => i.id == l.interv) : null, ent = inv ? inv.nom : (l.entrepriseNom || 'Sans entreprise'), d = pgDiff(pgDate(l.debut), pgDate(l.fin));
+    const c2 = !filter ? state.chantiers.find(c => c.id == l.chantierId) : null;
+    return `<div class="cd" style="border-left-color:${col}"><div class="ct">${esc(ent)}</div><div class="cl">${esc(l.nom)}${c2 ? ' · ' + esc(c2.nom) : ''}</div>` +
+      `<div class="cr"><span>Début</span><span>${pgLong(l.debut)}</span></div><div class="cr"><span>Fin</span><span>${pgLong(l.fin)}</span></div><div class="cr"><span>Durée</span><span>${d} jour${d > 1 ? 's' : ''}</span></div>` +
+      (l.notes ? `<div class="cn">${esc(l.notes)}</div>` : '') + '</div>';
   }).join('');
-
-  // Légende "Aujourd'hui"
-  html += `<div style="margin-top:12px;display:flex;align-items:center;gap:16px;font-size:11px;color:var(--text2);padding:8px 0;border-top:1px solid var(--border)">
-    <span><span style="display:inline-block;width:3px;height:12px;background:rgba(74,156,199,.6);vertical-align:middle;margin-right:4px"></span>Aujourd'hui</span>
-    <span><span style="display:inline-block;width:14px;height:8px;border-radius:2px;background:linear-gradient(90deg,#4A9CC7,#2A5298);vertical-align:middle;margin-right:4px"></span>En cours</span>
-    <span><span style="display:inline-block;width:14px;height:8px;border-radius:2px;background:linear-gradient(90deg,#2D7A4F,#5DBF88);vertical-align:middle;margin-right:4px"></span>Terminé</span>
-    <span><span style="display:inline-block;width:14px;height:8px;border-radius:2px;background:linear-gradient(90deg,#C0392B,#E74C3C);vertical-align:middle;margin-right:4px"></span>En attente</span>
-    <span style="color:var(--accent);font-weight:700"><span style="display:inline-block;width:14px;height:8px;border-radius:2px;background:var(--accent-bg);border:1px solid var(--accent);vertical-align:middle;margin-right:4px"></span>Semaine actuelle</span>
-  </div>`;
-
-  html += '</div>';
-  cont.innerHTML = html;
+  const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Planning — ${esc(titre)}</title><style>
+    @page{size:A4 landscape;margin:10mm}*{box-sizing:border-box}body{font-family:'DM Sans',Arial,sans-serif;color:#0d1b3e;margin:0;padding:14px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .hd{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #2A5298;padding-bottom:8px;margin-bottom:12px}.br{font-family:Georgia,serif;font-size:22px}.br span{color:#2A5298}.mt{text-align:right;font-size:11px;color:#5b6270}.mt b{display:block;font-size:14px;color:#0d1b3e}
+    h3{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:#2A5298;margin:6px 0}.gt{position:relative;margin-top:6px}.ft{margin-top:14px;font-size:9px;color:#8a93a3}
+    .pg2{page-break-before:always}.gr{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.cd{border:1px solid #dde4ee;border-left:4px solid #2A5298;border-radius:6px;padding:8px 10px;break-inside:avoid}
+    .ct{font-weight:700;font-size:12px}.cl{font-size:10.5px;color:#5b6270;margin-bottom:6px}.cr{display:flex;justify-content:space-between;font-size:10.5px;padding:1px 0}.cn{font-size:10px;color:#5b6270;margin-top:5px;border-top:1px dashed #dde4ee;padding-top:4px}
+    .np{text-align:right;margin-bottom:8px}@media print{.np{display:none}}</style></head><body>
+    <div class="np"><button onclick="window.print()" style="padding:8px 16px;border:0;border-radius:6px;background:#1B2D5B;color:#fff;cursor:pointer">🖨️ Imprimer / PDF</button></div>
+    ${head}<h3>Vue d'ensemble</h3><div class="gt" style="height:${th}px"><div style="position:absolute;left:${LW}px;top:0;right:0;height:16px;border-bottom:1px solid #dde4ee"></div>${mt}${todayLine}${rows}</div>
+    <div class="ft">Phénix-Architecture — document généré automatiquement, à titre indicatif. Les dates peuvent évoluer selon l'avancement du chantier.</div>
+    <div class="pg2">${head}<h3>Détail des interventions</h3><div class="gr">${cards}</div></div></body></html>`;
+  const win = window.open('', '_blank', 'width=1000,height=720');
+  if (!win) { toast('⚠️ Autorisez les fenêtres pop-up pour exporter.'); return; }
+  win.document.write(html); win.document.close();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -6451,11 +5866,6 @@ function crPlanSetColor(planIdx, color) {
   renderCRPlans();
 }
 
-function crPlanClick(e, planIdx) {
-  // Fallback for non-PDF images — delegated to crPlanClickPage
-  crPlanClickPage(e, planIdx, 0);
-}
-
 function crEditAnnotation(planIdx, aIdx) {
   const a = crPlans[planIdx].annotations[aIdx];
   const action = prompt(`Pastille ${aIdx+1}: "${esc(a.label)}"\n\nSaisissez une nouvelle légende, ou laissez vide pour supprimer :`, a.label);
@@ -6677,6 +6087,355 @@ function renderCR() {
 // ═══════════════════════════════════════════════════════════
 //  DASHBOARD
 // ═══════════════════════════════════════════════════════════
+// ── [Étape réelle] étape de construction du chantier, partagée avec la maquette 3D du Carnet ──
+const ETAPES_CH = ['Terrassement','Réseaux enterrés','Fouilles et ferraillage','Coulage des semelles','Dalle sur terre-plein','Liaison fondations – murs',
+  'Montée des murs','Linteaux','Chaînage haut et pignons','Charpente : fermes','Charpente : pannes','Charpente : chevrons','Écran et liteaux','Couverture',
+  'Pose des menuiseries','Isolation : doublage','Faux plafonds et isolation toit','Cloisons','Plomberie','Électricité','Chauffage','Plaques de plâtre et portes',
+  'Sols et peinture','Cuisine et salle de bain','Mobilier','Extérieurs et réception'];
+const PHASES_CH = [['Préparation',1,2],['Gros œuvre',3,9],['Hors d\'eau',10,15],['Second œuvre',16,22],['Finitions',23,25],['Réception',26,26]];
+function etapePhaseIdx(n) { for (let i = 0; i < PHASES_CH.length; i++) if (n >= PHASES_CH[i][1] && n <= PHASES_CH[i][2]) return i; return -1; }
+function setEtapeCh(id, n) {
+  if (!CH_ROLE || CH_ROLE === 'bloque') return;
+  n = parseInt(n, 10); if (!(n >= 1 && n <= ETAPES_CH.length)) return;
+  const c = state.chantiers.find(x => x.id == id); if (!c || c.etape === n) return;
+  c.etape = n; c.etapeMaj = new Date().toISOString();
+  try { window.phenixJournal && window.phenixJournal('chantier', 'étape', c.nom || '', 'Étape ' + n + ' : ' + ETAPES_CH[n - 1]); } catch (e) {}
+  saveLocal(); renderEtapesCh(); _planAssistante(800);
+}
+function renderEtapesCh() {
+  const box = document.getElementById('db-etapes'); if (!box) return;
+  const list = (activeChantier ? state.chantiers.filter(c => c.id == activeChantier) : state.chantiers).filter(c => c.statut !== 'cloture');
+  if (!list.length) { box.innerHTML = ''; return; }
+  const rows = list.map(c => {
+    const n = c.etape || 0, pi = n ? etapePhaseIdx(n) : -1;
+    const seg = PHASES_CH.map((ph, i) => {
+      const full = n > ph[2], cur = i === pi;
+      const w = cur ? Math.round((n - ph[1] + 1) / (ph[2] - ph[1] + 1) * 100) : (full ? 100 : 0);
+      return '<div title="' + esc(ph[0]) + '" style="flex:1;height:10px;border-radius:5px;background:var(--border)"><div style="width:' + w + '%;height:10px;border-radius:5px;background:' + (full ? '#1E7A4C' : 'var(--accent)') + '"></div></div>';
+    }).join('');
+    const names = PHASES_CH.map((ph, i) => '<div style="flex:1;font-size:11px;' + (i === pi ? 'color:var(--accent);font-weight:700' : 'color:var(--text3)') + '">' + esc(ph[0]) + '</div>').join('');
+    const opts = '<option value="">Étape à définir…</option>' + ETAPES_CH.map((t, i) => '<option value="' + (i + 1) + '"' + (n === i + 1 ? ' selected' : '') + '>' + (i + 1) + '. ' + esc(t) + '</option>').join('');
+    const maj = c.etapeMaj ? ' · mise à jour le ' + new Date(c.etapeMaj).toLocaleDateString('fr-FR') : '';
+    return '<div style="padding:12px 0;border-top:1px solid var(--border)">' +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap"><b>' + esc(c.nom || 'Chantier') + '</b>' +
+      '<span style="font-size:13px;color:var(--text2)">' + (n ? 'Étape ' + (pi + 1) + ' sur 6 · ' + esc(PHASES_CH[pi][0]) + ' — ' + n + '/' + ETAPES_CH.length + ' ' + esc(ETAPES_CH[n - 1]) : 'Étape non renseignée') + esc(maj) + '</span></div>' +
+      '<div style="display:flex;gap:5px;margin:10px 0 4px">' + seg + '</div><div style="display:flex;gap:5px">' + names + '</div>' +
+      '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">' +
+      '<button class="btn btn-sm" ' + (n > 1 ? '' : 'disabled ') + 'onclick="setEtapeCh(' + c.id + ',' + (n - 1) + ')">← Précédente</button>' +
+      '<select style="flex:1;min-width:200px" onchange="setEtapeCh(' + c.id + ',this.value)">' + opts + '</select>' +
+      '<button class="btn btn-sm btn-primary" ' + (n < ETAPES_CH.length ? '' : 'disabled ') + 'onclick="setEtapeCh(' + c.id + ',' + ((n || 0) + 1) + ')">Étape suivante →</button></div></div>';
+  }).join('');
+  box.innerHTML = '<div class="card" style="margin-bottom:1rem"><div class="card-header"><div class="card-title">Étape des chantiers</div><div style="font-size:12px;color:var(--text3)">Visible du client sur la maquette 3D</div></div>' + rows + '</div>';
+}
+
+// ══════════════════════════════════════════════════════════════
+//  [Plans] Bibliothèque de plans du chantier : versions, pastilles, photos
+//  Un plan = une fiche (collection phenix_ch_plans). Une nouvelle version = une nouvelle fiche du même groupe.
+//  Visibilité : visibleIntervs (entreprises qui le voient) et visibleClient — rien n'est visible du client par défaut.
+// ══════════════════════════════════════════════════════════════
+const PLAN_TYPES = ['Aménagement','Implantation','Alimentation électrique','Plomberie','Calepinage','Façades / coupes','Charpente','Autre'];
+const PASTILLE_TYPES = { photo:['À photographier','#A33A1F'], info:['Information','#1F62B8'], question:['Question','#C77A12'] };
+let planCur = null, planAddMode = false, planPastCur = null, planNextType = 'photo', planVersionOf = null;
+function planList() { return state.plans || (state.plans = []); }
+function planGet(id) { return planList().find(p => p.id == id); }
+function planGroupLatest(chId) {
+  const g = {};
+  planList().filter(p => !chId || p.chantierId == chId).forEach(p => { const k = p.groupe || p.id; if (!g[k] || (p.version || 1) > (g[k].version || 1)) g[k] = p; });
+  return Object.keys(g).map(k => g[k]);
+}
+function planDotColor(a) { return a.statut === 'verifiee' ? '#1E7A4C' : (PASTILLE_TYPES[a.type] || PASTILLE_TYPES.info)[1]; }
+function planMe() { return (typeof CH_ME !== 'undefined' && CH_ME && CH_ME.email) || ''; }
+async function planFileUrl(p) {
+  const f = (p.plans || [])[0]; if (!f) return '';
+  if (f.dataUrl) return f.dataUrl;
+  if (f.mediaId && window._fbChantier) { try { const du = await window._fbChantier.getMediaById(f.mediaId); if (du) { f.dataUrl = du; return du; } } catch (e) {} }
+  return '';
+}
+function renderPlansPage() {
+  const box = document.getElementById('plans-list'); if (!box) return;
+  if (!CH_ROLE || CH_ROLE === 'bloque') return;
+  const chId = (document.getElementById('plans-filter-ch') || {}).value || activeChantier;
+  const list = planGroupLatest(chId).sort((a, b) => String(a.type).localeCompare(String(b.type)) || String(a.nom).localeCompare(String(b.nom)));
+  if (!list.length) { box.innerHTML = '<div class="empty-state"><div class="empty-icon"><i class="ti ti-map-2"></i></div><div class="empty-title">Aucun plan</div><div style="font-size:13px;color:var(--text3)">Ajoutez un plan : les artisans concernés le verront, avec ses pastilles et ses photos.</div></div>'; renderPlanViewer(); return; }
+  box.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">' + list.map(p => {
+    const nbP = (p.pastilles || []).length, nbPh = (p.photos || []).length;
+    const ivs = (p.visibleIntervs || []).map(i => { const x = state.intervenants.find(y => y.id == i); return x ? '<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--accent-bg);color:var(--accent)">' + esc(x.nom) + '</span>' : ''; }).join('');
+    const cli = p.visibleClient ? '<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:rgba(230,160,40,.2);color:#8A6212">Client</span>' : '';
+    return '<div class="card" style="cursor:pointer;margin:0;' + (planCur == p.id ? 'border-color:var(--accent)' : '') + '" onclick="openPlan(' + p.id + ')"><div style="font-weight:700">' + esc(p.nom) + '</div>' +
+      '<div style="font-size:12px;color:var(--text2);margin:2px 0 8px">' + esc(p.type || '') + ' · v' + (p.version || 1) + ' · ' + nbP + ' pastille(s) · ' + nbPh + ' photo(s)</div>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap">' + (ivs || '<span style="font-size:11px;color:var(--text3)">Aucune entreprise</span>') + cli + '</div></div>';
+  }).join('') + '</div>';
+  renderPlanViewer();
+}
+function openPlan(id) { planCur = id; planAddMode = false; planPastCur = null; renderPlansPage(); const v = document.getElementById('plans-viewer'); if (v) v.scrollIntoView({ behavior:'smooth', block:'start' }); }
+function closePlan() { planCur = null; planAddMode = false; planPastCur = null; renderPlansPage(); }
+function renderPlanViewer() {
+  const v = document.getElementById('plans-viewer'); if (!v) return;
+  const p = planGet(planCur);
+  if (!p) { v.innerHTML = ''; return; }
+  const anciennes = planList().filter(x => (x.groupe || x.id) === (p.groupe || p.id) && x.id !== p.id).sort((a, b) => (b.version || 1) - (a.version || 1));
+  v.innerHTML = '<div class="card" style="margin-top:1rem"><div class="card-header" style="flex-wrap:wrap;gap:8px"><div><div class="card-title">' + esc(p.nom) + ' · v' + (p.version || 1) + '</div>' +
+    (anciennes.length ? '<div style="font-size:12px;color:var(--text3)">Versions précédentes : ' + anciennes.map(a => '<a href="#" onclick="openPlan(' + a.id + ');return false">v' + (a.version || 1) + '</a>').join(' · ') + '</div>' : '') + '</div>' +
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">' +
+    '<select id="plan-newtype" onchange="planNextType=this.value" class="btn btn-sm">' + Object.keys(PASTILLE_TYPES).map(k => '<option value="' + k + '"' + (planNextType === k ? ' selected' : '') + '>' + PASTILLE_TYPES[k][0] + '</option>').join('') + '</select>' +
+    '<button class="btn btn-sm ' + (planAddMode ? 'btn-primary' : '') + '" onclick="planAddMode=!planAddMode;renderPlanViewer()"><i class="ti ti-map-pin"></i> ' + (planAddMode ? 'Cliquez sur le plan…' : 'Placer une pastille') + '</button>' +
+    '<button class="btn btn-sm" onclick="openPlanModal(' + p.id + ')"><i class="ti ti-versions"></i> Nouvelle version</button>' +
+    '<button class="btn btn-sm" onclick="planEditVisibility(' + p.id + ')"><i class="ti ti-eye"></i> Visibilité</button>' +
+    '<button class="btn btn-sm btn-danger" onclick="deletePlan(' + p.id + ')"><i class="ti ti-trash"></i></button>' +
+    '<button class="btn btn-sm" onclick="closePlan()"><i class="ti ti-x"></i></button></div></div>' +
+    '<div style="display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:14px"><div id="plan-pages" style="background:#525659;padding:10px;border-radius:8px;max-height:75vh;overflow:auto;display:flex;flex-direction:column;gap:10px"><div style="color:#ccc;text-align:center;padding:30px">Chargement du plan…</div></div>' +
+    '<div id="plan-panel"></div></div></div>';
+  planRenderPages(); planRenderPanel();
+}
+async function planRenderPages() {
+  const p = planGet(planCur), box = document.getElementById('plan-pages'); if (!p || !box) return;
+  const du = await planFileUrl(p);
+  if (!du) { box.innerHTML = '<div style="color:#f99;text-align:center;padding:30px">Plan introuvable.</div>'; return; }
+  box.innerHTML = '';
+  const addPage = (el, pageIdx) => {
+    const w = document.createElement('div'); w.className = 'plan-pg'; w.dataset.page = pageIdx; w.style.cssText = 'position:relative;width:100%;background:#fff';
+    el.style.cssText = 'width:100%;display:block'; w.appendChild(el);
+    w.onclick = e => planClick(e, w, pageIdx);
+    box.appendChild(w);
+  };
+  try {
+    if (du.indexOf('data:application/pdf') === 0) {
+      if (typeof pdfjsLib === 'undefined') { box.innerHTML = '<div style="color:#f99;padding:20px">PDF.js indisponible (connexion ?).</div>'; return; }
+      const pdf = await pdfjsLib.getDocument({ data: atob(du.split(',')[1]) }).promise;
+      for (let n = 1; n <= pdf.numPages; n++) {
+        const page = await pdf.getPage(n), vp = page.getViewport({ scale: 1.4 }), cv = document.createElement('canvas');
+        cv.width = vp.width; cv.height = vp.height; await page.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise; addPage(cv, n - 1);
+      }
+    } else { const im = document.createElement('img'); im.src = du; addPage(im, 0); }
+  } catch (e) { box.innerHTML = '<div style="color:#f99;padding:20px">Erreur d\'affichage : ' + esc(e.message || e) + '</div>'; return; }
+  planRefreshDots();
+}
+function planRefreshDots() {
+  const p = planGet(planCur); if (!p) return;
+  document.querySelectorAll('#plan-pages .plan-pg').forEach(w => {
+    w.querySelectorAll('.pdot').forEach(d => d.remove());
+    (p.pastilles || []).forEach((a, i) => {
+      if ((a.page || 0) !== parseInt(w.dataset.page, 10)) return;
+      const d = document.createElement('div'); d.className = 'pdot';
+      d.style.cssText = 'position:absolute;left:' + a.x + '%;top:' + a.y + '%;transform:translate(-50%,-50%);width:28px;height:28px;border-radius:50%;color:#fff;font:700 13px sans-serif;display:flex;align-items:center;justify-content:center;cursor:pointer;background:' + planDotColor(a) + ';' + (planPastCur === a.id ? 'box-shadow:0 0 0 5px rgba(31,98,184,.35)' : '');
+      d.textContent = i + 1; d.onclick = e => { e.stopPropagation(); planPastCur = a.id; planRefreshDots(); planRenderPanel(); };
+      w.appendChild(d);
+    });
+    w.style.cursor = planAddMode ? 'crosshair' : 'default';
+  });
+}
+function planClick(e, w, pageIdx) {
+  if (!planAddMode) return;
+  const p = planGet(planCur); if (!p) return;
+  const r = w.getBoundingClientRect();
+  const a = { id: 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), x: +((e.clientX - r.left) / r.width * 100).toFixed(1), y: +((e.clientY - r.top) / r.height * 100).toFixed(1),
+              page: pageIdx, type: planNextType, label: '', note: '', statut: 'ouverte', par: planMe(), date: new Date().toISOString() };
+  (p.pastilles = p.pastilles || []).push(a); planAddMode = false; planPastCur = a.id;
+  saveLocal(); renderPlansPage();
+}
+function planRenderPanel() {
+  const p = planGet(planCur), box = document.getElementById('plan-panel'); if (!p || !box) return;
+  const list = p.pastilles || [], a = list.find(x => x.id === planPastCur);
+  let h = '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text2);margin-bottom:6px">Pastilles (' + list.length + ')</div>' +
+    '<div style="max-height:160px;overflow:auto;margin-bottom:10px">' + (list.map((x, i) => '<div onclick="planPastCur=\'' + x.id + '\';planRefreshDots();planRenderPanel()" style="display:flex;gap:8px;align-items:center;padding:5px 0;cursor:pointer;font-size:12px"><span style="width:20px;height:20px;border-radius:50%;background:' + planDotColor(x) + ';color:#fff;font-weight:700;font-size:11px;display:flex;align-items:center;justify-content:center;flex:none">' + (i + 1) + '</span><span>' + esc(x.label || '(sans titre)') + '</span></div>').join('') || '<div style="font-size:12px;color:var(--text3)">Aucune pastille.</div>') + '</div>';
+  if (a) {
+    const ph = (p.photos || []).map((x, i) => ({ x, i })).filter(o => o.x.pastilleId === a.id);
+    h += '<div style="border-top:1px solid var(--border);padding-top:10px"><select class="btn btn-sm" style="width:100%;margin-bottom:6px" onchange="planSetP(\'type\',this.value)">' + Object.keys(PASTILLE_TYPES).map(k => '<option value="' + k + '"' + (a.type === k ? ' selected' : '') + '>' + PASTILLE_TYPES[k][0] + '</option>').join('') + '</select>' +
+      '<input style="width:100%;margin-bottom:6px" placeholder="Titre de la pastille" value="' + esc(a.label || '') + '" onchange="planSetP(\'label\',this.value)">' +
+      '<textarea rows="3" style="width:100%;margin-bottom:6px" placeholder="Consigne, remarque…" onchange="planSetP(\'note\',this.value)">' + esc(a.note || '') + '</textarea>' +
+      (a.type === 'photo' ? '<label style="font-size:11px;color:var(--text2)">Fermeture de la cloison prévue le</label><input type="date" style="width:100%;margin-bottom:6px" value="' + esc(a.fermeture || '') + '" onchange="planSetP(\'fermeture\',this.value)">' : '') +
+      '<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text2);margin-bottom:4px">Photos (' + ph.length + ')</div>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">' + ph.map(o => '<div style="position:relative"><img data-mid="' + esc(o.x.mediaId || '') + '" src="' + esc(o.x.dataUrl || '') + '" style="width:64px;height:64px;object-fit:cover;border-radius:6px;background:var(--border)" onclick="planOpenPhoto(' + o.i + ')"><span title="Supprimer" onclick="planDelPhoto(' + o.i + ')" style="position:absolute;top:-5px;right:-5px;width:16px;height:16px;border-radius:50%;background:var(--red);color:#fff;font-size:11px;text-align:center;cursor:pointer;line-height:16px">×</span></div>').join('') +
+      '<label class="btn btn-sm" style="cursor:pointer"><i class="ti ti-camera"></i> Ajouter<input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="planAddPhotos(event)"></label></div>' +
+      '<div style="font-size:11px;color:var(--text3);margin-bottom:8px">' + esc((a.par || '').split('@')[0]) + (a.date ? ' · ' + new Date(a.date).toLocaleDateString('fr-FR') : '') + '</div>' +
+      '<div style="display:flex;gap:6px"><button class="btn btn-sm ' + (a.statut === 'verifiee' ? '' : 'btn-success') + '" style="flex:1" onclick="planSetP(\'statut\',\'' + (a.statut === 'verifiee' ? 'ouverte' : 'verifiee') + '\')">' + (a.statut === 'verifiee' ? 'Rouvrir' : 'Marquer vérifié') + '</button><button class="btn btn-sm btn-danger" onclick="planDelP()"><i class="ti ti-trash"></i></button></div></div>';
+  }
+  box.innerHTML = h;
+  box.querySelectorAll('img[data-mid]').forEach(im => { if (!im.getAttribute('src') && im.dataset.mid && window._fbChantier) window._fbChantier.getMediaById(im.dataset.mid).then(du => { if (du) im.src = du; }).catch(() => {}); });
+}
+function planSetP(k, v) { const p = planGet(planCur), a = p && (p.pastilles || []).find(x => x.id === planPastCur); if (!a) return; a[k] = v; saveLocal(); planRefreshDots(); planRenderPanel(); }
+function planDelP() { const p = planGet(planCur); if (!p || !confirm('Supprimer cette pastille et ses photos ?')) return; p.pastilles = (p.pastilles || []).filter(x => x.id !== planPastCur); p.photos = (p.photos || []).filter(x => x.pastilleId !== planPastCur); planPastCur = null; saveLocal(); renderPlansPage(); }
+function planDelPhoto(i) { const p = planGet(planCur); if (!p || !confirm('Supprimer cette photo ?')) return; p.photos.splice(i, 1); saveLocal(); planRenderPanel(); }
+function planOpenPhoto(i) { const p = planGet(planCur), x = p && p.photos[i]; if (!x) return; const open = du => { const w = window.open(); if (w) w.document.write('<img src="' + du + '" style="max-width:100%">'); }; if (x.dataUrl) open(x.dataUrl); else if (x.mediaId) window._fbChantier.getMediaById(x.mediaId).then(open); }
+function planShrink(file, max) {
+  return new Promise((res, rej) => {
+    const fr = new FileReader(); fr.onerror = rej;
+    fr.onload = () => { const im = new Image(); im.onerror = rej; im.onload = () => { const k = Math.min(1, max / Math.max(im.width, im.height)), cv = document.createElement('canvas'); cv.width = Math.round(im.width * k); cv.height = Math.round(im.height * k); cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height); res(cv.toDataURL('image/jpeg', 0.8)); }; im.src = fr.result; };
+    fr.readAsDataURL(file);
+  });
+}
+async function planAddPhotos(e) {
+  const p = planGet(planCur); if (!p || !planPastCur) return;
+  for (const f of Array.from(e.target.files)) { try { const du = await planShrink(f, 1600); (p.photos = p.photos || []).push({ name: f.name || 'photo.jpg', dataUrl: du, pastilleId: planPastCur, par: planMe(), date: new Date().toISOString() }); } catch (x) { toast('⚠️ Photo illisible.'); } }
+  e.target.value = ''; saveLocal(); planRenderPanel();
+}
+// ── Ajout d'un plan / d'une nouvelle version ──
+function openPlanModal(versionOf) {
+  planVersionOf = versionOf || null;
+  const prev = versionOf ? planGet(versionOf) : null;
+  const chId = prev ? prev.chantierId : ((document.getElementById('plans-filter-ch') || {}).value || activeChantier);
+  if (!chId) { toast('⚠️ Choisissez d\'abord un chantier (filtre en haut).'); return; }
+  document.getElementById('pl-title').textContent = prev ? 'Nouvelle version de « ' + prev.nom + ' »' : 'Ajouter un plan';
+  document.getElementById('pl-nom').value = prev ? prev.nom : ''; document.getElementById('pl-nom').disabled = !!prev;
+  document.getElementById('pl-type').innerHTML = PLAN_TYPES.map(t => '<option' + (prev && prev.type === t ? ' selected' : '') + '>' + esc(t) + '</option>').join('');
+  document.getElementById('pl-file').value = ''; document.getElementById('pl-client').checked = prev ? !!prev.visibleClient : false;
+  document.getElementById('pl-modal').dataset.ch = chId;
+  const ivs = state.intervenants.filter(i => i.chantierId == chId || !i.chantierId);
+  document.getElementById('pl-intervs').innerHTML = ivs.map(i => '<label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" value="' + i.id + '"' + (prev && (prev.visibleIntervs || []).indexOf(i.id) >= 0 ? ' checked' : '') + '> ' + esc(i.nom) + (i.metier ? ' <span style="color:var(--text3)">· ' + esc(i.metier) + '</span>' : '') + '</label>').join('') || '<div style="font-size:12px;color:var(--text3)">Aucun intervenant sur ce chantier.</div>';
+  openModal('pl-modal');
+}
+async function savePlanModal() {
+  const prev = planVersionOf ? planGet(planVersionOf) : null;
+  const nom = document.getElementById('pl-nom').value.trim(), f = document.getElementById('pl-file').files[0], chId = document.getElementById('pl-modal').dataset.ch;
+  if (!nom) { toast('⚠️ Donnez un nom au plan.'); return; }
+  if (!f) { toast('⚠️ Choisissez le fichier (PDF ou image).'); return; }
+  const du = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
+  const ivs = Array.from(document.querySelectorAll('#pl-intervs input:checked')).map(x => parseInt(x.value, 10));
+  const id = uid();
+  const p = { id, chantierId: parseInt(chId, 10) || chId, groupe: prev ? (prev.groupe || prev.id) : id, version: prev ? (prev.version || 1) + 1 : 1,
+              nom, type: document.getElementById('pl-type').value, plans: [{ name: f.name, dataUrl: du }],
+              pastilles: prev ? JSON.parse(JSON.stringify(prev.pastilles || [])) : [],
+              photos: prev ? (prev.photos || []).map(x => x.mediaId ? { name: x.name, mediaId: x.mediaId, pastilleId: x.pastilleId, par: x.par, date: x.date } : Object.assign({}, x)) : [],
+              visibleIntervs: ivs, visibleClient: document.getElementById('pl-client').checked, publieLe: new Date().toISOString(), publiePar: planMe() };
+  planList().push(p);
+  try { window.phenixJournal && window.phenixJournal('chantier', 'plan', nom, 'Plan v' + p.version + ' publié'); } catch (e) {}
+  saveLocal(); closeModal('pl-modal'); planCur = p.id; planPastCur = null; renderPlansPage();
+  toast('✅ Plan v' + p.version + ' publié.');
+}
+function planEditVisibility(id) {
+  const p = planGet(id); if (!p) return;
+  const ivs = state.intervenants.filter(i => i.chantierId == p.chantierId || !i.chantierId);
+  const cur = (p.visibleIntervs || []).map(i => { const x = state.intervenants.find(y => y.id == i); return x ? x.nom : ''; }).filter(Boolean).join(', ') || 'aucune';
+  const txt = prompt('Entreprises qui voient ce plan (noms séparés par une virgule).\nDisponibles : ' + ivs.map(i => i.nom).join(', ') + '\nActuellement : ' + cur, cur === 'aucune' ? '' : cur);
+  if (txt === null) return;
+  const noms = txt.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  p.visibleIntervs = ivs.filter(i => noms.indexOf(String(i.nom).toLowerCase()) >= 0).map(i => i.id);
+  p.visibleClient = confirm('Rendre ce plan visible du CLIENT ?\nOK = oui, Annuler = non (actuellement : ' + (p.visibleClient ? 'oui' : 'non') + ')');
+  saveLocal(); renderPlansPage();
+}
+function deletePlan(id) {
+  const p = planGet(id); if (!p || !confirm('Supprimer cette version du plan, ses pastilles et ses photos ?')) return;
+  state.plans = planList().filter(x => x.id != id); planCur = null; saveLocal(); renderPlansPage();
+}
+
+// ── [Pilotage] ce qui demande une action, d'un coup d'œil ──
+// ── [Artisan] données vivantes envoyées par l'accès mobile ──
+function liveStart() {
+  if (LIVE.started || !window._fbChantier || !window._fbChantier.listenCol || CH_ROLE === 'bloque' || CH_ROLE === 'pending') return;
+  LIVE.started = true;
+  const on = (name, key) => window._fbChantier.listenCol(name, a => { LIVE[key] = a; try { renderPilotageCh(); updateMsgBadge(); if (document.getElementById('page-messages').classList.contains('active')) renderMessagesPage(); } catch (e) {} }, e => { LIVE.started = false; console.warn(name, e); });
+  annStart(); cliStart();
+  on('phenix_ch_pointages', 'pointages'); on('phenix_ch_messages', 'messages'); on('phenix_ch_vus', 'vus');
+}
+function workingDaysSince(iso) {
+  if (!iso) return 0; let d = new Date(iso), n = 0; const end = new Date(); d.setHours(0, 0, 0, 0); end.setHours(0, 0, 0, 0);
+  while (d < end) { d.setDate(d.getDate() + 1); if (d.getDay() % 6 !== 0) n++; } return n;
+}
+function planVuPar(p, intervId) { const g = p.groupe || p.id; return LIVE.vus.some(v => String(v.intervenantId) === String(intervId) && (v.vus || {})[g] >= (p.version || 1)); }
+// alertes plans : pas ouvert après 2 jours ouvrés ; pastille « à photographier » sans photo, fermeture demain
+function planAlertes(ids) {
+  const out = [], td = _todayISO(), dem = new Date(); dem.setDate(dem.getDate() + 1); const demain = dem.toISOString().slice(0, 10);
+  planGroupLatest().filter(p => ids.some(i => i == p.chantierId)).forEach(p => {
+    (p.visibleIntervs || []).forEach(iv => { if (workingDaysSince(p.publieLe) >= 2 && !planVuPar(p, iv)) { const x = state.intervenants.find(y => y.id == iv); out.push({ tone: 'amber', txt: 'Plan non ouvert : ' + esc(p.nom) + ' v' + (p.version || 1), sub: (x ? esc(x.nom) : 'Entreprise') + ' · publié depuis ' + workingDaysSince(p.publieLe) + ' jours ouvrés' }); } });
+    (p.pastilles || []).forEach(a => { if (a.type === 'photo' && a.statut !== 'verifiee' && a.fermeture && a.fermeture <= demain && !(p.photos || []).some(x => x.pastilleId === a.id)) out.push({ tone: 'red', txt: 'Photo manquante avant fermeture', sub: esc(a.label || 'Pastille') + ' · ' + esc(p.nom) + (a.fermeture < td ? ' · fermeture dépassée' : ' · fermeture ' + (a.fermeture === demain ? 'demain' : 'aujourd\'hui')) }); });
+  });
+  return out;
+}
+function surChantierMaintenant(ids) {
+  const td = _todayISO(); const l = LIVE.pointages.filter(x => x.date === td && ids.some(i => i == x.chantierId));
+  if (!l.length) return '<div style="color:var(--text3);font-size:13px;padding:.5rem 0">Personne n\'a pointé aujourd\'hui.</div>';
+  const hh = iso => iso ? new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
+  return l.sort((a, b) => String(a.arrivee).localeCompare(String(b.arrivee))).map(x => { const iv = state.intervenants.find(y => String(y.id) === String(x.intervenantId));
+    return '<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-top:1px solid var(--border);font-size:13px"><span>' + (x.depart ? '⚪' : '🟢') + ' ' + esc(iv ? iv.nom : x.nom) + '</span><b>' + hh(x.arrivee) + (x.depart ? ' → ' + hh(x.depart) : '') + '</b></div>'; }).join('');
+}
+// ── [Artisan] Messages : tout passe par Phénix ──
+let msgConv = null;
+/* ── [Canal client unique] Messages = boîte unique : artisans ET client (journal du carnet) ── */
+function cliStart() {
+  if (CH_ROLE !== 'admin' || !window._fbChantier || !window._fbChantier.listenSub) return;
+  if (!LIVE.cliOn.__n) { LIVE.cliOn.__n = 1; window._fbChantier.listenColId('phenix_notifs_client', a => { LIVE.cliNotifs = (a || []).filter(x => x.lu === false); try { updateMsgBadge(); if (document.getElementById('page-messages').classList.contains('active')) renderMessagesPage(); } catch (e) {} }); }
+  (state.chantiers || []).forEach(c => {
+    if (!c.projetId || LIVE.cliOn[c.projetId]) return; LIVE.cliOn[c.projetId] = 1;
+    window._fbChantier.listenSub(['phenix_portail', String(c.projetId), 'journal'], a => { LIVE.cli[String(c.projetId)] = a || []; try { if (document.getElementById('page-messages').classList.contains('active')) renderMessagesPage(); } catch (e) {} }, e => console.warn('Journal client illisible', e));
+  });
+}
+function cliUnread(pid) { return LIVE.cliNotifs.filter(x => String(x.pid) === String(pid)).length; }
+function msgConvs() {
+  const m = {}; LIVE.messages.forEach(x => { const k = x.chantierId + '|' + x.intervenantId; (m[k] = m[k] || []).push(x); });
+  const out = Object.keys(m).map(k => { const a = m[k].sort((p, q) => String(p.date).localeCompare(String(q.date))); return { k, chantierId: a[0].chantierId, intervenantId: a[0].intervenantId, msgs: a, last: a[a.length - 1], unread: a.filter(x => x.de === 'artisan' && !x.luPhenix).length }; });
+  (state.chantiers || []).forEach(c => {     // une conversation client par chantier lié à un projet, dès qu'il y a un message
+    if (!c.projetId) return;
+    const a = (LIVE.cli[String(c.projetId)] || []).filter(e => e.kind === 'msg').map(e => ({ id: e._id, de: e.by === 'moe' ? 'phenix' : 'client', nom: e.who || (e.by === 'moe' ? 'Phénix' : 'Client'), texte: e.text || '', date: e.t || '' })).sort((p, q) => String(p.date).localeCompare(String(q.date)));
+    if (!a.length) return;
+    out.push({ k: 'cli|' + c.projetId, client: true, pid: String(c.projetId), chantierId: c.id, msgs: a, last: a[a.length - 1], unread: cliUnread(c.projetId) });
+  });
+  return out.sort((a, b) => String(b.last.date).localeCompare(String(a.last.date)));
+}
+function updateMsgBadge() { const n = LIVE.messages.filter(x => x.de === 'artisan' && !x.luPhenix).length + LIVE.cliNotifs.length, b = document.getElementById('msg-badge'); if (b) { b.textContent = n || ''; b.style.display = n ? '' : 'none'; } }
+function renderMessagesPage() {
+  const box = document.getElementById('msg-box'); if (!box) return; cliStart();
+  const cs = msgConvs(); if (!msgConv && cs.length) msgConv = cs[0].k;
+  const cur = cs.find(c => c.k === msgConv);
+  const nm = c => { const ch = state.chantiers.find(y => y.id == c.chantierId); if (c.client) return '👤 Client <span style="color:var(--text3);font-weight:500">· ' + esc(ch ? ch.nom : '') + '</span>'; const iv = state.intervenants.find(y => String(y.id) === String(c.intervenantId)); return esc(iv ? iv.nom : 'Artisan') + ' <span style="color:var(--text3);font-weight:500">· ' + esc(ch ? ch.nom : '') + '</span>'; };
+  if (!cs.length) { box.innerHTML = '<div class="empty-state"><div class="empty-title">Aucun message</div><div style="font-size:13px;color:var(--text3)">Les messages des artisans et du client arrivent ici. Les artisans et le client ne se parlent jamais directement : tout passe par Phénix.</div></div>'; return; }
+  box.innerHTML = '<div style="display:grid;grid-template-columns:260px minmax(0,1fr);gap:14px"><div>' + cs.map(c => '<div class="card" style="cursor:pointer;margin:0 0 8px;' + (c.k === msgConv ? 'border-color:var(--accent)' : '') + '" onclick="msgConv=\'' + c.k + '\';openMsgConv()"><b style="font-size:13px">' + nm(c) + '</b>' + (c.unread ? ' <span class="badge badge-red">' + c.unread + '</span>' : '') + '<div style="font-size:12px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(c.last.texte) + '</div></div>').join('') + '</div>' +
+    '<div class="card" style="margin:0"><div class="card-title" style="margin-bottom:10px">' + (cur ? nm(cur) : '') + '</div><div style="display:flex;flex-direction:column;gap:8px;max-height:50vh;overflow:auto;margin-bottom:10px">' +
+    (cur ? cur.msgs.map(x => '<div style="max-width:80%;padding:8px 12px;border-radius:12px;white-space:pre-wrap;' + (x.de === 'phenix' ? 'align-self:flex-end;background:var(--accent);color:#fff' : 'align-self:flex-start;background:var(--bg2,#EDF0F6)') + '">' + esc(x.texte) + '<div style="font-size:11px;opacity:.7">' + esc(x.de === 'phenix' ? (x.nom || 'Phénix') : (x.nom || (cur.client ? 'Client' : 'Artisan'))) + ' · ' + new Date(x.date).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + '</div></div>').join('') : '') +
+    '</div><div style="display:flex;gap:8px"><textarea id="msg-reply" rows="2" style="flex:1" placeholder="' + (cur && cur.client ? 'Votre réponse au client (visible dans son carnet)' : 'Votre réponse à l\'artisan') + '"></textarea><button class="btn btn-primary" onclick="sendMsgReply()">Répondre</button></div></div></div>';
+}
+function openMsgConv() {
+  const c = msgConvs().find(x => x.k === msgConv);
+  if (c && c.client) {
+    LIVE.cliNotifs.filter(x => String(x.pid) === c.pid).forEach(x => { window._fbChantier.saveDoc('phenix_notifs_client', x._id, Object.assign({}, x, { lu: true })).catch(() => {}); });
+    LIVE.cliNotifs = LIVE.cliNotifs.filter(x => String(x.pid) !== c.pid);
+  } else if (c) c.msgs.filter(x => x.de === 'artisan' && !x.luPhenix).forEach(x => { x.luPhenix = true; window._fbChantier.saveDoc('phenix_ch_messages', x.id, x).catch(() => {}); });
+  renderMessagesPage(); updateMsgBadge();
+}
+async function sendMsgReply() {
+  const c = msgConvs().find(x => x.k === msgConv), t = (document.getElementById('msg-reply').value || '').trim(); if (!c || !t) return;
+  if (c.client) {
+    const e = { t: new Date().toISOString(), kind: 'msg', by: 'moe', who: CH_ME.nom || 'Phénix', text: t, cat: null, email: '' };
+    try { await window._fbChantier.saveSub(['phenix_portail', c.pid, 'journal'], 'ms' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), e); } catch (x) { toast('⛔ Envoi impossible.'); }
+    return;
+  }
+  const id = 'ms_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  const rec = { id, chantierId: c.chantierId, intervenantId: c.intervenantId, de: 'phenix', nom: CH_ME.nom || 'Phénix', texte: t, date: new Date().toISOString(), luArtisan: false, luPhenix: true };
+  try { await window._fbChantier.saveDoc('phenix_ch_messages', id, rec); LIVE.messages.push(rec); renderMessagesPage(); } catch (e) { toast('⛔ Envoi impossible.'); }
+}
+
+function renderPilotageCh() {
+  const box = document.getElementById('db-pilotage'); if (!box) return;
+  liveStart();
+  const td = _todayISO();
+  const chs = (activeChantier ? state.chantiers.filter(c => c.id == activeChantier) : state.chantiers).filter(c => c.statut !== 'cloture');
+  const ids = chs.map(c => c.id);
+  const inScope = o => ids.indexOf(o.chantierId) >= 0 || ids.some(i => i == o.chantierId);
+  const lots = state.lots.filter(inScope), res = state.reserves.filter(inScope), crs = state.comptes_rendus.filter(inScope);
+  const lotsRetard = lots.filter(l => l.fin && l.fin < td && l.statut !== 'termine');
+  const lotsSansEnt = lots.filter(l => l.statut !== 'termine' && lotSansEntreprise(l));
+  const resOuv = res.filter(resIsOpen), resRetard = resOuv.filter(resIsLate);
+  const sansEtape = chs.filter(c => c.statut === 'actif' && !c.etape);
+  const prochaines = crs.map(c => c.prochaine).filter(d => d && d >= td).sort();
+  const dernierCR = crs.map(c => c.date).filter(Boolean).sort().pop();
+  const crAncien = chs.some(c => c.statut === 'actif') && (!dernierCR || (new Date(td) - new Date(dernierCR)) / 864e5 > 14);
+  const go = (page, i) => 'onclick="show(\'' + page + '\',document.querySelector(\'.nav-item[onclick*=&quot;show(\\\'' + page + '\\\'&quot;]\'))" style="cursor:pointer;'; 
+  const item = (txt, sub, tone, page, i) => '<div ' + go(page, i) + 'padding:9px 12px;border-radius:8px;margin-bottom:8px;background:' + (tone === 'red' ? 'rgba(192,57,43,.14)' : 'rgba(230,160,40,.16)') + '"><b style="font-size:13px">' + txt + '</b>' + (sub ? '<div style="font-size:12px;color:var(--text2)">' + sub + '</div>' : '') + '</div>';
+  const todo = [];
+  planAlertes(ids).slice(0, 6).forEach(a => todo.push(item(a.txt, a.sub, a.tone, 'plans', 12)));
+  if (resRetard.length) todo.push(item(resRetard.length + ' réserve(s) en retard', 'Échéance dépassée', 'red', 'reserves', 7));
+  if (lotsRetard.length) todo.push(item(lotsRetard.length + ' lot(s) en retard', lotsRetard.slice(0, 2).map(l => esc(l.nom)).join(' · '), 'red', 'lots', 2));
+  if (lotsSansEnt.length) todo.push(item(lotsSansEnt.length + ' lot(s) sans entreprise', 'À attribuer', 'amber', 'lots', 2));
+  if (sansEtape.length) todo.push(item('Étape à renseigner', sansEtape.map(c => esc(c.nom)).join(' · '), 'amber', 'dashboard', 0));
+  if (crAncien) todo.push(item('Compte rendu à faire', dernierCR ? 'Dernier : ' + fmtDate(dernierCR) : 'Aucun compte rendu', 'amber', 'comptes_rendus', 6));
+  const row = (a, b) => '<div style="display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-top:1px solid var(--border);font-size:13px"><span>' + a + '</span><b>' + b + '</b></div>';
+  box.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;margin-bottom:1rem">' +
+    '<div class="card"><div class="card-header"><div class="card-title">À traiter aujourd\'hui</div></div>' + (todo.length ? todo.join('') : '<div style="color:var(--text3);font-size:13px;padding:.5rem 0">✅ Rien d\'urgent.</div>') + '</div>' +
+    '<div class="card"><div class="card-header"><div class="card-title">Sur le chantier maintenant</div></div>' + surChantierMaintenant(ids) + '</div>' +
+    '<div class="card"><div class="card-header"><div class="card-title">Points de vigilance</div></div>' +
+      row('Réserves ouvertes', resOuv.length) + row('Lots sans entreprise', lotsSansEnt.length) +
+      row('Prochaine réunion', prochaines.length ? fmtDate(prochaines[0]) : '—') + '</div></div>';
+}
+
 function renderDashboard() {
   // Filtrer par chantier actif si sélectionné
   const filterCh = activeChantier ? state.chantiers.filter(c => c.id == activeChantier) : state.chantiers;
@@ -6694,6 +6453,8 @@ function renderDashboard() {
     ? `Chantier : ${esc(chActif.nom)} · ${filterLots.length} lot(s) définis`
     : actifs.length + ' chantier(s) en cours · ' + filterLots.length + ' lot(s) définis';
 
+  renderEtapesCh();   // [Étape réelle]
+  renderPilotageCh(); // [Pilotage]
   document.getElementById('db-nb-chantiers').textContent = actifs.length;
   document.getElementById('db-nb-chantiers-sub').textContent = filterCh.length + ' au total';
   document.getElementById('db-budget').textContent = totalTTC < 1e6 ? fmtEur(totalTTC) : (totalTTC / 1e6).toFixed(2) + ' M€';
@@ -7118,7 +6879,7 @@ function exportSynthesePDF() {
 
     // LOTS
     if(lots.length) {
-      o += '<div class="sec"><h3>📋 Lots & Chiffrage ('+lots.length+')</h3></div>';
+      o += '<div class="sec"><h3>📋 Lots ('+lots.length+')</h3></div>';
       o += '<table><thead><tr><th style="padding-left:22px">Lot</th><th>Catégorie</th><th>Intervenant</th><th style="text-align:right">HT</th><th style="text-align:right">TTC</th><th>Av.</th><th>Dates</th><th>Statut</th></tr></thead><tbody>';
       lots.forEach(l => {
         const inv = l.interv ? state.intervenants.find(i=>i.id==l.interv) : null;
@@ -7323,11 +7084,6 @@ ${body}
   toast('📄 Synthèse ouverte — Imprimer → Enregistrer en PDF');
 }
 
-function exportPlanningPDF() {
-  // Redirige vers la synthèse complète filtrée
-  exportSynthesePDF();
-}
-
 function exportFinancierPDF() {
   const filter = document.getElementById('fin-filter-ch')?.value || activeChantier;
   if (filter) {
@@ -7338,13 +7094,6 @@ function exportFinancierPDF() {
   } else {
     exportSynthesePDF();
   }
-}
-
-function downloadTxt(content, filename) {
-  const blob = new Blob([content], { type:'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
-  URL.revokeObjectURL(url);
 }
 
 // ── Sauvegarde / Restauration JSON ────────────────────────
@@ -7416,20 +7165,13 @@ function closeChanSidebar() {
 // Close sidebar on nav item click (mobile)
 document.querySelectorAll('#chantierSidebar .nav-item').forEach(el => {
   el.addEventListener('click', () => {
+    if (el.classList.contains('nav-toggle')) return;
     if (window.innerWidth <= 768) closeChanSidebar();
   });
 });
 
 </script>
 <script>
-function switchApp(target) {
-  if (target === 'dossier') {
-    if (window.parent && window.parent !== window) {
-      try { window.parent.postMessage({source:'phenix-chantier', action:'open-module', module: 'dossier'}, '*'); return; } catch(e) {}
-    }
-    window.location.href = 'phenix_dossier.html';
-  }
-}
 if (window.parent && window.parent !== window) {
   const _logoC = document.querySelector('#app-chantier .sidebar-logo');
   if (_logoC) {
@@ -7442,89 +7184,5 @@ if (window.parent && window.parent !== window) {
 }
 </script>
 
-<script>
-/* WebAuthn biométrie — Phénix-Architecture */
-var CHANTIER_BIO_KEY='chantier_bio_credId',CHANTIER_BIO_EMAIL='chantier_bio_email',CHANTIER_BIO_CREDS='chantier_bio_creds';
-function _cb64u(b){return btoa(String.fromCharCode(...new Uint8Array(b))).replace(/[+]/g,'-').replace(/[/]/g,'_').replace(/=/g,'');}
-function _cfromb64u(s){s=s.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';return Uint8Array.from(atob(s),c=>c.charCodeAt(0)).buffer;}
-async function chantierBioInit(){
-  if(!window.PublicKeyCredential)return;
-  var ok=await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().catch(()=>false);
-  if(!ok)return;
-  var w=document.getElementById('pl-bio-wrap');if(w)w.style.display='block';
-  if(!localStorage.getItem(CHANTIER_BIO_KEY)){
-    var l=document.getElementById('pl-bio-label');if(l)l.textContent="Activer l'empreinte après connexion";
-    var b=document.getElementById('pl-bio-btn');if(b)b.onclick=()=>{var p=document.getElementById('pl-pwd');if(p)p.focus();};
-  } else {
-    // WebAuthn exige un vrai geste utilisateur, surtout sur mobile — un setTimeout seul
-    // échoue silencieusement. On déclenche donc au premier tap réel de l'utilisateur.
-    // Rattaché à l'écran de connexion lui-même (pas au document entier) : un clic
-    // ailleurs dans l'application, une fois connecté, ne doit plus jamais déclencher
-    // cette demande d'empreinte par erreur (ex. bouton menu).
-    var _cBioScope = document.getElementById('phenix-login') || document;
-    var _cBioAutoTrigger = function(){
-      _cBioScope.removeEventListener('pointerdown', _cBioAutoTrigger);
-      _cBioScope.removeEventListener('touchstart', _cBioAutoTrigger);
-      try{ chantierBioLogin(); }catch(e){}
-    };
-    _cBioScope.addEventListener('pointerdown', _cBioAutoTrigger, { once:true, passive:true });
-    _cBioScope.addEventListener('touchstart', _cBioAutoTrigger, { once:true, passive:true });
-  }
-}
-async function chantierBioLogin(){
-  var btn=document.getElementById('pl-bio-btn'),err=document.getElementById('pl-err');
-  var credId=localStorage.getItem(CHANTIER_BIO_KEY);
-  if(err){err.textContent='';err.style.color='#FFB4A8';}
-  if(!credId){var p=document.getElementById('pl-pwd');if(p)p.focus();return;}
-  if(btn){btn.disabled=true;btn.innerHTML='<span style="font-size:18px">⏳</span><span>Vérification…</span>';}
-  try{
-    await navigator.credentials.get({publicKey:{challenge:crypto.getRandomValues(new Uint8Array(32)),allowCredentials:[{type:'public-key',id:_cfromb64u(credId),transports:['internal']}],userVerification:'required',timeout:60000}});
-    var sc=localStorage.getItem(CHANTIER_BIO_CREDS);
-    if(sc&&window._auth){var pts=atob(sc).split('|||');if(pts.length===2){if(err){err.style.color='#4db8e8';err.textContent='✓ Connexion en cours…';}window._auth.login(pts[0],pts[1]).catch(()=>{if(err){err.style.color='#FFB4A8';err.textContent='Session expirée — saisissez votre mot de passe.';}var em=document.getElementById('pl-email');if(em){em.value=pts[0];em.style.background='#e8f5e9';em.readOnly=true;}});return;}}
-    var se=localStorage.getItem(CHANTIER_BIO_EMAIL)||'';
-    var em2=document.getElementById('pl-email');if(em2){em2.value=se;em2.style.background='#e8f5e9';em2.readOnly=true;}
-    if(err){err.style.color='#4db8e8';err.textContent='✓ Empreinte reconnue — saisissez votre mot de passe.';}
-    var pw=document.getElementById('pl-pwd');if(pw)pw.focus();
-  }catch(e){
-    if(!err)return;
-    err.style.color='#E74C3C'; err.style.fontWeight='600';
-    if(e.name==='NotAllowedError')err.textContent='⚠️ Reconnaissance refusée — vérifiez que Face ID/empreinte est activé pour ce navigateur dans les réglages du téléphone, puis réessayez avec le bouton.';
-    else if(e.name==='InvalidStateError')err.textContent='⚠️ Empreinte invalide — cliquez sur 🔄 Réinitialiser puis reconnectez-vous par mot de passe.';
-    else err.textContent='⚠️ Erreur : '+e.name+' — '+e.message;
-  }finally{
-    if(btn){btn.disabled=false;btn.innerHTML='<span style="font-size:24px">☝️</span><span id="pl-bio-label">Se connecter avec empreinte</span>';}
-  }
-}
-async function chantierBioEnroll(user){
-  var err=document.getElementById('pl-err'),wrap=document.getElementById('pl-enroll-wrap');
-  if(!user){if(err){err.style.color='#FFB4A8';err.textContent='Session non reconnue.';}return;}
-  try{
-    var cred=await navigator.credentials.create({publicKey:{challenge:crypto.getRandomValues(new Uint8Array(32)),rp:{name:'Phénix-Architecture',id:location.hostname},user:{id:new TextEncoder().encode(user.uid),name:user.email,displayName:'Phénix'},pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],authenticatorSelection:{authenticatorAttachment:'platform',userVerification:'required',residentKey:'discouraged',requireResidentKey:false},timeout:60000,attestation:'none'}});
-    localStorage.setItem(CHANTIER_BIO_KEY,_cb64u(cred.rawId));
-    localStorage.setItem(CHANTIER_BIO_EMAIL,user.email);
-    var pw=document.getElementById('pl-pwd');if(pw&&pw.value)localStorage.setItem(CHANTIER_BIO_CREDS,btoa(user.email+'|||'+pw.value));
-    if(wrap)wrap.innerHTML='<div style="color:#7DC6E8;font-size:13px;font-weight:600">✓ Empreinte activée !</div>';
-    setTimeout(()=>{if(wrap)wrap.style.display='none';},3000);
-  }catch(e){
-    if(!err)return;
-    err.style.color='#FFB4A8';
-    err.textContent=e.name==='NotAllowedError'?'Enrôlement annulé.':'Erreur: '+e.message;
-  }
-}
-function chantierBioReset(){
-  if(!confirm("Supprimer l'empreinte ?"))return;
-  ['chantier_bio_credId','chantier_bio_email','chantier_bio_creds'].forEach(k=>localStorage.removeItem(k));
-  var w=document.getElementById('pl-bio-wrap');if(w)w.style.display='none';
-  var em=document.getElementById('pl-email');if(em){em.value='';em.readOnly=false;em.style.background='';}
-  var err=document.getElementById('pl-err');if(err){err.style.color='#4db8e8';err.textContent='Empreinte supprimée.';}
-}
-// Chargé dans le Shell (iframe) : le Shell gère seul l'authentification et
-// transmet la connexion à ce module. On n'initialise donc PAS la biométrie
-// ici, sinon l'empreinte serait redemandée à chaque changement de module.
-document.addEventListener('DOMContentLoaded', function(){
-  if (window.parent !== window) return; // dans le Shell → rien à faire
-  chantierBioInit();
-});
-</script>
 </body>
 </html>

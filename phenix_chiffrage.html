@@ -2,7 +2,6 @@
 <!DOCTYPE html>
 <html>
 <head>
-<script>try{Object.defineProperty(window,'PublicKeyCredential',{value:undefined,configurable:true});['phenix_bio_creds','phenix_bio_credId','phenix_bio_email','phenix_bio_enroll_refuse','chiffrage_bio_creds','chiffrage_bio_credId','chantier_bio_creds','chantier_bio_credId','chantier_bio_email'].forEach(function(k){localStorage.removeItem(k)})}catch(e){}</script>
 
 <!--
 ══════════════════════════════════════════════════════════════════
@@ -56,6 +55,11 @@ body{font-family:var(--font-sans);background-color:var(--bg);background-image:li
 .topbar{background:rgba(9,18,34,.85);color:white;padding:0 24px;height:56px;display:flex;align-items:center;gap:16px;flex-shrink:0}
 .topbar-actions{display:flex;gap:8px;align-items:center}
 .topbar-btn{background:rgba(74,156,199,.15);border:1px solid rgba(74,156,199,.35);color:#7DC6E8;padding:5px 12px;border-radius:var(--r-sm);font-size:12px;font-family:var(--font-sans);cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:all .15s;font-weight:500}
+.topbar-menu{position:relative;display:inline-block}
+.topbar-menu-list{display:none;position:absolute;right:0;top:calc(100% + 6px);min-width:250px;background:#0f2038;border:1px solid var(--border);border-radius:var(--r-sm);padding:6px;z-index:60;box-shadow:0 10px 30px rgba(0,0,0,.45)}
+.topbar-menu.open .topbar-menu-list{display:block}
+.topbar-menu-list button,.topbar-menu-list label{display:flex;align-items:center;gap:8px;width:100%;padding:9px 10px;border:none;background:none;color:var(--text,#e5ecf3);font-size:13px;font-family:inherit;border-radius:6px;cursor:pointer;text-align:left}
+.topbar-menu-list button:hover,.topbar-menu-list label:hover{background:rgba(74,156,199,.2)}
 .topbar-btn:hover{background:rgba(74,156,199,.28);border-color:var(--accent)}
 .logo{font-family:var(--font-serif);font-size:18px;font-weight:400;color:#fff;letter-spacing:.02em;white-space:nowrap;line-height:1.1}
 .logo span{font-size:9.5px;font-weight:400;color:rgba(74,156,199,.85);display:block;letter-spacing:.12em;text-transform:uppercase;margin-top:2px}
@@ -68,12 +72,10 @@ body{font-family:var(--font-sans);background-color:var(--bg);background-image:li
 
 /* SIDEBAR */
 .sidebar{width:220px;background:linear-gradient(180deg,#0F1E3D 0%,#1B2D5B 60%,#1a3060 100%);color:white;display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto}
-.sidebar-section{padding:20px 16px 8px;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:rgba(74,156,199,.5);font-weight:600}
 .nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;font-size:13px;color:rgba(255,255,255,.5);cursor:pointer;border-left:2.5px solid transparent;transition:all .15s}
 .nav-item:hover{color:white;background:rgba(255,255,255,.06)}
 .nav-item.active{color:#fff;border-left-color:#4A9CC7;background:rgba(74,156,199,.18);font-weight:600}
 .nav-item i{font-size:15px;width:18px;text-align:center}
-.nav-badge{margin-left:auto;background:rgba(74,156,199,.25);color:#7DC6E8;font-size:10px;font-weight:600;padding:1px 6px;border-radius:10px}
 
 /* MAIN */
 .main{flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0}
@@ -123,7 +125,6 @@ tr:last-child td{border-bottom:none}
 tr:hover td{background:var(--accent-bg)}
 .lot-num{font-weight:700;color:var(--accent);font-size:12px;width:60px}
 .lot-name{font-weight:500}
-.lot-cat{font-size:11px;color:var(--text3)}
 .ht-val{font-weight:600;font-family:var(--font-serif);font-size:15px;color:var(--nav)}
 .ttc-val{font-weight:600;font-family:var(--font-serif);font-size:15px;color:var(--accent2)}
 .status-badge{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;display:inline-block}
@@ -136,7 +137,6 @@ tr:hover td{background:var(--accent-bg)}
 .lot-detail-header{padding:20px 28px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border);background:var(--surface)}
 .back-btn{cursor:pointer;color:var(--text2);font-size:13px;display:flex;align-items:center;gap:5px;padding:6px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);background:transparent;font-family:var(--font-sans)}
 .back-btn:hover{background:var(--accent-bg);border-color:var(--accent);color:var(--nav)}
-.lot-title-detail{font-family:var(--font-serif);font-size:22px;font-weight:400;color:var(--nav)}
 .lot-title-edit-row{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
 .lot-title-input{font-family:var(--font-serif);font-weight:400;color:var(--nav);border:1px solid transparent;border-radius:6px;background:transparent;padding:2px 6px;transition:border-color .12s,background .12s}
 .lot-title-input:hover{border-color:var(--border)}
@@ -238,9 +238,6 @@ tr:hover td{background:var(--accent-bg)}
 
 /* LOADING */
 .loading{text-align:center;padding:40px;color:var(--text3);font-size:13px}
-
-/* MARGE / IMPORT ARTISAN */
-.pu-artisan{font-size:12px;color:var(--text3);text-decoration:line-through}
 .pu-client-cell input{background:rgba(200,150,60,.20);border-color:#e6b95c!important}
 .marge-badge{display:inline-block;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;background:#e3f5ec;color:#2D7A4F}
 .marge-badge.neg{background:#fdeceb;color:#C0392B}
@@ -326,32 +323,11 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
 .ia-sum-card{background:var(--accent-bg);border:1.5px solid var(--border);border-radius:var(--r-md);padding:10px 12px}
 .ia-sum-label{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--text2);font-weight:700}
 .ia-sum-val{font-family:var(--font-serif);font-size:18px;color:var(--nav);margin-top:2px}
-/* ═══ PAGE RÉNOVATION ═══ */
-.reno-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
-.reno-niveau-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r-lg);overflow:hidden}
-.reno-niveau-header{padding:10px 16px;background:var(--surface2);display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border)}
-.reno-niveau-title{font-size:13px;font-weight:700;color:var(--nav);flex:1}
-.reno-plan-slots{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px}
-.reno-plan-slot{border:2px dashed var(--border);border-radius:var(--r-md);min-height:100px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:all .15s;position:relative;overflow:hidden;background:var(--bg);text-align:center;padding:8px}
-.reno-plan-slot:hover{border-color:var(--accent);background:var(--accent-bg)}
-.reno-plan-slot.loaded{border-style:solid;border-color:var(--accent);background:var(--accent-bg)}
-.reno-plan-slot.loaded-demolition{border-color:#e67e22;background:rgba(230,126,34,.07)}
-.reno-plan-slot.loaded-projet{border-color:#27ae60;background:rgba(39,174,96,.07)}
-.reno-slot-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px}
-.reno-slot-label.existant{color:var(--text3)}
-.reno-slot-label.demolition{color:#e67e22}
-.reno-slot-label.projet{color:#27ae60}
-.reno-slot-thumb{width:100%;height:60px;object-fit:contain;border-radius:4px;margin-bottom:4px;display:none}
-.reno-slot-name{font-size:10px;color:var(--text2);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.reno-slot-del{position:absolute;top:4px;right:4px;width:18px;height:18px;border-radius:50%;background:var(--danger);color:#fff;font-size:10px;display:none;align-items:center;justify-content:center;cursor:pointer;border:none;line-height:1}
-.reno-plan-slot.loaded .reno-slot-del{display:flex}
 .reno-prompt-zone{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r-lg);padding:16px;margin-bottom:16px}
 .reno-prompt-label{font-size:12px;font-weight:700;color:var(--nav);margin-bottom:8px;display:flex;align-items:center;gap:6px}
 .reno-prompt-textarea{width:100%;min-height:120px;padding:10px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:var(--font-sans);background:var(--bg);color:var(--text);resize:vertical;line-height:1.6}
 .reno-prompt-textarea:focus{outline:none;border-color:var(--accent)}
 .reno-prompt-hint{font-size:11px;color:var(--text3);margin-top:6px;line-height:1.6}
-.reno-add-niveau{display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;border:2px dashed var(--border);border-radius:var(--r-lg);cursor:pointer;color:var(--text3);font-size:13px;font-weight:600;transition:all .15s;background:var(--bg);margin-bottom:16px;font-family:var(--font-sans)}
-.reno-add-niveau:hover{border-color:var(--accent);color:var(--nav);background:var(--accent-bg)}
 .reno-ia-status{display:none;padding:12px 16px;border-radius:var(--r-md);font-size:13px;margin-bottom:12px}
 .reno-ia-status.running{background:rgba(108,52,131,.08);border:1.5px solid rgba(108,52,131,.25);color:#c896e0;display:flex;align-items:center;gap:10px}
 .reno-ia-status.error{background:var(--danger-bg);border:1.5px solid var(--danger);color:var(--danger);display:block}
@@ -411,7 +387,6 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
   /* Texte masqué, icône seule — fonctionne même sans <span> */
   .topbar-btn { padding: 8px 10px; font-size: 0 !important; gap: 0; min-width: 40px; justify-content: center; line-height: 1; }
   .topbar-btn i, .topbar-btn .ti { font-size: 18px !important; display: inline-block; }
-  .push-label { display: none; }
   .topbar-actions { gap: 6px; }
   .topbar-info { display: none; }
   .layout { flex-direction: column; overflow: visible; min-height: unset; }
@@ -493,7 +468,6 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
 }
 * { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 
-
 /* [Aucune entreprise] */
 .no-ent{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;color:#ff8f84;background:rgba(200,60,50,.22);border:1px solid rgba(255,120,105,.55);border-radius:10px;padding:1px 8px;white-space:nowrap}
 .no-ent.devis{color:#ffc36b;background:rgba(230,150,40,.18);border-color:rgba(255,190,100,.5)}
@@ -516,35 +490,11 @@ if (window.parent !== window) {
 <body>
 
 <!-- LOGIN GATE -->
-<div id="phenix-login" style="display:flex;position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#0F1E3D,#1B2D5B,#2A5298);align-items:center;justify-content:center;padding:20px;font-family:'DM Sans',system-ui,sans-serif">
+<div id="phenix-login" style="display:none;position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#0a1628,#12233f,#2f6fc0);align-items:center;justify-content:center;padding:20px;font-family:'DM Sans',system-ui,sans-serif">
   <div style="background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.18);border-radius:16px;padding:34px 28px;max-width:360px;width:100%;text-align:center">
-    <div style="font-family:'DM Serif Display',Georgia,serif;font-size:30px;color:#fff;margin-bottom:4px">Phénix<span style="color:#7DC6E8">-Architecture</span></div>
-    <div style="font-size:11px;color:rgba(255,255,255,.5);letter-spacing:.12em;text-transform:uppercase;margin-bottom:26px">Chiffrage · Connexion</div>
-    <div id="pl-bio-wrap" style="display:none;margin-bottom:16px">
-      <button id="pl-bio-btn" onclick="phenixBioLogin()" style="width:100%;padding:14px;border:2px solid rgba(77,184,232,.6);border-radius:9px;background:rgba(77,184,232,.12);color:#7DC6E8;font-size:15px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px">
-        <span style="font-size:24px">☝️</span><span id="pl-bio-label">Se connecter avec empreinte</span>
-      </button>
-      <div style="display:flex;align-items:center;gap:10px;margin-top:14px;margin-bottom:14px">
-        <div style="flex:1;height:1px;background:rgba(255,255,255,.15)"></div>
-        <span style="font-size:11px;color:rgba(255,255,255,.35);letter-spacing:.08em">ou par mot de passe</span>
-        <div style="flex:1;height:1px;background:rgba(255,255,255,.15)"></div>
-      </div>
-    </div>
-    <input id="pl-email" type="email" autocomplete="username" placeholder="E-mail" style="width:100%;padding:12px 14px;margin-bottom:10px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.95);font-size:14px;outline:none">
-    <input id="pl-pwd" type="password" autocomplete="current-password" placeholder="Mot de passe" onkeydown="if(event.key===&quot;Enter&quot;)phenixDoLogin()" style="width:100%;padding:12px 14px;margin-bottom:14px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.95);font-size:14px;outline:none">
-    <button id="pl-btn" onclick="phenixDoLogin()" style="width:100%;padding:12px;border:none;border-radius:9px;background:linear-gradient(135deg,#4A9CC7,#2A5298);color:#fff;font-size:15px;font-weight:600;cursor:pointer">Se connecter</button>
-    <div id="pl-err" style="color:#FFB4A8;font-size:12.5px;margin-top:12px;min-height:16px"></div>
-    <div style="margin-top:14px;text-align:center">
-      <button onclick="phenixBioReset()" style="background:none;border:none;color:rgba(255,255,255,.25);font-size:11px;cursor:pointer;font-family:inherit;padding:6px">🔄 Réinitialiser l'empreinte enregistrée</button>
-    </div>
-    <div id="pl-enroll-wrap" style="display:none;margin-top:16px;padding:14px;background:rgba(77,184,232,.1);border:1.5px solid rgba(77,184,232,.3);border-radius:9px">
-      <div style="font-size:13px;color:#7DC6E8;font-weight:600;margin-bottom:6px">☝️ Activer la connexion par empreinte ?</div>
-      <div style="font-size:11px;color:rgba(255,255,255,.55);margin-bottom:12px">Votre empreinte restera stockée uniquement sur cet appareil.</div>
-      <div style="display:flex;gap:8px">
-        <button id="pl-enroll-btn" style="flex:1;padding:9px;border:none;border-radius:7px;background:linear-gradient(135deg,#4A9CC7,#2A5298);color:#fff;font-size:13px;font-weight:600;cursor:pointer">Activer</button>
-        <button onclick="document.getElementById('pl-enroll-wrap').style.display='none'" style="flex:1;padding:9px;border:1.5px solid rgba(255,255,255,.2);border-radius:7px;background:transparent;color:rgba(255,255,255,.6);font-size:13px;cursor:pointer">Plus tard</button>
-      </div>
-    </div>
+    <div style="font-family:'DM Serif Display',Georgia,serif;font-size:30px;color:#fff;margin-bottom:4px">Phénix<span style="color:#4fa8f0">-Architecture</span></div>
+    <div style="font-size:14px;color:rgba(255,255,255,.75);margin:18px 0 22px;line-height:1.5">Session fermée ou expirée.<br>La connexion se fait depuis Phénix.</div>
+    <a href="phenix_shell.html" style="display:block;padding:13px;border-radius:9px;background:#2f6fc0;color:#fff;font-size:15px;font-weight:600;text-decoration:none">Ouvrir Phénix</a>
   </div>
 </div>
 
@@ -553,9 +503,13 @@ if (window.parent !== window) {
   <div class="topbar-actions">
     <button class="topbar-btn" id="undo-btn" onclick="undoAction()" title="Rien à annuler" style="opacity:.4;pointer-events:none"><i class="ti ti-arrow-back-up" aria-hidden="true"></i></button>
     <button class="topbar-btn" id="redo-btn" onclick="redoAction()" title="Rien à rétablir" style="opacity:.4;pointer-events:none"><i class="ti ti-arrow-forward-up" aria-hidden="true"></i></button>
-    <button class="topbar-btn" onclick="exportData()" title="Exporter les données (sauvegarde)"><i class="ti ti-cloud-upload" aria-hidden="true"></i>Sauvegarder</button>
-    <label class="topbar-btn" title="Importer des données depuis un autre appareil" style="cursor:pointer"><i class="ti ti-cloud-download" aria-hidden="true"></i>Importer<input type="file" accept=".json" onchange="importData(event)" style="display:none"></label>
-        <button class="topbar-btn" id="btn-push-cloud" onclick="pushToCloud()" title="Pousser les données locales vers le cloud" style="background:linear-gradient(135deg,#4A9CC7,#2A5298);color:white;border:none"><i class="ti ti-cloud-arrow-up" aria-hidden="true"></i><span class="push-label">&nbsp;Cloud</span></button>
+    <div class="topbar-menu" id="file-menu">
+      <button class="topbar-btn" onclick="document.getElementById('file-menu').classList.toggle('open')" title="Sauvegarde sur fichier (secours) — l'enregistrement cloud est automatique" aria-haspopup="true"><i class="ti ti-file-export" aria-hidden="true"></i>Fichier</button>
+      <div class="topbar-menu-list">
+        <button onclick="document.getElementById('file-menu').classList.remove('open');exportData()"><i class="ti ti-cloud-upload" aria-hidden="true"></i> Exporter une sauvegarde (.json)</button>
+        <label><i class="ti ti-cloud-download" aria-hidden="true"></i> Importer une sauvegarde<input type="file" accept=".json" onchange="document.getElementById('file-menu').classList.remove('open');importData(event)" style="display:none"></label>
+      </div>
+    </div>
   </div>
   <div class="topbar-info" id="sync-info"><span class="sync-dot" id="sync-dot"></span><span id="sync-label">Prêt</span></div>
 </div>
@@ -568,7 +522,7 @@ if (window.parent !== window) {
     <div style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:rgba(74,156,199,.5);font-weight:600">Navigation</div>
   </div>
   <div class="nav-item active" onclick="showPage('chantiers')" id="nav-chantiers">
-    <i class="ti ti-building-2" aria-hidden="true"></i> Chantiers
+    <i class="ti ti-building-2" aria-hidden="true"></i> Projets
   </div>
   <div class="nav-item" onclick="showPage('chiffrage')" id="nav-chiffrage">
     <i class="ti ti-calculator" aria-hidden="true"></i> Lots & Chiffrage
@@ -601,10 +555,10 @@ if (window.parent !== window) {
   <!-- PAGE CHANTIERS -->
   <div class="page active" id="page-chantiers">
     <div class="page-header">
-      <div class="page-title">Chantiers</div>
+      <div class="page-title">Projets</div>
       <div class="page-sub">Gestion de vos projets</div>
       <div class="page-actions">
-        <button class="btn btn-primary" onclick="openNewChantierModal()"><i class="ti ti-plus" aria-hidden="true"></i>Nouveau chantier</button>
+        <button class="btn btn-primary" onclick="openNewChantierModal()"><i class="ti ti-plus" aria-hidden="true"></i>Nouveau projet</button>
       </div>
     </div>
     <div id="chantier-grid-wrap" class="chantier-grid"><div class="loading">Chargement…</div></div>
@@ -617,7 +571,7 @@ if (window.parent !== window) {
       <div class="page-sub" id="chiffrage-sub">Décomposition par corps d'état</div>
       <div class="page-actions" style="flex-wrap:wrap;gap:8px">
         <select id="chantier-select" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;background:var(--surface2);color:var(--text)" onchange="onChantierSelect()">
-          <option value="">— Sélectionner un chantier —</option>
+          <option value="">— Sélectionner un projet —</option>
         </select>
         <button class="btn btn-primary" onclick="openNewLotModal()"><i class="ti ti-plus" aria-hidden="true"></i>Nouveau lot</button>
           <button class="btn btn-outline" onclick="exportPDF(true)" style="border-color:#4A9CC7;color:#4A9CC7"><i class="ti ti-file-type-pdf" aria-hidden="true"></i>Devis client PDF</button>
@@ -625,7 +579,8 @@ if (window.parent !== window) {
           <button class="btn btn-outline" onclick="exportDPGF()" style="border-color:#7DC6E8;color:#7DC6E8"><i class="ti ti-clipboard-list" aria-hidden="true"></i>DPGF consultation</button>
           <button class="btn btn-outline" onclick="openImportArtisanModalGlobal()" style="border-color:#e74c3c;color:#e74c3c"><i class="ti ti-file-import" aria-hidden="true"></i>Importer devis artisan (IA)</button>
           <button class="btn btn-outline" onclick="exportToFinancement()" style="border-color:#2D7A4F;color:#2D7A4F"><i class="ti ti-coin" aria-hidden="true"></i>Envoyer vers Financement</button>
-          <button class="btn btn-outline" onclick="exportToCarnet()" style="border-color:#E8833A;color:#E8833A" title="Envoie le dossier, les lots et l'accès client vers le Carnet de projet"><i class="ti ti-book-2" aria-hidden="true"></i>Envoyer vers Carnet</button>
+          <button class="btn btn-outline" onclick="exportToCarnet()" style="border-color:#E8833A;color:#E8833A" title="Ouvre le Carnet de projet au client (phase conception : choix des matières, sans prix) et crée son accès privé"><i class="ti ti-book-2" aria-hidden="true"></i>Ouvrir le Carnet au client</button>
+          <button class="btn btn-outline" onclick="voirChoixCarnet()" style="border-color:#E8833A;color:#E8833A" title="Affiche les matières choisies par le client dans son Carnet, pour chiffrer en conséquence"><i class="ti ti-palette" aria-hidden="true"></i>Choix du client (Carnet)</button>
           <button class="btn btn-outline" onclick="exportToChantier()" style="border-color:#4fa8f0;color:#4fa8f0"><i class="ti ti-building-factory-2" aria-hidden="true"></i>Envoyer vers Chantier</button>
           <button class="btn btn-outline" onclick="exportToAppelsOffres()" style="border-color:#1E5FAA;color:#1E5FAA"><i class="ti ti-send" aria-hidden="true"></i>Envoyer vers Appels d'offres</button>
           <button class="btn btn-outline" onclick="ouvrirModalRaccorderDossier()" id="btn-raccorder-dossier" style="border-color:#e6b95c;color:#e6b95c;display:none"><i class="ti ti-link" aria-hidden="true"></i>Raccorder à Phénix Dossier</button>
@@ -643,11 +598,11 @@ if (window.parent !== window) {
       <div class="stat-card"><div class="stat-label">Marge totale artisans</div><div class="stat-value" id="stat-marge" style="color:#4fd18b">0 €</div><div class="stat-sub" id="stat-marge-pct">0%</div></div>
     </div>
 
-    <!-- CCTP du chantier -->
+    <!-- CCTP du projet -->
     <div id="cctp-card" style="padding:12px 28px;background:var(--surface2);border-bottom:1px solid var(--border);color:var(--text)">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:space-between">
         <div>
-          <div style="font-size:13px;font-weight:700;color:var(--nav)">📄 CCTP du chantier</div>
+          <div style="font-size:13px;font-weight:700;color:var(--nav)">📄 CCTP du projet</div>
           <div id="cctp-card-sub" style="font-size:12px;color:var(--text3);margin-top:2px"></div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -666,7 +621,7 @@ if (window.parent !== window) {
           <div id="contrat-card-sub" style="font-size:12px;color:var(--text3);margin-top:2px"></div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-sm btn-outline" onclick="contratVersPlanning('tous')" style="border-color:#1E5FAA;color:#1E5FAA">📅 Tout envoyer vers Planning</button>
+          <button class="btn btn-sm btn-outline" onclick="contratVersPlanning('tous')" style="border-color:#1E5FAA;color:#1E5FAA">📅 Tout envoyer vers le Gantt de Chantier</button>
           <button class="btn btn-sm btn-outline" onclick="contratExportPDF('tous')"><i class="ti ti-file-export" aria-hidden="true"></i>Tous les contrats (PDF)</button>
         </div>
       </div>
@@ -702,9 +657,9 @@ if (window.parent !== window) {
       <span style="font-size:12px;color:var(--text3)">Change le taux de TVA de chaque lot existant en une fois — vous pouvez toujours ajuster un lot particulier ensuite dans son détail.</span>
     </div>
 
-    <!-- Marge générale du chantier -->
+    <!-- Marge générale du projet -->
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 28px;background:var(--surface2);border-bottom:1px solid var(--border);color:var(--text)">
-      <label style="font-size:13px;font-weight:600;color:var(--nav);white-space:nowrap">Marge générale du chantier (%)</label>
+      <label style="font-size:13px;font-weight:600;color:var(--nav);white-space:nowrap">Marge générale du projet (%)</label>
       <input type="number" id="marge-generale-input" value="20" min="0" max="100" step="1" style="width:80px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface);color:var(--text)">
       <button class="btn btn-outline" style="padding:6px 14px;font-size:13px" onclick="appliquerMargeGeneraleChantier()">Appliquer à tous les lots</button>
       <span style="font-size:12px;color:var(--text3)">Recalcule le prix client de tous les postes de tous les lots à partir de leur prix artisan — même mécanisme que « Marge globale » dans un lot, mais pour tout le chantier d'un coup. Vous pouvez toujours ajuster un lot ou un poste particulier ensuite.</span>
@@ -741,11 +696,11 @@ if (window.parent !== window) {
         <button class="back-btn" onclick="closeLotDetail()"><i class="ti ti-arrow-left" aria-hidden="true"></i>Retour</button>
         <div style="flex:1">
           <div class="lot-title-edit-row">
-            <input type="text" id="detail-num" class="lot-title-input lot-title-input-num" placeholder="N° lot" oninput="saveLotIdentity()">
+            <input type="text" id="detail-num" class="lot-title-input lot-title-input-num" placeholder="N° lot" readonly title="Numéro automatique : monter ou descendre le lot dans la liste pour le changer">
             <input type="text" id="detail-nom" class="lot-title-input lot-title-input-nom" placeholder="Désignation du lot" oninput="saveLotIdentity()">
           </div>
           <div style="font-size:12px;color:var(--text3)" id="detail-chantier-name"></div>
-          <div class="lot-ent-row"><label for="detail-entreprise" style="font-size:12px;color:var(--text2);font-weight:600">Entreprise</label><input type="text" id="detail-entreprise" placeholder="Entreprise retenue (devis artisan)" oninput="saveLotEntreprise()"><span id="detail-ent-badge"></span></div>
+          <div class="lot-ent-row"><label for="detail-entreprise" style="font-size:12px;color:var(--text2);font-weight:600">Entreprise</label><input type="text" id="detail-entreprise" list="ann-names" onfocus="annLoad()" autocomplete="off" placeholder="Entreprise retenue (devis artisan)" oninput="saveLotEntreprise()"><span id="detail-ent-badge"></span></div>
         </div>
         <div style="margin-left:auto;display:flex;gap:8px">
           <select id="detail-prestation" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;background:var(--surface2);color:var(--text)" onchange="onPrestationChange()">
@@ -801,7 +756,7 @@ if (window.parent !== window) {
               <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
                 <button class="btn btn-sm btn-accent" onclick="contratOuvrir(state.currentLot)"><i class="ti ti-file-certificate" aria-hidden="true"></i>Préparer / modifier le contrat</button>
                 <button class="btn btn-sm btn-outline" onclick="contratExportPDF(state.currentLot)"><i class="ti ti-file-export" aria-hidden="true"></i>Exporter en PDF</button>
-                <button class="btn btn-sm btn-outline" onclick="contratVersPlanning(state.currentLot)" style="border-color:#1E5FAA;color:#1E5FAA">📅 Envoyer vers Planning</button>
+                <button class="btn btn-sm btn-outline" onclick="contratVersPlanning(state.currentLot)" style="border-color:#1E5FAA;color:#1E5FAA">📅 Envoyer vers le Gantt de Chantier</button>
                 <span id="contrat-lot-etat" style="font-size:12px;color:var(--text3)"></span>
               </div>
             </div>
@@ -1435,7 +1390,7 @@ if (window.parent !== window) {
   <div class="modal-overlay" id="modal-chiffrage-archive">
     <div class="modal" style="max-width:640px">
       <div class="modal-title"><i class="ti ti-archive" style="color:#c896e0;margin-right:8px" aria-hidden="true"></i>Chiffrages enregistrés</div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:14px">Ce chantier a plusieurs chiffrages complets enregistrés (générés avec des prompts différents). Activez-en un pour le rendre courant — l'actuel sera automatiquement archivé à sa place.</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:14px">Ce projet a plusieurs chiffrages complets enregistrés (générés avec des prompts différents). Activez-en un pour le rendre courant — l'actuel sera automatiquement archivé à sa place.</div>
       <div id="chiffrage-archive-list"></div>
       <div style="display:flex;justify-content:flex-end;margin-top:16px">
         <button class="btn btn-outline" onclick="closeModal('modal-chiffrage-archive')">Fermer</button>
@@ -1446,7 +1401,7 @@ if (window.parent !== window) {
   <div class="modal-overlay" id="modal-raccorder-dossier">
     <div class="modal" style="max-width:560px">
       <div class="modal-title"><i class="ti ti-link" style="color:#e6b95c;margin-right:8px" aria-hidden="true"></i>Raccorder à Phénix Dossier</div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:14px">Ce chantier a été créé directement dans Chiffrage, sans passer par Phénix Dossier. Choisissez le dossier auquel il correspond pour activer les envois (Financement, Chantier, Appels d'offres…).</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:14px">Ce projet a été créé directement dans Chiffrage, sans passer par Phénix Dossier. Choisissez le dossier auquel il correspond pour activer les envois (Financement, Chantier, Appels d'offres…).</div>
       <select id="raccorder-projet-select" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;background:var(--surface2);color:var(--text);margin-bottom:8px">
         <option value="">— Chargement… —</option>
       </select>
@@ -1481,7 +1436,7 @@ if (window.parent !== window) {
       <!-- Sélecteur chantier destination -->
       <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:8px;flex-wrap:wrap">
         <div style="flex:1;min-width:180px">
-          <label style="font-size:11px;color:var(--text2);font-weight:600;display:block;margin-bottom:3px">Chantier destination</label>
+          <label style="font-size:11px;color:var(--text2);font-weight:600;display:block;margin-bottom:3px">Projet destination</label>
           <select id="ia-dest-chantier" onchange="onIAChantierChange()" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:var(--font-sans);background:var(--bg);color:var(--text)">
             <option value="">— Sélectionner —</option>
           </select>
@@ -1502,11 +1457,11 @@ if (window.parent !== window) {
       <!-- Formulaire création chantier inline -->
       <div id="ia-new-chantier-form" style="background:linear-gradient(135deg,rgba(74,156,199,.07),rgba(42,82,152,.05));border:1.5px solid var(--accent);border-radius:var(--r-lg);padding:14px 16px;margin-bottom:12px">
         <div style="font-size:12px;font-weight:700;color:var(--nav);margin-bottom:10px;display:flex;align-items:center;gap:6px">
-          <i class="ti ti-home-plus" style="font-size:16px;color:var(--accent)"></i>Créer un nouveau chantier
+          <i class="ti ti-home-plus" style="font-size:16px;color:var(--accent)"></i>Créer un nouveau projet
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
           <div>
-            <label style="font-size:11px;color:var(--text2);font-weight:600;display:block;margin-bottom:3px">Nom du chantier *</label>
+            <label style="font-size:11px;color:var(--text2);font-weight:600;display:block;margin-bottom:3px">Nom du projet *</label>
             <input type="text" id="ia-chantier-nom" placeholder="ex: DEVAL — Vitrac" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:var(--font-sans);background:var(--bg);color:var(--text)" oninput="updateIAChantierNom()">
           </div>
           <div>
@@ -1534,7 +1489,7 @@ if (window.parent !== window) {
           </div>
         </div>
         <div style="margin-top:8px;font-size:11px;color:var(--text3)">
-          <i class="ti ti-info-circle" style="vertical-align:middle"></i> Ce chantier sera créé dans votre liste et les lots y seront rattachés automatiquement.
+          <i class="ti ti-info-circle" style="vertical-align:middle"></i> Ce projet sera créé dans votre liste et les lots y seront rattachés automatiquement.
         </div>
       </div>
       <!-- Corps des lots IA -->
@@ -1551,9 +1506,9 @@ if (window.parent !== window) {
     <div class="modal modal-lg">
       <div class="modal-title"><i class="ti ti-file-arrow-right" style="color:var(--accent);margin-right:8px" aria-hidden="true"></i>Envoyer les mesures vers un lot</div>
       <div class="form-group">
-        <label>Chantier de destination</label>
+        <label>Projet de destination</label>
         <select id="export-mes-chantier" onchange="updateExportMesLots()" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:var(--font-sans);background:var(--bg);color:var(--text)">
-          <option value="">— Sélectionner un chantier —</option>
+          <option value="">— Sélectionner un projet —</option>
         </select>
       </div>
       <div class="form-group">
@@ -1852,7 +1807,7 @@ if (window.parent !== window) {
     <div class="export-section">
       <div class="export-card">
         <div class="export-title"><i class="ti ti-cloud-upload" style="color:var(--accent);margin-right:6px" aria-hidden="true"></i>Sauvegarde des données</div>
-        <div class="export-desc">Exportez l'ensemble de vos chantiers dans un fichier <strong>.json</strong>. Transférez ce fichier sur un autre appareil (clé USB, cloud, email) et importez-le pour retrouver toutes vos données. Vos données sont aussi sauvegardées automatiquement sur cet appareil (stockage local du navigateur).</div>
+        <div class="export-desc">Exportez l'ensemble de vos projets dans un fichier <strong>.json</strong>. Transférez ce fichier sur un autre appareil (clé USB, cloud, email) et importez-le pour retrouver toutes vos données. Vos données sont aussi sauvegardées automatiquement sur cet appareil (stockage local du navigateur).</div>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
           <button class="btn btn-accent" onclick="exportData()"><i class="ti ti-cloud-upload" aria-hidden="true"></i>Exporter la sauvegarde (.json)</button>
           <label class="btn btn-outline" style="cursor:pointer"><i class="ti ti-cloud-download" aria-hidden="true"></i>Importer une sauvegarde<input type="file" accept=".json" onchange="importData(event)" style="display:none"></label>
@@ -1860,10 +1815,10 @@ if (window.parent !== window) {
       </div>
       <div class="export-card">
         <div class="export-title">Synthèse CSV — Tous lots</div>
-        <div class="export-desc">Export tableur de l'ensemble des lots du chantier sélectionné, avec postes détaillés, PU et totaux HT/TTC. Importable dans Excel ou LibreOffice.</div>
+        <div class="export-desc">Export tableur de l'ensemble des lots du projet sélectionné, avec postes détaillés, PU et totaux HT/TTC. Importable dans Excel ou LibreOffice.</div>
         <div style="margin-bottom:12px">
           <select id="export-chantier-select" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;background:var(--surface2);color:var(--text);width:100%">
-            <option value="">— Sélectionner un chantier —</option>
+            <option value="">— Sélectionner un projet —</option>
           </select>
         </div>
         <button class="btn btn-primary" onclick="exportCSVFull()"><i class="ti ti-table-export" aria-hidden="true"></i>Exporter CSV complet</button>
@@ -1879,7 +1834,7 @@ if (window.parent !== window) {
         <div class="export-desc">Document à envoyer aux artisans <strong>avant chiffrage</strong> : contexte du projet, désignation et quantitatif de chaque poste, <strong>sans aucun prix</strong> — à eux de compléter et vous retourner.</div>
         <div style="margin-bottom:12px">
           <select id="dpgf-chantier-select" onchange="dpgfRemplirLots()" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;background:var(--surface2);color:var(--text);width:100%">
-            <option value="">— Sélectionner un chantier —</option>
+            <option value="">— Sélectionner un projet —</option>
           </select>
         </div>
         <div id="dpgf-lots-select" style="margin-bottom:12px;display:none">
@@ -1900,7 +1855,7 @@ if (window.parent !== window) {
 <!-- MODAL NOUVEAU CHANTIER -->
 <div class="modal-overlay" id="modal-chantier">
   <div class="modal">
-    <div class="modal-title" id="modal-chantier-title">Nouveau chantier</div>
+    <div class="modal-title" id="modal-chantier-title">Nouveau projet</div>
 
     <!-- ── Import depuis Phénix Dossier ── -->
     <div id="import-dossier-zone" style="background:rgba(74,156,199,0.09);border:1px solid rgba(74,156,199,0.28);border-radius:8px;padding:11px 13px;margin-bottom:14px">
@@ -1914,7 +1869,7 @@ if (window.parent !== window) {
       <div id="import-dossier-status" style="font-size:11px;color:var(--text2,rgba(255,255,255,0.5));margin-top:5px;display:none"></div>
     </div>
 
-    <div class="form-group"><label>Nom du chantier *</label><input type="text" id="f-nom" placeholder="Ex: Maison Dupont — Rénovation"></div>
+    <div class="form-group"><label>Nom du projet *</label><input type="text" id="f-nom" placeholder="Ex: Maison Dupont — Rénovation"></div>
     <div class="form-row">
       <div class="form-group"><label>Type de projet</label>
         <select id="f-type">
@@ -1942,7 +1897,7 @@ if (window.parent !== window) {
     </div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal('modal-chantier')">Annuler</button>
-      <button class="btn btn-primary" id="btn-save-chantier" onclick="saveNewChantier()">Créer le chantier</button>
+      <button class="btn btn-primary" id="btn-save-chantier" onclick="saveNewChantier()">Créer le projet</button>
     </div>
   </div>
 </div>
@@ -1982,7 +1937,7 @@ if (window.parent !== window) {
     <div class="modal-actions" style="flex-wrap:wrap">
       <button class="btn btn-outline" onclick="contratFermer()">Plus tard</button>
       <button class="btn btn-outline" onclick="contratExporterDepuisModal()"><i class="ti ti-file-export" aria-hidden="true"></i>Enregistrer et exporter en PDF</button>
-      <button class="btn btn-outline" onclick="contratEnvoyerDepuisModal()" style="border-color:#1E5FAA;color:#1E5FAA">📅 Enregistrer et envoyer vers Planning</button>
+      <button class="btn btn-outline" onclick="contratEnvoyerDepuisModal()" style="border-color:#1E5FAA;color:#1E5FAA">📅 Enregistrer et envoyer vers le Gantt</button>
       <button class="btn btn-primary" onclick="contratEnregistrerFermer()">Enregistrer</button>
     </div>
   </div>
@@ -1991,7 +1946,7 @@ if (window.parent !== window) {
 <!-- MODAL CCTP GÉNÉRAL -->
 <div class="modal-overlay" id="modal-cctp">
   <div class="modal" style="max-width:880px;width:94%">
-    <div class="modal-title">CCTP général du chantier</div>
+    <div class="modal-title">CCTP général du projet</div>
     <div style="font-size:12px;color:var(--text3);margin-bottom:6px">Texte rédigé avec l'aide de l'IA : relisez-le et ajustez-le avant diffusion. Mise en forme : « ## » titre de chapitre, « ### » sous-titre, « - » puce, **gras**.</div>
     <textarea id="cctp-modal-ta" rows="22" onchange="cctpGeneralSauver()" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:13px;line-height:1.5;background:var(--surface);color:var(--text)"></textarea>
     <div class="modal-actions" style="flex-wrap:wrap">
@@ -2007,7 +1962,7 @@ if (window.parent !== window) {
   <div class="modal">
     <div class="modal-title">Nouveau lot de travaux</div>
     <div class="form-row">
-      <div class="form-group"><label>N° de lot</label><input type="text" id="fl-num" placeholder="LOT 01"></div>
+      <div class="form-group"><label>N° de lot</label><input type="text" id="fl-num" placeholder="LOT 01" readonly title="Numéro automatique (selon la position du lot dans la liste)"></div>
       <div class="form-group"><label>Désignation *</label><input type="text" id="fl-nom" placeholder="Ex: Gros œuvre / Maçonnerie"></div>
     </div>
     <div class="form-group"><label>Modèle de départ</label>
@@ -2105,7 +2060,7 @@ if (window.parent !== window) {
       </div>
       <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <label for="import-entreprise" style="font-size:12px;color:var(--text2);font-weight:600">Entreprise du devis</label>
-        <input type="text" id="import-entreprise" placeholder="Raison sociale de l'artisan" style="min-width:240px;padding:5px 8px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:13px;font-family:var(--font-sans);background:var(--bg);color:var(--text)">
+        <input type="text" id="import-entreprise" list="ann-names" onfocus="annLoad()" autocomplete="off" placeholder="Raison sociale de l'artisan" style="min-width:240px;padding:5px 8px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:13px;font-family:var(--font-sans);background:var(--bg);color:var(--text)">
         <span style="font-size:12px;color:var(--text2)">→ retire la mention rouge « Aucune entreprise » du lot</span>
       </div>
     </div>
@@ -2161,7 +2116,7 @@ const auth = getAuth(app);
 // ════════════════════════════════════════════════════════════
 window.addEventListener('message', function(_pxEv){
   var _pxD = _pxEv.data;
-  if(_pxD && _pxD.source === 'phenix-shell' && _pxD.action === 'auto-login' && _pxD.email && _pxD.password){
+  if(_pxD && _pxD.source === 'phenix-shell' && _pxD.action === 'auto-login' && _pxD.email && _pxD.password && _pxEv.source === window.parent){
     signInWithEmailAndPassword(auth, _pxD.email, _pxD.password).catch(function(){});
   }
 });
@@ -2277,27 +2232,6 @@ window._auth = {
   login:  (e,p) => signInWithEmailAndPassword(auth, e, p),
   logout: () => signOut(auth),
   current: () => auth.currentUser
-};
-window.phenixDoLogin = function(){
-  const email=(document.getElementById('pl-email').value||'').trim();
-  const pwd=document.getElementById('pl-pwd').value||'';
-  const err=document.getElementById('pl-err'); if(err){err.style.color='#FFB4A8';err.textContent='';}
-  const btn=document.getElementById('pl-btn'); if(btn)btn.disabled=true;
-  window._auth.login(email,pwd).then(cred=>{
-    if(pwd) localStorage.setItem('chiffrage_bio_creds',btoa(email+'|||'+pwd));
-    if(!localStorage.getItem('chiffrage_bio_credId')&&window.PublicKeyCredential){
-      PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(ok=>{
-        if(ok){/* futur enrôlement bio */}
-      });
-    }
-  }).catch(e=>{
-    const c=(e&&e.code)||'';
-    if(err) err.textContent=
-      (c.includes('invalid-credential')||c.includes('wrong-password')||c.includes('user-not-found'))?'E-mail ou mot de passe incorrect.':
-      c.includes('invalid-email')?'E-mail invalide.':
-      c.includes('too-many-requests')?'Trop de tentatives.':
-      'Erreur : '+(c||(e&&e.message)||'');
-  }).finally(()=>{if(btn)btn.disabled=false;});
 };
 let _dispatched=false;
 onAuthStateChanged(auth, user=>{
@@ -2443,7 +2377,6 @@ function loadState(){
   updateSyncStatus('ok');
 }
 
-
 // ═══════════════════════════════════════════════════════════
 //  ANNULER / RÉTABLIR (Ctrl+Z / Ctrl+Y) — les 10 dernières actions
 //  Principe : à chaque saveState(), on compare l'état à l'instantané précédent ;
@@ -2463,15 +2396,15 @@ function _undoBase(){
 function _undoDescribe(prevStr, cur){
   try{
     const prev=JSON.parse(prevStr), nm=x=>'« '+String((x&&x.nom)||'sans nom').slice(0,40)+' »';
-    if(cur.length>prev.length){ const n=cur.find((x,i)=>!prev.some(p=>JSON.stringify(p)===JSON.stringify(x))); return ['création du chantier '+nm(n),'new:'+cur.length]; }
-    if(cur.length<prev.length){ const d=prev.find(p=>!cur.some(x=>JSON.stringify(p)===JSON.stringify(x))); return ['suppression du chantier '+nm(d),'del:'+prev.length]; }
+    if(cur.length>prev.length){ const n=cur.find((x,i)=>!prev.some(p=>JSON.stringify(p)===JSON.stringify(x))); return ['création du projet '+nm(n),'new:'+cur.length]; }
+    if(cur.length<prev.length){ const d=prev.find(p=>!cur.some(x=>JSON.stringify(p)===JSON.stringify(x))); return ['suppression du projet '+nm(d),'del:'+prev.length]; }
     for(let i=0;i<cur.length;i++){
       if(JSON.stringify(prev[i])===JSON.stringify(cur[i])) continue;
       const a=prev[i].lots||[], b=cur[i].lots||[];
       if(b.length>a.length) return ['ajout d\'un lot dans '+nm(cur[i]),'addlot:'+i+':'+b.length];
       if(b.length<a.length) return ['suppression d\'un lot dans '+nm(cur[i]),'dellot:'+i+':'+a.length];
       for(let j=0;j<b.length;j++) if(JSON.stringify(a[j])!==JSON.stringify(b[j])) return ['modification du lot '+nm(b[j])+' ('+String(cur[i].nom||'').slice(0,30)+')','lot:'+i+':'+j];
-      return ['modification du chantier '+nm(cur[i]),'ch:'+i];
+      return ['modification du projet '+nm(cur[i]),'ch:'+i];
     }
   }catch(e){}
   return ['modification','?'];
@@ -2569,30 +2502,6 @@ function updateSyncStatus(status){
 
 // === EXPORT / IMPORT DONNÉES ===
 
-// ── PUSH TO CLOUD ─────────────────────────────────────────────────────
-async function pushToCloud(){
-  if(!window._auth||!window._auth.current||!window._auth.current()){showToast('⚠️ Connectez-vous d\'abord');return;}
-  if(!state.chantiers.length){showToast('⚠️ Aucune donnée à pousser');return;}
-  if(!confirm('Pousser '+state.chantiers.length+' chantier(s) vers Firebase ?\nRemplace les données cloud existantes.'))return;
-  const btn=document.getElementById('btn-push-cloud');
-  if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader" style="font-size:18px;animation:spin 1s linear infinite"></i>';}
-  try{
-    if(typeof window.saveChantiers==='function'){
-      await window.saveChantiers();
-      showToast('✅ Données poussées — disponibles sur tous vos appareils !');
-    }else{
-      showToast('⚠️ Firebase non disponible ici');
-    }
-  }catch(e){showToast('❌ Erreur : '+e.message);}
-  finally{if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-cloud-arrow-up" style="font-size:18px"></i>';}}
-}
-
-function checkShowPushBtn(){
-  // Bouton cloud toujours visible quand connecté — pas de masquage
-  const btn=document.getElementById('btn-push-cloud');
-  if(btn) btn.style.display='inline-flex';
-}
-
 function exportData(){
   const json=JSON.stringify({version:3,date:new Date().toISOString(),chantiers:state.chantiers},null,2);
   const blob=new Blob([json],{type:'application/json;charset=utf-8;'});
@@ -2613,13 +2522,13 @@ function importData(event){
       const data=JSON.parse(e.target.result);
       if(!data.chantiers)throw new Error('Format invalide');
       const nb=data.chantiers.length;
-      if(!confirm('Importer '+nb+' chantier(s) ? Les données actuelles seront remplacées.'))return;
+      if(!confirm('Importer '+nb+' projet(s) ? Les données actuelles seront remplacées.'))return;
       state.chantiers=data.chantiers;
       state.currentChantier=null;
       state.currentLot=null;
       saveState();
       initUI();
-      showToast(nb+' chantier(s) importé(s)');
+      showToast(nb+' projet(s) importé(s)');
     }catch(err){alert('Fichier invalide ou corrompu.');}
   };
   reader.readAsText(file);
@@ -2648,7 +2557,6 @@ function initUI(){
   _undoBase(); _undoUpdateUI();
   renderChantierGrid();
   renderChantierSelects();
-  if(typeof checkShowPushBtn==='function') checkShowPushBtn();
   // Détecter un projet passé depuis Phénix Dossier
   checkIncomingFromDossier();
   // Charger le nombre d'offres artisans en attente (bouton + badge)
@@ -2867,7 +2775,7 @@ function checkIncomingFromDossier() {
     const existing = state.chantiers.findIndex(c => String(c.projetId) === String(p.projetId));
     if (existing >= 0) {
       // Chantier déjà lié → l'ouvrir directement
-      showToast('📂 Projet Dossier détecté — chantier existant ouvert');
+      showToast('📂 Projet Dossier détecté — projet existant ouvert');
       state.currentChantier = existing;
       renderChantierGrid();
       renderChiffrage();
@@ -2875,11 +2783,11 @@ function checkIncomingFromDossier() {
       return;
     }
     // Pas de chantier lié → proposer d'en créer un
-    if (confirm('📋 Phénix Dossier a transmis le projet :\n\n"' + p.nom + '" — ' + p.client + '\n\nCréer un nouveau chantier Chiffrage pour ce projet ?')) {
+    if (confirm('📋 Phénix Dossier a transmis le projet :\n\n"' + p.nom + '" — ' + p.client + '\n\nCréer un nouveau projet Chiffrage pour ce projet ?')) {
       // Pré-remplir et ouvrir le modal
       state.editingChantierIdx = null;
       clearChantierForm();
-      document.getElementById('modal-chantier-title').textContent = 'Nouveau chantier';
+      document.getElementById('modal-chantier-title').textContent = 'Nouveau projet';
       document.getElementById('f-nom').value = p.nom || '';
       document.getElementById('f-client').value = p.client || '';
       document.getElementById('f-adresse').value = p.adresse || '';
@@ -3089,7 +2997,7 @@ function cctpVersHtml(t){
 // ── Export PDF : portée = 'general' | n° d'index de lot | 'tous' ──
 function cctpExportPDF(portee){
   const ci = state.currentChantier, c = ci === null ? null : state.chantiers[ci];
-  if (!c){ showToast('⚠️ Sélectionnez un chantier'); return; }
+  if (!c){ showToast('⚠️ Sélectionnez un projet'); return; }
   const lots = c.lots || [];
   const blocs = [];
   const general = (c.cctp && c.cctp.general) || '';
@@ -3295,10 +3203,10 @@ function iaCCTPAttacher(chantier, map){
     chantier.cctpContexte = job.contexte || '';
     job.promise.then(() => {
       if (job.status !== 'done') return;
-      if (!state.chantiers.includes(chantier)){ showToast('📝 CCTP prêt — rédigez-le depuis le chantier (🔄 la fiche a été rechargée)'); return; }
+      if (!state.chantiers.includes(chantier)){ showToast('📝 CCTP prêt — rédigez-le depuis le projet (🔄 la fiche a été rechargée)'); return; }
       appliquer(); saveState();
       try { _cctpRenderChantier(); if (document.getElementById('lots-tbody')) renderLotsTableOrCards(); } catch(e){}
-      showToast('📝 CCTP rédigé et joint au chantier — relisez-le avant diffusion');
+      showToast('📝 CCTP rédigé et joint au projet — relisez-le avant diffusion');
     });
   }
 }
@@ -3452,7 +3360,7 @@ ${ct.annexeCctp && lot.cctp ? '<div class="annexe saut"><h2>Annexe 2 — CCTP du
 }
 function contratExportPDF(portee){
   const ci = state.currentChantier, c = ci === null ? null : state.chantiers[ci];
-  if (!c){ showToast('⚠️ Sélectionnez un chantier'); return; }
+  if (!c){ showToast('⚠️ Sélectionnez un projet'); return; }
   const lots = (c.lots || []).filter((l,i) => portee === 'tous' ? !!l.contrat : i === portee && l.contrat);
   if (!lots.length){ showToast('⚠️ Aucun contrat préparé'); return; }
   const incomplets = lots.filter(l => !l.contrat.entreprise || !ctPeriode(l.contrat));
@@ -3501,70 +3409,21 @@ ${corps}
   showToast('Contrat ouvert — Imprimer pour enregistrer en PDF');
 }
 
-// ── Envoi vers Phénix Planning : état partagé « phenix_planning_state/main » ──
-// Structure lue par Planning : { currentChantierId, chantiers: { [id du dossier]: { interventions:[{id,lot,artisan,dateDebut,dateFin,notes}] } } }
-// Correspondance vers la liste de lots de Phénix Planning (menu déroulant + couleurs)
-function ctLotPlanning(nom){
-  const t = String(nom||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-  const R = [
-    ['Maçonnerie', /macon|gros.?oeuvre|terrassement|demolition|fondation|dalle|beton/],
-    ['Charpente / Couverture', /charpente|couverture|toiture|zinguerie|ardoise|tuile|ossature/],
-    ['Menuiseries extérieures', /menuiserie.*ext|fenetre|baie|volet|porte.?d.?entree|occultation/],
-    ['Menuiseries intérieures', /menuiserie.*int|porte.*int|placard|escalier|parquet.*menuis/],
-    ['Isolation / Plâtrerie', /isolation|platr|cloison|doublage|plaque|faux.?plafond/],
-    ['Électricité', /electri|courant|domotique/],
-    ['Plomberie', /plomb|sanitaire|salle.?d.?eau/],
-    ['Chauffage / VMC', /chauff|vmc|ventilation|climatisation|pompe.?a.?chaleur|poele|cheminee/],
-    ['Revêtements', /carrelage|revetement|sol|faience|chape|moquette|stratifie/],
-    ['Peinture', /peinture|enduit.?de.?finition|tapisserie/],
-    ['Façades', /facade|ravalement|enduit.?ext|bardage|isolation.*exterieure|ite\b/],
-    ['VRD', /vrd|reseaux|assainissement|voirie|amenagement.?ext|terrasse|cloture/]
-  ];
-  for (const r of R) if (r[1].test(t)) return r[0];
-  return 'Autre';
-}
 async function contratVersPlanning(portee){
+  // Le planning vit désormais dans Phénix Chantier (Gantt) : on envoie la synthèse des lots,
+  // dates de contrat comprises, dans « phenix_chantier_import » ; Chantier l'importe d'un clic.
   const c = state.chantiers[state.currentChantier]; if (!c) return;
   const tous = (c.lots || []).map((l,i) => [l,i]).filter(x => x[0].contrat && (portee === 'tous' || portee === x[1]));
   const prets = tous.filter(x => x[0].contrat.entreprise && ctPeriode(x[0].contrat));
   if (!prets.length){ showToast('⚠️ Aucun contrat complet à envoyer (entreprise + semaine de début + année)'); return; }
-  const cle = c.projetId ? String(c.projetId) : null;
-  const key = cle || ('chiffrage-' + String(c.nom || 'chantier').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''));
-  if (!cle && !confirm('Ce chantier n\'est pas relié à un dossier Phénix Dossier (utilisez « Raccorder à Phénix Dossier » pour le faire).\n\nOK = envoyer quand même : dans Phénix Planning, le planning apparaîtra sous « planning à rattacher » et vous le rattacherez au bon dossier en un clic.\nAnnuler = ne rien envoyer.')) return;
-  try {
-    const refs = await _phenixFbRefs();
-    if (!refs.auth.currentUser) throw new Error('vous n\'êtes pas connecté');
-    const ref = refs.doc(refs.db, 'phenix_planning_state', 'main');
-    const snap = await refs.getDoc(ref);
-    let st = {};
-    if (snap.exists()){ try { st = JSON.parse(snap.data().data || '{}'); } catch(e){ throw new Error('état de Planning illisible, rien n\'a été modifié'); } }
-    if (!st || typeof st !== 'object') st = {};
-    st.chantiers = st.chantiers || {};
-    const ch = st.chantiers[key] = st.chantiers[key] || { interventions:[] };
-    ch.interventions = ch.interventions || [];
-    if (!cle && !ch.nom) ch.nom = c.nom || '';
-    const ids = [];
-    prets.forEach(x => {
-      const l = x[0], ct = l.contrat, p = ctPeriode(ct);
-      const id = ct.planningId || ('ctr-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
-      ids.push([ct, id]);
-      const suffixe = new RegExp('\\s*[—–-]\\s*' + String(ct.entreprise).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*$', 'i');
-      const nomLot = String(l.nom || '').replace(suffixe, '').trim(); const note = (l.num ? l.num + ' ' : '') + nomLot + ' · Contrat d\'engagement ' + (ct.statut === 'signe' ? 'signé' + (ct.dateSignature ? ' le ' + ct.dateSignature.split('-').reverse().join('/') : '') : 'à faire signer') + ' · semaine ' + p.sem + '/' + p.an + ', ' + p.dur + ' sem.';
-      const iv = { id, lot:ctLotPlanning(String(l.nom || '').replace(suffixe, '').trim()), artisan:ct.entreprise, dateDebut:p.isoDebut, dateFin:p.isoFin, notes:note };
-      const k = ch.interventions.findIndex(z => z.id === id);
-      if (k >= 0) ch.interventions[k] = Object.assign({}, ch.interventions[k], iv, { notes:ch.interventions[k].notes || note });
-      else ch.interventions.push(iv);
-    });
-    if (!st.currentChantierId) st.currentChantierId = key;
-    await refs.setDoc(ref, { data:JSON.stringify(st), updatedAt:new Date().toISOString() });
-    const jour = new Date().toLocaleDateString('fr-FR');
-    ids.forEach(x => { x[0].planningId = x[1]; x[0].planningEnvoye = jour; });
-    saveState(); renderLotsTableOrCards(); _contratRenderChantier();
-    if (state.currentLot !== null){ const tw = document.getElementById('lots-table-wrap'); if (tw) tw.style.display = 'none'; contratLotRefresh(); }
-    showToast('📅 ' + prets.length + ' intervention(s) envoyée(s) vers Phénix Planning' + (cle ? '' : ' (à rattacher à un dossier)') + (tous.length > prets.length ? ' — ' + (tous.length - prets.length) + ' contrat(s) incomplet(s) ignoré(s)' : ''));
-  } catch(e){
-    showToast('❌ Envoi vers Planning impossible : ' + String(e.message || e).slice(0, 90));
-  }
+  if (!c.projetId){ showToast('⚠️ Ce projet n\'est pas relié à un dossier Phénix Dossier — utilisez « Raccorder à Phénix Dossier » d\'abord'); return; }
+  const jour = new Date().toLocaleDateString('fr-FR');
+  prets.forEach(x => { x[0].contrat.planningEnvoye = jour; });
+  saveState();
+  await exportToChantier();
+  renderLotsTableOrCards(); _contratRenderChantier();
+  if (state.currentLot !== null){ const tw = document.getElementById('lots-table-wrap'); if (tw) tw.style.display = 'none'; contratLotRefresh(); }
+  showToast('📅 ' + prets.length + ' lot(s) daté(s) envoyé(s) vers Chantier — à importer dans son Gantt (« Importer depuis Chiffrage »)' + (tous.length > prets.length ? ' · ' + (tous.length - prets.length) + ' contrat(s) incomplet(s) ignoré(s)' : ''));
 }
 function contratEnvoyerDepuisModal(){
   const ct = contratLire();
@@ -3586,6 +3445,9 @@ function sortLotsInPlace(lots){
     if (oa !== ob) return oa - ob;
     return (a.num || a.nom || '').localeCompare(b.num || b.nom || '', 'fr', {numeric:true, sensitivity:'base'});
   });
+  // Numérotation automatique : le rang dans la liste fait le numéro (LOT 01, 02, 03…).
+  // Monter / descendre / supprimer / ajouter un lot renumérote donc tout seul.
+  lots.forEach((l, i) => { l.ordre = i; l.num = 'LOT ' + String(i + 1).padStart(2, '0'); });
   if (trackedLot) {
     const newIdx = lots.indexOf(trackedLot);
     if (newIdx !== -1) state.currentLot = newIdx;
@@ -3615,7 +3477,7 @@ window.moveLot = moveLot;
 function renderChantierGrid(){
   const wrap=document.getElementById('chantier-grid-wrap');
   if(!state.chantiers.length){
-    wrap.innerHTML='<div class="empty-state" style="grid-column:1/-1"><i class="ti ti-building-2" aria-hidden="true"></i><p>Aucun chantier — créez votre premier projet.</p></div>';
+    wrap.innerHTML='<div class="empty-state" style="grid-column:1/-1"><i class="ti ti-building-2" aria-hidden="true"></i><p>Aucun projet — créez votre premier projet.</p></div>';
     return;
   }
   wrap.innerHTML='';
@@ -3667,7 +3529,6 @@ function computeChantierTotals(c){
 }
 
 // Legacy compat
-function computeChantierHT(c){return computeChantierTotals(c).htClient;}
 
 function selectChantier(i){
   state.currentChantier=i;
@@ -3676,8 +3537,8 @@ function selectChantier(i){
   renderChiffrage();
 }
 
-function openNewChantierModal(){state.editingChantierIdx=null;clearChantierForm();document.getElementById('modal-chantier-title').textContent='Nouveau chantier';
-  const btn=document.getElementById('btn-save-chantier'); if(btn) btn.textContent='Créer le chantier';
+function openNewChantierModal(){state.editingChantierIdx=null;clearChantierForm();document.getElementById('modal-chantier-title').textContent='Nouveau projet';
+  const btn=document.getElementById('btn-save-chantier'); if(btn) btn.textContent='Créer le projet';
   // Reset import
   const importSel = document.getElementById('f-import-projet');
   if (importSel) { delete importSel.dataset.linkedProjetId; delete importSel.dataset.linkedBudget; delete importSel.dataset.linkedHonoraires; }
@@ -3704,7 +3565,7 @@ function deleteChantier(i){
   state.chantiers.splice(i,1);
   if(state.currentChantier===i)state.currentChantier=null;
   else if(state.currentChantier>i)state.currentChantier--;
-  saveState();renderChantierGrid();renderChantierSelects();showToast('Chantier supprimé');
+  saveState();renderChantierGrid();renderChantierSelects();showToast('Projet supprimé');
 }
 function clearChantierForm(){['f-nom','f-surface','f-adresse','f-client'].forEach(id=>document.getElementById(id).value='');}
 
@@ -3775,7 +3636,7 @@ function importFromDossier() {
 // posteriori, sans toucher aux lots ni aux champs déjà saisis.
 async function ouvrirModalRaccorderDossier(){
   const idx = state.currentChantier;
-  if(idx===null || !state.chantiers[idx]){ showToast('⚠️ Sélectionnez d\'abord un chantier'); return; }
+  if(idx===null || !state.chantiers[idx]){ showToast('⚠️ Sélectionnez d\'abord un projet'); return; }
   const sel = document.getElementById('raccorder-projet-select');
   const status = document.getElementById('raccorder-dossier-status');
   status.style.display = 'none';
@@ -3831,7 +3692,7 @@ function confirmerRaccordementDossier(){
   renderChantierGrid();
   renderChiffrage();
   closeModal('modal-raccorder-dossier');
-  showToast('✅ Chantier raccordé à « '+(opt.dataset.nom||'')+' »');
+  showToast('✅ Projet raccordé à « '+(opt.dataset.nom||'')+' »');
 }
 
 // Rattrapage pour un chantier déjà raccordé à un projet Dossier avant que le
@@ -3885,7 +3746,7 @@ function saveNewChantier(){
     data.lots=[];
     state.chantiers.push(data);
   }
-  saveState();renderChantierGrid();renderChantierSelects();closeModal('modal-chantier');showToast(state.editingChantierIdx!==null?'Chantier mis à jour (lots conservés)':'Chantier créé');
+  saveState();renderChantierGrid();renderChantierSelects();closeModal('modal-chantier');showToast(state.editingChantierIdx!==null?'Projet mis à jour (lots conservés)':'Projet créé');
 }
 
 function renderChantierSelects(){
@@ -3893,7 +3754,7 @@ function renderChantierSelects(){
     const sel=document.getElementById(id);
     if(!sel)return;
     const cur=sel.value;
-    sel.innerHTML='<option value="">— Sélectionner un chantier —</option>';
+    sel.innerHTML='<option value="">— Sélectionner un projet —</option>';
     state.chantiers.forEach((c,i)=>sel.add(new Option(c.nom,i)));
     if(cur!=='')sel.value=cur;
   });
@@ -3913,8 +3774,8 @@ function renderChiffrage(){
   const banner=document.getElementById('chiffrage-actif-banner');
   const archBtn=document.getElementById('btn-chiffrage-archive');
   if(idx===null||!state.chantiers[idx]){
-    document.getElementById('chiffrage-sub').textContent='Sélectionnez un chantier';
-    document.getElementById('lots-tbody').innerHTML='<tr><td colspan="7" style="padding:24px;text-align:center;color:var(--text3)">Aucun chantier sélectionné</td></tr>';
+    document.getElementById('chiffrage-sub').textContent='Sélectionnez un projet';
+    document.getElementById('lots-tbody').innerHTML='<tr><td colspan="7" style="padding:24px;text-align:center;color:var(--text3)">Aucun projet sélectionné</td></tr>';
     updateStats([]);
     banner.style.display='none'; archBtn.style.display='none';
     return;
@@ -4051,9 +3912,9 @@ function computeLotAmounts(lot){
 
 async function exportToFinancement(){
   const idx=state.currentChantier;
-  if(idx===null||!state.chantiers[idx]){ showToast('Sélectionnez un chantier d\'abord'); return; }
+  if(idx===null||!state.chantiers[idx]){ showToast('Sélectionnez un projet d\'abord'); return; }
   const c=state.chantiers[idx];
-  if(!c.projetId){ showToast('⚠️ Ce chantier n\'est pas lié à un projet Phénix Dossier — importez le projet depuis la fiche chantier avant l\'export'); return; }
+  if(!c.projetId){ showToast('⚠️ Ce projet n\'est pas lié à un projet Phénix Dossier — importez le projet depuis la fiche projet avant l\'export'); return; }
   const lots=sortLotsInPlace(c.lots||[]);
   if(!lots.length){ showToast('Aucun lot à exporter'); return; }
 
@@ -4087,15 +3948,15 @@ window.exportToFinancement = exportToFinancement;
 
 async function exportToChantier(){
   const idx=state.currentChantier;
-  if(idx===null||!state.chantiers[idx]){ showToast('Sélectionnez un chantier d\'abord'); return; }
+  if(idx===null||!state.chantiers[idx]){ showToast('Sélectionnez un projet d\'abord'); return; }
   const c=state.chantiers[idx];
-  if(!c.projetId){ showToast('⚠️ Ce chantier n\'est pas lié à un projet Phénix Dossier — importez le projet depuis la fiche chantier avant l\'export'); return; }
+  if(!c.projetId){ showToast('⚠️ Ce projet n\'est pas lié à un projet Phénix Dossier — importez le projet depuis la fiche projet avant l\'export'); return; }
   const lots=sortLotsInPlace(c.lots||[]);
   if(!lots.length){ showToast('Aucun lot à exporter'); return; }
 
   const lotsExport = lots.map(lot=>{
     const { ht, ttc, tva } = computeLotAmounts(lot);
-    return { num: lot.num||'', nom: lot.nom||'', montantHt: Math.round(ht*100)/100, tva, montantTtc: Math.round(ttc*100)/100, statut: lot.statut||'Chiffrage', entreprise: lotEntrepriseNom(lot), devisArtisan: !!lot.devisArtisan };
+    return { num: lot.num||'', nom: lot.nom||'', montantHt: Math.round(ht*100)/100, tva, montantTtc: Math.round(ttc*100)/100, statut: lot.statut||'Chiffrage', entreprise: lotEntrepriseNom(lot), devisArtisan: !!lot.devisArtisan, ...(lot.contrat && ctPeriode(lot.contrat) ? { debut: ctPeriode(lot.contrat).isoDebut, fin: ctPeriode(lot.contrat).isoFin } : {}) };
   });
 
   const payload = {
@@ -4119,35 +3980,20 @@ async function exportToChantier(){
 window.exportToChantier = exportToChantier;
 
 // ── Passerelle vers le Carnet de projet (portail client) ─────────────
-// Envoie : dossier (client, adresse, surface), lots chiffrés, et crée l'accès privé du client.
+// Phase 1 du Carnet (conception) : ouvre le Carnet au client, SANS prix ni lots, et crée son accès privé.
+// Les lots chiffrés partent ensuite vers Chantier (« Envoyer vers Chantier »), pas vers le Carnet.
 async function exportToCarnet(){
   const idx=state.currentChantier;
-  if(idx===null||!state.chantiers[idx]){ showToast('Sélectionnez un chantier d\'abord'); return; }
+  if(idx===null||!state.chantiers[idx]){ showToast('Sélectionnez un projet d\'abord'); return; }
   const c=state.chantiers[idx];
-  if(!c.projetId){ showToast('⚠️ Ce chantier n\'est pas lié à un projet Phénix Dossier — importez le projet depuis la fiche chantier avant l\'envoi'); return; }
-  const lots=sortLotsInPlace(c.lots||[]);
-  if(!lots.length){ showToast('Aucun lot à envoyer'); return; }
-
+  if(!c.projetId){ showToast('⚠️ Ce projet n\'est pas lié à un projet Phénix Dossier — importez le projet depuis la fiche projet avant l\'envoi'); return; }
   let email=(window.prompt('E-mail du client pour son accès privé au Carnet\n(laisser vide pour envoyer sans créer d\'accès) :', c.clientEmail||'')||'').trim().toLowerCase();
   if(email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ showToast('⚠️ Adresse e-mail invalide'); return; }
 
-  let totalHt=0;
-  const lotsExport=lots.map(lot=>{
-    const { ht, ttc, tva }=computeLotAmounts(lot);
-    totalHt+=ht;
-    return { num: lot.num||'', nom: lot.nom||'', montantHt: Math.round(ht*100)/100, tva, montantTtc: Math.round(ttc*100)/100, statut: lot.statut||'Chiffrage', entreprise: lotEntrepriseNom(lot), devisArtisan: !!lot.devisArtisan };
-  });
   const pid=String(c.projetId);
   const surface=parseFloat(c.surface)||0;
-  const payload={
-    chantierNom: c.nom||'', client: c.client||'', clientEmail: email,
-    adresse: c.adresse||'', surface, type: c.type||'', phase: c.phase||'',
-    lots: lotsExport, totalHt: Math.round(totalHt*100)/100,
-    exportedAt: new Date().toISOString(), source: 'phenix_chiffrage', cible: 'carnet'
-  };
   try{
     const r=await _phenixFbRefs();
-    await r.setDoc(r.doc(r.db,'phenix_chantier_import',pid), payload, {merge:true});
     await r.setDoc(r.doc(r.db,'phenix_portail',pid), { nom: c.nom||'', clients: c.client||'', updatedAt: new Date().toISOString() }, {merge:true});
     let acces='';
     if(email){
@@ -4166,13 +4012,49 @@ async function exportToCarnet(){
       c.clientEmail=email;
       if(typeof window.saveChantiers==='function') window.saveChantiers();
     }
-    showToast('✅ '+lotsExport.length+' lot(s) envoyé(s) vers le Carnet'+acces);
+    showToast('✅ Carnet ouvert au client (conception, sans prix)'+acces);
   }catch(e){
     console.error('Export carnet error', e);
     showToast('⚠️ Échec de l\'envoi vers le Carnet ('+((e&&e.code)||'erreur')+')');
   }
 }
 window.exportToCarnet = exportToCarnet;
+
+// ── Choix de matières faits par le client dans son Carnet (phase conception) ──
+async function voirChoixCarnet(){
+  const idx=state.currentChantier;
+  if(idx===null||!state.chantiers[idx]){ showToast('Sélectionnez un projet d\'abord'); return; }
+  const c=state.chantiers[idx];
+  if(!c.projetId){ showToast('⚠️ Ce projet n\'est pas lié à un projet Phénix Dossier'); return; }
+  let d=null;
+  try{
+    const r=await _phenixFbRefs();
+    const snap=await r.getDoc(r.doc(r.db,'phenix_portail',String(c.projetId),'etat','choix'));
+    d=snap.exists()?snap.data():null;
+  }catch(e){ console.error('Choix carnet', e); showToast('⚠️ Lecture des choix impossible ('+((e&&e.code)||'erreur')+')'); return; }
+  const items=(d&&d.items)||[];
+  if(!items.length){ showToast('Le client n\'a pas encore fait de choix dans son Carnet'); return; }
+  const esc2=t=>String(t==null?'':t).replace(/[&<>"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
+  const pct=v=>(v==null||v===0)?'—':((v>0?'+ ':'− ')+String(Math.abs(v)).replace('.',',')+' %');
+  const st=d.statut==='valide'?'Validés par le client le '+new Date(d.validatedAt).toLocaleDateString('fr-FR'):d.statut==='modifie'?'⚠ Modifiés depuis la validation : à acter avec le client':'Pas encore validés par le client';
+  const conf=items.filter(i=>i.confirme).length;
+  const rows=items.map(i=>'<tr style="border-top:1px solid #e3e8ef"><td style="padding:6px 8px"><b>'+esc2(i.titre)+'</b></td><td style="padding:6px 8px">'+esc2(i.libelle)+(i.epaisseurMm?' · '+i.epaisseurMm+' mm':'')+(i.confirme?'':' <small style="color:#8a94a6">(proposition)</small>')+'</td><td style="padding:6px 8px;text-align:right">'+pct(i.ecartPct)+'</td><td style="padding:6px 8px">'+esc2(i.note||'')+'</td></tr>').join('');
+  const ov=document.createElement('div');
+  ov.className='modal-overlay open';
+  ov.innerHTML='<div class="modal" style="max-width:760px;max-height:88vh;overflow:auto"><div class="modal-title"><i class="ti ti-palette" style="color:#E8833A;margin-right:8px" aria-hidden="true"></i>Choix du client — '+esc2(c.nom||'')+'</div><p style="margin:0 0 10px">'+conf+' choix confirmés sur '+items.length+' · '+esc2(st)+'</p><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="text-align:left;padding:6px 8px">Poste</th><th style="text-align:left;padding:6px 8px">Choix</th><th style="text-align:right;padding:6px 8px">Impact budget</th><th style="text-align:left;padding:6px 8px">Remarque</th></tr></thead><tbody>'+rows+'</tbody></table><p style="font-size:12px;color:#8a94a6;margin:10px 0 0">Les pourcentages sont indicatifs (estimation du Carnet) : chiffrez avec vos devis d\'artisans.</p><div class="modal-actions" style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px"><button class="btn btn-outline" data-x="close">Fermer</button><button class="btn" data-x="notes">Ajouter aux notes du projet</button></div></div>';
+  ov.addEventListener('click',function(e){
+    const b=e.target.closest('[data-x]');
+    if(e.target===ov||(b&&b.dataset.x==='close')){ ov.remove(); return; }
+    if(b&&b.dataset.x==='notes'){
+      const txt='Choix du client (Carnet) — '+conf+'/'+items.length+' confirmés\n'+items.map(i=>'- '+i.titre+' : '+i.libelle+(i.epaisseurMm?' '+i.epaisseurMm+' mm':'')+(i.confirme?'':' (proposition)')+(i.note?' · '+i.note:'')).join('\n');
+      c.notes=((c.notes?c.notes+'\n\n':'')+txt);
+      if(typeof window.saveChantiers==='function') window.saveChantiers();
+      showToast('✅ Choix ajoutés aux notes du projet'); ov.remove();
+    }
+  });
+  document.body.appendChild(ov);
+}
+window.voirChoixCarnet = voirChoixCarnet;
 
 // ── Passerelle vers Phénix Appels d'offres (pousser un DPGF pour chiffrage artisans) ──
 // ── Résolveur Firebase autonome ────────────────────────────────
@@ -4209,7 +4091,7 @@ window.pushDpgfToAppelsOffres = pushDpgfToAppelsOffres;
 
 async function exportToAppelsOffres(){
   const idx=state.currentChantier;
-  if(idx===null||!state.chantiers[idx]){ showToast('Sélectionnez un chantier d\'abord'); return; }
+  if(idx===null||!state.chantiers[idx]){ showToast('Sélectionnez un projet d\'abord'); return; }
   const c=state.chantiers[idx];
   const lots=sortLotsInPlace(c.lots||[]);
   if(!lots.length){ showToast('Aucun lot à envoyer'); return; }
@@ -4287,7 +4169,6 @@ async function confirmerExportAppelsOffres(){
   closeModal('modal-export-ao');
 }
 window.confirmerExportAppelsOffres = confirmerExportAppelsOffres;
-
 
 const LOTS_ATTENDUS_DEFAUT = [
   'Démolition / Dépose / Curage',
@@ -4419,7 +4300,7 @@ function updateStats(lots){
 // à 20%), cette action ne fait qu'harmoniser rapidement le point de départ.
 function appliquerTvaGenerale(){
   const idx=state.currentChantier;
-  if(idx===null||!state.chantiers[idx]){ showToast('Sélectionnez un chantier d\'abord'); return; }
+  if(idx===null||!state.chantiers[idx]){ showToast('Sélectionnez un projet d\'abord'); return; }
   const lots=state.chantiers[idx].lots||[];
   if(!lots.length){ showToast('Aucun lot dans ce chantier'); return; }
   const taux=parseFloat(document.getElementById('tva-generale-select').value);
@@ -4437,7 +4318,7 @@ window.appliquerTvaGenerale=appliquerTvaGenerale;
 // éviter d'avoir à ouvrir chaque lot un par un.
 function appliquerMargeGeneraleChantier(){
   const idx=state.currentChantier;
-  if(idx===null||!state.chantiers[idx]){ showToast('Sélectionnez un chantier d\'abord'); return; }
+  if(idx===null||!state.chantiers[idx]){ showToast('Sélectionnez un projet d\'abord'); return; }
   const lots=state.chantiers[idx].lots||[];
   if(!lots.length){ showToast('Aucun lot dans ce chantier'); return; }
   const marge=parseFloat(document.getElementById('marge-generale-input').value)||0;
@@ -4462,9 +4343,10 @@ function appliquerMargeGeneraleChantier(){
 window.appliquerMargeGeneraleChantier=appliquerMargeGeneraleChantier;
 
 function openNewLotModal(){
-  if(state.currentChantier===null){alert('Sélectionnez d\'abord un chantier.');return;}
+  if(state.currentChantier===null){alert('Sélectionnez d\'abord un projet.');return;}
   const lots=state.chantiers[state.currentChantier].lots||[];
   document.getElementById('fl-num').value='LOT '+(lots.length+1).toString().padStart(2,'0');
+  document.getElementById('fl-num').readOnly=true;
   document.getElementById('fl-nom').value='';
   document.getElementById('fl-modele').value='';
   document.getElementById('modal-lot').classList.add('open');
@@ -4476,7 +4358,7 @@ function saveNewLot(){
   if(!nom){alert('Désignation requise');return;}
   const modele=document.getElementById('fl-modele').value;
   const postes=modele&&LOT_TEMPLATES[modele]?LOT_TEMPLATES[modele].map(p=>({n:p.n,q:p.q,u:p.u,puArtisan:p.pu.std,puClient:Math.round(p.pu.std*1.2),pu:p.pu.std})):[];
-  const lot={num,nom,postes,tva:20,statut:'Chiffrage',prestation:'std',notes:'',marge:20};
+  const lot={num,nom,postes,tva:20,statut:'Chiffrage',prestation:'std',notes:'',marge:20,ordre:(state.chantiers[state.currentChantier].lots||[]).length};
   if(!state.chantiers[state.currentChantier].lots)state.chantiers[state.currentChantier].lots=[];
   state.chantiers[state.currentChantier].lots.push(lot);
   saveState();if(typeof renderLotsTableOrCards === "function") renderLotsTableOrCards(); else renderLotsTable();renderChantierGrid();closeModal('modal-lot');showToast('Lot créé');
@@ -4786,7 +4668,7 @@ function saveLot(){
 let importGlobalMode = false;
 
 function openImportArtisanModalGlobal(){
-  if(state.currentChantier===null){alert('Sélectionnez d\'abord un chantier.');return;}
+  if(state.currentChantier===null){alert('Sélectionnez d\'abord un projet.');return;}
   importGlobalMode = true;
   importPreviewData=[];
   document.getElementById('import-preview').style.display='none';
@@ -4890,10 +4772,10 @@ async function analyzePdfArtisan(base64){
         system:`Tu es un assistant spécialisé dans l'analyse de devis du bâtiment français.
 Analyse le devis artisan fourni et extrais TOUTES les lignes de prestations.
 Retourne UNIQUEMENT un JSON valide, sans markdown, sans texte avant ou après :
-{"entreprise":"RAISON SOCIALE DE L'ARTISAN","totalHtDevis":13595.82,"postes":[{"n":"Désignation complète de la prestation","q":1.0,"u":"m²","pu":150.00${lotFieldSchema}},...]}
+{"totalHtDevis":13595.82,"artisan":{"entreprise":"Raison sociale","contact":"Prénom NOM du signataire/gérant","metier":"électricien","tel":"0600000000","email":"x@y.fr","siret":"14 chiffres","adresse":"rue","cp":"63000","ville":"Ville","assurance":"n° police décennale","assuranceDate":"AAAA-MM-JJ"},"postes":[{"n":"Désignation complète de la prestation","q":1.0,"u":"m²","pu":150.00${lotFieldSchema}},...]}
 
 RÈGLES STRICTES :
-- "entreprise" : raison sociale de l'ENTREPRISE QUI ÉMET le devis (l'artisan/prestataire : bloc « Émetteur », en-tête ou pied de page avec SIRET/SIREN/capital), ex. "BK FINITIONS". Ce n'est JAMAIS le client (le bloc « Client » / « Destinataire », ici le maître d'ouvrage ou Phénix-Architecture). Si introuvable, mettre "".
+- "artisan" : coordonnées de l'ENTREPRISE QUI ÉMET le devis (l'en-tête / pied de page : pas le client). Chaque champ non trouvé = chaîne vide. "metier" : corps de métier en un mot ou deux (électricien, plombier, maçon, couvreur…).
 - "totalHtDevis" : le TOTAL HT tel qu'imprimé sur le devis (dans le récapitulatif en fin de document). Recopie-le exactement, ne le recalcule pas. Si absent, mettre 0.
 - "n" : désignation complète (libellé de la ligne), SANS puce ni tiret de liste en début de texte (retire tout "-", "•", "*" placé au début, même si le devis source les affiche ainsi)
 - "q" : quantité numérique (ex: 80, 12.5) — si non trouvée mettre 1
@@ -4937,9 +4819,6 @@ RÈGLES STRICTES :
     }
     if(!parsed.postes||!parsed.postes.length)throw new Error('Aucun poste détecté dans le PDF');
     status.style.display='none';
-    // Entreprise émettrice du devis : pré-remplit le champ (sans écraser une saisie manuelle)
-    { const _ie=document.getElementById('import-entreprise'), _nom=String(parsed.entreprise||'').trim();
-      if(_ie && _nom && !_ie.value.trim()) _ie.value=_nom; }
     // Filet de sécurité : retire toute puce/tiret de liste résiduel en tête de désignation
     // (ex: "-Prise de courant" → "Prise de courant"), même si l'IA ne l'a pas fait.
     const nettoyerDesignation = s => String(s||'').replace(/^[\s]*[-•*–—]+[\s]*/, '').trim();
@@ -4950,6 +4829,8 @@ RÈGLES STRICTES :
       puArtisan:parseFloat(p.pu)||0,
       lotSuggestion:p.lot||''
     }));
+    window._impArt = parsed.artisan || null;
+    try{ const _a=window._impArt, _ie=document.getElementById('import-entreprise'); if(_a && _a.entreprise && _ie && !_ie.value.trim()){ _ie.value=_a.entreprise; annAlerteMaj(); } }catch(e){}
     showImportPreview(postesExtraits);
 
     // Contrôle de cohérence : compare la somme des lignes extraites au total HT
@@ -5209,6 +5090,7 @@ function confirmImportArtisan(){
   const chantier=state.chantiers[state.currentChantier];
   const entImport=((document.getElementById('import-entreprise')||{}).value||'').trim();
   const marquerDevis=l=>{ l.devisArtisan=true; if(entImport) l.entreprise=entImport; };
+  annEnsure(entImport, window._impArt); window._impArt=null;
 
   if(!importGlobalMode){
     const lot=chantier.lots[state.currentLot];
@@ -5303,13 +5185,13 @@ function renderExportSelects(){renderChantierSelects();}
 
 function exportCSV(){
   const idx=state.currentChantier;
-  if(idx===null){alert('Sélectionnez un chantier');return;}
+  if(idx===null){alert('Sélectionnez un projet');return;}
   exportCSVForChantier(idx);
 }
 
 function exportCSVFull(){
   const v=document.getElementById('export-chantier-select').value;
-  if(v===''){alert('Sélectionnez un chantier');return;}
+  if(v===''){alert('Sélectionnez un projet');return;}
   exportCSVForChantier(parseInt(v));
 }
 
@@ -5347,7 +5229,7 @@ function exportPDF(detaille){
   const idx=state.currentChantier;
   const selIdx=document.getElementById('export-chantier-select').value;
   const ci=idx!==null?idx:(selIdx!==''?parseInt(selIdx):null);
-  if(ci===null){alert('Sélectionnez un chantier');return;}
+  if(ci===null){alert('Sélectionnez un projet');return;}
   const c=state.chantiers[ci];
   sortLotsInPlace(c.lots||[]);
 
@@ -5512,7 +5394,7 @@ function exportDPGF(){
   const selEl = document.getElementById('dpgf-chantier-select');
   const selCi = selEl ? selEl.value : '';
   const ci = quickCi !== null ? quickCi : (selCi !== '' ? parseInt(selCi) : null);
-  if(ci === null || !state.chantiers[ci]){ showToast('⚠️ Sélectionnez un chantier'); return; }
+  if(ci === null || !state.chantiers[ci]){ showToast('⚠️ Sélectionnez un projet'); return; }
   const c = state.chantiers[ci];
 
   // Depuis la page Export, la sélection fine des lots + le contexte modifié sont pris en
@@ -5716,7 +5598,6 @@ tbody.tot tr.tot-row td{background:#fff !important;border:0;padding:14px 0 0}
   setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},1000);
   showToast('Bordereau lot ouvert — Imprimer pour enregistrer en PDF');
 }
-
 
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 // Comme parseFloat(x)||def, mais ne remplace PAS un 0 volontaire par la valeur par défaut
@@ -6265,7 +6146,7 @@ function renderMeasureList(){
 function openExportMesuresModal(){
   if(!metrageState.measures.length){showToast('⚠️ Aucune mesure à exporter');return;}
   const sel=document.getElementById('export-mes-chantier');
-  sel.innerHTML='<option value="">— Sélectionner un chantier —</option>';
+  sel.innerHTML='<option value="">— Sélectionner un projet —</option>';
   state.chantiers.forEach((c,i)=>sel.add(new Option(c.nom,i)));
   document.getElementById('export-mes-lot').innerHTML='<option value="">— Sélectionner un lot —</option>';
   const listEl=document.getElementById('export-mes-list');
@@ -6291,7 +6172,7 @@ function updateExportMesLots(){
 function confirmExportMesures(){
   const ci=parseInt(document.getElementById('export-mes-chantier').value);
   const lotSel=document.getElementById('export-mes-lot').value;
-  if(isNaN(ci)){showToast('⚠️ Sélectionnez un chantier');return;}
+  if(isNaN(ci)){showToast('⚠️ Sélectionnez un projet');return;}
   if(!lotSel){showToast('⚠️ Sélectionnez un lot');return;}
   let li;
   if(lotSel==='__new__'){
@@ -6664,7 +6545,7 @@ function confirmerImportIA() {
     const adresse = document.getElementById('ia-chantier-adresse').value.trim();
     const type = document.getElementById('ia-chantier-type').value;
     const surface = parseFloat(document.getElementById('ia-chantier-surface').value) || (iaResultData?.projet?.surface_plancher) || 0;
-    // Créer le chantier
+    // Créer le projet
     const newChantier = {
       nom, client, adresse, type, surface,
       lots: [], statut: 'En cours', date: new Date().toISOString().split('T')[0],
@@ -6690,7 +6571,7 @@ function confirmerImportIA() {
   if(lotMode === 'new' && chantier.lots.length > 0){
     const nomActuel = chantier._nomChiffrageActif || 'Chiffrage actuel';
     const veutRemplacer = confirm(
-      `Ce chantier a déjà un chiffrage actif : « ${nomActuel} » (${chantier.lots.length} lot(s)).\n\n` +
+      `Ce projet a déjà un chiffrage actif : « ${nomActuel} » (${chantier.lots.length} lot(s)).\n\n` +
       `OK → Enregistrer « ${nomChiffrage} » comme chiffrage actif et archiver « ${nomActuel} » (vous pourrez les comparer et rebasculer à tout moment).\n` +
       `Annuler → Ajouter ces nouveaux lots à la suite du chiffrage actuel (fusion).`
     );
@@ -6750,7 +6631,7 @@ function confirmerImportIA() {
   document.getElementById('ia-chantier-client').value = '';
   document.getElementById('ia-chantier-adresse').value = '';
   document.getElementById('ia-chantier-surface').value = '';
-  showToast('✅ ' + (selCi===''||selCi==='__preview__' ? 'Chantier créé + ' : '') + nbLots + ' lot(s), ' + nbPostes + ' poste(s) importé(s)');
+  showToast('✅ ' + (selCi===''||selCi==='__preview__' ? 'Projet créé + ' : '') + nbLots + ' lot(s), ' + nbPostes + ' poste(s) importé(s)');
   // Naviguer vers le chiffrage du chantier créé
   state.currentChantier = ci;
   showPage('chiffrage');
@@ -6861,42 +6742,6 @@ window.confirmerImportIA = confirmerImportIA;
 // État du questionnaire
 // questReponses déclaré en haut du script
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 function selectChip(el, key) {
   // Désélectionner les autres chips du même groupe
   const container = el.closest('.quest-chips');
@@ -6966,9 +6811,8 @@ function _ouvrirModalResultats(data) {
   const menus = data.menuiseries || {};
   const lots = data.lots || [];
 
-
   const selC = document.getElementById('ia-dest-chantier');
-  selC.innerHTML = '<option value="">— Créer un nouveau chantier —</option>';
+  selC.innerHTML = '<option value="">— Créer un nouveau projet —</option>';
   state.chantiers.forEach((c,i) => selC.add(new Option(c.nom, i)));
   // Aucun chantier existant → formulaire visible d'emblée
   const hasChantiers = state.chantiers.length > 0;
@@ -8269,175 +8113,77 @@ Génère le chiffrage complet pour ce projet, sans plan disponible.`;
 window.surfaceLancerIA = surfaceLancerIA;
 </script>
 <script>
-// ════════════════════════════════════════════════════════════
-//  WEBAUTHN — Authentification biométrique (empreinte / Face ID)
-//  Même mécanisme que Dossier — la clé stockée est partagée
-//  (même origine) donc un enrôlement fait dans Dossier fonctionne ici aussi.
-// ════════════════════════════════════════════════════════════
-const BIO_KEY      = 'phenix_bio_credId';
-const BIO_EMAIL_KEY= 'phenix_bio_email';
-function _b64u(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,''); }
-function _fromb64u(s){ s=s.replace(/-/g,'+').replace(/_/g,'/'); while(s.length%4) s+='='; return Uint8Array.from(atob(s),c=>c.charCodeAt(0)).buffer; }
-
-async function phenixBioInit(){
-  if(!window.PublicKeyCredential) return;
-  const hasPlatform = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().catch(()=>false);
-  if(!hasPlatform) return;
-  const bioWrap = document.getElementById('pl-bio-wrap');
-  if(!bioWrap) return;
-  bioWrap.style.display = 'block';
-  const credId = localStorage.getItem(BIO_KEY);
-  if(!credId){
-    document.getElementById('pl-bio-label').textContent = 'Activer l\'empreinte après connexion';
-    document.getElementById('pl-bio-btn').onclick = () => { document.getElementById('pl-pwd').focus(); };
-  } else {
-    // Empreinte déjà activée : on la propose automatiquement, sans clic,
-    // dès l'arrivée sur l'écran de connexion.
-    // WebAuthn exige un vrai geste utilisateur (obligatoire sur mobile) : un simple délai
-    // programmé (setTimeout) ne suffit pas et échoue silencieusement, surtout sur téléphone.
-    // On déclenche donc dès le tout premier tap/clic de l'utilisateur n'importe où sur
-    // l'écran de connexion — ça reste un vrai geste, donc autorisé, tout en étant quasi
-    // automatique (pas besoin de viser le bouton précisément).
-    const _bioAutoTrigger = () => {
-      document.removeEventListener('pointerdown', _bioAutoTrigger);
-      document.removeEventListener('touchstart', _bioAutoTrigger);
-      try { phenixBioLogin(); } catch(e) {}
-    };
-    document.addEventListener('pointerdown', _bioAutoTrigger, { once: true, passive: true });
-    document.addEventListener('touchstart', _bioAutoTrigger, { once: true, passive: true });
-  }
-}
-
-function phenixBioReset(){
-  if(!confirm('Supprimer l\'empreinte enregistrée ? Vous devrez la ré-enregistrer après votre prochaine connexion.')) return;
-  localStorage.removeItem(BIO_KEY);
-  localStorage.removeItem(BIO_EMAIL_KEY);
-  localStorage.removeItem('phenix_bio_creds');
-  const lbl = document.getElementById('pl-bio-label'); if(lbl) lbl.textContent = 'Activer l\'empreinte après connexion';
-  const btn = document.getElementById('pl-bio-btn'); if(btn) btn.onclick = () => document.getElementById('pl-pwd').focus();
-  const err = document.getElementById('pl-err');
-  if(err){ err.style.color = '#7DC6E8'; err.textContent = '✓ Empreinte supprimée — connectez-vous avec email/mdp pour la ré-activer.'; }
-}
-
-async function phenixBioLogin(){
-  const btn = document.getElementById('pl-bio-btn');
-  const err = document.getElementById('pl-err');
-  const credId = localStorage.getItem(BIO_KEY);
-  if(err){ err.textContent = ''; err.style.color = '#FFB4A8'; }
-  if(!credId){ document.getElementById('pl-pwd').focus(); return; }
-  btn.disabled = true;
-  btn.innerHTML = '<span style="font-size:18px">⏳</span> <span>Vérification empreinte…</span>';
-  try {
-    await navigator.credentials.get({
-      publicKey: {
-        challenge: crypto.getRandomValues(new Uint8Array(32)),
-        allowCredentials: [{ type: 'public-key', id: _fromb64u(credId), transports: ['internal'] }],
-        userVerification: 'required',
-        timeout: 60000
-      }
-    });
-    const savedCreds = localStorage.getItem('phenix_bio_creds');
-    if(savedCreds && window._auth){
-      const parts = atob(savedCreds).split('|||');
-      if(parts.length === 2){
-        err.style.color = '#4db8e8'; err.textContent = '✓ Connexion en cours…';
-        window._auth.login(parts[0], parts[1]).catch(() => {
-          err.style.color = '#FFB4A8';
-          err.textContent = 'Session expirée — saisissez votre mot de passe.';
-          const em = document.getElementById('pl-email');
-          em.value = parts[0]; em.style.background = '#e8f5e9'; em.readOnly = true;
-          document.getElementById('pl-pwd').focus();
-        });
-        return;
-      }
-    }
-    const savedEmail = localStorage.getItem(BIO_EMAIL_KEY) || '';
-    document.getElementById('pl-email').value = savedEmail;
-    document.getElementById('pl-email').style.background = '#e8f5e9';
-    document.getElementById('pl-email').readOnly = true;
-    err.style.color = '#4db8e8'; err.textContent = '✓ Empreinte reconnue — saisissez votre mot de passe.';
-    document.getElementById('pl-pwd').focus();
-  } catch(e){
-    err.style.color = '#E74C3C'; err.style.fontWeight = '600';
-    if(e.name === 'NotAllowedError') err.textContent = '⚠️ Reconnaissance refusée — vérifiez que Face ID/empreinte est bien activé pour ce navigateur dans les réglages de votre téléphone, puis réessayez avec le bouton.';
-    else if(e.name === 'InvalidStateError') err.textContent = '⚠️ Empreinte invalide — cliquez sur 🔄 Réinitialiser puis reconnectez-vous par mot de passe pour la ré-enregistrer.';
-    else err.textContent = '⚠️ Erreur : ' + e.name + ' — ' + e.message;
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = '<span style="font-size:24px">☝️</span> <span>Se connecter avec empreinte</span>';
-  }
-}
-
-async function phenixBioEnroll(userOverride){
-  const err = document.getElementById('pl-err');
-  const wrap = document.getElementById('pl-enroll-wrap');
-  const user = userOverride || (window._auth && window._auth.current());
-  if(!user){ if(err) err.textContent = 'Session non reconnue — réessayez dans quelques secondes.'; return; }
-  try {
-    const encoder = new TextEncoder();
-    const credential = await navigator.credentials.create({
-      publicKey: {
-        challenge: crypto.getRandomValues(new Uint8Array(32)),
-        rp: { name: 'Phénix-Architecture', id: location.hostname },
-        user: { id: encoder.encode(user.uid), name: user.email, displayName: 'Phénix' },
-        pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
-        authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'discouraged', requireResidentKey: false },
-        excludeCredentials: [],
-        timeout: 60000,
-        attestation: 'none'
-      }
-    });
-    localStorage.setItem(BIO_KEY, _b64u(credential.rawId));
-    localStorage.setItem(BIO_EMAIL_KEY, user.email);
-    const pwd = document.getElementById('pl-pwd').value;
-    if(pwd) localStorage.setItem('phenix_bio_creds', btoa(user.email + '|||' + pwd));
-    if(wrap){ wrap.innerHTML = '<div style="color:#7DC6E8;font-size:13px;font-weight:600">✓ Empreinte activée — connexion automatique dès maintenant !</div>'; setTimeout(()=>{ wrap.style.display='none'; }, 3000); }
-  } catch(e){
-    if(err) err.textContent = e.name === 'NotAllowedError' ? 'Enrôlement annulé.' : ('Erreur enrôlement : ' + e.message);
-  }
-}
-
-// Chargé dans le Shell (iframe) : le Shell gère seul l'authentification et
-// transmet la connexion à ce module. On n'initialise donc PAS la biométrie
-// ici, sinon l'empreinte serait redemandée à chaque changement de module.
-document.addEventListener('DOMContentLoaded', function(){
-  if (window.parent !== window) return; // dans le Shell → rien à faire
-  phenixBioInit();
-});
-window.phenixBioLogin  = phenixBioLogin;
-window.phenixBioEnroll = phenixBioEnroll;
-window.phenixBioReset  = phenixBioReset;
-
-// Propose l'enrôlement après une connexion email réussie
-const _origDoLogin_bio = window.phenixDoLogin;
-window.phenixDoLogin = function(){
-  const email = (document.getElementById('pl-email').value || '').trim();
-  const pwd   = document.getElementById('pl-pwd').value || '';
-  const err   = document.getElementById('pl-err'); if(err){ err.style.color='#FFB4A8'; err.textContent=''; }
-  const btn   = document.getElementById('pl-btn'); if(btn) btn.disabled = true;
-  window._auth.login(email, pwd).then((cred) => {
-    const user = cred.user;
-    if(!localStorage.getItem(BIO_KEY) && window.PublicKeyCredential){
-      PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(ok => {
-        if(ok){
-          const wrap = document.getElementById('pl-enroll-wrap');
-          if(wrap){ wrap.style.display='block'; document.getElementById('pl-enroll-btn').onclick = () => phenixBioEnroll(user); }
-        }
-      });
-    }
-  }).catch((e) => {
-    const c = (e && e.code) || '';
-    if(err) err.textContent =
-      c.indexOf('user-not-found')>=0 || c.indexOf('wrong-password')>=0 || c.indexOf('invalid-credential')>=0 ? 'Email ou mot de passe incorrect.' :
-      c.indexOf('network')>=0 ? 'Pas de connexion internet.' :
-      ('Erreur : ' + (c || (e && e.message) || ''));
-  }).finally(() => { if(btn) btn.disabled = false; });
-};
-</script>
-<script>
 /* Menu réduit aux icônes sur tablette étroite : on garde le nom en info-bulle */
 document.querySelectorAll('.sidebar .nav-item').forEach(function(n){ if(!n.title) n.title=n.textContent.trim(); });
 </script>
 
+<script>document.addEventListener('click',function(e){var m=document.getElementById('file-menu');if(m&&!m.contains(e.target))m.classList.remove('open');});</script>
+<datalist id="ann-names"></datalist>
+<script>
+/* [Artisan unique] suggestions d'entreprises depuis l'Annuaire des artisans (phenix_artisans) */
+var _annLoaded=false, _annList=[];
+const _annN=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\b(sarl|eurl|sas|sasu|sa|ei|entreprise|ets|ste|societe)\b/g,'').replace(/[^a-z0-9]/g,'');
+function annTrouve(nom,siret){
+  const n=_annN(nom), sr=String(siret||'').replace(/\D/g,'');
+  return _annList.find(a=>(sr.length>=9 && String(a.siret||'').replace(/\D/g,'')===sr) || (n && (_annN(a.entreprise)===n || _annN(a.nom)===n))) || null;
+}
+function annAlerteMaj(){}
+/* Devis importé : fiche créée dans l'Annuaire si l'entreprise n'y est pas, sinon complétée (champs vides seulement) */
+async function annEnsure(nom,info){
+  info=info||{}; nom=(nom||info.entreprise||'').trim(); if(!nom) return;
+  try{
+    _annLoaded=false; await annLoad(); 
+    const r=await _phenixFbRefs();
+    const snap=await r.getDocs(r.collection(r.db,'phenix_artisans')); _annList=snap.docs.map(d=>d.data());
+    const ex=annTrouve(nom,info.siret);
+    const champs={entreprise:nom,nom:info.contact||'',metier:info.metier||'',tel:info.tel||'',email:info.email||'',siret:info.siret||'',ville:info.ville||'',assurance:info.assurance||'',assuranceDate:info.assuranceDate||'',adresse:[info.adresse,info.cp].filter(Boolean).join(' ')};
+    if(ex){
+      const maj={}; Object.keys(champs).forEach(k=>{ if(!ex[k] && champs[k]) maj[k]=champs[k]; });
+      if(Object.keys(maj).length){ Object.assign(ex,maj); ex.updatedAt=new Date().toISOString(); await r.setDoc(r.doc(r.db,'phenix_artisans',String(ex.id)),ex); }
+      showToast('Fiche Annuaire existante : '+nom+(Object.keys(maj).length?' (complétée)':''));
+    } else {
+      const rec=Object.assign({id:'art-'+Date.now(),favori:0,note:0,dispo:'contactez',source:'devis',alerte:'',notes:'Créé depuis un devis importé dans Chiffrage',updatedAt:new Date().toISOString()},champs,{nom:champs.nom||nom});
+      if(!rec.metier) rec.metier='À préciser';
+      await r.setDoc(r.doc(r.db,'phenix_artisans',rec.id),rec); _annList.push(rec);
+      showToast('Fiche créée dans l\'Annuaire : '+nom);
+    }
+    _annLoaded=false; annLoad();
+  }catch(e){ console.warn('Annuaire :',e); }
+}
+
+async function annLoad(){
+  if(_annLoaded)return; _annLoaded=true;
+  try{
+    const r=await _phenixFbRefs(); const snap=await r.getDocs(r.collection(r.db,'phenix_artisans')); const seen={}; _annList=snap.docs.map(d=>d.data());
+    document.getElementById('ann-names').innerHTML=snap.docs.map(d=>d.data()).map(a=>(a.entreprise||a.nom||'').trim()).filter(n=>n&&!seen[n.toLowerCase()]&&(seen[n.toLowerCase()]=1)).sort().map(n=>'<option value="'+n.replace(/&/g,'&amp;').replace(/"/g,'&quot;')+'">').join('');
+  }catch(e){_annLoaded=false;}
+}
+</script>
+<script type="module">
+/* [Garde d'accès] un compte client ou artisan, ou une fiche désactivée, ne peut pas utiliser ce module interne même en l'ouvrant directement.
+   (Les règles Firestore restent la vraie protection des données ; ceci évite d'exposer l'écran.) */
+import { getApps } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+(function(){
+  try{
+    if(!getApps().length) return;
+    const app = getApps()[0], auth = getAuth(app), db = getFirestore(app);
+    onAuthStateChanged(auth, async u => {
+      if(!u || !u.email) return;
+      const em = u.email.toLowerCase(); if(em === 'contact@phenixarchitecte.fr') return;
+      let f = null; try { const s = await getDoc(doc(db, 'phenix_users', em)); f = s.exists() ? s.data() : null; } catch(e) { return; }
+      const OK = ['admin'];
+      if(f && (f.role === 'client' || f.role === 'artisan' || f.actif === false || (f.role && OK.indexOf(f.role) < 0))){
+        const o = document.createElement('div');
+        o.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:#0d1b3e;color:#fff;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;font:600 16px system-ui,sans-serif';
+        o.textContent = f.actif === false ? 'Ce compte est désactivé. Contactez l\u2019administrateur.' : 'Ce compte n\u2019a pas accès à ce module.';
+        document.body.appendChild(o);
+        try { await signOut(auth); } catch(e) {}
+      }
+    });
+  }catch(e){}
+})();
+</script>
 </body>
 </html>

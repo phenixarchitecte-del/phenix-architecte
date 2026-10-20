@@ -53,25 +53,11 @@ try {
 // Connexion automatique transmise par le Shell
 window.addEventListener('message', function(ev){
   var d = ev.data;
-  if (d && d.source === 'phenix-shell' && d.action === 'auto-login' && d.email && d.password) {
+  if (d && d.source === 'phenix-shell' && d.action === 'auto-login' && d.email && d.password && ev.source === window.parent) {
     signInWithEmailAndPassword(auth, d.email, d.password).catch(function(){});
   }
 });
 try { window.parent.postMessage({ source:'phenix-module', readyForLogin:true }, '*'); } catch(e) {}
-
-window.phenixDoLogin = function(){
-  const email = (document.getElementById('pl-email').value || '').trim();
-  const pwd   = document.getElementById('pl-pwd').value || '';
-  const err   = document.getElementById('pl-err'); if (err) err.textContent = '';
-  const btn   = document.getElementById('pl-btn'); if (btn) btn.disabled = true;
-  signInWithEmailAndPassword(auth, email, pwd).catch(e => {
-    const c = (e && e.code) || '';
-    if (err) err.textContent =
-      (c.indexOf('invalid-credential')>=0 || c.indexOf('wrong-password')>=0 || c.indexOf('user-not-found')>=0) ? 'E-mail ou mot de passe incorrect.' :
-      c.indexOf('too-many-requests')>=0 ? 'Trop de tentatives, réessayez plus tard.' :
-      ('Erreur : ' + (c || (e && e.message) || ''));
-  }).finally(() => { if (btn) btn.disabled = false; });
-};
 
 // Écoute de la fenêtre de dates demandée (champ « jour » ≥ depuis)
 let unsub = null;
@@ -152,14 +138,11 @@ button{font-family:inherit;cursor:pointer}
 </head>
 <body>
 
-<div id="phenix-login" style="display:flex;position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#0a1628,#12233f,#2f6fc0);align-items:center;justify-content:center;padding:20px;font-family:'DM Sans',sans-serif">
+<div id="phenix-login" style="display:none;position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#0a1628,#12233f,#2f6fc0);align-items:center;justify-content:center;padding:20px;font-family:'DM Sans',system-ui,sans-serif">
   <div style="background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.18);border-radius:16px;padding:34px 28px;max-width:360px;width:100%;text-align:center">
     <div style="font-family:'DM Serif Display',Georgia,serif;font-size:30px;color:#fff;margin-bottom:4px">Phénix<span style="color:#4fa8f0">-Architecture</span></div>
-    <div style="font-size:11px;color:rgba(255,255,255,.5);letter-spacing:.12em;text-transform:uppercase;margin-bottom:26px">Journal d'activité</div>
-    <input id="pl-email" type="email" autocomplete="username" placeholder="E-mail" style="width:100%;padding:12px 14px;margin-bottom:10px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;font-size:15px;font-family:inherit">
-    <input id="pl-pwd" type="password" autocomplete="current-password" placeholder="Mot de passe" onkeydown="if(event.key==='Enter')phenixDoLogin()" style="width:100%;padding:12px 14px;margin-bottom:10px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;font-size:15px;font-family:inherit">
-    <div id="pl-err" style="color:#ff9a8f;font-size:12px;min-height:16px;margin-bottom:8px"></div>
-    <button id="pl-btn" onclick="phenixDoLogin()" style="width:100%;padding:13px;border:none;border-radius:9px;background:#2f6fc0;color:#fff;font-size:15px;font-weight:600">Se connecter</button>
+    <div style="font-size:14px;color:rgba(255,255,255,.75);margin:18px 0 22px;line-height:1.5">Session fermée ou expirée.<br>La connexion se fait depuis Phénix.</div>
+    <a href="phenix_shell.html" style="display:block;padding:13px;border-radius:9px;background:#2f6fc0;color:#fff;font-size:15px;font-weight:600;text-decoration:none">Ouvrir Phénix</a>
   </div>
 </div>
 
@@ -196,7 +179,7 @@ var VERBES = { cree:'A créé', ajoute:'A ajouté', modifie:'A modifié', enregi
   rouvre:'A rouvert', assigne:'A assigné', note:'A ajouté une note', consulte:'A consulté', relance:'A relancé', signe:'Devis signé', refuse:'Devis perdu / refusé',
   statut:'A changé le statut', exporte:'A exporté', transfere:'A transféré', connexion:'S\'est connecté(e)', ouvre:'A ouvert' };
 var MODULES = { dossier:'Dossier', compta:'Comptabilité', chiffrage:'Chiffrage', chantier:'Chantier', planning:'Planning', carnet:'Carnet',
-  relances:'Devis en cours', espace:'Mon espace', shell:'Phénix', contrat:'Contrats', permis:'Permis', financement:'Financement' };
+  relances:'Devis à relancer', espace:'Mon espace', shell:'Phénix', contrat:'Contrats', permis:'Permis', financement:'Financement' };
 var BRUIT = ['consulte','connexion','ouvre'];
 
 var $ = function(id){ return document.getElementById(id); };

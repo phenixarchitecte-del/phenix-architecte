@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0E2247">
+<title>Phénix · Espace artisan</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap">
+<style>
+:root{--navy:#0E2247;--ink:#0B1630;--mute:#56637E;--line:#CBD3E2;--bg:#EDF0F6;--blue:#1F62B8;--blue-bg:#DCE8F8;--green:#1E7A4C;--red:#A33A1F;--red-bg:#FBE9E3;--orange:#C77A12}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:15px 'DM Sans',system-ui,sans-serif}
+button{font-family:inherit;cursor:pointer}
+#app{display:flex;flex-direction:column;height:100dvh;max-width:520px;margin:0 auto;background:var(--bg)}
+header{background:var(--navy);color:#fff;padding:14px 18px 12px;padding-top:max(14px,env(safe-area-inset-top))}
+header .k{font-size:12px;letter-spacing:.09em;text-transform:uppercase;opacity:.7}
+header .t{font:22px/1.15 'DM Serif Display',Georgia,serif;display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+header select{background:transparent;color:#fff;border:0;font:inherit;max-width:100%}
+header .out{font:600 12px 'DM Sans',system-ui,sans-serif;opacity:.75;background:none;border:0;color:#fff;text-decoration:underline;white-space:nowrap}
+main{flex:1;min-height:0;overflow:auto;padding:14px 16px 16px;display:flex;flex-direction:column;gap:14px}
+nav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));background:#fff;border-top:1.5px solid var(--line);padding:6px 6px max(10px,env(safe-area-inset-bottom))}
+nav button{min-height:56px;border:0;background:none;border-radius:10px;font:600 15px 'DM Sans',system-ui,sans-serif;color:var(--mute)}
+nav button.on{background:var(--blue-bg);color:var(--blue);font-weight:700}
+nav .nb{margin-left:4px;background:#F09A80;color:var(--ink);border-radius:10px;padding:0 7px;font-size:12px}
+.card{background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+.card b.h{font-weight:700}.mute{color:var(--mute);line-height:1.5}
+.big{width:100%;height:132px;border:0;border-radius:16px;color:#fff;font:700 28px 'DM Sans',system-ui,sans-serif,system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+.big small{font-size:13px;font-weight:500;opacity:.92}
+.bar{min-height:44px;border-radius:10px;background:var(--red-bg);border:1.5px solid var(--red);padding:6px 8px 6px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px}
+.bar button{padding:8px 14px;border-radius:8px;background:var(--red);color:#fff;border:0;font-weight:700;font-size:13px}
+.alert{background:var(--red-bg);border:1.5px solid var(--red);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+.btn{min-height:46px;padding:10px 16px;border-radius:10px;border:1.5px solid var(--blue);background:#fff;color:var(--blue);font-weight:700;font-size:15px;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn.p{background:var(--blue);color:#fff}.btn.r{background:var(--red);border-color:var(--red);color:#fff}
+.plan{background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;justify-content:space-between;gap:10px;align-items:center;text-align:left;width:100%}
+.tag{font-size:12px;font-weight:700;padding:2px 8px;border-radius:10px;background:var(--red-bg);color:var(--red);white-space:nowrap}
+.pgs{background:#525659;border-radius:12px;padding:8px;display:flex;flex-direction:column;gap:8px;overflow:auto;max-height:52vh}
+.pg{position:relative;background:#fff}.pg canvas,.pg img{width:100%;display:block}
+.dot{position:absolute;width:30px;height:30px;border-radius:50%;transform:translate(-50%,-50%);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid #fff}
+.thumbs{display:flex;gap:8px;flex-wrap:wrap}.thumbs img{width:72px;height:72px;border-radius:8px;object-fit:cover;background:var(--line)}
+.msg{max-width:85%;border-radius:12px;padding:10px 12px;line-height:1.4;white-space:pre-wrap}
+.msg.me{align-self:flex-end;background:var(--blue);color:#fff}.msg.ph{align-self:flex-start;background:#fff;border:1.5px solid var(--line)}
+.msg small{display:block;opacity:.7;font-size:11px;margin-top:2px}
+textarea,input[type=text],input[type=email],input[type=password],select.f{width:100%;font:inherit;padding:12px;border:1.5px solid var(--line);border-radius:10px;background:#fff}
+#login{position:fixed;inset:0;background:var(--navy);display:none;align-items:center;justify-content:center;padding:24px;z-index:50}
+#login form{background:#fff;border-radius:16px;padding:22px;width:100%;max-width:360px;display:flex;flex-direction:column;gap:12px}
+#login h1{font:26px 'DM Serif Display',serif;margin:0}
+#toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:20px;font-size:14px;display:none;z-index:60;max-width:90%}
+</style>
+</head>
+<body>
+<div id="login"><form onsubmit="return doLogin(event)"><h1>Phénix</h1><div class="mute">Espace artisan</div>
+<input type="email" id="lg-email" placeholder="E-mail" autocomplete="username" required><input type="password" id="lg-pw" placeholder="Mot de passe" autocomplete="current-password" required>
+<button class="btn p" type="submit">Se connecter</button><div id="lg-err" style="color:var(--red);font-size:13px"></div></form></div>
+<div id="app" style="display:none">
+  <header><div class="k" id="h-k"></div><div class="t"><select id="h-ch" onchange="setCh(this.value)"></select><button class="out" onclick="doLogout()">Sortir</button></div></header>
+  <main id="main"></main>
+  <nav id="nav"></nav>
+</div>
+<div id="toast"></div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, onSnapshot, query, where } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js';
+const app = initializeApp({
+  apiKey:"AIzaSyCjNKNvS6p3nqE6-_Gw9I397ZtXm2FG1ew", authDomain:"phenix-architecte-9151b.firebaseapp.com", projectId:"phenix-architecte-9151b",
+  storageBucket:"phenix-architecte-9151b.firebasestorage.app", messagingSenderId:"811231684720", appId:"1:811231684720:web:413fa324ae43c07607acb5" });
+try { initializeAppCheck(app, { provider: new ReCaptchaV3Provider('6LeObWktAAAAAL9eyppDRtLp5yZTyBaF4ZNKXNIO'), isTokenAutoRefreshEnabled: true }); } catch (e) {}
+const db = getFirestore(app), auth = getAuth(app);
+
+// Collections (mêmes que Phénix Chantier + 4 nouvelles pour l'artisan)
+const C = { chantiers:'phenix_ch_chantiers', lots:'phenix_ch_lots', plans:'phenix_ch_plans', users:'phenix_users', media:'phenix_media',
+            pointages:'phenix_ch_pointages', messages:'phenix_ch_messages', photos:'phenix_ch_photos', vus:'phenix_ch_vus' };
+const S = { me:null, chIds:[], ch:null, chantiers:{}, lots:[], plans:[], pointages:[], messages:[], photos:[], vus:{vus:{},rappel:{}},
+            tab:'pointer', planId:null, pastId:null, unsub:[] };
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ymd = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+const hm = iso => iso ? new Date(iso).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}) : '';
+function toast(t){ const e=$('toast'); e.textContent=t; e.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>e.style.display='none',2800); }
+
+// ── Médias (même format que Phénix Chantier : fiche + morceaux) ──
+const mcache = {};
+async function putMedia(du, name){
+  const id='m_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,9), parts=[];
+  for(let i=0;i<du.length;i+=700000) parts.push(du.slice(i,i+700000));
+  await setDoc(doc(db,C.media,id),{kind:'photo',name:name||'',parts:parts.length,createdAt:new Date().toISOString()});
+  for(let i=0;i<parts.length;i++) await setDoc(doc(db,C.media,id+'__'+i),{d:parts[i]});
+  mcache[id]=du; return id;
+}
+async function getMedia(id){
+  if(mcache[id]) return mcache[id];
+  const m=await getDoc(doc(db,C.media,id)); if(!m.exists()) return null;
+  let du=''; for(let i=0;i<(m.data().parts||0);i++){ const c=await getDoc(doc(db,C.media,id+'__'+i)); if(c.exists()) du+=c.data().d||''; }
+  return mcache[id]=du;
+}
+function shrink(file,max){ return new Promise((res,rej)=>{ const fr=new FileReader(); fr.onerror=rej; fr.onload=()=>{ const im=new Image(); im.onerror=rej;
+  im.onload=()=>{ const k=Math.min(1,max/Math.max(im.width,im.height)), cv=document.createElement('canvas'); cv.width=Math.round(im.width*k); cv.height=Math.round(im.height*k);
+    cv.getContext('2d').drawImage(im,0,0,cv.width,cv.height); res(cv.toDataURL('image/jpeg',0.8)); }; im.src=fr.result; }; fr.readAsDataURL(file); }); }
+
+// ── Connexion ──
+window.doLogin = async e => { e.preventDefault(); $('lg-err').textContent='';
+  try { await setPersistence(auth, browserLocalPersistence); await signInWithEmailAndPassword(auth, $('lg-email').value.trim(), $('lg-pw').value); }
+  catch(x){ $('lg-err').textContent = /invalid|wrong|credential|user-not-found/.test(x.code||x.message) ? 'E-mail ou mot de passe incorrect.' : 'Connexion impossible.'; }
+  return false; };
+window.doLogout = async () => { S.unsub.forEach(u=>{try{u()}catch(e){}}); S.unsub=[]; await signOut(auth); };
+onAuthStateChanged(auth, async user => {
+  if(!user){ $('app').style.display='none'; $('login').style.display='flex'; return; }
+  $('login').style.display='none';
+  try { await boot(user.email.toLowerCase()); } catch(e){ console.error(e); denied('Impossible de charger votre espace.'); }
+});
+function denied(msg){ $('app').style.display='flex'; $('h-k').textContent='Phénix'; $('h-ch').innerHTML='<option>Espace artisan</option>'; $('nav').innerHTML='';
+  $('main').innerHTML='<div class="card"><b class="h">Accès non disponible</b><div class="mute">'+esc(msg)+'<br>Contactez Phénix.</div></div>'; }
+
+async function boot(email){
+  const u = await getDoc(doc(db, C.users, email));
+  const d = u.exists() ? u.data() : null;
+  if(!d || d.role!=='artisan' || d.actif===false || d.intervenantId==null) { denied('Ce compte n\'est pas un compte artisan actif.'); return; }
+  S.me = { email, nom:d.nom||email.split('@')[0], intervId:String(d.intervenantId), intervRaw:d.intervenantId };
+  S.chIds = (d.chantierIds||[]).map(Number).filter(n=>!isNaN(n));
+  if(!S.chIds.length){ denied('Aucun chantier ne vous est attribué.'); return; }
+  S.ch = S.chIds[0];
+  for(const id of S.chIds){ try{ const c=await getDoc(doc(db,C.chantiers,String(id))); if(c.exists()) S.chantiers[id]=c.data(); }catch(e){} }
+  try{ const v=await getDoc(doc(db,C.vus,email)); if(v.exists()) S.vus=Object.assign({vus:{},rappel:{}}, v.data()); }catch(e){}
+  S.vus.intervenantId=S.me.intervId; S.vus.email=email;
+  S.unsub.forEach(u=>{try{u()}catch(e){}}); S.unsub=[];
+  const listen=(col,q,key,filter)=>S.unsub.push(onSnapshot(q,snap=>{ const a=[]; snap.forEach(x=>a.push(x.data())); S[key]=filter?a.filter(filter):a; render(); },e=>console.warn(col,e)));
+  listen(C.lots, query(collection(db,C.lots), where('interv','==',S.me.intervId)),'lots', l=>S.chIds.indexOf(Number(l.chantierId))>=0);
+  listen(C.plans, query(collection(db,C.plans), where('visibleIntervs','array-contains',S.me.intervRaw)),'plans', p=>S.chIds.indexOf(Number(p.chantierId))>=0);
+  listen(C.pointages, query(collection(db,C.pointages), where('intervenantId','==',S.me.intervId)),'pointages');
+  listen(C.messages, query(collection(db,C.messages), where('intervenantId','==',S.me.intervId)),'messages');
+  listen(C.photos, query(collection(db,C.photos), where('intervenantId','==',S.me.intervId)),'photos');
+  $('app').style.display='flex'; render();
+}
+
+// ── Données dérivées ──
+const grp = p => p.groupe || p.id;
+function myPlans(){ const g={}; S.plans.filter(p=>p.chantierId==S.ch).forEach(p=>{ const k=grp(p); if(!g[k]||(p.version||1)>(g[k].version||1)) g[k]=p; });
+  return Object.keys(g).map(k=>g[k]).sort((a,b)=>String(a.nom).localeCompare(String(b.nom))); }
+const isNew = p => (S.vus.vus[grp(p)]||0) < (p.version||1);
+const today = () => S.pointages.find(x=>x.date===ymd(new Date()) && x.chantierId==S.ch);
+function aPhotographier(){ const out=[]; myPlans().forEach(p=>(p.pastilles||[]).forEach((a,i)=>{
+  if(a.type==='photo' && a.statut!=='verifiee' && !(p.photos||[]).some(x=>x.pastilleId===a.id)) out.push({plan:p,a,n:i+1}); })); return out; }
+function unreadMsgs(){ return S.messages.filter(m=>m.de==='phenix' && !m.luArtisan && m.chantierId==S.ch).length; }
+function bannerPlans(){ const t=today(); if(!t||!(t.planAlerte||[]).length) return [];
+  return myPlans().filter(p=>(t.planAlerte||[]).some(id=>id==p.id||id==grp(p)) && isNew(p)); }
+
+// ── Rendu ──
+function setCh(v){ S.ch=Number(v); S.planId=null; render(); }
+window.setCh=setCh;
+window.tab = t => { S.tab=t; S.planId=null; render(); if(t==='phenix') markRead(); };
+function render(){
+  if(!S.me) return;
+  $('h-k').textContent = (S.me.nom||'') ;
+  $('h-ch').innerHTML = S.chIds.map(id=>'<option value="'+id+'"'+(id===S.ch?' selected':'')+'>'+esc((S.chantiers[id]||{}).nom||('Chantier '+id))+'</option>').join('');
+  const nb=unreadMsgs(), np=myPlans().filter(isNew).length;
+  $('nav').innerHTML = [['pointer','Pointer',0],['plans','Mes plans',np],['photos','Photos',0],['phenix','Phénix',nb]].map(([k,l,n])=>
+    '<button class="'+(S.tab===k?'on':'')+'" onclick="tab(\''+k+'\')">'+l+(n?'<span class="nb">'+n+'</span>':'')+'</button>').join('');
+  const m=$('main'); const keep=m.scrollTop;
+  if(S.tab==='pointer') m.innerHTML=vPointer(); else if(S.tab==='plans') { m.innerHTML=vPlans(); if(S.planId) drawPlan(); }
+  else if(S.tab==='photos') { m.innerHTML=vPhotos(); hydrateImgs(); } else { m.innerHTML=vPhenix(); m.scrollTop=m.scrollHeight; return; }
+  m.scrollTop=keep;
+}
+function vPointer(){
+  const t=today(), lots=S.lots.filter(l=>l.chantierId==S.ch), ph=aPhotographier().filter(x=>x.plan.chantierId==S.ch), ban=bannerPlans();
+  const last=S.messages.filter(x=>x.chantierId==S.ch).sort((a,b)=>a.date<b.date?-1:1).slice(-2);
+  let h='';
+  if(!t) h+='<button class="big" style="background:var(--green)" onclick="arrive()">J\'arrive<small>Un seul appui · pas de géolocalisation</small></button>';
+  else if(!t.depart) h+='<button class="big" style="background:var(--navy)" onclick="partir()">Je pars<small>Arrivé à '+hm(t.arrivee)+'</small></button>';
+  else h+='<button class="big" style="background:var(--mute)" onclick="revenir()">Je reviens<small>Parti à '+hm(t.depart)+' · arrivé à '+hm(t.arrivee)+'</small></button>';
+  if(ban.length) h+='<div class="bar"><span><b style="color:var(--red)">Nouveau plan</b> · '+esc(ban[0].nom)+', v'+(ban[0].version||1)+(ban.length>1?' (+'+(ban.length-1)+')':'')+'</span><button onclick="openPlan(\''+ban[0].id+'\')">Voir</button></div>';
+  if(lots.length) h+='<div class="card"><b class="h">Aujourd\'hui sur votre lot</b>'+lots.map(l=>'<div class="mute"><b>'+esc(l.nom)+'</b>'+(l.fin?' · fin prévue '+new Date(l.fin).toLocaleDateString('fr-FR'):'')+(l.notes?'<br>'+esc(l.notes):'')+'</div>').join('')+'</div>';
+  if(ph.length) h+='<div class="alert"><b style="color:var(--red)">À photographier avant fermeture</b><div style="line-height:1.5">'+ph.slice(0,4).map(x=>esc(x.a.label||'Pastille '+x.n)).join(', ')+(ph.length>4?'…':'')+'. Une photo, un appui.</div><button class="btn r" style="align-self:flex-start" onclick="openPlan(\''+ph[0].plan.id+'\',\''+ph[0].a.id+'\')">Prendre la photo</button></div>';
+  if(last.length) h+='<div class="card"><b class="h">Dernier échange avec Phénix</b>'+last.map(x=>'<div class="msg '+(x.de==='artisan'?'me':'ph')+'" style="background:'+(x.de==='artisan'?'var(--blue)':'var(--bg)')+';border:0">'+esc(x.texte)+'</div>').join('')+'</div>';
+  return h;
+}
+function vPlans(){
+  if(S.planId) return vPlanDetail();
+  const l=myPlans();
+  if(!l.length) return '<div class="card"><b class="h">Aucun plan</b><div class="mute">Les plans de votre lot apparaîtront ici dès que Phénix les publie.</div></div>';
+  return l.map(p=>'<button class="plan" onclick="openPlan(\''+p.id+'\')"><span><b>'+esc(p.nom)+'</b><br><span class="mute" style="font-size:13px">'+esc(p.type||'')+' · v'+(p.version||1)+' · '+(p.pastilles||[]).length+' pastille(s)</span></span>'+(isNew(p)?'<span class="tag">Nouveau</span>':'')+'</button>').join('');
+}
+function planCur(){ return S.plans.find(p=>p.id==S.planId); }
+function vPlanDetail(){
+  const p=planCur(); if(!p) return '';
+  const a=(p.pastilles||[]).find(x=>x.id===S.pastId), photos=a?(p.photos||[]).filter(x=>x.pastilleId===a.id):[];
+  let h='<button class="btn" style="align-self:flex-start" onclick="S_back()">← Mes plans</button><div><b>'+esc(p.nom)+'</b> · v'+(p.version||1)+'</div><div class="pgs" id="pgs"><div style="color:#ccc;text-align:center;padding:30px">Chargement…</div></div>';
+  if(a){ h+='<div class="card"><div style="display:flex;gap:10px;align-items:center"><span class="dot" style="position:static;transform:none;background:'+dotColor(a)+'">'+((p.pastilles||[]).indexOf(a)+1)+'</span><b>'+esc(a.label||'Pastille')+'</b></div>'+(a.note?'<div class="mute">'+esc(a.note)+'</div>':'')+
+    '<div class="thumbs">'+photos.map(x=>'<img data-mid="'+esc(x.mediaId||'')+'" src="'+esc(x.dataUrl||'')+'">').join('')+'</div>'+
+    '<label class="btn r" style="cursor:pointer">Ajouter une photo<input type="file" accept="image/*" capture="environment" multiple hidden onchange="addPhotoPastille(event)"></label>'+
+    '<div class="mute" style="font-size:12px">Vos photos vont à Phénix, qui les vérifie.</div></div>'; }
+  else h+='<div class="mute" style="font-size:13px">Touchez une pastille pour la consulter et y ajouter des photos.</div>';
+  h+='<button class="btn" onclick="poserPastille()" id="btn-pose">Poser une pastille</button>';
+  return h;
+}
+const dotColor = a => a.statut==='verifiee' ? '#1E7A4C' : ({photo:'#A33A1F',info:'#1F62B8',question:'#C77A12'}[a.type]||'#1F62B8');
+let pose=false;
+function vPhotos(){
+  const mine=[]; S.plans.filter(p=>p.chantierId==S.ch).forEach(p=>(p.photos||[]).forEach(x=>{ if(x.par===S.me.email) mine.push(x); }));
+  S.photos.filter(x=>x.chantierId==S.ch).forEach(x=>mine.push(x));
+  mine.sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  return '<label class="btn r" style="cursor:pointer;min-height:56px">Prendre une photo du chantier<input type="file" accept="image/*" capture="environment" multiple hidden onchange="addPhotoLibre(event)"></label>'+
+    '<div class="mute" style="font-size:13px">Les photos sont transmises à Phénix, jamais directement au client.</div><div class="thumbs">'+
+    mine.map(x=>'<img data-mid="'+esc(x.mediaId||'')+'" src="'+esc(x.dataUrl||'')+'">').join('')+'</div>'+(mine.length?'':'<div class="mute">Aucune photo pour l\'instant.</div>');
+}
+function vPhenix(){
+  const l=S.messages.filter(x=>x.chantierId==S.ch).sort((a,b)=>a.date<b.date?-1:1);
+  return '<div style="flex:1;display:flex;flex-direction:column;gap:10px">'+(l.map(x=>'<div class="msg '+(x.de==='artisan'?'me':'ph')+'">'+esc(x.texte)+'<small>'+(x.de==='artisan'?'Vous':'Phénix')+' · '+new Date(x.date).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</small></div>').join('')||'<div class="mute">Écrivez à Phénix : question, information, problème. Phénix répond ou transmet.</div>')+'</div>'+
+    '<div style="display:flex;gap:8px"><textarea id="msg-t" rows="2" placeholder="Votre message à Phénix"></textarea><button class="btn p" onclick="sendMsg()">Envoyer</button></div>';
+}
+async function hydrateImgs(){ document.querySelectorAll('img[data-mid]').forEach(async im=>{ if(im.getAttribute('src')||!im.dataset.mid) return; try{ const d=await getMedia(im.dataset.mid); if(d) im.src=d; }catch(e){} }); }
+
+// ── Pointage ──
+const pid = () => S.me.email.replace(/[^a-z0-9]/gi,'_')+'_'+ymd(new Date())+'_'+S.ch;
+window.arrive = async () => {
+  const unseen = myPlans().filter(p => (S.vus.vus[grp(p)]||0)<(p.version||1) && (S.vus.rappel[grp(p)]||0)<(p.version||1));
+  const rec = { id:pid(), chantierId:S.ch, intervenantId:S.me.intervId, email:S.me.email, nom:S.me.nom, date:ymd(new Date()), arrivee:new Date().toISOString(), depart:null, planAlerte:unseen.map(p=>p.id) };
+  unseen.forEach(p=>S.vus.rappel[grp(p)]=p.version||1);
+  try{ await setDoc(doc(db,C.pointages,rec.id),rec); if(unseen.length) await setDoc(doc(db,C.vus,S.me.email),S.vus); toast('Arrivée enregistrée'); }catch(e){ toast('Pas de réseau : réessayez'); return; }
+  if(!S.pointages.some(x=>x.id===rec.id)) S.pointages.push(rec); render();
+};
+async function upd(patch){ const t=today(); if(!t) return; Object.assign(t,patch); try{ await setDoc(doc(db,C.pointages,t.id),t); }catch(e){ toast('Pas de réseau : réessayez'); } render(); }
+window.partir = () => upd({depart:new Date().toISOString()}).then(()=>toast('Départ enregistré'));
+window.revenir = () => upd({depart:null});
+
+// ── Plans ──
+window.S_back = () => { S.planId=null; S.pastId=null; pose=false; render(); };
+window.openPlan = async (id, pastId) => { S.tab='plans'; S.planId=id; S.pastId=pastId||null; pose=false; const p=planCur();
+  if(p){ S.vus.vus[grp(p)]=Math.max(S.vus.vus[grp(p)]||0,p.version||1); try{ await setDoc(doc(db,C.vus,S.me.email),S.vus); }catch(e){} } render(); };
+async function planUrl(p){ const f=(p.plans||[])[0]; if(!f) return ''; if(f.dataUrl) return f.dataUrl; if(f.mediaId) return (await getMedia(f.mediaId))||''; return ''; }
+async function drawPlan(){
+  const p=planCur(), box=$('pgs'); if(!p||!box) return; const du=await planUrl(p);
+  if(!du){ box.innerHTML='<div style="color:#f99;padding:20px">Plan introuvable.</div>'; return; }
+  box.innerHTML='';
+  const add=(el,i)=>{ const w=document.createElement('div'); w.className='pg'; w.dataset.page=i; w.appendChild(el); w.onclick=e=>clickPlan(e,w,i); box.appendChild(w); };
+  try{
+    if(du.indexOf('data:application/pdf')===0){
+      const pdf=await pdfjsLib.getDocument({data:atob(du.split(',')[1])}).promise;
+      for(let n=1;n<=pdf.numPages;n++){ const pg=await pdf.getPage(n), vp=pg.getViewport({scale:1.6}), cv=document.createElement('canvas'); cv.width=vp.width; cv.height=vp.height; await pg.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise; add(cv,n-1); }
+    } else { const im=new Image(); im.src=du; add(im,0); }
+  }catch(e){ box.innerHTML='<div style="color:#f99;padding:20px">Affichage impossible.</div>'; return; }
+  dots();
+}
+function dots(){ const p=planCur(); if(!p) return; document.querySelectorAll('#pgs .pg').forEach(w=>{ w.querySelectorAll('.dot').forEach(d=>d.remove());
+  (p.pastilles||[]).forEach((a,i)=>{ if((a.page||0)!==+w.dataset.page) return; const d=document.createElement('div'); d.className='dot'; d.style.cssText='left:'+a.x+'%;top:'+a.y+'%;background:'+dotColor(a)+(S.pastId===a.id?';box-shadow:0 0 0 5px rgba(31,98,184,.4)':'');
+    d.textContent=i+1; d.onclick=e=>{ e.stopPropagation(); S.pastId=a.id; pose=false; render(); }; w.appendChild(d); }); }); }
+window.poserPastille = () => { pose=!pose; $('btn-pose').textContent=pose?'Touchez le plan à l\'endroit voulu…':'Poser une pastille'; };
+async function clickPlan(e,w,i){
+  if(!pose) return; const p=planCur(); if(!p) return; const r=w.getBoundingClientRect();
+  const label=prompt('Que voulez-vous signaler ? (question ou information pour Phénix)'); if(!label){ pose=false; render(); return; }
+  const a={ id:'a'+Date.now().toString(36)+Math.random().toString(36).slice(2,5), x:+((e.clientX-r.left)/r.width*100).toFixed(1), y:+((e.clientY-r.top)/r.height*100).toFixed(1),
+    page:i, type:'question', label:label.slice(0,80), note:'', statut:'ouverte', par:S.me.email, parNom:S.me.nom, date:new Date().toISOString() };
+  pose=false; await patchPlan(p.id, pl=>{ pl.pastilles=(pl.pastilles||[]).concat([a]); }); S.pastId=a.id; toast('Pastille envoyée à Phénix'); render();
+}
+// lecture-modification-écriture : on ne touche que pastilles / photos
+async function patchPlan(id, fn){
+  const ref=doc(db,C.plans,String(id)); const s=await getDoc(ref); if(!s.exists()) return; const pl=s.data(); fn(pl);
+  await updateDoc(ref,{pastilles:pl.pastilles||[],photos:pl.photos||[]});
+  const loc=S.plans.find(x=>x.id==id); if(loc){ loc.pastilles=pl.pastilles; loc.photos=pl.photos; }
+}
+window.addPhotoPastille = async ev => {
+  const p=planCur(); if(!p||!S.pastId) return; const files=Array.from(ev.target.files); ev.target.value=''; toast('Envoi…');
+  try{ for(const f of files){ const du=await shrink(f,1600), mid=await putMedia(du,f.name);
+    await patchPlan(p.id, pl=>{ pl.photos=(pl.photos||[]).concat([{name:f.name||'photo.jpg',mediaId:mid,pastilleId:S.pastId,par:S.me.email,parNom:S.me.nom,date:new Date().toISOString()}]); }); }
+    toast('Photo envoyée'); }catch(e){ toast('Échec de l\'envoi : réessayez'); }
+  render();
+};
+window.addPhotoLibre = async ev => {
+  const files=Array.from(ev.target.files); ev.target.value=''; toast('Envoi…');
+  try{ for(const f of files){ const du=await shrink(f,1600), mid=await putMedia(du,f.name), id='ph_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+    const rec={id,chantierId:S.ch,intervenantId:S.me.intervId,par:S.me.email,parNom:S.me.nom,mediaId:mid,date:new Date().toISOString(),name:f.name||'photo.jpg'};
+    await setDoc(doc(db,C.photos,id),rec); S.photos.push(rec); } toast('Photo envoyée'); }catch(e){ toast('Échec de l\'envoi : réessayez'); }
+  render();
+};
+
+// ── Messages (tout passe par Phénix) ──
+window.sendMsg = async () => { const t=$('msg-t').value.trim(); if(!t) return;
+  const id='ms_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+  const rec={id,chantierId:S.ch,intervenantId:S.me.intervId,de:'artisan',nom:S.me.nom,texte:t,date:new Date().toISOString(),luPhenix:false};
+  try{ await setDoc(doc(db,C.messages,id),rec); if(!S.messages.some(x=>x.id===id)) S.messages.push(rec); }catch(e){ toast('Pas de réseau : réessayez'); return; } render(); };
+async function markRead(){ const un=S.messages.filter(m=>m.de==='phenix'&&!m.luArtisan&&m.chantierId==S.ch); if(!un.length) return;
+  for(const m of un){ m.luArtisan=true; try{ await updateDoc(doc(db,C.messages,m.id),{luArtisan:true}); }catch(e){} } render(); }
+window.__S = S; // test
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
+</body>
+</html>

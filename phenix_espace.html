@@ -9,6 +9,9 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 <title>Phénix-Architecture · Mon espace</title>
 <!--
+ 17/10/2026 — FUSION COMPLÈTE : l'ancien module Relances (phenix_relances.html) et le portail à deux onglets
+   (phenix_assistante.html) sont intégrés ici. Onglets : Tâches · Projets · Devis à relancer. Ce fichier remplace les trois.
+   Pour l'assistante (?restreint=1) l'onglet Devis s'ouvre en premier. Repérer : #rel-view, rsheet, window.R.
 ══════════════════════════════════════════════════════════════════════
  PHÉNIX — MON ESPACE (portail de l'assistante administrative)
 ──────────────────────────────────────────────────────────────────────
@@ -41,7 +44,7 @@
 -->
 <script type="module">
 import { initializeApp }       from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-import { getFirestore, collection, doc, onSnapshot, setDoc }
+import { getFirestore, collection, doc, onSnapshot, setDoc, deleteDoc, query, where }
                                from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged }
                                from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
@@ -91,27 +94,11 @@ try {
 // ── Auto-login transmis par le Shell (même protocole que les autres modules) ──
 window.addEventListener('message', function(ev){
   var d = ev.data;
-  if (d && d.source === 'phenix-shell' && d.action === 'auto-login' && d.email && d.password) {
+  if (d && d.source === 'phenix-shell' && d.action === 'auto-login' && d.email && d.password && ev.source === window.parent) {
     signInWithEmailAndPassword(auth, d.email, d.password).catch(function(){});
   }
 });
 try { window.parent.postMessage({ source:'phenix-module', readyForLogin:true }, '*'); } catch(e) {}
-
-window.phenixDoLogin = function(){
-  const email = (document.getElementById('pl-email').value || '').trim();
-  const pwd   = document.getElementById('pl-pwd').value || '';
-  const err   = document.getElementById('pl-err'); if (err) err.textContent = '';
-  const btn   = document.getElementById('pl-btn'); if (btn) btn.disabled = true;
-  signInWithEmailAndPassword(auth, email, pwd).catch(e => {
-    const c = (e && e.code) || '';
-    if (err) err.textContent =
-      (c.indexOf('invalid-credential')>=0 || c.indexOf('wrong-password')>=0 || c.indexOf('user-not-found')>=0) ? 'E-mail ou mot de passe incorrect.' :
-      c.indexOf('invalid-email')>=0 ? 'E-mail invalide.' :
-      c.indexOf('too-many-requests')>=0 ? 'Trop de tentatives, réessayez plus tard.' :
-      c.indexOf('network')>=0 ? 'Pas de connexion internet.' :
-      ('Erreur : ' + (c || (e && e.message) || ''));
-  }).finally(() => { if (btn) btn.disabled = false; });
-};
 
 // Écritures « fusionnées » : on ne touche que les champs modifiés d'une tâche,
 // jamais le reste du document (Dossier peut l'éditer en parallèle).
@@ -121,7 +108,58 @@ window._fb = {
   logout: () => signOut(auth),
 };
 
-let unsubT = null, unsubP = null, unsubC = null, unsubS = null, unsubL = null;
+// ── Devis à relancer (ex-module Relances) : écritures « fusionnées »
+Object.assign(window._fb, {
+  saveFacture: (id, patch) => setDoc(doc(db, 'phenix_factures', String(id)), patch, { merge: true }),
+  // Devis envoyés mais pas encore signés : collection à part, jamais mélangée à la facturation
+  saveDevisEnCours: (id, data) => setDoc(doc(db, 'phenix_devis_en_cours', String(id)), data, { merge: true }),
+  deleteDevisEnCours: (id) => deleteDoc(doc(db, 'phenix_devis_en_cours', String(id))),
+  // Notifications « statut modifié par la secrétaire » (lues par Maxime, dans le module et dans le shell)
+  saveNotif: (id, data) => setDoc(doc(db, 'phenix_notifs', String(id)), data, { merge: true }),
+});
+
+// ── [Journal] enveloppes des écritures du module Devis en cours ──
+(function(){
+  const fb = window._fb;
+  const item = id => { try{ return (typeof findItem === 'function') ? findItem(id) : null; }catch(e){ return null; } };
+  const RES = { signed:'devis signé', lost:'devis perdu / sans suite' };
+  const lib = (id, d) => { const f = (item(id) || {}).f || d || {}; return [f.client, f.numero].filter(Boolean).join(' · ') || ('#' + id); };
+  function relance(id, patch){
+    const histo = Array.isArray(patch.relanceHisto) ? patch.relanceHisto : [];
+    const last = histo[histo.length - 1] || {};
+    let act = 'relance', det = [last.canal, last.res].filter(Boolean).join(' · ');
+    if (patch.statut === 'signe' || patch.statut === 'accepte') { act = 'signe'; det = 'devis signé'; }
+    else if (patch.statut === 'perdu' || patch.statut === 'refuse') { act = 'refuse'; det = 'devis perdu / refusé' + (patch.motifPerte ? ' — ' + patch.motifPerte : ''); }
+    else if (patch.statut) { act = 'statut'; det = 'statut → ' + patch.statut; }
+    return [act, lib(id), det];
+  }
+  const sF = fb.saveFacture, sD = fb.saveDevisEnCours, dD = fb.deleteDevisEnCours;
+  fb.saveFacture = async function(id, patch){
+    let m = null; try{ m = relance(id, patch || {}); }catch(e){}
+    const r = await sF.apply(this, arguments);
+    try{ if(m) window.phenixJournal('relances', m[0], 'devis', m[1], { detail:m[2], projetNom:m[1] }); }catch(e){}
+    return r;
+  };
+  fb.saveDevisEnCours = async function(id, data){
+    let m = null;
+    try{
+      data = data || {};
+      m = (data.relanceHisto || data.statut) && !data.client ? relance(id, data)
+        : ['enregistre', lib(id, data), data.statut === 'en_cours' ? 'nouveau devis dans la file' : 'devis modifié'];
+    }catch(e){}
+    const r = await sD.apply(this, arguments);
+    try{ if(m) window.phenixJournal('relances', m[0], 'devis', m[1], { detail:m[2], projetNom:m[1] }); }catch(e){}
+    return r;
+  };
+  fb.deleteDevisEnCours = async function(id){
+    let l = ''; try{ l = lib(id); }catch(e){}
+    const r = await dD.apply(this, arguments);
+    try{ window.phenixJournal('relances', 'supprime', 'devis', l); }catch(e){}
+    return r;
+  };
+})();
+
+let unsubT = null, unsubP = null, unsubC = null, unsubS = null, unsubL = null, unsubU = null, unsubD = null, unsubN = null, unsubF = null, unsubRP = null;
 const lire = snap => { const l = []; snap.forEach(d => { const x = d.data(); if (x && x.id == null) x.id = d.id; l.push(x); }); return l; };
 onAuthStateChanged(auth, user => {
   const ov = document.getElementById('phenix-login');
@@ -130,16 +168,36 @@ onAuthStateChanged(auth, user => {
   if (unsubC) { unsubC(); unsubC = null; }
   if (unsubS) { unsubS(); unsubS = null; }
   if (unsubL) { unsubL(); unsubL = null; }
+  if (unsubU) { unsubU(); unsubU = null; }
+  if (unsubD) { unsubD(); unsubD = null; }
+  if (unsubN) { unsubN(); unsubN = null; }
+  if (unsubF) { unsubF(); unsubF = null; }
+  if (unsubRP) { unsubRP(); unsubRP = null; }
   if (user) {
     if (ov) ov.style.display = 'none';
     window.E.setUser(user.email || '');
-    unsubT = onSnapshot(collection(db, 'phenix_taches'),             s => window.E.setTaches(lire(s)),  e => window.E.onError(e, 'tâches'));
-    unsubP = onSnapshot(collection(db, 'phenix_projets_assistante'), s => window.E.setProjets(lire(s)), e => window.E.onError(e, 'projets'));
-    unsubC = onSnapshot(collection(db, 'phenix_chiffrage_assistante'), s => window.E.setChiffrage(lire(s)), e => window.E.onError(e, 'chiffrage'));
-    unsubS = onSnapshot(collection(db, 'phenix_chantier_assistante'),  s => window.E.setSuivi(lire(s)),     e => window.E.onError(e, 'suivi'));
-    unsubL = onSnapshot(collection(db, 'phenix_planning_assistante'),  s => window.E.setPlanning(lire(s)),  e => window.E.onError(e, 'planning'));
+    const _solo = /[?&]taches=1/.test(location.search);   // [Accès] compte « tâches seulement » : requête limitée à SES tâches (exigé par les règles Firestore)
+    const _qT = _solo ? query(collection(db, 'phenix_taches'), where('assigneA', '==', String(user.email || '').toLowerCase())) : collection(db, 'phenix_taches');
+    unsubT = onSnapshot(_qT, s => window.E.setTaches(lire(s)),  e => window.E.onError(e, 'tâches'));
+    const _restr = /[?&]restreint=1/.test(location.search);
+    if (!_solo) {
+      unsubP = onSnapshot(collection(db, 'phenix_projets_assistante'), s => window.E.setProjets(lire(s)), e => window.E.onError(e, 'projets'));
+      if (!_restr) unsubC = onSnapshot(collection(db, 'phenix_chiffrage_assistante'), s => window.E.setChiffrage(lire(s)), e => window.E.onError(e, 'chiffrage'));
+    }
+    // [Accès] personnes assignables = fiches phenix_users (illisible pour un compte « tâches seulement » : liste de secours)
+    if (!_solo) unsubU = onSnapshot(collection(db, 'phenix_users'), s => { window.E.setUsers(lire(s).map(function(x){ return Object.assign({}, x, { email: x.email || x.id }); })); }, function(e){ console.warn('phenix_users :', e && e.code); });
+    // ── Devis à relancer (ex-Relances) : devis en cours, notifications (admin seulement), factures-devis, contacts projets
+    window.R.setUser(user.email || '');
+    if (!_solo) {
+      unsubD = onSnapshot(collection(db, 'phenix_devis_en_cours'), s => window.R.setDevis(lire(s)), e => window.R.onError(e, 'devis'));
+      if (!window.R.restreint) unsubN = onSnapshot(query(collection(db, 'phenix_notifs'), where('lu', '==', false)), s => window.R.setNotifs(lire(s)), e => window.R.onError(e, 'notifs'));
+      unsubF = onSnapshot(collection(db, 'phenix_factures'), s => window.R.setFactures(lire(s)), e => window.R.onError(e));
+      unsubRP = onSnapshot(collection(db, 'phenix_projets'), s => window.R.setProjets(lire(s)), e => window.R.onError(e));
+    }
+    // [Accès] suivi de chantier et planning de chantier retirés : l'assistante n'a que les devis et les tâches
   } else {
-    window.E.setTaches([]); window.E.setProjets([]); window.E.setChiffrage([]); window.E.setSuivi([]); window.E.setPlanning([]);
+    window.R.setFactures([]); window.R.setProjets([]); window.R.setDevis([]);
+    window.E.setTaches([]); window.E.setProjets([]); window.E.setChiffrage([]); window.E.setSuivi([]);
     if (ov) ov.style.display = 'flex';
   }
 });
@@ -176,8 +234,6 @@ a{color:var(--accent);text-decoration:none}
 .kpi .l{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);margin-top:3px}
 .kpi.red .v{color:var(--red)} .kpi.amber .v{color:var(--amber)} .kpi.green .v{color:var(--green)}
 @media(max-width:560px){.kpis{grid-template-columns:repeat(2,1fr)}}
-.devisbar{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--accent-bg);border:1px solid rgba(79,168,240,.35);border-radius:var(--r-lg);padding:11px 14px;margin-bottom:14px}
-.devisbar b{color:#fff}.devisbar span{font-size:12px;color:var(--text2)}
 .tabs{display:flex;gap:6px;overflow-x:auto;margin-bottom:10px;padding-bottom:2px;-webkit-overflow-scrolling:touch}
 .tab{flex-shrink:0;padding:9px 14px;border-radius:99px;border:1.5px solid var(--border);background:var(--card);color:var(--text2);font-size:13px;font-weight:600}
 .tab .n{font-size:11px;background:rgba(255,255,255,.12);border-radius:99px;padding:1px 7px;margin-left:5px}
@@ -257,18 +313,70 @@ select.field{appearance:auto}
 .alerte b{color:#fff}
 .dire{background:var(--accent-bg);border:1px solid rgba(79,168,240,.35);border-radius:var(--r-md);padding:10px 12px;font-size:13px;color:var(--text);margin-bottom:10px}
 .dire small{display:block;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;font-size:10px;margin-bottom:3px}
+
+/* ── Onglet Devis : règles issues de phenix_relances.html ── */
+.card.cloture{border-left-color:#b48cf0}
+.c-amt{font-weight:600;color:#fff;white-space:nowrap;text-align:right}
+.c-amt small{display:block;font-size:10px;color:var(--text3);font-weight:400}
+.c-last{font-size:12px;color:var(--text3);margin-top:7px}
+.btn.red{background:var(--red-bg);border-color:rgba(224,119,108,.4);color:var(--red)}
+.btn[disabled],.btn.off{opacity:.4;pointer-events:none}
+.seg{display:flex;gap:6px;margin-top:10px}
+.seg .opt{flex:1;min-height:38px;padding:0 6px;font-size:12px;border-radius:10px;text-align:center}
+.restreint [data-act="newdevis"],.restreint [data-act="settings"]{display:none}
+.c-more{margin-top:12px;padding-top:12px;border-top:1px dashed var(--border);display:none}
+.card.open .c-more{display:block}
+.histo{list-style:none;font-size:12px;color:var(--text2);margin:6px 0 10px}
+.histo li{padding:5px 0;border-bottom:1px solid rgba(120,170,220,.08)}
+.histo li b{color:var(--text)}
+.dl{margin:4px 0 14px;border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden}
+.dl-row{display:flex;justify-content:space-between;gap:12px;padding:8px 10px;border-bottom:1px solid rgba(120,170,220,.08);font-size:13px}
+.dl-row:last-child{border-bottom:none}
+.dl-row .lib{flex:1;min-width:0;color:var(--text);overflow-wrap:anywhere;white-space:pre-line}
+.dl-row .det{display:block;font-size:11px;color:var(--text3);margin-top:2px;white-space:normal}
+.dl-row .mt{white-space:nowrap;text-align:right;font-weight:600;color:#fff}
+.dl-row.titre{background:rgba(79,168,240,.10);font-weight:600;color:var(--accent)}
+.dl-row.titre .lib{color:var(--accent)}
+.dl-tot{background:rgba(255,255,255,.04)}
+.dl-tot .lib{color:var(--text2);text-align:right}
+.lignes-btn{background:none;border:none;color:var(--accent);font-size:12px;font-weight:600;padding:6px 0 0;text-align:left}
+.lignes-btn:hover{text-decoration:underline}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.c-actions .btn{flex-shrink:0}
+.c-actions .btn.primary{flex-shrink:1}
+.bilan{background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px;margin-bottom:10px}
+.bilan .line{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid rgba(120,170,220,.08)}
+.bilan .line:last-child{border-bottom:none}
+.note{font-size:11px;color:var(--text3);margin-top:8px}
+.opt.sel.g{background:var(--green-bg);border-color:var(--green);color:var(--green)}
+#rsheet-back{position:fixed;inset:0;background:rgba(3,8,18,.62);z-index:50;display:none}
+#rsheet{position:fixed;left:0;right:0;bottom:0;z-index:51;display:none;max-height:92%;overflow-y:auto;background:#0f2038;border-top:1px solid var(--border);border-radius:18px 18px 0 0;padding:16px 16px calc(20px + env(safe-area-inset-bottom,0px));box-shadow:0 -10px 40px rgba(0,0,0,.5)}
+#rsheet .inner{max-width:560px;margin:0 auto}
+#rsheet h2{font-family:var(--font-serif);font-weight:400;font-size:22px;color:#fff;margin-bottom:2px}
+#rsheet .sub2{font-size:12px;color:var(--text3);margin-bottom:14px}
+#rtoast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%) translateY(20px);background:#12233f;border:1px solid var(--accent);color:#fff;padding:11px 18px;border-radius:99px;font-size:13px;z-index:90;opacity:0;pointer-events:none;transition:.25s;max-width:92%;text-align:center}
+#rtoast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ── Onglet Devis (ex-module Relances, fusionné) : écarts de style conservés ── */
+#rel-view a{color:inherit}
+#rel-view .icon-btn{flex-shrink:0}
+#rel-view .c-actions,#rsheet .c-actions{flex-wrap:nowrap}
+#rel-view .btn.primary,#rsheet .btn.primary{flex:1;min-width:96px}
+#rel-view .bar,#rsheet .bar{margin-top:5px}
+#rel-view .opt,#rsheet .opt{padding:10px 13px;min-height:40px}
+#rsheet textarea.field{min-height:120px}
+#rel-view .rel-bar{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-bottom:12px}
+#rel-view .rel-bar .sub{flex:1}
+#rel-view #rtabs{margin-bottom:10px}
 </style>
 </head>
 <body>
 
-<div id="phenix-login" style="display:flex;position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#0a1628,#12233f,#2f6fc0);align-items:center;justify-content:center;padding:20px;font-family:'DM Sans',sans-serif">
+<div id="phenix-login" style="display:none;position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#0a1628,#12233f,#2f6fc0);align-items:center;justify-content:center;padding:20px;font-family:'DM Sans',system-ui,sans-serif">
   <div style="background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.18);border-radius:16px;padding:34px 28px;max-width:360px;width:100%;text-align:center">
     <div style="font-family:'DM Serif Display',Georgia,serif;font-size:30px;color:#fff;margin-bottom:4px">Phénix<span style="color:#4fa8f0">-Architecture</span></div>
-    <div style="font-size:11px;color:rgba(255,255,255,.5);letter-spacing:.12em;text-transform:uppercase;margin-bottom:26px">Mon espace</div>
-    <input id="pl-email" type="email" autocomplete="username" placeholder="E-mail" style="width:100%;padding:12px 14px;margin-bottom:10px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;font-size:15px;font-family:inherit">
-    <input id="pl-pwd" type="password" autocomplete="current-password" placeholder="Mot de passe" onkeydown="if(event.key==='Enter')phenixDoLogin()" style="width:100%;padding:12px 14px;margin-bottom:10px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;font-size:15px;font-family:inherit">
-    <div id="pl-err" style="color:#ff9a8f;font-size:12px;min-height:16px;margin-bottom:8px"></div>
-    <button id="pl-btn" onclick="phenixDoLogin()" style="width:100%;padding:13px;border:none;border-radius:9px;background:#2f6fc0;color:#fff;font-size:15px;font-weight:600">Se connecter</button>
+    <div style="font-size:14px;color:rgba(255,255,255,.75);margin:18px 0 22px;line-height:1.5">Session fermée ou expirée.<br>La connexion se fait depuis Phénix.</div>
+    <a href="phenix_shell.html" style="display:block;padding:13px;border-radius:9px;background:#2f6fc0;color:#fff;font-size:15px;font-weight:600;text-decoration:none">Ouvrir Phénix</a>
   </div>
 </div>
 
@@ -283,22 +391,40 @@ select.field{appearance:auto}
 
   <div id="err"></div>
 
-  <div class="devisbar" id="devisbar">
-    <div><b>Devis à relancer</b><br><span>La file de relances du jour et le changement de statut des devis.</span></div>
-    <button class="btn primary" onclick="E.ouvrirDevis()"><i class="ti ti-file-invoice"></i> Ouvrir</button>
-  </div>
-
+  <style>html.solo #tabs [data-v=projets],html.solo #tabs [data-v=devis]{display:none!important}</style>
   <div class="tabs" id="tabs">
     <button class="tab active" data-v="taches" onclick="E.vue('taches')">Tâches <span class="n" id="n-taches">0</span></button>
     <button class="tab" data-v="projets" onclick="E.vue('projets')">Projets <span class="n" id="n-projets">0</span></button>
+    <button class="tab" data-v="devis" onclick="E.vue('devis')">Devis à relancer <span class="n" id="n-devis">0</span></button>
   </div>
 
   <div id="view"></div>
+
+  <!-- Onglet Devis à relancer (ex-module Relances) -->
+  <div id="rel-view" style="display:none">
+    <div class="rel-bar">
+      <div class="sub" id="subtitle">Chargement…</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn primary" data-act="newdevis" style="flex:none;min-width:0;min-height:40px">＋ Nouveau</button>
+        <button class="icon-btn" data-act="settings" title="Réglages de la cadence" aria-label="Réglages">⚙️</button>
+      </div>
+    </div>
+    <div id="errbox"></div>
+    <div id="notifs"></div>
+    <div id="conv"></div>
+    <div class="kpis" id="kpis"></div>
+    <div class="tabs" id="rtabs"></div>
+    <input class="search" id="search" type="search" placeholder="Rechercher un client, un numéro, un projet…" autocomplete="off">
+    <div id="list"></div>
+  </div>
 </div>
 
 <div id="sheet-back" onclick="E.closeSheet()"></div>
 <div id="sheet"><div class="inner" id="sheet-in"></div></div>
 <div id="toast"></div>
+<div id="rsheet-back"></div>
+<div id="rsheet"><div class="inner" id="rsheet-inner"></div></div>
+<div id="rtoast"></div>
 
 <script>
 (function(){
@@ -311,9 +437,16 @@ var NOMS = {}; // rempli depuis ASSIGNABLES juste après
 // Personnes à qui l'assistante peut assigner une tâche (en plus d'elle-même). Ajouter les autres ici, p. ex. Kévin.
 var ASSIGNABLES = [
   { email:'contact@phenixarchitecte.fr',   nom:'Maxime' },
-  { email:'c.gironde@phenixarchitecte.fr', nom:'C. Gironde' }
-  // , { email:'kevin@exemple.fr', nom:'Kévin' }
+  { email:'c.gironde@phenixarchitecte.fr', nom:'Cassandra' }
 ];
+// [Accès] secours seulement : remplacée par les fiches phenix_users (Chantier › Équipe) quand elles sont lisibles
+function majAssignables(fiches){
+  var l = [{ email:'contact@phenixarchitecte.fr', nom:'Maxime' }];
+  fiches.filter(function(f){ return f.actif !== false && ['admin','assistante','equipe','chantier'].indexOf(f.role) >= 0 && String(f.email).toLowerCase() !== 'contact@phenixarchitecte.fr'; })
+    .forEach(function(f){ l.push({ email:String(f.email).toLowerCase(), nom:String(f.nom || '').trim() || String(f.email).split('@')[0] }); });
+  ASSIGNABLES.length = 0; l.forEach(function(a){ ASSIGNABLES.push(a); });
+  NOMS = {}; ASSIGNABLES.forEach(function(a){ NOMS[a.email.toLowerCase()] = a.nom; });
+}
 var STATUT_CHIFFRAGE = { Chiffrage:'En chiffrage', Valide:'Validé', Revision:'En révision' };
 var STATUT_LOT = { chiffrage:'Chiffrage', ao:'Appel d\'offres', attribue:'Attribué', en_cours:'En cours', termine:'Terminé', reserve:'Réserves' };
 var CATEGORIES_GESTION = ['Administratif / compta','Commercial / marketing','RH / équipe','Outils & logiciels','Patrimoine / holding'];
@@ -325,7 +458,10 @@ ASSIGNABLES.forEach(function(a){ NOMS[a.email.toLowerCase()] = a.nom; });
 var $ = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 var RESTREINT = /[?&]restreint=1/.test(location.search);
-var S = { me:'', taches:[], projets:[], chiffrage:{}, suivi:{}, planning:{}, v:'taches', filtre:'all', q:'', qp:'', projetId:null, tasksReady:false };
+// [Accès] ?taches=1 : compte « tâches seulement » (alternante) — uniquement les tâches qui lui sont assignées, ni projets ni devis
+var TACHES_SEULES = /[?&]taches=1/.test(location.search);
+if (TACHES_SEULES) { try { document.documentElement.classList.add('solo'); } catch (e) {} }
+var S = { me:'', taches:[], projets:[], chiffrage:{}, suivi:{}, v:(!TACHES_SEULES && (/#devis/.test(location.hash) || (RESTREINT && !/#taches/.test(location.hash)))) ? 'devis' : 'taches', filtre:'all', q:'', qp:'', projetId:null, tasksReady:false };
 
 function iso(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function todayISO(){ return iso(new Date()); }
@@ -341,6 +477,7 @@ function visibles(){
   return S.taches.filter(function(t){
     if (!t || !t.titre) return false;
     if (t.type === 'gestion' && CATEGORIES_MASQUEES.indexOf(t.categorie) >= 0) return false;
+    if (TACHES_SEULES && String(t.assigneA || '').toLowerCase() !== S.me) return false;
     return true;
   });
 }
@@ -588,22 +725,8 @@ function phraseChiffrage(e){
   return s.trim();
 }
 function majLe(iso){ var s = String(iso||''); if (!s) return ''; var d = new Date(s); if (isNaN(d)) return ''; return d.toLocaleDateString('fr-FR') + ' ' + d.toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' }); }
-function renderPlanning(p){
-  var pl = S.planning[String(p.id)], td = todayISO();
-  var l = pl ? (pl.interventions || []) : [];
-  if (!l.length) return '<div class="sec-title"><span>Planning de chantier</span></div><div class="box"><div class="info vide">Pas encore de planning de chantier pour ce dossier.</div></div>';
-  var etat = function(i){ return i.dateFin && i.dateFin < td ? 'fait' : (i.dateDebut && i.dateDebut <= td ? 'cours' : 'avenir'); };
-  var faits = l.filter(function(i){ return etat(i) === 'fait'; }), restant = l.filter(function(i){ return etat(i) !== 'fait'; });
-  var liste = faits.slice(-2).concat(restant);
-  var h = '<div class="sec-title"><span>Planning de chantier</span></div><div class="box">' + liste.map(function(i){
-    var e = etat(i);
-    return '<div class="lot"><div class="lot-h"><span>' + esc(i.lot || 'Intervention') + '</span><span class="chip ' + (e === 'cours' ? 'amber' : e === 'fait' ? 'green' : 'blue') + '">' + (e === 'cours' ? 'En cours' : e === 'fait' ? 'Terminé' : 'À venir') + '</span></div>' +
-      '<div class="lot-m">' + (i.artisan ? '<span class="chip">🏢 ' + esc(i.artisan) + '</span>' : '<span class="chip red">⚠ Aucune entreprise</span>') + '<span class="chip">' + (i.dateDebut ? frL(i.dateDebut) : '?') + ' → ' + (i.dateFin ? frL(i.dateFin) : '?') + '</span></div></div>';
-  }).join('') + '</div>';
-  if (pl.updatedAt) h += '<div class="c-objet" style="margin-top:6px">Planning mis à jour le ' + esc(majLe(pl.updatedAt)) + '</div>';
-  return h;
-}
 function renderChiffrage(p){
+  if (RESTREINT) return '';   // [Accès] l'assistante ne voit pas le chiffrage par lot : seulement ses devis à relancer et ses tâches
   var e = etatLots(p.id);
   if (!e.chiffrage && !e.suivi) return '<div class="sec-title"><span>Chiffrage</span></div><div class="box"><div class="info vide">Pas encore de chiffrage transmis pour ce dossier.</div></div>';
   var h = '<div class="sec-title"><span>Chiffrage' + (e.chiffrage ? ' — ' + esc(e.chiffrage.chantierNom || '') : '') + '</span></div>';
@@ -673,7 +796,8 @@ function renderFiche(){
     '<div class="pgrid"><div class="box"><h3>Client</h3>' + kv('Nom', esc(p.client)) + kv('Téléphone', tel) + kv('E-mail', mail) + kv('Adresse du projet', adr) + '</div>' +
     '<div class="box"><h3>Projet</h3>' + kv('Nature', esc(p.type)) + kv('Mission', esc(p.mission)) + kv('Surface', p.surface ? esc(p.surface) + ' m²' : '') + kv('Statut', esc(p.statut)) + kv('Démarrage', p.date ? frL(p.date) : '') + '</div>' +
     '<div class="box"><h3>Artisans</h3>' + art + '</div><div class="box"><h3>Planning · prochaines échéances</h3>' + echH + '</div></div>' +
-    renderPlanning(p) + renderChiffrage(p) +
+    renderChiffrage(p) +
+    '<div class="sec-title"><span>Dossier de financement</span><button class="btn sm" onclick="E.ouvrirFinancement(\'' + esc(p.id) + '\')"><i class="ti ti-building-bank"></i> Ouvrir</button></div>' +
     '<div class="sec-title"><span>Pour répondre au client</span></div><div class="infos4">' +
     bloc('Où en est le dossier', inf.etat) + bloc('Prochaine étape', inf.prochaine) + bloc('Ce que vous pouvez dire', inf.adire) + bloc('À éviter de dire', inf.aeviter) + bloc('Questions fréquentes', inf.faq) + '</div>' +
     '<div class="sec-title"><span>Tâches de ce dossier (' + tp.length + ')</span><button class="btn sm primary" onclick="E.nouvelle(\'' + esc(p.id) + '\')"><i class="ti ti-plus"></i> Tâche</button></div>' +
@@ -687,6 +811,9 @@ function renderFiche(){
 function render(){
   document.querySelectorAll('#tabs .tab').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-v') === S.v); });
   $('n-projets').textContent = S.projets.length;
+  var dv = S.v === 'devis';
+  $('view').style.display = dv ? 'none' : ''; $('rel-view').style.display = dv ? '' : 'none';
+  if (dv) return;
   if (document.activeElement && (document.activeElement.id === 'q' || document.activeElement.id === 'qp')) {   // ne pas casser la saisie en cours
     var id = document.activeElement.id, pos = document.activeElement.selectionStart;
     (S.v === 'taches' ? renderTaches : renderProjets)();
@@ -698,13 +825,14 @@ function render(){
 window.E = {
   restreint: RESTREINT,
   setUser: function(email){ S.me = String(email||'').toLowerCase(); $('who').textContent = S.me + (RESTREINT ? '' : ' · aperçu de l\'espace assistante'); render(); },
+  setUsers: function(l){ try { majAssignables((l||[]).map(function(x){ return Object.assign({}, x, { email: x.email || x.id }); })); } catch(e){} render(); },
   setTaches: function(l){ S.taches = l || []; S.tasksReady = true; render(); },
   setProjets: function(l){ S.projets = l || []; render(); },
   onError: function(err, quoi){
     var perm = err && err.code === 'permission-denied';
     $('err').innerHTML = '<div class="banner">⚠️ Lecture des ' + esc(quoi || 'données') + ' impossible' + (perm ? ' : accès refusé par les règles Firestore (voir la règle à ajouter pour ' + (quoi === 'projets' ? 'phenix_projets_assistante' : quoi === 'chiffrage' ? 'phenix_chiffrage_assistante' : quoi === 'suivi' ? 'phenix_chantier_assistante' : quoi === 'planning' ? 'phenix_planning_assistante' : 'phenix_taches') + ').' : ' : ' + esc((err && err.message) || err)) + '</div>';
   },
-  vue: function(v){ S.v = v; if (v === 'projets') S.projetId = null; render(); },
+  vue: function(v){ if (TACHES_SEULES) v = 'taches'; S.v = v; if (v === 'projets') S.projetId = null; render(); },
   setQ: function(v){ S.q = v; render(); }, setQp: function(v){ S.qp = v; render(); },
   setFiltre: function(f){ S.filtre = f; render(); },
   ouvrirProjet: function(id){
@@ -713,19 +841,1011 @@ window.E = {
       if (p && (!window.__consult[k] || Date.now() - window.__consult[k] > 600000)) { window.__consult[k] = Date.now(); jr('consulte', 'fiche projet', p.nom || p.client || p.ref, { projetId:String(p.id), projetNom:p.nom || p.client || '' }); } } catch(e){}
   },
   fermerProjet: function(){ S.projetId = null; render(); },
+  ouvrirFinancement: function(id){
+    var p = projetDe(id); if (!p) return;
+    try { localStorage.setItem('phenix-open-in-financement', JSON.stringify({ projetId:String(p.id), nom:p.nom||'', client:p.client||'', adresse:p.adresse||'', surface:p.surface||'', budget:'', type:p.type||'', phase:p.phase||'', ref:p.ref||'', _source:'phenix_espace', _ts:Date.now() })); } catch(e){}
+    try { if (window.parent && window.parent !== window) { window.parent.postMessage({ source:'phenix-espace', action:'open-module', module:'financement' }, '*'); return; } } catch(e){}
+    window.open('phenix_financement.html?projet=' + encodeURIComponent(p.id), '_blank');
+  },
   nouvelle: sheetNouvelle, nset: nset, nkeep: nkeep, saveNew: saveNew,
   note: sheetNote, saveNote: saveNote, closeSheet: closeSheet,
   terminer: terminer, enCours: enCours, rouvrir: rouvrir, prendre: prendre, assigner: assigner, assignerA: sheetAssigner,
   setChiffrage: function(l){ var m = {}; (l || []).forEach(function(x){ m[String(x.projetId || x.id)] = x; }); S.chiffrage = m; render(); },
   setSuivi: function(l){ var m = {}; (l || []).forEach(function(x){ m[String(x.projetId || x.id)] = x; }); S.suivi = m; render(); },
-  setPlanning: function(l){ var m = {}; (l || []).forEach(function(x){ m[String(x.projetId || x.id)] = x; }); S.planning = m; render(); },
-  ouvrirDevis: function(){
-    try { if (window.parent && window.parent !== window) { window.parent.postMessage({ source:'phenix-espace', action:'open-module', module:'relances' }, '*'); return; } } catch(e){}
-    toast('Ouvrez « Devis » depuis le menu du Shell.');
-  },
   logout: function(){ if (window._fb) window._fb.logout(); }
 };
 render();
+})();
+</script>
+
+<!-- ═══ Onglet « Devis à relancer » (ex-phenix_relances.html) ═══ -->
+<script>
+(function(){
+'use strict';
+
+/* ════════════════════════════════════════════════════════════
+   PHÉNIX RELANCES — file de relance des devis en attente
+   Source : collection phenix_factures (type 'devis', statut 'en_attente')
+   Contacts : collection phenix_projets (client, email, tel)
+   Les relances sont écrites DANS le devis (champs relance*), pour rester
+   visibles dans Dossier et ne créer aucune nouvelle collection.
+   ════════════════════════════════════════════════════════════ */
+
+var DEFAULT_CFG = { cadence:[3,10,21], cloture:45, ecartMin:4, signature:'Phénix-Architecture · 04 73 73 00 59' };
+var CFG_KEY = 'phenix_relances_cfg';
+var PROXY = 'https://phenix-proxy.phenixarchitecte.workers.dev';
+
+var FACTURES = [], PROJETS = [], DEVIS = [], NOTIFS = [], ME = '', LOADED = { f:false, p:false, d:false };
+var RESTREINT = /[?&]restreint=1/.test(location.search);   // compte « Relances seulement » (secrétaire)
+var tab = 'todo', search = '', openIds = {};
+var CFG = loadCfg();
+
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+
+/* ── Réglages (stockés sur l'appareil) ── */
+function loadCfg(){
+  var c = JSON.parse(JSON.stringify(DEFAULT_CFG));
+  try {
+    var raw = JSON.parse(localStorage.getItem(CFG_KEY) || 'null');
+    if (raw) {
+      if (Array.isArray(raw.cadence) && raw.cadence.length) c.cadence = raw.cadence.map(Number).filter(function(n){ return n > 0; });
+      if (raw.cloture > 0) c.cloture = Number(raw.cloture);
+      if (raw.ecartMin >= 0) c.ecartMin = Number(raw.ecartMin);
+      if (typeof raw.signature === 'string' && raw.signature.trim()) c.signature = raw.signature.trim();
+    }
+  } catch(e) {}
+  if (!c.cadence.length) c.cadence = DEFAULT_CFG.cadence.slice();
+  return c;
+}
+
+/* ── Dates (toujours en AAAA-MM-JJ local) ── */
+function iso(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function todayISO(){ return window.__TODAY || iso(new Date()); }
+function parseISO(s){ var p = String(s).slice(0,10).split('-').map(Number); return new Date(p[0], p[1]-1, p[2]); }
+function addDays(s, n){ var d = parseISO(s); d.setDate(d.getDate()+n); return iso(d); }
+function diffDays(a, b){ return Math.round((parseISO(a) - parseISO(b)) / 86400000); }
+function normDate(v){
+  if (!v) return '';
+  try {
+    if (typeof v === 'string') {
+      if (/^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0,10);
+      var m = v.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+      if (m) return m[3]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[1]).padStart(2,'0');
+      return '';
+    }
+    if (typeof v.toDate === 'function') return iso(v.toDate());
+    if (typeof v.seconds === 'number') return iso(new Date(v.seconds*1000));
+  } catch(e) {}
+  return '';
+}
+function fmtDate(s){ if (!s) return '—'; var p = s.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
+function fmtDateShort(s){ if (!s) return '—'; var p = s.split('-'); return p[2]+'/'+p[1]; }
+function euros(n){ return (Math.round(n)||0).toLocaleString('fr-FR') + ' €'; }
+function ago(days){ return days <= 0 ? "aujourd'hui" : days === 1 ? 'hier' : 'il y a ' + days + ' j'; }
+
+/* ── Cœur : quelle est la prochaine action sur ce devis ? ──
+   - relance n°k à J+cadence[k] depuis l'envoi (jamais moins de ecartMin jours après la précédente)
+   - une fois la cadence épuisée, ou si le devis a dépassé « cloture » jours : décision de clôture
+   - une date « à rappeler » saisie à la main prime sur tout le reste */
+function etat(f, today, cfg){
+  var base = normDate(f.dateEnvoi) || normDate(f.dateEmission);
+  var nb = parseInt(f.relanceNb, 10) || 0;
+  var der = normDate(f.relanceDerniere);
+  if (!base) return { type:'completer', base:'', nb:nb, der:der, due:'', age:0, retard:0, jours:0, bucket:'later' };
+  var age = diffDays(today, base);
+  var gap = der ? addDays(der, cfg.ecartMin) : '';
+  var man = normDate(f.relanceProchaine);
+  var type = 'relance', due;
+  if (man) { due = man; }
+  else if (age >= cfg.cloture) { type = 'cloture'; due = addDays(base, cfg.cloture); if (gap && gap > due) due = gap; }
+  else if (nb < cfg.cadence.length) { due = addDays(base, cfg.cadence[nb]); if (gap && gap > due) due = gap; }
+  else { type = 'cloture'; due = addDays(base, cfg.cloture); if (gap && gap > due) due = gap; }
+  var jours = diffDays(due, today);            // >0 : dans le futur ; <0 : en retard
+  var bucket = jours < 0 ? 'retard' : jours === 0 ? 'today' : jours <= 7 ? 'soon' : 'later';
+  return { type:type, base:base, age:age, nb:nb, der:der, due:due, retard:Math.max(0,-jours), jours:jours, bucket:bucket };
+}
+
+function projetDe(f){
+  for (var i=0;i<PROJETS.length;i++) if (String(PROJETS[i].id) === String(f.projetId)) return PROJETS[i];
+  return null;
+}
+function ttc(f){
+  var ht = parseFloat(f.montantHt) || 0;
+  var t = parseFloat(f.montantTtcDevis); if (t > 0) return t;
+  var tva = (f.tva === undefined || f.tva === '' || f.tva === null) ? 20 : parseFloat(f.tva);
+  return ht * (1 + (isNaN(tva) ? 20 : tva) / 100);
+}
+/* Deux sources, une même file :
+   - 'dec'  : collection phenix_devis_en_cours (devis envoyés, pas encore signés — pas de projet)
+   - 'fact' : devis de Dossier restés « en attente » (ex. devis complémentaire d'un client existant) */
+function allItems(){
+  var out = [];
+  DEVIS.forEach(function(d){ if (d) out.push({ src:'dec', f:d, p:null }); });
+  FACTURES.forEach(function(f){ if (f && f.type === 'devis') out.push({ src:'fact', f:f, p:projetDe(f) }); });
+  return out;
+}
+function statutNorm(it){
+  var s = it.f.statut;
+  if (it.src === 'dec') return s === 'signe' ? 'accepte' : s === 'perdu' ? 'refuse' : 'en_attente';
+  return s || 'en_attente';
+}
+function estEnAttente(it){ return statutNorm(it) === 'en_attente'; }
+function contact(it){
+  if (it.src === 'dec') return { tel: it.f.tel || '', email: it.f.email || '' };
+  return { tel: (it.p && it.p.tel) || '', email: (it.p && it.p.email) || '' };
+}
+
+function queue(){
+  var today = todayISO();
+  return allItems().filter(estEnAttente).map(function(it){
+    it.e = etat(it.f, today, CFG);
+    return it;
+  });
+}
+function ordre(a, b){
+  // Tri automatique, uniquement par date (jamais par montant), du plus ancien au plus récent.
+  // 1) les devis À RAPPELER maintenant (relance due ou en retard) passent en premier ;
+  //    puis ceux dont la relance est à venir ; puis ceux sans date d'envoi.
+  // 2) à l'intérieur de chaque groupe : par date de référence, la plus ancienne en haut :
+  //    - devis jamais relancé : date du devis
+  //    - devis déjà appelé (en attente de réponse) : date de son dernier appel → il redescend
+  //      derrière les devis pas encore contactés, puis remonte au fil des jours
+  var rk = function(x){ return x.e.type === 'completer' ? 2 : (x.e.bucket === 'retard' || x.e.bucket === 'today') ? 0 : 1; };
+  var ga = rk(a), gb = rk(b);
+  if (ga !== gb) return ga - gb;
+  var da = a.e.der || a.e.base || '', db = b.e.der || b.e.base || '';
+  if (da !== db) { if (!da) return 1; if (!db) return -1; return da < db ? -1 : 1; }
+  var ba = a.e.base || '', bb = b.e.base || '';
+  if (ba !== bb) { if (!ba) return 1; if (!bb) return -1; return ba < bb ? -1 : 1; }
+  return 0;
+}
+function nomClient(it){
+  if (it.src === 'dec') return it.f.client || 'Client sans nom';
+  var p = it.p; var c = p && (p.client || p.nom);
+  return c || it.f.client || 'Client sans nom';
+}
+function matchSearch(it, q){
+  if (!q) return true;
+  q = q.toLowerCase();
+  var hay = [nomClient(it), it.f.numero, it.f.objet, it.f.email, it.p && it.p.nom, it.p && it.p.ref, it.p && it.p.email].join(' ').toLowerCase();
+  return hay.indexOf(q) >= 0;
+}
+
+/* ── Rendu ── */
+function render(){
+  var q = queue().sort(ordre);
+  var aFaire = q.filter(function(i){ return i.e.bucket==='retard' || i.e.bucket==='today'; });
+  var retard = q.filter(function(i){ return i.e.bucket==='retard'; });
+  var soon = q.filter(function(i){ return i.e.bucket==='soon'; });
+  var enJeu = q.reduce(function(s,i){ return s + (parseFloat(i.f.montantHt)||0); }, 0);
+  var st = bilan();
+
+  $('subtitle').textContent = !(LOADED.f && LOADED.p && LOADED.d) ? 'Chargement des devis…' :
+    q.length + ' devis en attente de signature · ' + aFaire.length + ' à relancer';
+  renderConv(); renderNotifs();
+
+  $('kpis').innerHTML =
+    kpi(aFaire.length, 'À relancer', aFaire.length ? 'amber' : 'green') +
+    kpi(retard.length, 'En retard', retard.length ? 'red' : '') +
+    kpi(euros(enJeu), 'En attente (HT)', '') +
+    kpi(st.relances.n ? st.relances.taux + ' %' : '—', 'Signés après relance', st.relances.n ? 'green' : '');
+
+  $('rtabs').innerHTML =
+    tabBtn('todo', 'À relancer', aFaire.length) + tabBtn('soon', 'À venir', soon.length) +
+    tabBtn('all', 'Tous', q.length) + tabBtn('clos', 'Clôturés', null) + tabBtn('bilan', 'Bilan', null);
+
+  var html = '';
+  if (tab === 'bilan') { html = renderBilan(st); }
+  else if (tab === 'clos') {
+    var cl = clotures().filter(function(i){ return matchSearch(i, search); });
+    html = cl.length ? '<div class="note" style="margin:0 0 10px">Devis refusés depuis ce module. Un clic sur « En attente » remet le devis dans la file.</div>' + cl.map(cardClos).join('')
+                     : '<div class="empty"><div class="big">📭</div>Aucun devis clôturé pour l\'instant.</div>';
+  } else {
+    var src = tab === 'todo' ? aFaire : tab === 'soon' ? soon : q;
+    src = src.filter(function(i){ return matchSearch(i, search); });
+    if (tab === 'todo') {
+      var manquants = q.filter(function(i){ return i.e.type==='completer' && matchSearch(i, search); });
+      if (manquants.length) src = src.concat(manquants);
+    }
+    if (!src.length) {
+      html = '<div class="empty"><div class="big">' + (tab==='todo' ? '🎉' : '📭') + '</div>' +
+        (tab==='todo' ? (q.length ? "Rien à relancer aujourd'hui." : 'Aucun devis en attente. Ajoutez-en un avec « ＋ Nouveau ».') :
+         tab==='soon' ? 'Aucune relance prévue dans les 7 prochains jours.' : 'Aucun devis en attente. Ajoutez-en un avec « ＋ Nouveau ».') + '</div>';
+    } else {
+      html = src.map(card).join('');
+    }
+  }
+  $('list').innerHTML = html;
+  $('search').style.display = tab === 'bilan' ? 'none' : '';
+}
+function kpi(v, l, cls){ return '<div class="kpi ' + (cls||'') + '"><div class="v">' + esc(v) + '</div><div class="l">' + esc(l) + '</div></div>'; }
+function tabBtn(k, l, n){ return '<button class="tab ' + (tab===k?'active':'') + '" data-act="tab" data-tab="' + k + '">' + l + (n===null?'':'<span class="n">'+n+'</span>') + '</button>'; }
+
+/* ── Lignes du devis (dépliable) ── */
+function lignesDe(f){ return Array.isArray(f.lignes) ? f.lignes.filter(function(l){ return l && typeof l === 'object'; }) : []; }
+function numL(x){ var n = parseFloat(String(x == null ? '' : x).replace(',', '.')); return isFinite(n) ? n : 0; }
+function qteFmt(n){ return (Math.round(n * 100) / 100).toLocaleString('fr-FR'); }
+function eur2(n){ return (Math.round(n * 100) / 100).toLocaleString('fr-FR', { minimumFractionDigits:2, maximumFractionDigits:2 }) + ' €'; }
+function lignesHtml(f){
+  var L = lignesDe(f);
+  if (!L.length) return '<span class="lbl">Contenu du devis</span><div class="note" style="margin:0 0 14px">Aucune ligne enregistrée pour ce devis' + (RESTREINT ? '.' : ' : modifiez le devis et importez le PDF pour les relever.') + '</div>';
+  var h = '<span class="lbl">Contenu du devis · ' + L.length + ' ligne' + (L.length > 1 ? 's' : '') + '</span><div class="dl">';
+  L.forEach(function(l){
+    var lib = String(l.libelle || l.designation || l.description || l.label || l.titre || '').trim();
+    var qte = numL(l.qte != null ? l.qte : l.quantite), pu = numL(l.puHt != null ? l.puHt : (l.pu != null ? l.pu : l.prixUnitaire));
+    var mt = numL(l.montantHt != null ? l.montantHt : (l.totalHt != null ? l.totalHt : l.total));
+    if (!mt && qte && pu) mt = qte * pu;
+    var unite = String(l.unite || l.unit || '').trim();
+    if (!lib && !mt) return;
+    if (!mt && !qte && !pu) { h += '<div class="dl-row titre"><div class="lib">' + esc(lib) + '</div></div>'; return; }
+    var det = (qte ? qteFmt(qte) + (unite ? ' ' + esc(unite) : '') : '') + (qte && pu ? ' × ' + eur2(pu) : '');
+    h += '<div class="dl-row"><div class="lib">' + esc(lib || '—') + (det ? '<span class="det">' + det + '</span>' : '') + '</div><div class="mt">' + (mt ? eur2(mt) : '') + '</div></div>';
+  });
+  var ht = numL(f.montantHt), t = ttc(f);
+  h += '<div class="dl-row dl-tot"><div class="lib">Total HT</div><div class="mt">' + eur2(ht) + '</div></div>' +
+       '<div class="dl-row dl-tot"><div class="lib">Total TTC</div><div class="mt">' + eur2(t) + '</div></div></div>';
+  return h;
+}
+
+function card(it){
+  var f = it.f, p = it.p, e = it.e;
+  var id = String(f.id);
+  var isOpen = !!openIds[id];
+  var cls = e.type === 'completer' ? '' : e.type === 'cloture' && e.bucket !== 'later' ? 'cloture' : e.bucket === 'later' ? '' : e.bucket;
+  var chips = '';
+  if (e.type === 'completer') chips += '<span class="chip red">Date d\'envoi manquante</span>';
+  else {
+    if (e.bucket === 'retard') chips += '<span class="chip red">En retard de ' + e.retard + ' j</span>';
+    else if (e.bucket === 'today') chips += '<span class="chip amber">À relancer aujourd\'hui</span>';
+    else if (e.bucket === 'soon') chips += '<span class="chip blue">Dans ' + e.jours + ' j (' + fmtDateShort(e.due) + ')</span>';
+    else chips += '<span class="chip">Prévue le ' + fmtDateShort(e.due) + '</span>';
+    if (e.type === 'cloture') chips += '<span class="chip violet">Dernière relance ou clôture</span>';
+    else chips += '<span class="chip blue">Relance n°' + (e.nb + 1) + '</span>';
+    chips += '<span class="chip">Devis du ' + fmtDate(e.base) + ' · ' + ago(e.age) + '</span>';
+    if (e.der) chips += '<span class="chip">Dernière relance le ' + fmtDate(e.der) + '</span>';
+  }
+  var histo = Array.isArray(f.relanceHisto) ? f.relanceHisto : [];
+  var last = histo.length ? histo[histo.length-1] : null;
+  var lastTxt = '';
+  if (last) {
+    var ld = normDate(last.d);
+    lastTxt = '<div class="c-last">Dernier contact : ' + canalIcon(last.canal) + ' ' + esc(resLabel(last.res)) + (ld ? ' · ' + ago(diffDays(todayISO(), ld)) : '') +
+      (last.note ? ' — « ' + esc(String(last.note).slice(0, 90)) + (String(last.note).length > 90 ? '…' : '') + ' »' : '') + '</div>';
+  }
+  var ct = contact(it);
+  var tel = ct.tel ? String(ct.tel).replace(/[^\d+]/g, '') : '';
+  var mail = ct.email || '';
+  var det = lignesHtml(f);
+  det += '<span class="lbl">Historique des relances</span>';
+  det += histo.length ? '<ul class="histo">' + histo.slice().reverse().map(function(h){
+    var d = normDate(h.d);
+    return '<li>' + canalIcon(h.canal) + ' <b>' + fmtDate(d) + '</b> · ' + esc(resLabel(h.res)) + (h.note ? ' — ' + esc(h.note) : '') + (h.par ? ' <span style="color:var(--text3)">(' + esc(String(h.par).split('@')[0]) + ')</span>' : '') + '</li>';
+  }).join('') + '</ul>' : '<div class="note" style="margin:0 0 10px">Aucune relance consignée pour l\'instant.</div>';
+  if (!RESTREINT) det += '<div class="row"><div style="flex:1;min-width:160px"><span class="lbl">Date d\'envoi du devis</span><input class="field" type="date" id="env-' + esc(id) + '" value="' + esc(e.base) + '"></div>' +
+         '<button class="btn" data-act="saveenvoi" data-id="' + esc(id) + '" style="align-self:flex-end">Enregistrer</button></div>';
+  det += '<div class="row" style="margin-top:12px">' +
+         (it.src === 'dec' ? (RESTREINT ? '' : '<button class="btn" data-act="editdec" data-id="' + esc(id) + '">✏️ Modifier</button><button class="btn red" data-act="deldec" data-id="' + esc(id) + '">🗑 Supprimer</button>') :
+          (RESTREINT ? '' : '<button class="btn" data-act="opendossier" data-id="' + esc(id) + '">📁 Ouvrir le dossier</button>')) +
+         '</div><div class="note">' + esc(f.numero||'') + ' · envoyé le ' + fmtDate(e.base) + ' · ' + esc(mail || 'pas d\'e-mail') + (tel ? ' · ' + esc(ct.tel) : ' · pas de téléphone') +
+         (it.src === 'fact' ? ' · devis issu de Dossier' : '') + '</div>';
+
+  return '<div class="card ' + cls + (isOpen?' open':'') + '" data-id="' + esc(id) + '">' +
+    '<div class="c-top"><div><div class="c-client">' + esc(nomClient(it)) + '</div>' +
+      '<div class="c-objet">' + esc(f.numero || '') + (f.objet ? ' · ' + esc(f.objet) : '') + '</div></div>' +
+      '<div class="c-amt">' + euros(parseFloat(f.montantHt)||0) + '<small>HT</small></div></div>' +
+    '<div class="c-meta">' + chips + '</div>' + lastTxt +
+    '<button class="lignes-btn" data-act="more" data-id="' + esc(id) + '">' + (isOpen ? '▲ Masquer le détail du devis' : '▼ Voir les lignes du devis' + (lignesDe(f).length ? ' (' + lignesDe(f).length + ')' : '')) + '</button>' +
+    '<div class="c-actions">' +
+      (tel ? '<a class="btn" href="tel:' + esc(tel) + '" title="Appeler" aria-label="Appeler">📞</a>' : '<span class="btn off" title="Pas de téléphone">📞</span>') +
+      '<button class="btn" data-act="msg" data-id="' + esc(id) + '">✉️ Message</button>' +
+      '<button class="btn primary" data-act="log" data-id="' + esc(id) + '">✓ Consigner</button>' +
+      '<button class="btn ghost" data-act="more" data-id="' + esc(id) + '" title="Détails" aria-label="Détails">⋯</button>' +
+    '</div>' + statutBtns(it) +
+    '<div class="c-more">' + det + '</div></div>';
+}
+
+/* ── Notifications : « la secrétaire a changé le statut d'un devis » ── */
+var STATUT_LABEL = { en_attente:'En attente', refuse:'Refusé', accepte:'Signé' };
+function normStatut(src, s){
+  if (src === 'dec') return s === 'signe' ? 'accepte' : s === 'perdu' ? 'refuse' : 'en_attente';
+  return s || 'en_attente';
+}
+function notifierStatut(it, avant, apres, motif){
+  var de = normStatut(it.src, avant), vers = normStatut(it.src, apres);
+  if (de === vers) return;
+  var f = it.f;
+  var n = { id:'n-' + Date.now() + '-' + Math.floor(Math.random()*1000), type:'statut', devisId:String(f.id), src:it.src, client:nomClient(it), numero:f.numero || '',
+            objet:f.objet || '', montantHt:parseFloat(f.montantHt) || 0, de:de, vers:vers, motif: vers === 'refuse' ? (motif || '') : '', par:ME, date:new Date().toISOString(), lu:false };
+  try { window._fb.saveNotif(n.id, JSON.parse(JSON.stringify(n))).catch(function(e){ console.warn('Notification non enregistrée :', e); }); }
+  catch(e) { console.warn('Notification non enregistrée :', e); }
+}
+function fmtQuand(iso){
+  var d = new Date(iso); if (isNaN(d)) return '';
+  var j = iso10(d), hh = String(d.getHours()).padStart(2,'0') + 'h' + String(d.getMinutes()).padStart(2,'0');
+  var t = todayISO();
+  return j === t ? "aujourd'hui " + hh : j === addDays(t, -1) ? 'hier ' + hh : fmtDateShort(j) + ' ' + hh;
+}
+function iso10(d){ return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+function qui(par){ var x = String(par || '').split('@')[0]; return x ? x.charAt(0).toUpperCase() + x.slice(1) : 'La secrétaire'; }
+function renderNotifs(){
+  var el = $('notifs');
+  if (RESTREINT || !NOTIFS.length) { el.innerHTML = ''; return; }
+  var l = NOTIFS.slice().sort(function(a,b){ return String(b.date) < String(a.date) ? -1 : 1; });
+  el.innerHTML = '<div class="banner" style="background:var(--accent-bg);border-color:rgba(79,168,240,.45);color:var(--accent)"><b>🔔 ' + l.length + ' changement' + (l.length > 1 ? 's' : '') + ' de statut</b>' +
+    l.slice(0, 8).map(function(n){
+      var col = n.vers === 'accepte' ? 'var(--green)' : n.vers === 'refuse' ? 'var(--red)' : 'var(--amber)';
+      return '<div class="row" style="margin-top:8px;align-items:flex-start"><div style="flex:1;min-width:150px;color:var(--text)">' +
+        '<div style="font-size:11px;color:var(--text3)">' + esc(fmtQuand(n.date)) + ' · ' + esc(qui(n.par)) + '</div>' +
+        '<div><b>' + esc(n.client || '') + '</b> · ' + esc(n.numero || '') + ' · ' + euros(n.montantHt || 0) + ' HT</div>' +
+        '<div style="color:' + col + '">' + esc(STATUT_LABEL[n.de] || n.de) + ' → <b>' + esc(STATUT_LABEL[n.vers] || n.vers) + '</b>' + (n.motif ? ' · ' + esc(n.motif) : '') + '</div></div>' +
+        '<button class="btn ghost" data-act="notiflu" data-id="' + esc(String(n.id)) + '" style="min-height:36px">Lu</button></div>';
+    }).join('') +
+    (l.length > 8 ? '<div class="note">… et ' + (l.length - 8) + ' autre(s).</div>' : '') +
+    '<div class="row"><button class="btn" data-act="notiftout" style="min-height:36px">Tout marquer comme lu</button></div></div>';
+}
+function marquerLu(ids){
+  ids.forEach(function(id){ try { window._fb.saveNotif(id, { lu:true, luLe:new Date().toISOString() }).catch(function(e){ toast('⚠️ ' + (e && e.message || e)); }); } catch(e) {} });
+  NOTIFS = NOTIFS.filter(function(n){ return ids.indexOf(String(n.id)) < 0; });   // affichage immédiat
+  render();
+}
+
+/* ── Statut du devis : En attente / Refusé / Accepté ── */
+function statutBtns(it){
+  var cur = statutNorm(it), id = String(it.f.id);
+  return '<div class="seg">' + [['en_attente','En attente',''],['refuse','Refusé','r'],['accepte','Signé','g']].map(function(x){
+    return '<button class="opt ' + (cur === x[0] ? 'sel ' + x[2] : '') + '" data-act="setstatut" data-id="' + esc(id) + '" data-v="' + x[0] + '">' + x[1] + '</button>';
+  }).join('') + '</div>';
+}
+function clotures(){
+  var key = function(it){ return normDate(it.f.dateAcceptation) || normDate(it.f.dateCloture) || normDate(it.f.dateEnvoi) || ''; };
+  return allItems().filter(function(it){
+    if (estEnAttente(it)) return false;
+    if (RESTREINT && statutNorm(it) === 'accepte') return false;   // [Portail] un devis signé disparaît du fichier de l'assistante
+    if (it.src === 'fact') return (parseInt(it.f.relanceNb,10)||0) > 0 || !!normDate(it.f.dateAcceptation) || !!normDate(it.f.dateCloture);   // on ne liste pas tout l'historique de Dossier
+    return true;
+  }).sort(function(a,b){ return key(a) < key(b) ? 1 : -1; }).slice(0, 40);
+}
+function cardClos(it){
+  var f = it.f, ok = statutNorm(it) === 'accepte';
+  var dt = normDate(ok ? f.dateAcceptation : f.dateCloture);
+  return '<div class="card" style="border-left-color:' + (ok ? 'var(--green)' : 'var(--red)') + '"><div class="c-top"><div><div class="c-client" style="font-size:15px">' + esc(nomClient(it)) + '</div>' +
+    '<div class="c-objet">' + esc(f.numero||'') + (f.objet ? ' · ' + esc(f.objet) : '') + '</div></div><div class="c-amt">' + euros(parseFloat(f.montantHt)||0) + '<small>HT</small></div></div>' +
+    '<div class="c-meta"><span class="chip ' + (ok ? 'green' : 'red') + '">' + (ok ? 'Signé' : 'Refusé' + (f.motifPerte ? ' · ' + esc(f.motifPerte) : '')) + '</span>' +
+    '<span class="chip">Devis du ' + fmtDate(normDate(f.dateEnvoi) || normDate(f.dateEmission)) + '</span>' + (dt ? '<span class="chip">clôturé le ' + fmtDate(dt) + '</span>' : '') + '<span class="chip">' + (parseInt(f.relanceNb,10)||0) + ' relance(s)</span></div>' + statutBtns(it) + '</div>';
+}
+async function setStatut(id, v){
+  var it = findItem(id); if (!it) return;
+  if (statutNorm(it) === v) return;
+  var today = todayISO();
+  var ST = it.src === 'dec' ? { ok:'signe', ko:'perdu', att:'en_cours' } : { ok:'accepte', ko:'refuse', att:'en_attente' };
+  if (v === 'accepte') {
+    if (!confirm('Marquer ce devis comme SIGNÉ ?' + (RESTREINT ? '\n\nIl disparaîtra de votre liste et le dossier sera créé automatiquement.' : ''))) return;
+    // [Portail] le dossier est créé automatiquement par Dossier (plus d'ouverture manuelle ici)
+    await persist(it, { statut:ST.ok, dateAcceptation:today, dateCloture:'', motifPerte:'', relanceProchaine:'' }, RESTREINT ? '✅ Devis signé — le dossier sera créé automatiquement.' : '✅ Devis signé — le dossier se crée à l\'ouverture de Dossier.');
+  } else if (v === 'refuse') {
+    sheetState = { kind:'refus', id:String(id), motif:MOTIFS[0] }; renderRefus();
+  } else {
+    await persist(it, { statut:ST.att, motifPerte:'', dateCloture:'', dateAcceptation:'', relanceProchaine: addDays(today, 3) }, 'Devis remis en attente.');
+  }
+}
+function renderRefus(){
+  var s2 = sheetState; if (!s2) return;
+  var it = findItem(s2.id); if (!it) { closeSheet(); return; }
+  var h = '<h2>Devis refusé</h2><div class="sub2">' + esc(nomClient(it)) + ' · ' + esc(it.f.numero||'') + ' · ' + euros(parseFloat(it.f.montantHt)||0) + ' HT</div>' +
+    '<div class="fgroup"><span class="lbl">Motif</span><div class="chips">' + MOTIFS.map(function(m){ return '<button class="opt ' + (m === s2.motif ? 'sel r' : '') + '" data-act="r-motif" data-v="' + esc(m) + '">' + esc(m) + '</button>'; }).join('') + '</div></div>' +
+    '<div class="row"><button class="btn ghost" data-act="closesheet">Annuler</button><button class="btn red" data-act="r-save" style="flex:1">Marquer refusé</button></div>';
+  openSheet(h);
+}
+async function saveRefus(){
+  var s2 = sheetState; if (!s2 || s2.kind !== 'refus') return;
+  var it = findItem(s2.id); if (!it) return;
+  var motif = s2.motif;
+  closeSheet();
+  await persist(it, { statut: it.src === 'dec' ? 'perdu' : 'refuse', dateCloture: todayISO(), motifPerte: motif, dateAcceptation:'', relanceProchaine:'' }, 'Devis marqué refusé.');
+}
+
+var RESULTATS = [
+  { k:'noans',    l:'Pas de réponse',     cls:'' },
+  { k:'callback', l:'À rappeler',         cls:'', ask:3 },
+  { k:'think',    l:'Veut réfléchir',     cls:'', ask:7 },
+  { k:'signed',   l:'Signé ✅',           cls:'g', final:true },
+  { k:'lost',     l:'Perdu / sans suite', cls:'r', final:true }
+];
+var MOTIFS = ['Prix trop élevé','Concurrent retenu','Projet reporté ou abandonné','Sans réponse (sans suite)','Autre'];
+var CANAUX = { tel:'📞 Téléphone', mail:'✉️ Mail', sms:'💬 SMS' };
+function canalIcon(c){ return c === 'tel' ? '📞' : c === 'mail' ? '✉️' : c === 'sms' ? '💬' : '•'; }
+function resLabel(k){ for (var i=0;i<RESULTATS.length;i++) if (RESULTATS[i].k === k) return RESULTATS[i].l; return k || ''; }
+
+/* ── Bilan : taux de signature des devis relancés vs non relancés (indicatif) ── */
+function bilan(){
+  var today = todayISO();
+  var limite = addDays(today, -365);
+  var rel = { n:0, signes:0 }, non = { n:0, signes:0 };
+  var clos = [];
+  allItems().forEach(function(it){
+    var f = it.f;
+    var base = normDate(f.dateEnvoi) || normDate(f.dateEmission);
+    if (!base || base < limite) return;
+    var histo = Array.isArray(f.relanceHisto) ? f.relanceHisto : [];
+    var relance = (parseInt(f.relanceNb,10) || 0) > 0 || histo.length > 0;
+    var g = relance ? rel : non;
+    var statut = statutNorm(it);
+    // on ne compte que les devis « tranchés » ou assez anciens pour l'être
+    var tranche = statut === 'accepte' || statut === 'refuse' || diffDays(today, base) >= CFG.cloture;
+    if (!tranche) return;
+    g.n++; if (statut === 'accepte') g.signes++;
+    if (relance && ((statut === 'accepte' && !RESTREINT) || statut === 'refuse')) clos.push(it);
+  });
+  rel.taux = rel.n ? Math.round(rel.signes / rel.n * 100) : 0;
+  non.taux = non.n ? Math.round(non.signes / non.n * 100) : 0;
+  clos.sort(function(a,b){ return (normDate(b.f.dateAcceptation||b.f.dateCloture)||'') < (normDate(a.f.dateAcceptation||a.f.dateCloture)||'') ? -1 : 1; });
+  return { relances:rel, non:non, clos:clos.slice(0, 12) };
+}
+function renderBilan(st){
+  function ligne(titre, g, color){
+    return '<div class="line"><div style="flex:1"><div>' + titre + '</div><div class="bar"><i style="width:' + g.taux + '%;background:' + color + '"></i></div></div>' +
+      '<div style="text-align:right;white-space:nowrap"><b style="color:#fff;font-size:16px">' + (g.n ? g.taux + ' %' : '—') + '</b><div style="font-size:11px;color:var(--text3)">' + g.signes + ' / ' + g.n + ' devis</div></div></div>';
+  }
+  var h = '<div class="bilan"><span class="lbl">Taux de signature — devis des 12 derniers mois</span>' +
+    ligne('Devis relancés', st.relances, 'var(--green)') + ligne('Devis jamais relancés', st.non, 'var(--accent)') +
+    '<div class="note">Indicatif : seuls les devis signés, refusés ou plus anciens que ' + CFG.cloture + ' jours sont comptés. Il faut quelques mois de données pour que la comparaison soit significative.</div></div>';
+  h += '<div class="sec-title">Dernières relances aboutées</div>';
+  if (!st.clos.length) h += '<div class="empty" style="padding:20px">Aucun devis relancé puis clôturé pour le moment.</div>';
+  else h += st.clos.map(function(it){
+    var f = it.f; var ok = statutNorm(it) === 'accepte';
+    return '<div class="card" style="border-left-color:' + (ok ? 'var(--green)' : 'var(--red)') + '"><div class="c-top"><div><div class="c-client" style="font-size:14px">' + esc(nomClient(it)) + '</div>' +
+      '<div class="c-objet">' + esc(f.numero||'') + (f.objet ? ' · ' + esc(f.objet) : '') + '</div></div>' +
+      '<div class="c-amt">' + euros(parseFloat(f.montantHt)||0) + '<small>HT</small></div></div><div class="c-meta"><span class="chip ' + (ok?'green':'red') + '">' + (ok ? 'Signé' : 'Perdu' + (f.motifPerte ? ' · ' + esc(f.motifPerte) : '')) + '</span>' +
+      '<span class="chip">' + (parseInt(f.relanceNb,10)||0) + ' relance(s)</span></div>' +
+      (ok ? '' : '<div class="c-actions"><button class="btn" data-act="reopen" data-id="' + esc(String(f.id)) + '">↺ Rouvrir</button></div>') + '</div>';
+  }).join('');
+  return h;
+}
+
+/* ── Feuilles (fenêtres du bas) ── */
+var sheetState = null;
+function openSheet(html){ $('rsheet-inner').innerHTML = html; $('rsheet').style.display = 'block'; $('rsheet-back').style.display = 'block'; $('rsheet').scrollTop = 0; }
+function closeSheet(){ $('rsheet').style.display = 'none'; $('rsheet-back').style.display = 'none'; sheetState = null; }
+function findItem(id){
+  var all = allItems();
+  for (var i=0;i<all.length;i++) if (String(all[i].f.id) === String(id)) { all[i].e = etat(all[i].f, todayISO(), CFG); return all[i]; }
+  return null;
+}
+
+function consigner(id, canal){
+  var it = findItem(id); if (!it) return;
+  var defRes = it.e.type === 'cloture' ? 'lost' : 'noans';
+  sheetState = { id:String(id), canal: canal || 'tel', res: defRes, date:'', motif: MOTIFS[3] };
+  renderConsigner();
+}
+function renderConsigner(){
+  var s = sheetState; if (!s) return;
+  var it = findItem(s.id); if (!it) { closeSheet(); return; }
+  var res = RESULTATS.filter(function(x){ return x.k === s.res; })[0];
+  var needDate = !!res.ask;
+  if (needDate && !s.date) s.date = addDays(todayISO(), res.ask);
+  var h = '<h2>Consigner la relance</h2><div class="sub2">' + esc(nomClient(it)) + ' · ' + esc(it.f.numero||'') + ' · ' + euros(parseFloat(it.f.montantHt)||0) + ' HT</div>';
+  h += '<div class="fgroup"><span class="lbl">Comment ?</span><div class="chips">' + Object.keys(CANAUX).map(function(k){
+    return '<button class="opt ' + (s.canal===k?'sel':'') + '" data-act="s-canal" data-v="' + k + '">' + CANAUX[k] + '</button>'; }).join('') + '</div></div>';
+  h += '<div class="fgroup"><span class="lbl">Résultat</span><div class="chips">' + RESULTATS.map(function(x){
+    return '<button class="opt ' + (s.res===x.k ? 'sel ' + x.cls : '') + '" data-act="s-res" data-v="' + x.k + '">' + x.l + '</button>'; }).join('') + '</div></div>';
+  if (s.res === 'lost') {
+    h += '<div class="fgroup"><span class="lbl">Motif</span><select class="field" id="s-motif">' + MOTIFS.map(function(m){ return '<option' + (m===s.motif?' selected':'') + '>' + esc(m) + '</option>'; }).join('') + '</select></div>';
+  }
+  if (needDate) {
+    h += '<div class="fgroup"><span class="lbl">' + (s.res==='callback' ? 'Rappeler le' : 'Reprendre contact le') + '</span><input class="field" type="date" id="s-date" value="' + esc(s.date) + '"></div>';
+  } else if (!res.final) {
+    var apres = etat(Object.assign({}, it.f, { relanceNb:(it.e.nb||0)+1, relanceDerniere:todayISO(), relanceProchaine:'' }), todayISO(), CFG);
+    h += '<div class="note" style="margin:-4px 0 12px">Prochaine action automatique : ' + (apres.type==='cloture' ? 'décision de clôture' : 'relance n°' + (apres.nb+1)) + ' le <b style="color:var(--text)">' + fmtDate(apres.due) + '</b>.</div>';
+  }
+  h += '<div class="fgroup"><span class="lbl">Note (facultatif)</span><textarea class="field" id="s-note" rows="3" style="min-height:80px" placeholder="Ex. : en attente de l\'accord de la banque, rappeler après le 15."></textarea></div>';
+  h += '<div class="row" style="margin-top:4px"><button class="btn ghost" data-act="closesheet">Annuler</button><button class="btn primary" data-act="s-save">Enregistrer</button></div>';
+  openSheetKeep(h);
+}
+// Ré-affichage de la feuille en conservant la note déjà saisie
+function openSheetKeep(h){
+  var oldNote = $('s-note') ? $('s-note').value : '';
+  openSheet(h);
+  if ($('s-note') && oldNote) $('s-note').value = oldNote;
+}
+
+async function saveConsigner(){
+  var s = sheetState; if (!s) return;
+  var it = findItem(s.id); if (!it) return;
+  var f = it.f, today = todayISO();
+  var res = RESULTATS.filter(function(x){ return x.k === s.res; })[0];
+  var note = ($('s-note') && $('s-note').value || '').trim();
+  var date = $('s-date') ? $('s-date').value : '';
+  if (res.ask) {
+    if (!date) { toast('⚠️ Choisissez une date.'); return; }
+    if (date < today) { toast('⚠️ La date doit être aujourd\'hui ou plus tard.'); return; }
+  }
+  if (res.k === 'signed' && !confirm('Marquer ce devis comme SIGNÉ ?')) return;
+  var motif = $('s-motif') ? $('s-motif').value : '';
+  if (res.k === 'lost' && !confirm('Clôturer ce devis (perdu / sans suite) ?')) return;
+
+  var entry = { d: new Date().toISOString(), canal: s.canal, res: s.res, note: note, par: ME };
+  var histo = (Array.isArray(f.relanceHisto) ? f.relanceHisto : []).concat([entry]);
+  var ST = it.src === 'dec' ? { ok:'signe', ko:'perdu' } : { ok:'accepte', ko:'refuse' };
+  var patch = { relanceHisto: histo, relanceNb: (parseInt(f.relanceNb,10)||0) + 1, relanceDerniere: today, relanceProchaine: res.ask ? date : '' };
+  if (res.k === 'signed') { patch.statut = ST.ok; patch.dateAcceptation = today; patch.relanceProchaine = ''; }
+  if (res.k === 'lost')   { patch.statut = ST.ko; patch.dateCloture = today; patch.motifPerte = motif; patch.relanceProchaine = ''; }
+  closeSheet();
+  var msgOk = res.k === 'signed' ? (RESTREINT ? '✅ Devis signé — le dossier sera créé automatiquement.' : '✅ Devis signé — bravo !') : res.k === 'lost' ? 'Devis clôturé.' : '✅ Relance consignée.';
+  var ok = await persist(it, patch, msgOk);
+  // Devis signé issu de « devis en cours » : il n'existe pas encore de projet → on le crée dans Dossier
+  // [Portail] devis signé : le dossier est créé automatiquement par Dossier
+}
+
+async function persist(it, patch, okMsg){
+  var f = it.f, avant = {};
+  Object.keys(patch).forEach(function(k){ avant[k] = f[k]; });
+  Object.assign(f, patch);            // affichage immédiat
+  render();
+  try {
+    if (!window._fb) throw new Error('Connexion Firebase indisponible');
+    if (it.src === 'dec') await window._fb.saveDevisEnCours(f.id, patch);
+    else await window._fb.saveFacture(f.id, patch);
+    if (okMsg) toast(okMsg);
+    if (RESTREINT && patch.statut !== undefined) notifierStatut(it, avant.statut, patch.statut, patch.motifPerte);
+    return true;
+  } catch(e) {
+    Object.keys(avant).forEach(function(k){ if (avant[k] === undefined) delete f[k]; else f[k] = avant[k]; });
+    render();
+    toast('⚠️ Échec de l\'enregistrement : ' + (e && e.message ? e.message : e));
+    return false;
+  }
+}
+
+/* ── Messages de relance ── */
+function prenomNom(it){ var c = nomClient(it); return c === 'Client sans nom' ? '' : c; }
+function gabarit(it, canal){
+  var f = it.f, e = it.e, nom = prenomNom(it);
+  var sig = CFG.signature;
+  var objet = f.objet ? ' (' + f.objet + ')' : '';
+  var refLe = (f.numero ? 'le devis ' + f.numero : 'notre devis') + objet;   // « le devis DEV-001 (…) »
+  var refDu = (f.numero ? 'du devis ' + f.numero : 'de notre devis') + objet; // « du devis DEV-001 (…) »
+  var envoye = e.base ? ' que nous vous avons adressé le ' + fmtDate(e.base) : '';
+  var salut = nom ? 'Bonjour ' + nom + ',' : 'Bonjour,';
+  var stade = e.type === 'cloture' ? 3 : Math.min(e.nb + 1, 3);
+  var corps;
+  if (canal === 'appel') {
+    var lignes = [
+      '1. Se présenter : « Bonjour, ' + (CFG.signature.split('·')[0].trim() || 'Phénix-Architecture') + ', maître d\'œuvre. Je vous appelle au sujet du devis ' + (f.numero||'') + (f.objet ? ' (' + f.objet + ')' : '') + '. »',
+      stade === 1 ? '2. Vérifier la réception : « Avez-vous bien reçu et pu consulter le devis ? »' :
+      stade === 2 ? '2. Lever les freins : « Avez-vous des questions sur le contenu ou le budget ? Souhaitez-vous qu\'on ajuste certains points ? »' :
+                    '2. Faire le point : « Votre projet est-il toujours d\'actualité ? Sinon, je clôture le dossier — vous pourrez nous recontacter à tout moment. »',
+      '3. Écouter, noter la réponse et, si le client veut réfléchir, convenir d\'une date de rappel.',
+      '4. Ne jamais négocier un prix ni promettre un délai : en cas de demande, « Je transmets à Maxime Suchet, qui vous recontacte rapidement. »',
+      '5. Consigner l\'appel dans l\'application juste après.'
+    ];
+    return { subject:'', text: lignes.join('\n') };
+  }
+  var subject = 'Votre devis' + (f.numero ? ' ' + f.numero : '') + (f.objet ? ' — ' + f.objet : '');
+  if (canal === 'sms') {
+    corps = salut + ' ' + (stade === 1 ? 'Je me permets de revenir vers vous au sujet ' + refDu + '. Avez-vous pu le consulter ?' :
+      stade === 2 ? 'Je reviens vers vous concernant ' + refLe + '. Avez-vous des questions ou souhaitez-vous ajuster certains points ?' :
+                    'Sans nouvelle de votre part concernant ' + refLe + ', votre projet est-il toujours d\'actualité ?') + ' ' + sig;
+    return { subject:'', text: corps };
+  }
+  var mid = stade === 1 ?
+    'Je me permets de revenir vers vous au sujet ' + refDu + envoye + '. Avez-vous bien pu en prendre connaissance ?\n\nN\'hésitez pas si vous avez la moindre question : nous restons à votre disposition pour en discuter.' :
+    stade === 2 ?
+    'Je reviens vers vous concernant ' + refLe + envoye + '. Avez-vous eu le temps de l\'étudier ?\n\nSi certains points méritent d\'être précisés ou ajustés (contenu, périmètre, budget), nous pouvons en parler quelques minutes par téléphone.' :
+    'Je n\'ai pas eu de retour concernant ' + refLe + envoye + ', et je souhaitais savoir si votre projet est toujours d\'actualité.\n\nSans nouvelle de votre part, je clôturerai le dossier ; vous pourrez bien sûr nous recontacter quand vous le souhaitez.';
+  return { subject: subject, text: salut + '\n\n' + mid + '\n\nCordialement,\n' + sig };
+}
+
+function message(id, canal){
+  var it = findItem(id); if (!it) return;
+  var ctm = contact(it);
+  var c = canal || (ctm.email ? 'mail' : ctm.tel ? 'sms' : 'mail');
+  var g = gabarit(it, c);
+  sheetState = { id:String(id), canal:c, subject:g.subject, text:g.text, kind:'msg' };
+  renderMessage();
+}
+function renderMessage(){
+  var s = sheetState; if (!s) return;
+  var it = findItem(s.id); if (!it) { closeSheet(); return; }
+  var p = contact(it);
+  var h = '<h2>Message de relance</h2><div class="sub2">' + esc(nomClient(it)) + ' · ' + esc(it.f.numero||'') + '</div>';
+  h += '<div class="chips">' + [['mail','✉️ Mail'],['sms','💬 SMS'],['appel','📞 Script d\'appel']].map(function(x){
+    return '<button class="opt ' + (s.canal===x[0]?'sel':'') + '" data-act="m-canal" data-v="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>';
+  if (s.canal === 'mail') h += '<div class="fgroup"><span class="lbl">Objet</span><input class="field" id="m-subject" value="' + esc(s.subject) + '"></div>';
+  h += '<div class="fgroup"><span class="lbl">' + (s.canal==='appel' ? 'Trame de l\'appel' : 'Message') + '</span><textarea class="field" id="m-text" rows="9">' + esc(s.text) + '</textarea></div>';
+  h += '<div class="row"><button class="btn" data-act="m-ia">✨ Personnaliser (IA)</button><button class="btn" data-act="m-copy">📋 Copier</button></div>';
+  var dest = s.canal === 'mail' ? p.email : s.canal === 'sms' ? p.tel : '';
+  h += '<div class="row" style="margin-top:12px"><button class="btn ghost" data-act="closesheet">Fermer</button>';
+  if (s.canal === 'mail' || s.canal === 'sms') {
+    h += '<button class="btn ' + (dest?'':'off') + '" data-act="m-open">📤 Ouvrir dans ma messagerie</button>';
+  }
+  h += '<button class="btn primary" data-act="m-log">✓ Fait → consigner</button></div>';
+  if ((s.canal === 'mail' || s.canal === 'sms') && !dest) h += '<div class="note">Pas de ' + (s.canal==='mail' ? 'e-mail' : 'numéro') + ' enregistré sur le projet : copiez le message et envoyez-le manuellement.</div>';
+  openSheet(h);
+}
+function syncMsgFields(){
+  if (!sheetState || sheetState.kind !== 'msg') return;
+  if ($('m-text')) sheetState.text = $('m-text').value;
+  if ($('m-subject')) sheetState.subject = $('m-subject').value;
+}
+async function copyText(t){
+  try { await navigator.clipboard.writeText(t); toast('📋 Copié.'); }
+  catch(e) { var ta = $('m-text'); if (ta) { ta.select(); try { document.execCommand('copy'); toast('📋 Copié.'); } catch(e2) { toast('Sélectionnez le texte pour le copier.'); } } }
+}
+async function parseProxy(res){
+  var raw = await res.text();
+  try { return JSON.parse(raw); }
+  catch(e) {
+    var full = '';
+    raw.split('\n').forEach(function(line){
+      line = line.trim(); if (line.indexOf('data:') !== 0) return;
+      var j = line.slice(5).trim(); if (!j || j === '[DONE]') return;
+      try { var ev = JSON.parse(j); if (ev.type === 'content_block_delta' && ev.delta && typeof ev.delta.text === 'string') full += ev.delta.text; } catch(e2) {}
+    });
+    if (full) return { content:[{ type:'text', text:full }] };
+    throw new Error('Réponse du proxy illisible');
+  }
+}
+async function personnaliserIA(){
+  var s = sheetState; if (!s) return; syncMsgFields();
+  var it = findItem(s.id); if (!it) return;
+  var f = it.f, e = it.e;
+  var histo = Array.isArray(f.relanceHisto) ? f.relanceHisto : [];
+  var notes = histo.filter(function(h){ return h.note; }).slice(-3).map(function(h){ return fmtDate(normDate(h.d)) + ' (' + resLabel(h.res) + ') : ' + h.note; }).join('\n');
+  var stade = e.type === 'cloture' ? 'dernière relance avant clôture du dossier' : 'relance n°' + (e.nb + 1);
+  var btn = document.querySelector('[data-act="m-ia"]'); if (btn) { btn.disabled = true; btn.textContent = '✨ Rédaction…'; }
+  try {
+    var canalTxt = s.canal === 'mail' ? 'un e-mail' : s.canal === 'sms' ? 'un SMS (maximum 3 phrases)' : "une trame d'appel téléphonique (5 à 6 puces courtes)";
+    var res = await fetch(PROXY, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001', max_tokens: 700,
+      system: "Tu rédiges des messages de relance de devis pour Phénix-Architecture, une entreprise de maîtrise d'œuvre en Auvergne. " +
+        "Règles impératives : français, vouvoiement, ton chaleureux, simple et professionnel, jamais insistant ni culpabilisant, aucune pression commerciale, aucune promesse de prix, de remise ou de délai. " +
+        "Ne qualifie JAMAIS l'entreprise ni son dirigeant d'« architecte » : dis « maître d'œuvre » si nécessaire. N'invente aucun fait absent des informations fournies. " +
+        "Réponds UNIQUEMENT par le texte du message" + (s.canal === 'mail' ? " (sans la ligne « Objet »)" : '') + ", sans introduction ni commentaire. Termine l'e-mail ou le SMS par la signature fournie.",
+      messages: [{ role:'user', content:
+        'Rédige ' + canalTxt + ' pour : ' + stade + '.\n' +
+        'Client : ' + (prenomNom(it) || 'inconnu (écrire « Bonjour, »)') + '\n' +
+        'Devis : ' + (f.numero || '') + (f.objet ? ' — ' + f.objet : '') + '\n' +
+        'Envoyé le : ' + (e.base ? fmtDate(e.base) : 'date inconnue') + '\n' +
+        'Signature : ' + CFG.signature + '\n' +
+        (notes ? 'Échanges précédents :\n' + notes + '\n' : '') +
+        '\nBrouillon de départ à améliorer et personnaliser :\n' + s.text }]
+    })});
+    if (!res.ok) throw new Error('Proxy HTTP ' + res.status);
+    var data = await parseProxy(res);
+    if (data.error) throw new Error(data.error.message || 'Erreur API');
+    var txt = (data.content || []).map(function(b){ return b.text || ''; }).join('').trim();
+    if (!txt) throw new Error('réponse vide');
+    sheetState.text = txt; renderMessage(); toast('✨ Message personnalisé.');
+  } catch(err) {
+    toast('⚠️ IA indisponible — le brouillon reste utilisable.'); renderMessage();
+  }
+}
+
+/* ── Saisie d'un devis en cours (manuelle ou import PDF par IA) ── */
+function openDevisForm(id){
+  var ex = null;
+  if (id) { for (var i=0;i<DEVIS.length;i++) if (String(DEVIS[i].id) === String(id)) ex = DEVIS[i]; if (!ex) return; }
+  sheetState = { kind:'devis', id: ex ? String(ex.id) : '', busy:false, status:'',
+    d: ex ? { client:ex.client||'', tel:ex.tel||'', email:ex.email||'', adresse:ex.adresse||'', objet:ex.objet||'', numero:ex.numero||'',
+              montantHt: ex.montantHt || '', tva: (ex.tva === undefined || ex.tva === '' ? 20 : ex.tva), dateEnvoi: normDate(ex.dateEnvoi) || normDate(ex.dateEmission) || todayISO(), lignes: ex.lignes || [] }
+        : { client:'', tel:'', email:'', adresse:'', objet:'', numero:'', montantHt:'', tva:20, dateEnvoi: todayISO(), lignes:[] } };
+  renderDevisForm();
+}
+function lireDevisForm(){
+  if (!sheetState || sheetState.kind !== 'devis' || !$('d-client')) return;
+  var d = sheetState.d;
+  d.client = $('d-client').value; d.tel = $('d-tel').value; d.email = $('d-email').value; d.adresse = $('d-adresse').value;
+  d.objet = $('d-objet').value; d.numero = $('d-numero').value; d.montantHt = $('d-ht').value; d.tva = $('d-tva').value; d.dateEnvoi = $('d-date').value;
+}
+function renderDevisForm(){
+  var s = sheetState; if (!s) return; var d = s.d;
+  var f = function(id, label, val, extra){ return '<div class="fgroup"><span class="lbl">' + label + '</span><input class="field" id="' + id + '" value="' + esc(val) + '" ' + (extra||'') + '></div>'; };
+  var h = '<h2>' + (s.id ? 'Modifier le devis' : 'Nouveau devis') + '</h2><div class="sub2">Devis envoyé, pas encore signé : il reste ici, hors de Dossier, jusqu\'à la signature.</div>';
+  h += '<div class="fgroup"><label class="btn' + (s.busy ? ' off' : '') + '" style="width:100%;cursor:pointer">📄 Importer le PDF du devis (IA)<input type="file" id="d-file" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/*" style="display:none"></label>' +
+       (s.status ? '<div class="note" style="margin-top:6px">' + esc(s.status) + '</div>' : '<div class="note" style="margin-top:6px">Lit le client, le montant et la date sur le devis. Vérifiez les champs avant d\'enregistrer.</div>') + '</div>';
+  h += f('d-client', 'Client *', d.client, 'autocomplete="off" placeholder="Nom du client ou raison sociale"');
+  h += '<div class="row" style="margin-top:0;align-items:flex-start"><div style="flex:1;min-width:140px">' + f('d-tel','Téléphone', d.tel, 'inputmode="tel" type="tel"') + '</div><div style="flex:1;min-width:160px">' + f('d-email','E-mail', d.email, 'inputmode="email" type="email"') + '</div></div>';
+  h += f('d-adresse', 'Adresse du projet / du client', d.adresse);
+  h += f('d-objet', 'Objet du devis', d.objet, 'placeholder="Ex. : Mission de maîtrise d\'œuvre — extension"');
+  h += '<div class="row" style="margin-top:0;align-items:flex-start"><div style="flex:1;min-width:130px">' + f('d-numero','N° du devis', d.numero) + '</div><div style="flex:1;min-width:130px">' + f('d-ht','Montant HT (€) *', d.montantHt, 'inputmode="decimal" type="number" step="0.01" min="0"') + '</div><div style="width:80px">' + f('d-tva','TVA %', d.tva, 'inputmode="decimal" type="number" step="0.1" min="0"') + '</div></div>';
+  h += '<div class="fgroup"><span class="lbl">Date d\'envoi du devis *</span><input class="field" type="date" id="d-date" value="' + esc(d.dateEnvoi) + '"></div>';
+  h += '<div class="row"><button class="btn ghost" data-act="closesheet">Annuler</button><button class="btn primary" data-act="d-save">Enregistrer</button></div>';
+  openSheet(h);
+}
+function nettoyerEmail(v){
+  var m = String(v == null ? '' : v).toLowerCase().match(/[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}/);
+  if (!m) return '';
+  return /phenixarchitecte|phenix-architecte|phenix-architecture/.test(m[0]) ? '' : m[0];
+}
+function nettoyerTel(v){
+  var d = String(v == null ? '' : v).replace(/[^\d+]/g, '');
+  if (d.indexOf('+33') === 0) d = '0' + d.slice(3); else if (d.indexOf('0033') === 0) d = '0' + d.slice(4);
+  d = d.replace(/\D/g, '');
+  if (d.length === 9 && /^[1-9]/.test(d)) d = '0' + d;
+  if (!/^0[1-9]\d{8}$/.test(d) || d === '0473730059') return '';
+  return d.replace(/(\d{2})(?=\d)/g, '$1 ').trim();
+}
+function preparerFichier(file){
+  return new Promise(function(resolve, reject){
+    var pdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+    if (pdf) {
+      var r = new FileReader();
+      r.onload = function(e){ resolve({ base64: String(e.target.result).split(',')[1], mediaType:'application/pdf', pdf:true }); };
+      r.onerror = function(){ reject(new Error('Lecture du fichier impossible')); };
+      r.readAsDataURL(file); return;
+    }
+    var url = URL.createObjectURL(file), img = new Image();
+    img.onload = function(){
+      var k = Math.min(1, 2200 / Math.max(img.naturalWidth, img.naturalHeight));
+      var w = Math.round(img.naturalWidth * k), h = Math.round(img.naturalHeight * k);
+      var cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+      var cx = cv.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0,0,w,h); cx.drawImage(img,0,0,w,h);
+      var q = 0.88, out = cv.toDataURL('image/jpeg', q);
+      while (out.length * 0.75 > 4000000 && q > 0.5) { q -= 0.1; out = cv.toDataURL('image/jpeg', q); }
+      URL.revokeObjectURL(url); resolve({ base64: out.split(',')[1], mediaType:'image/jpeg', pdf:false });
+    };
+    img.onerror = function(){ URL.revokeObjectURL(url); reject(new Error('Image illisible — utilisez un PDF, JPG ou PNG')); };
+    img.src = url;
+  });
+}
+var PROMPT_DEVIS = "Tu lis un devis émis par un maître d'œuvre (Phénix-Architecture) à destination d'un client, signé ou non. " +
+  "Retourne UNIQUEMENT un JSON valide, sans markdown, de la forme : " +
+  '{"client":"","adresse":"","email":"","tel":"","objet":"","numero":"","dateEmission":"AAAA-MM-JJ","montantHt":0,"tva":0,"lignes":[{"libelle":"","qte":0,"unite":"","puHt":0,"montantHt":0,"tva":0}]}. ' +
+  "RÈGLES : ne renseigne que ce qui figure réellement sur le document, sinon \"\" ou 0 — n'invente rien. " +
+  "client = prénom et nom du client SANS civilité (Madame, M., Mme) ; pour une société, sa raison sociale. adresse = adresse postale du client (numéro, rue, code postal, commune), sans « FRANCE ». " +
+  "email et tel = coordonnées du CLIENT, dans le cadre client (sous son nom et son adresse) ou sur une ligne « Email » / « Tél. » / « Mobile » à côté de ses coordonnées ; le mobile de préférence ; tel = 10 chiffres. Le devis est ÉMIS par Phénix-Architecture : ses propres coordonnées (contact@phenixarchitecte.fr, 04 73 73 00 59, SIRET, adresse de l'entreprise) ne sont JAMAIS celles du client ; si le client n'a pas de téléphone ou d'e-mail sur le devis, mets \"\". " +
+  "objet = la nature de la mission en une courte phrase. numero = numéro du devis. montantHt = total HT du devis ; tva = taux de TVA global en %. " +
+  "Nombres en décimal avec un point, sans espace ni symbole. Ignore les annotations manuscrites et la signature : lis uniquement le texte imprimé.";
+async function importerDevisIA(file){
+  if (!file || !sheetState || sheetState.kind !== 'devis') return;
+  lireDevisForm();
+  sheetState.busy = true; sheetState.status = '⏳ Lecture du devis en cours…'; renderDevisForm();
+  try {
+    var prep = await preparerFichier(file);
+    var res = await fetch(PROXY, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+      model:'claude-sonnet-4-6', max_tokens:4000, system: PROMPT_DEVIS,
+      messages:[{ role:'user', content:[
+        prep.pdf ? { type:'document', source:{ type:'base64', media_type:'application/pdf', data:prep.base64 } }
+                 : { type:'image', source:{ type:'base64', media_type:prep.mediaType, data:prep.base64 } },
+        { type:'text', text:'Relève dans ce devis les données demandées.' } ] }] }) });
+    if (!res.ok) throw new Error('Proxy HTTP ' + res.status);
+    var data = await parseProxy(res);
+    if (data.error) throw new Error(data.error.message || 'Erreur API');
+    var text = (data.content || []).map(function(b){ return b.text || ''; }).join('');
+    var a = text.indexOf('{'), b = text.lastIndexOf('}');
+    if (a < 0 || b < a) throw new Error('réponse illisible');
+    var v = JSON.parse(text.slice(a, b + 1)); v = v.valeurs || v;
+    var d = sheetState.d, n = 0;
+    function put(k, val){ if (val !== undefined && val !== null && String(val).trim() !== '') { d[k] = String(val).trim(); n++; } }
+    put('client', v.client); put('adresse', v.adresse); put('email', nettoyerEmail(v.email)); put('tel', nettoyerTel(v.tel)); put('objet', v.objet); put('numero', v.numero);
+    if (parseFloat(v.montantHt) > 0) { d.montantHt = String(parseFloat(v.montantHt)); n++; }
+    if (parseFloat(v.tva) > 0) d.tva = String(parseFloat(v.tva));
+    var dt = normDate(v.dateEmission); if (dt) { d.dateEnvoi = dt; n++; }
+    if (Array.isArray(v.lignes)) {
+      d.lignes = v.lignes.map(function(l){ var num = function(x){ var f = parseFloat(String(x).replace(',','.')); return isFinite(f) ? f : 0; };
+        return { libelle:String((l && l.libelle) || '').trim(), qte:num(l && l.qte), unite:String((l && l.unite) || '').trim(), puHt:num(l && l.puHt), montantHt:num(l && l.montantHt), tva:num(l && l.tva) }; })
+        .filter(function(l){ return l.libelle || l.montantHt; });
+      if (d.lignes.length && !parseFloat(d.montantHt)) d.montantHt = String(Math.round(d.lignes.reduce(function(s2,l){ return s2 + l.montantHt; }, 0) * 100) / 100);
+    }
+    var manque = [!d.tel ? 'téléphone' : '', !d.email ? 'e-mail' : ''].filter(Boolean).join(' et ');
+    sheetState.status = n ? '✅ ' + n + ' information(s) relevée(s) — vérifiez' + (manque ? ' ; ' + manque + ' du client non trouvé : à compléter pour pouvoir le relancer.' : '.') : '⚠️ Rien de lisible sur ce document : remplissez à la main.';
+  } catch(err) {
+    sheetState.status = '⚠️ Lecture impossible (' + (err && err.message ? err.message : err) + ') — remplissez à la main.';
+  }
+  sheetState.busy = false; renderDevisForm();
+}
+async function enregistrerDevis(){
+  if (!sheetState || sheetState.kind !== 'devis') return;
+  lireDevisForm();
+  var d = sheetState.d;
+  var client = (d.client || '').trim(), ht = parseFloat(d.montantHt), date = d.dateEnvoi;
+  if (!client) { toast('⚠️ Indiquez le client.'); return; }
+  if (!(ht > 0)) { toast('⚠️ Indiquez le montant HT.'); return; }
+  if (!date) { toast('⚠️ Indiquez la date d\'envoi.'); return; }
+  var numero = (d.numero || '').trim();
+  if (numero) {
+    var dup = DEVIS.filter(function(x){ return String(x.numero || '').trim().toLowerCase() === numero.toLowerCase() && String(x.id) !== sheetState.id; })[0];
+    if (dup && !confirm('Un devis « ' + numero + ' » existe déjà (' + (dup.client || '') + '). Enregistrer quand même ?')) return;
+  }
+  if (!(d.tel || '').trim() && !(d.email || '').trim() && !confirm('Ni téléphone ni e-mail pour ce client : impossible de le relancer. Enregistrer quand même ?')) return;
+  var tvaN = parseFloat(d.tva); var tva = isFinite(tvaN) ? tvaN : 20;
+  var id = sheetState.id || ('dec-' + Date.now());
+  var doc = { id:id, client:client, tel:(d.tel||'').trim(), email:(d.email||'').trim(), adresse:(d.adresse||'').trim(), objet:(d.objet||'').trim(), numero:numero,
+              montantHt:ht, tva:tva, dateEnvoi:date, dateEmission:date };
+  if (d.lignes && d.lignes.length) doc.lignes = d.lignes;
+  if (!sheetState.id) { doc.statut = 'en_cours'; doc.relanceNb = 0; doc.relanceHisto = []; doc.createdAt = new Date().toISOString(); doc.createdBy = ME; }
+  doc = JSON.parse(JSON.stringify(doc));
+  try {
+    if (!window._fb) throw new Error('Connexion Firebase indisponible');
+    await window._fb.saveDevisEnCours(id, doc);
+    var _nouveau = !!doc.statut; closeSheet(); toast(_nouveau ? '✅ Devis ajouté à la file.' : '✅ Devis modifié.');
+  } catch(e) {
+    toast('⚠️ Échec de l\'enregistrement : ' + (e && e.code === 'permission-denied' ? 'accès refusé par Firestore (voir la règle à ajouter pour phenix_devis_en_cours)' : (e && e.message ? e.message : e)));
+  }
+}
+async function supprimerDevis(id){
+  if (RESTREINT) { toast('La suppression est réservée à Maxime.'); return; }
+  var it = findItem(id); if (!it || it.src !== 'dec') return;
+  if (!confirm('Supprimer définitivement ce devis (' + (it.f.client || '') + ' · ' + (it.f.numero || '') + ') ?')) return;
+  try { await window._fb.deleteDevisEnCours(it.f.id); toast('🗑️ Devis supprimé.'); }
+  catch(e) { toast('⚠️ Suppression impossible : ' + (e && e.message ? e.message : e)); }
+}
+
+/* ── Signature : création du projet dans Dossier ── */
+function creerProjet(it){
+  if (RESTREINT) { toast('Devis signé : Maxime créera le projet dans Dossier.'); return; }
+  var f = it.f;
+  var devis = { client:f.client || '', adresse:f.adresse || '', email:f.email || '', tel:f.tel || '', objet:f.objet || '', numero:f.numero || '',
+                date: normDate(f.dateEmission) || normDate(f.dateEnvoi) || todayISO(), montantHt: parseFloat(f.montantHt) || 0, tva: parseFloat(f.tva) || 20,
+                lignes: f.lignes || [], decId: String(f.id) };
+  try {
+    if (window.parent && window.parent !== window) { window.parent.postMessage({ source:'phenix-espace', action:'creer-projet-devis', devis:devis }, '*'); toast('📁 Ouverture de Dossier — vérifiez la fiche puis « Créer le projet ».'); }
+    else toast('Ouvrez Phénix Dossier depuis le Shell pour créer le projet.');
+  } catch(e) { toast('Impossible d\'ouvrir Dossier : ' + (e && e.message || e)); }
+}
+function aConvertir(){ return DEVIS.filter(function(d){ return d && d.statut === 'signe' && !d.projetCree; }); }
+function renderConv(){
+  var l = aConvertir(), el = $('conv');
+  if (RESTREINT || !l.length) { el.innerHTML = ''; return; }   // [Portail] rien à afficher pour l'assistante
+  el.innerHTML = '<div class="banner" style="background:var(--green-bg);border-color:rgba(79,209,139,.4);color:var(--green)"><b>' + l.length + ' devis signé' + (l.length > 1 ? 's' : '') + ' à transformer en projet</b>' +
+    l.map(function(d){
+      return '<div class="row" style="margin-top:8px"><span style="color:var(--text);flex:1;min-width:140px">' + esc(d.client || '') + ' · ' + esc(d.numero || '') + ' · ' + euros(parseFloat(d.montantHt)||0) + ' HT</span>' +
+        (RESTREINT ? '<span class="note" style="margin:0">à créer par Maxime</span>' : '<button class="btn green" data-act="convert" data-id="' + esc(String(d.id)) + '">Créer le projet</button>') +
+        (RESTREINT ? '' : '<button class="btn ghost" data-act="convdone" data-id="' + esc(String(d.id)) + '">C\'est fait</button>') + '</div>';
+    }).join('') + '</div>';
+}
+
+/* ── Réglages ── */
+function openSettings(){
+  var h = '<h2>Réglages de la cadence</h2><div class="sub2">Enregistrés sur cet appareil.</div>' +
+    '<div class="fgroup"><span class="lbl">Jours de relance après l\'envoi du devis</span><input class="field" id="c-cad" value="' + esc(CFG.cadence.join(', ')) + '" inputmode="numeric" placeholder="3, 10, 21"></div>' +
+    '<div class="fgroup"><span class="lbl">Clôture proposée à (jours après l\'envoi)</span><input class="field" id="c-clo" type="number" min="7" value="' + CFG.cloture + '"></div>' +
+    '<div class="fgroup"><span class="lbl">Écart minimum entre deux relances (jours)</span><input class="field" id="c-gap" type="number" min="0" value="' + CFG.ecartMin + '"></div>' +
+    '<div class="fgroup"><span class="lbl">Signature des messages</span><input class="field" id="c-sig" value="' + esc(CFG.signature) + '"></div>' +
+    '<div class="row"><button class="btn ghost" data-act="c-reset">Valeurs par défaut</button><button class="btn ghost" data-act="closesheet">Annuler</button><button class="btn primary" data-act="c-save">Enregistrer</button></div>';
+  openSheet(h);
+}
+function saveSettings(){
+  var cad = ($('c-cad').value || '').split(/[^\d]+/).map(Number).filter(function(n){ return n > 0; }).sort(function(a,b){ return a-b; });
+  if (!cad.length) { toast('⚠️ Indiquez au moins un jour de relance.'); return; }
+  var clo = parseInt($('c-clo').value, 10);
+  if (!(clo > cad[cad.length-1])) { toast('⚠️ La clôture doit venir après la dernière relance.'); return; }
+  var c = { cadence:cad, cloture:clo, ecartMin: Math.max(0, parseInt($('c-gap').value,10) || 0), signature: ($('c-sig').value || '').trim() || DEFAULT_CFG.signature };
+  try { localStorage.setItem(CFG_KEY, JSON.stringify(c)); } catch(e) {}
+  CFG = loadCfg(); closeSheet(); render(); toast('Réglages enregistrés.');
+}
+
+/* ── Divers ── */
+var toastTimer = null;
+function toast(m){ var t = $('rtoast'); t.textContent = m; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(function(){ t.classList.remove('show'); }, 2800); }
+
+async function saveEnvoi(id){
+  var it = findItem(id); if (!it) return;
+  var v = $('env-' + id) ? $('env-' + id).value : '';
+  if (!v) { toast('⚠️ Choisissez une date.'); return; }
+  await persist(it, it.src === 'dec' ? { dateEnvoi: v, dateEmission: v } : { dateEnvoi: v }, '✅ Date d\'envoi enregistrée.');
+}
+async function reopen(id){
+  var it = findItem(id); if (!it) return;
+  if (!confirm('Rouvrir ce devis (retour « en attente ») ?')) return;
+  await persist(it, { statut: it.src === 'dec' ? 'en_cours' : 'en_attente', motifPerte:'', dateCloture:'', relanceProchaine: addDays(todayISO(), 3) }, 'Devis rouvert.');
+}
+function openDossier(id){
+  var it = findItem(id); if (!it) return;
+  try {
+    if (window.parent && window.parent !== window) window.parent.postMessage({ source:'phenix-espace', action:'open-projet', id:String(it.f.projetId) }, '*');
+    else toast('Ouvrez Phénix Dossier depuis le Shell pour accéder au dossier.');
+  } catch(e) {}
+}
+
+/* ── Événements (délégation) ── */
+document.addEventListener('click', function(ev){
+  if (ev.target.id === 'rsheet-back') { closeSheet(); return; }
+  var el = ev.target.closest('[data-act]'); if (!el) return;
+  var act = el.getAttribute('data-act'), id = el.getAttribute('data-id'), v = el.getAttribute('data-v');
+  switch (act) {
+    case 'tab': tab = el.getAttribute('data-tab'); render(); break;
+    case 'more': openIds[id] = !openIds[id]; render(); break;
+    case 'log': consigner(id); break;
+    case 'msg': message(id); break;
+    case 'settings': if (!RESTREINT) openSettings(); break;
+    case 'closesheet': closeSheet(); break;
+    case 's-canal': sheetState.canal = v; renderConsigner(); break;
+    case 's-res': if ($('s-motif')) sheetState.motif = $('s-motif').value; sheetState.res = v; sheetState.date = ''; renderConsigner(); break;
+    case 's-save': if ($('s-date')) sheetState.date = $('s-date').value; saveConsigner(); break;
+    case 'm-canal': syncMsgFields(); var it = findItem(sheetState.id); var g = gabarit(it, v); sheetState.canal = v; sheetState.subject = g.subject; sheetState.text = g.text; renderMessage(); break;
+    case 'm-copy': syncMsgFields(); copyText(sheetState.text); break;
+    case 'm-ia': personnaliserIA(); break;
+    case 'm-open': {
+      syncMsgFields();
+      var it2 = findItem(sheetState.id), p = it2 ? contact(it2) : {};
+      if (sheetState.canal === 'mail' && p.email) window.location.href = 'mailto:' + p.email + '?subject=' + encodeURIComponent(sheetState.subject) + '&body=' + encodeURIComponent(sheetState.text);
+      else if (sheetState.canal === 'sms' && p.tel) window.location.href = 'sms:' + String(p.tel).replace(/[^\d+]/g,'') + '?&body=' + encodeURIComponent(sheetState.text);
+      break;
+    }
+    case 'm-log': { syncMsgFields(); var cid = sheetState.id, cc = sheetState.canal === 'appel' ? 'tel' : sheetState.canal; consigner(cid, cc); break; }
+    case 'saveenvoi': saveEnvoi(id); break;
+    case 'reopen': reopen(id); break;
+    case 'opendossier': openDossier(id); break;
+    case 'newdevis': if (!RESTREINT) openDevisForm(''); break;
+    case 'setstatut': setStatut(id, v); break;
+    case 'notiflu': marquerLu([String(id)]); break;
+    case 'notiftout': marquerLu(NOTIFS.map(function(n){ return String(n.id); })); break;
+    case 'r-motif': sheetState.motif = v; renderRefus(); break;
+    case 'r-save': saveRefus(); break;
+    case 'editdec': if (!RESTREINT) openDevisForm(id); break;
+    case 'deldec': supprimerDevis(id); break;
+    case 'd-save': enregistrerDevis(); break;
+    case 'convert': { var itc = findItem(id); if (itc) creerProjet(itc); break; }
+    case 'convdone': { var itd = findItem(id); if (itd) persist(itd, { projetCree:true }, '✅ Noté.'); break; }
+    case 'c-save': saveSettings(); break;
+    case 'c-reset': try { localStorage.removeItem(CFG_KEY); } catch(e) {} CFG = loadCfg(); closeSheet(); render(); toast('Valeurs par défaut rétablies.'); break;
+  }
+});
+document.addEventListener('change', function(ev){ if (ev.target && ev.target.id === 'd-file') importerDevisIA(ev.target.files[0]); });
+if (RESTREINT) document.body.classList.add('restreint');
+$('search').addEventListener('input', function(e){ search = e.target.value.trim(); render(); });
+
+/* ── API appelée par le bloc Firebase (module) ── */
+window.R = {
+  setUser: function(email){ ME = String(email || '').toLowerCase(); },
+  setFactures: function(l){ FACTURES = l || []; LOADED.f = true; render(); },
+  setProjets: function(l){ PROJETS = l || []; LOADED.p = true; render(); },
+  setDevis: function(l){ DEVIS = l || []; LOADED.d = true; render(); },
+  setNotifs: function(l){ NOTIFS = l || []; render(); },
+  restreint: RESTREINT,
+  onError: function(err, which){
+    var m = (err && err.code === 'permission-denied')
+      ? (which === 'devis' ? 'Firestore refuse la collection « phenix_devis_en_cours » : ajoutez-la à vos règles de sécurité (voir la règle fournie).' : 'Accès refusé par Firestore (règles de sécurité ou connexion expirée).')
+      : 'Erreur de lecture : ' + (err && err.message || err);
+    if (which === 'notifs') { return; }   // notifications : ne pas masquer le reste en cas de refus des règles
+    if (which === 'devis') { LOADED.d = true; render(); }
+    $('errbox').innerHTML = '<div class="banner">⚠️ ' + esc(m) + '</div>';
+  },
+  // exposé pour les tests
+  _etat: etat, _gabarit: gabarit, _bilan: bilan, _cfg: function(){ return CFG; }
+};
+/* [Portail] ordres du Shell : « Nouveau devis » demandé depuis Dossier ; signal « prêt » pour recevoir l'ordre */
+window.addEventListener('message', function(ev){
+  var d = ev.data;
+  if (d && d.source === 'phenix-shell' && d.action === 'nouveau-devis' && !RESTREINT) { try { window.E.vue('devis'); } catch(e){} openDevisForm(''); }
+});
+try { if (window.parent && window.parent !== window) window.parent.postMessage({ source:'phenix-espace', ready:true }, '*'); } catch(e) {}
+// pastille « à relancer » sur l'onglet Devis
+var _renderRel = render;
+render = function(){
+  _renderRel();
+  try { var el = document.querySelector('#rtabs [data-tab="todo"] .n'); var b = document.getElementById('n-devis'); if (b) b.textContent = el ? el.textContent : '0'; } catch(e) {}
+};
+render();
+})();
+</script>
+<script type="module">
+/* [Garde d'accès] un compte client ou artisan, ou une fiche désactivée, ne peut pas utiliser ce module interne même en l'ouvrant directement.
+   (Les règles Firestore restent la vraie protection des données ; ceci évite d'exposer l'écran.) */
+import { getApps } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+(function(){
+  try{
+    if(!getApps().length) return;
+    const app = getApps()[0], auth = getAuth(app), db = getFirestore(app);
+    onAuthStateChanged(auth, async u => {
+      if(!u || !u.email) return;
+      const em = u.email.toLowerCase(); if(em === 'contact@phenixarchitecte.fr') return;
+      let f = null; try { const s = await getDoc(doc(db, 'phenix_users', em)); f = s.exists() ? s.data() : null; } catch(e) { return; }
+      const OK = ['admin', 'assistante', 'equipe'];
+      if(f && (f.role === 'client' || f.role === 'artisan' || f.actif === false || (f.role && OK.indexOf(f.role) < 0))){
+        const o = document.createElement('div');
+        o.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:#0d1b3e;color:#fff;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;font:600 16px system-ui,sans-serif';
+        o.textContent = f.actif === false ? 'Ce compte est désactivé. Contactez l\u2019administrateur.' : 'Ce compte n\u2019a pas accès à ce module.';
+        document.body.appendChild(o);
+        try { await signOut(auth); } catch(e) {}
+      }
+    });
+  }catch(e){}
 })();
 </script>
 </body>
