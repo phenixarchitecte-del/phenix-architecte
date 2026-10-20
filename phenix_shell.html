@@ -26,7 +26,9 @@
      (navBadgeTaches), remis à zéro à l'ouverture de Dossier.
    • Le portail peut ouvrir « Devis » (message phenix-espace / open-module).
    Repérer : [Espace assistante].
- 17/10/2026 (2) — MENU : ordre chronologique d'un projet (Dossier, Chiffrage, Chantier — Carnet intégré, page « Carnet client » —, Espace, Annuaire, puis Journal et Paramètres). Contrats et Financement s'ouvrent depuis la fiche projet ; module Permis supprimé.
+ 20/10/2026 — CONTRAT : le module Contrat signale « prêt » (phenix-contrat) pour recevoir l'ordre « ouvrir-contrat » envoyé par Dossier
+   à la signature d'un devis (bascule automatique vers Phénix Contrat).
+ 17/10/2026 (2) — MENU : ordre chronologique d'un projet (Dossier, Chiffrage, Chantier — Carnet intégré, page « Carnet client » —, Espace, Annuaire, puis Journal et Paramètres). Contrats (entrée de menu rétablie le 20/10) et Financement s'ouvrent aussi depuis la fiche projet ; module Permis supprimé.
  17/10/2026 — FUSION : « Devis à relancer », le portail assistante et « Mon espace » ne forment plus qu'un module (espace → phenix_espace.html, 3 onglets). Modules « assistante » et fichier phenix_relances.html supprimés ; « relances » ouvre l'onglet Devis.
  16/10/2026 — PORTAIL UNIQUE DE L'ASSISTANTE : module « assistante » (phenix_assistante.html, 2 onglets : devis à relancer / tâches
    à réaliser). Les comptes COMPTES_RELANCES_SEULES ne voient que ce module (page d'accueil). Dossier peut ouvrir « Devis » sur
@@ -244,6 +246,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
   <div class="shell-nav">
     <div class="shell-nav-item active" data-view="module" data-module="dossier" data-tip="Tableau de bord" onclick="shellOpenModule('dossier',this)"><i class="ti ti-layout-dashboard"></i><span class="lbl">Dossier</span><span class="nav-badge" id="navBadgeTaches">0</span></div>
     <div class="shell-nav-item" data-view="module" data-module="chiffrage" data-tip="Chiffrage" onclick="shellOpenModule('chiffrage',this)"><i class="ti ti-calculator"></i><span class="lbl">Chiffrage</span></div>
+    <div class="shell-nav-item" data-view="module" data-module="contrat" data-tip="Contrats" onclick="shellOpenModule('contrat',this)"><i class="ti ti-signature"></i><span class="lbl">Contrats</span></div>
     <div class="shell-nav-item" data-view="module" data-module="chantier" data-tip="Chantier" onclick="shellOpenModule('chantier',this)"><i class="ti ti-building"></i><span class="lbl">Chantier</span></div>
     <div class="shell-nav-item" data-view="module" data-module="espace" data-tip="Mon espace — devis à relancer, tâches, projets" onclick="shellOpenModule('espace',this)"><i class="ti ti-headset"></i><span class="lbl">Espace</span><span class="nav-badge" id="navBadgeDevis">0</span></div>
     <div class="shell-nav-item" data-view="module" data-module="annuaire" data-tip="Annuaire artisans" onclick="shellOpenModule('annuaire',this)"><i class="ti ti-address-book"></i><span class="lbl">Annuaire</span></div>
@@ -927,7 +930,7 @@ window.shellOpenProjet = function(id, nom) {
 window.addEventListener('message', (ev) => {
   const msg = ev.data;
   if (!msg || !msg.source) return;
-  if ((msg.source === 'phenix-dossier' || msg.source === 'phenix-relances' || msg.source === 'phenix-espace') && msg.ready && shellPendingOrder && shellCurrentFrame) {
+  if ((msg.source === 'phenix-dossier' || msg.source === 'phenix-relances' || msg.source === 'phenix-espace' || msg.source === 'phenix-contrat') && msg.ready && shellPendingOrder && shellCurrentFrame) {
     try { shellCurrentFrame.contentWindow.postMessage(shellPendingOrder, '*'); } catch(e) {}
     shellPendingOrder = null;
   }
