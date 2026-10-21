@@ -3706,6 +3706,7 @@ window.addEventListener('firebase-ready', async () => {
   } catch (e) { console.warn(e); }
 
   // [Accès] collaborateurs assignables = fiches phenix_users
+  _equipeTachesCharger();
   window._fb.listenUsers(list => { try { _collabDepuisFiches(list); if (typeof renderTaches === 'function' && document.getElementById('page-taches') && document.getElementById('page-taches').classList.contains('active')) renderTaches(); } catch (e) { console.warn(e); } });
 
   // Écoute temps réel : rémunérations (+ reprise unique des anciennes lignes du navigateur)
@@ -10133,7 +10134,43 @@ const COLLABORATEURS = [
 ];
 // [Accès] La liste ci-dessus n'est qu'un secours : elle est remplacée par les fiches phenix_users
 // (Chantier › Équipe) dès qu'elles sont lues — ajouter quelqu'un se fait donc à un seul endroit.
+// Équipe propre à Dossier (indépendante de Chantier › Équipe) : phenix_meta/equipe_taches { liste:[{email,nom}] }
+let _collabPerso = [], _fichesCache = [];
+async function _equipeTachesCharger() {
+  try { const fb = window._fb; const sn = await fb.getDoc(fb.doc(fb.db, 'phenix_meta', 'equipe_taches')); _collabPerso = sn.exists() ? (sn.data().liste || []) : []; _collabDepuisFiches(_fichesCache); }
+  catch (e) { console.warn('Équipe (tâches) illisible :', e && e.code); }
+}
+async function _equipeTachesSauver() {
+  const fb = window._fb; await fb.setDoc(fb.doc(fb.db, 'phenix_meta', 'equipe_taches'), { liste: _collabPerso, updatedAt: new Date().toISOString() });
+}
+function ouvrirEquipeTaches() {
+  let m = document.getElementById('equipeTachesModal');
+  if (!m) {
+    m = document.createElement('div'); m.id = 'equipeTachesModal'; m.className = 'modal-overlay';
+    m.innerHTML = '<div class="modal" style="max-width:460px"><div class="modal-header"><div class="modal-title">👥 Mon équipe (tâches)</div><button class="modal-close" onclick="closeModal_d(\'equipeTachesModal\')">✕</button></div><div class="modal-body"><div id="eqt-liste" style="margin-bottom:14px"></div><div class="form-group"><label>Prénom / nom</label><input type="text" id="eqt-nom" placeholder="Ex. Kevin"></div><div class="form-group"><label>E-mail de son compte Phénix</label><input type="email" id="eqt-email" placeholder="prenom@phenixarchitecte.fr"></div><button class="btn btn-primary" onclick="ajouterEquipeTaches()">+ Ajouter à mon équipe</button></div></div>';
+    (document.getElementById('app-dossier') || document.body).appendChild(m);
+  }
+  renderEquipeTaches(); m.classList.add('open');
+}
+function renderEquipeTaches() {
+  const el = document.getElementById('eqt-liste'); if (!el) return;
+  el.innerHTML = COLLABORATEURS.map(c => { const perso = _collabPerso.some(x => x.email === c.email);
+    return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)"><div style="flex:1"><b>' + esc(c.nom) + '</b><div style="font-size:11px;color:var(--text2)">' + esc(c.email) + '</div></div>' + (perso ? '<button class="btn btn-sm" onclick="retirerEquipeTaches(\'' + c.email + '\')">Retirer</button>' : '<span style="font-size:11px;color:var(--text2)">fiche d\'accès</span>') + '</div>'; }).join('');
+}
+async function ajouterEquipeTaches() {
+  const nom = document.getElementById('eqt-nom').value.trim(), email = document.getElementById('eqt-email').value.trim().toLowerCase();
+  if (!nom || email.indexOf('@') < 0) { toast_d('⚠️ Indiquez un nom et une adresse e-mail valide.'); return; }
+  if (!_collabPerso.some(x => x.email === email)) _collabPerso.push({ email, nom, role: 'equipe' });
+  _collabDepuisFiches(_fichesCache); renderEquipeTaches(); fillAssigneSelect(email);
+  document.getElementById('eqt-nom').value = ''; document.getElementById('eqt-email').value = '';
+  try { await _equipeTachesSauver(); toast_d('✅ ' + nom + ' ajouté(e) à votre équipe.'); } catch (e) { toast_d('⚠️ Enregistrement impossible (règles Firestore : phenix_meta) — ajouté pour cette session seulement.'); }
+}
+async function retirerEquipeTaches(email) {
+  _collabPerso = _collabPerso.filter(x => x.email !== email); _collabDepuisFiches(_fichesCache); renderEquipeTaches(); fillAssigneSelect('');
+  try { await _equipeTachesSauver(); } catch (e) { toast_d('⚠️ Enregistrement impossible : ' + (e && e.code || e)); }
+}
 function _collabDepuisFiches(fiches) {
+  _fichesCache = fiches || [];
   const nomDe = f => String(f.nom || '').trim() || String(f.email).split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   const roleDe = r => r === 'equipe' ? 'alternante' : r;
   const liste = [{ email: 'contact@phenixarchitecte.fr', nom: 'Maxime', role: 'admin' }];
@@ -10141,6 +10178,13 @@ function _collabDepuisFiches(fiches) {
     .filter(f => String(f.email).toLowerCase() !== 'contact@phenixarchitecte.fr')
     .sort((a, b) => nomDe(a).localeCompare(nomDe(b), 'fr'))
     .forEach(f => liste.push({ email: String(f.email).toLowerCase(), nom: nomDe(f), role: roleDe(f.role) }));
+  // Filet de sécurité : une personne sans fiche (compte créé avant le système d'accès) ne doit pas disparaître de la liste.
+  // → on garde les comptes de secours connus, puis toute adresse déjà vue sur une tâche (assigné / créée par).
+  const deja = new Set(liste.map(c => c.email));
+  const ajouter = (email, nom, role) => { email = String(email || '').toLowerCase().trim(); if (!email || email.indexOf('@') < 0 || deja.has(email)) return; deja.add(email); liste.push({ email, nom: nom || nomDe({ email }), role: role || 'equipe' }); };
+  _collabPerso.forEach(c => ajouter(c.email, c.nom, c.role));
+  ajouter('c.gironde@phenixarchitecte.fr', 'Cassandra', 'alternante');
+  try { (stateDossier.taches || []).forEach(t => { ajouter(t.assigneA); ajouter(t.creePar); }); } catch (e) {}
   COLLABORATEURS.length = 0; liste.forEach(c => COLLABORATEURS.push(c));
 }
 // ── Rôles et restrictions d'accès ──────────────────────────
@@ -10189,8 +10233,12 @@ if (typeof firebaseReady !== 'undefined' && firebaseReady) {
 function fillAssigneSelect(selectedEmail) {
   const sel = document.getElementById('tache-assigne');
   if (!sel) return;
+  const liste = COLLABORATEURS.slice();
+  if (selectedEmail && !liste.some(c => c.email === selectedEmail)) liste.push({ email: selectedEmail, nom: String(selectedEmail).split('@')[0] });
   sel.innerHTML = '<option value="">— Non assigné —</option>' +
-    COLLABORATEURS.map(c => `<option value="${c.email}" ${c.email===selectedEmail?'selected':''}>${c.nom}</option>`).join('');
+    liste.map(c => `<option value="${c.email}" ${c.email===selectedEmail?'selected':''}>${esc(c.nom)}</option>`).join('') +
+    '<option value="__equipe__">👥 Gérer mon équipe (ajouter un employé)…</option>';
+  sel.onchange = function() { if (sel.value === '__equipe__') { sel.value = selectedEmail || ''; ouvrirEquipeTaches(); } };
 }
 
 // [Espace assistante] Notes laissées par l'assistante sur une tâche (lecture seule ici)
