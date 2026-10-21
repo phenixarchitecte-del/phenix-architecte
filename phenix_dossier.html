@@ -10141,7 +10141,7 @@ async function _equipeTachesCharger() {
   catch (e) { console.warn('Équipe (tâches) illisible :', e && e.code); }
 }
 async function _equipeTachesSauver() {
-  const fb = window._fb; await fb.setDoc(fb.doc(fb.db, 'phenix_meta', 'equipe_taches'), { liste: _collabPerso, updatedAt: new Date().toISOString() });
+  const fb = window._fb; await fb.setDoc(fb.doc(fb.db, 'phenix_meta', 'equipe_taches'), { liste: _collabPerso, emails: _collabPerso.map(x => String(x.email).toLowerCase()), updatedAt: new Date().toISOString() });
 }
 function ouvrirEquipeTaches() {
   let m = document.getElementById('equipeTachesModal');

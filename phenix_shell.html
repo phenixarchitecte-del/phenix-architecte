@@ -389,6 +389,8 @@ onAuthStateChanged(auth, async user => {
     let _fiche = null, _ficheErr = false;
     try { const sn = await getDoc(doc(db, 'phenix_users', me)); _fiche = sn.exists() ? sn.data() : null; } catch (e) { _ficheErr = true; }
     const _estAdmin = me === SHELL_ADMIN_EMAIL.toLowerCase();
+    // Employé ajouté depuis Dossier › Tâches › « Gérer mon équipe » (phenix_meta/equipe_taches) : accès « tâches seulement », sans fiche
+    if (!_fiche && !_estAdmin) { try { const sm = await getDoc(doc(db, 'phenix_meta', 'equipe_taches')); if (sm.exists() && (sm.data().emails || []).map(x => String(x).toLowerCase()).indexOf(me) >= 0) _fiche = { role: 'equipe', actif: true, nom: me.split('@')[0] }; } catch (e) {} }
     const _enListe = [COMPTES_TACHES_SEULES, COMPTES_CHANTIER_SEUL, COMPTES_RELANCES_SEULES].some(l => l.map(x => String(x).toLowerCase()).indexOf(me) >= 0);
     const _horsSuite = !!(_fiche && (_fiche.role === 'client' || _fiche.role === 'artisan'));   // clients et artisans : jamais dans la suite interne
     if (!_estAdmin && (_horsSuite || (_fiche && _fiche.actif === false) || (!_fiche && !_enListe))) {
