@@ -541,8 +541,9 @@ async function terminer(id){
 }
 async function enCours(id){ var t = find(id); if (!t) return; if (await patch(id, { statut:'doing' })) { jr('demarre', 'tâche', t.titre, tp(t)); toast('▶ Tâche en cours.'); } }
 async function rouvrir(id){ var t = find(id); if (!t) return; if (await patch(id, { statut:'todo' })) { jr('rouvre', 'tâche', t.titre, tp(t)); toast('↺ Tâche rouverte.'); } }
-async function prendre(id){ var t = find(id); if (!t) return; if (await patch(id, { assigneA:S.me })) { jr('assigne', 'tâche', t.titre, tp(t, 'à elle-même')); toast('👤 Tâche assignée à vous.'); } }
+async function prendre(id){ if (TACHES_SEULES) return; var t = find(id); if (!t) return; if (await patch(id, { assigneA:S.me })) { jr('assigne', 'tâche', t.titre, tp(t, 'à elle-même')); toast('👤 Tâche assignée à vous.'); } }
 async function assigner(id, email){
+  if (TACHES_SEULES) return;   // compte « tâches seulement » : ne réassigne jamais
   var t = find(id); if (!t) return; email = String(email || '').toLowerCase();
   if (await patch(id, { assigneA:email })) {
     t.assigneA = email;
@@ -584,7 +585,7 @@ async function saveNote(id){
 
 var NEW = null;
 function sheetNouvelle(projetId){
-  NEW = { rattach: projetId ? 'dossier' : 'dossier', prio:'normale', assigne:ADMIN_EMAIL, projetId: projetId ? String(projetId) : '' };
+  NEW = { rattach: projetId ? 'dossier' : 'dossier', prio:'normale', assigne:(TACHES_SEULES ? S.me : ADMIN_EMAIL), projetId: projetId ? String(projetId) : '' };
   renderNew();
 }
 function renderNew(){
@@ -601,7 +602,7 @@ function renderNew(){
     '<span class="lbl">Rattachement</span><div class="chips">' + chip('Dossier client', NEW.rattach==='dossier', "E.nset('rattach','dossier')") + chip('Gestion d\'entreprise', NEW.rattach==='gestion', "E.nset('rattach','gestion')") + '</div>' +
     (NEW.rattach === 'dossier' ? '<div class="fgroup"><span class="lbl">Projet</span><select class="field" id="n-projet" onchange="E.nkeep()">' + opts + '</select></div>'
                                : '<div class="fgroup"><span class="lbl">Catégorie *</span><select class="field" id="n-cat" onchange="E.nkeep()">' + copts + '</select></div>') +
-    '<span class="lbl">Assignée à</span><div class="chips">' + assignOptions().map(function(a){ return chip(esc(a.nom), NEW.assigne===a.email, "E.nset('assigne','" + esc(a.email) + "')"); }).join('') + chip('Personne', NEW.assigne==='', "E.nset('assigne','')") + '</div>' +
+    (TACHES_SEULES ? '' : '<span class="lbl">Assignée à</span><div class="chips">') + (TACHES_SEULES ? '' : assignOptions().map(function(a){ return chip(esc(a.nom), NEW.assigne===a.email, "E.nset('assigne','" + esc(a.email) + "')"); }).join('') + chip('Personne', NEW.assigne==='', "E.nset('assigne','')") + '</div>') +
     '<div class="c-actions"><button class="btn primary" onclick="E.saveNew()"><i class="ti ti-check"></i> Créer la tâche</button><button class="btn ghost" onclick="E.closeSheet()">Annuler</button></div>');
 }
 function nkeep(){
@@ -644,8 +645,8 @@ function carte(t, mine){
   else {
     act = '<button class="btn green sm" onclick="E.terminer(\'' + esc(t.id) + '\')"><i class="ti ti-check"></i> Terminer</button>' +
           (t.statut !== 'doing' ? '<button class="btn sm" onclick="E.enCours(\'' + esc(t.id) + '\')"><i class="ti ti-player-play"></i> En cours</button>' : '') +
-          (!t.assigneA || (t.assigneA||'').toLowerCase() !== S.me ? '<button class="btn sm" onclick="E.prendre(\'' + esc(t.id) + '\')"><i class="ti ti-user-plus"></i> Me l\'assigner</button>' : '') +
-          '<button class="btn sm" onclick="E.assignerA(\'' + esc(t.id) + '\')"><i class="ti ti-users"></i> Assigner à…</button>';
+          (!TACHES_SEULES && (!t.assigneA || (t.assigneA||'').toLowerCase() !== S.me) ? '<button class="btn sm" onclick="E.prendre(\'' + esc(t.id) + '\')"><i class="ti ti-user-plus"></i> Me l\'assigner</button>' : '') +
+          (TACHES_SEULES ? '' : '<button class="btn sm" onclick="E.assignerA(\'' + esc(t.id) + '\')"><i class="ti ti-users"></i> Assigner à…</button>');
   }
   act += '<button class="btn sm ghost" onclick="E.note(\'' + esc(t.id) + '\')"><i class="ti ti-message"></i> Note</button>';
   return '<div class="card' + cls + '"><div class="c-top"><div><div class="c-client">' + esc(t.titre) + '</div></div></div>' +
