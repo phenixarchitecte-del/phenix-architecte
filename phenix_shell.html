@@ -403,7 +403,7 @@ onAuthStateChanged(auth, async user => {
     const _restreint = window.appliquerRestrictionsShell ? window.appliquerRestrictionsShell(me, _estAdmin ? { role: 'admin' } : _fiche) : false;
     { const nj = document.querySelector('.shell-nav-item[data-module="journal"]'); if (nj) nj.style.display = (me === SHELL_ADMIN_EMAIL.toLowerCase()) ? '' : 'none'; }   // [Journal]
     try { if (!sessionStorage.getItem('phenix_jrn_conn')) { sessionStorage.setItem('phenix_jrn_conn', '1'); window.phenixJournal('shell', 'connexion', 'application', 'Connexion à Phénix'); } } catch (e) {}
-    if (!_restreint) { startListeners(); startNotifs(); startNotifsTaches(); startNotifsCentre(me === SHELL_ADMIN_EMAIL.toLowerCase()); }
+    if (!_restreint) { startListeners(); startNotifs(); startNotifsTaches(); startNotifsCentre(me === SHELL_ADMIN_EMAIL.toLowerCase()); startMoteurConversion(me === SHELL_ADMIN_EMAIL.toLowerCase()); }
     // Dossier = page d'accueil du shell, ouverte automatiquement à la connexion (Relances pour un compte restreint)
     const _accueil = _restreint ? window._phenixAccueil : 'dossier';
     shellOpenModule(_accueil, document.querySelector('.shell-nav-item[data-module="' + _accueil + '"]'));
@@ -460,7 +460,7 @@ function renderNC() {
   const items = [];
   NC.cli.forEach(x => items.push({ ico: '👤', t: x.t, h: 'Client · ' + (x.nom || 'projet'), txt: (x.who ? x.who + ' : ' : '') + (x.text || ''), go: 'msg', conv: 'cli|' + x.pid, col: 'phenix_notifs_client', id: x._id, patch: { lu: true } }));
   NC.art.forEach(x => items.push({ ico: '🧱', t: x.date, h: 'Message d\'artisan', txt: x.texte || '', go: 'msg', conv: x.chantierId + '|' + x.intervenantId, col: 'phenix_ch_messages', id: x._id, patch: { luPhenix: true } }));
-  NC.devis.forEach(x => items.push({ ico: '📄', t: x.date || x.at, h: 'Devis · ' + (x.client || ''), txt: 'statut → ' + (x.vers || ''), go: 'espace', col: 'phenix_notifs', id: x._id, patch: { lu: true } }));
+  NC.devis.forEach(x => items.push({ ico: x.projet ? '📝' : '📄', t: x.date || x.at, h: (x.projet ? 'Devis signé · ' : 'Devis · ') + (x.client || ''), txt: x.projet ? (x.vers || '') + ' — cliquer pour ouvrir le contrat' : 'statut → ' + (x.vers || ''), go: x.projet ? 'contrat' : 'espace', order: x.projet ? { source: 'phenix-shell', action: 'ouvrir-contrat', projet: x.projet } : null, col: 'phenix_notifs', id: x._id, patch: { lu: true } }));
   NC.taches.forEach(x => items.push({ ico: '✅', t: x.quand || x.date, h: 'Tâche', txt: (String(x.par || '').split('@')[0] || 'L\'assistante') + ' · « ' + (x.titre || '') + ' »', go: 'dossier', col: 'phenix_notifs_taches', id: x._id, patch: { lu: true } }));
   items.sort((a, b) => String(b.t || '').localeCompare(String(a.t || '')));
   const n = items.length;
@@ -477,10 +477,35 @@ window.ncToutLu = function(ev) { if (ev) { ev.stopPropagation(); ev.preventDefau
 window.ncOpen = function(i) {
   const x = (NC._items || [])[i]; if (!x) return; document.getElementById('ncPanel').classList.remove('open');
   const mod = x.go === 'msg' ? 'chantier' : x.go;
-  shellOpenModule(mod, document.querySelector('.shell-nav-item[data-module="' + mod + '"]'));
+  const _deja = x.order && shellCurrentModule === mod && shellCurrentFrame;
+  shellOpenModule(mod, document.querySelector('.shell-nav-item[data-module="' + mod + '"]'), x.order || undefined);
+  if (_deja) { try { shellCurrentFrame.contentWindow.postMessage(x.order, '*'); } catch (e) {} shellPendingOrder = null; }
   if (x.go === 'msg') [500, 1600, 3600].forEach(t => setTimeout(() => { try { shellCurrentFrame.contentWindow.postMessage({ source: 'phenix-shell', action: 'goto-page', page: 'messages', conv: x.conv || null }, '*'); } catch (e) {} }, t));
 };
 window.renderNC = renderNC;
+// ─── Moteur de conversion « devis signé → dossier + contrat » ───
+// Dès qu'un devis est signé (par l'assistante ou par Maxime), Dossier est chargé en arrière-plan (invisible) pour créer le dossier
+// et le contrat brouillon, puis Maxime reçoit une notification. Personne n'est déplacé de son écran.
+let _bgDossier = null, _unsubConv = null, _bgTimer = null;
+function startMoteurConversion(estAdmin) {
+  if (_unsubConv) { try { _unsubConv(); } catch (e) {} _unsubConv = null; }
+  if (!estAdmin) return;
+  try {
+    _unsubConv = onSnapshot(query(collection(db, 'phenix_devis_en_cours'), where('statut', '==', 'signe')), snap => {
+      const attente = snap.docs.filter(d => !(d.data() || {}).projetCree).length;
+      if (attente && !_bgDossier && shellCurrentModule !== 'dossier') {
+        clearTimeout(_bgTimer);
+        const f = document.createElement('iframe');
+        f.src = 'phenix_dossier.html?bg=1'; f.setAttribute('aria-hidden', 'true'); f.tabIndex = -1;
+        f.style.cssText = 'position:fixed;left:-9999px;top:0;width:1100px;height:700px;border:0;opacity:0;pointer-events:none';
+        document.body.appendChild(f); _bgDossier = f;
+      } else if (!attente && _bgDossier) {
+        clearTimeout(_bgTimer);
+        _bgTimer = setTimeout(() => { if (_bgDossier) { _bgDossier.remove(); _bgDossier = null; } }, 8000);   // laisse finir l'écriture du contrat et de la notification
+      }
+    }, err => console.warn('Moteur de conversion :', err && err.message));
+  } catch (e) { console.warn('Moteur de conversion :', e); }
+}
 function startNotifsCentre(estAdmin) {
   unsubNC.forEach(u => { try { u(); } catch (e) {} }); unsubNC = [];
   if (!estAdmin) return;   // messages artisans / client : compte administrateur
@@ -934,7 +959,7 @@ window.shellOpenProjet = function(id, nom) {
 window.addEventListener('message', (ev) => {
   const msg = ev.data;
   if (!msg || !msg.source) return;
-  if ((msg.source === 'phenix-dossier' || msg.source === 'phenix-relances' || msg.source === 'phenix-espace' || msg.source === 'phenix-contrat') && msg.ready && shellPendingOrder && shellCurrentFrame) {
+  if ((msg.source === 'phenix-dossier' || msg.source === 'phenix-relances' || msg.source === 'phenix-espace' || msg.source === 'phenix-contrat') && msg.ready && shellPendingOrder && shellCurrentFrame && !(_bgDossier && ev.source === _bgDossier.contentWindow)) {
     try { shellCurrentFrame.contentWindow.postMessage(shellPendingOrder, '*'); } catch(e) {}
     shellPendingOrder = null;
   }

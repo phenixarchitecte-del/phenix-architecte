@@ -12504,9 +12504,16 @@ async function convertirDevisSigneAuto(dec) {
   try { if (window.phenixJournal) window.phenixJournal('dossier', 'cree', 'projet', client, { detail: 'création automatique — devis ' + num + ' signé' }); } catch (e) {}
   try { refreshAllViews(); } catch (e) {}
   toast_d('✅ Devis signé : dossier « ' + client + ' » créé automatiquement — vérifiez le type et les honoraires.');
-  // [Contrat] la signature déclenche la mise en contrat (une seule ouverture automatique par lot de devis, avec confirmation)
-  await declencherContratDepuisDevis(p, devisCree, { ouvrir: !window._contratAutoOuvert, confirmer: true });
-  window._contratAutoOuvert = true;
+  // [Contrat] la signature prépare le contrat SANS déplacer personne (ni l'assistante, ni Maxime) :
+  // un brouillon prérempli est enregistré et Maxime reçoit une notification dans la cloche du Shell.
+  window._dernierContratPayload = null;
+  await declencherContratDepuisDevis(p, devisCree, { ouvrir: false });
+  try {
+    await fb.setDoc(fb.doc(fb.db, 'phenix_notifs', 'dossier-' + String(id) + '-' + Date.now()), {
+      type: 'dossier-cree', client, vers: 'signé — dossier créé, contrat prêt à relire', par: 'Phénix', date: new Date().toISOString(),
+      lu: false, projetId: String(id), projet: window._dernierContratPayload || { projetId: String(id), client, nom: p.nom || '', adresse: p.adresse || '' },
+    });
+  } catch (e) { console.warn('Notification de création impossible :', e); }
 }
 // ══ [Contrat 20/10/2026] DEVIS SIGNÉ → CONTRAT ═══════════════════════
 // Dès qu'un devis est signé, un contrat « brouillon » est préparé dans phenix_contrats (MOE par défaut,
@@ -12560,6 +12567,7 @@ async function declencherContratDepuisDevis(p, dev, opts) {
       } catch (e) { console.warn('Contrat : brouillon non enregistré', e); toast_d('⚠️ Brouillon de contrat non enregistré (' + (e && e.code || e && e.message || e) + ') — Contrat s\'ouvre quand même, prérempli.'); }
     }
     const payload = Object.assign({}, projet, { honoraires: ht ? String(ht) : '', budget: p.budget || '', phase: p.phase || '', devis, _source: 'phenix_dossier', _ts: Date.now() });
+    window._dernierContratPayload = payload;
     let ouvrir = opts.ouvrir !== false;
     if (ouvrir && opts.confirmer) ouvrir = confirm('Devis ' + (devis.numero || '') + ' signé — « ' + (p.client || p.nom) + ' ».\n\nLe contrat est prêt : l\'ouvrir maintenant dans Phénix Contrat ?');
     if (ouvrir && window.parent && window.parent !== window) {
@@ -12568,7 +12576,7 @@ async function declencherContratDepuisDevis(p, dev, opts) {
       toast_d(existe ? '📝 Contrat existant ouvert.' : '📝 Contrat préparé à partir du devis signé — vérifiez les articles avant envoi au client.');
       return true;
     }
-    toast_d('📝 Contrat préparé (menu Contrats) pour « ' + (p.client || p.nom) + ' ».');
+    if (opts.ouvrir !== false) toast_d('📝 Contrat préparé (menu Contrats) pour « ' + (p.client || p.nom) + ' ».');
     return ouvrir && !(window.parent && window.parent !== window) ? false : true;
   } catch (e) {
     console.warn('Contrat automatique impossible :', e);
