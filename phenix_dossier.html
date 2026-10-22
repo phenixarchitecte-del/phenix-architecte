@@ -3702,7 +3702,7 @@ window.addEventListener('firebase-ready', async () => {
   // [Portail] devis signés par l'assistante → dossier créé automatiquement
   try {
     window._fb.listenDevisEnCours(list => { try { convertirDevisSignes(list); } catch (e) { console.warn(e); } },
-      err => console.warn('Devis en cours non lisibles :', err && err.code));
+      err => { console.warn('Devis en cours non lisibles :', err && err.code); _signalerConversion(false, 'lecture des devis refusée (' + (err && err.code) + ') — règles Firestore'); });
   } catch (e) { console.warn(e); }
 
   // [Accès] collaborateurs assignables = fiches phenix_users
@@ -12497,6 +12497,8 @@ function _devisTypeProjet(objet) {
   if (/agricole|industri|hangar/.test(o)) return 'Industriel / Agricole';
   return 'Rénovation / Réhabilitation';
 }
+// Dossier peut tourner en arrière-plan (invisible) : on prévient le Shell du résultat, qui l'affiche à Maxime.
+function _signalerConversion(ok, detail) { try { if (window.parent && window.parent !== window) window.parent.postMessage({ source: 'phenix-dossier', action: ok ? 'conversion-ok' : 'conversion-erreur', detail: String(detail || '') }, '*'); } catch (e) {} }
 async function convertirDevisSignes(list) {
   if (typeof getCurrentUserRole === 'function' && getCurrentUserRole() !== 'admin') return;   // jamais depuis le compte de l'assistante
   if (!window._fb || !Array.isArray(list)) return;
@@ -12507,8 +12509,8 @@ async function convertirDevisSignes(list) {
     const t0 = dec.conversionDebut ? Date.parse(dec.conversionDebut) : 0;
     if (t0 && Date.now() - t0 < 120000) continue;   // un autre onglet est déjà en train de le convertir
     _convDevisEnCours.add(id);
-    try { await convertirDevisSigneAuto(dec); }
-    catch (e) { console.warn('Conversion du devis signé impossible :', e); try { toast_d('⚠️ Devis signé ' + (dec.numero || id) + ' : dossier non créé (' + (e && e.message || e) + ')'); } catch (e2) {} }
+    try { await convertirDevisSigneAuto(dec); _signalerConversion(true, dec.client || dec.numero || id); }
+    catch (e) { console.warn('Conversion du devis signé impossible :', e); try { toast_d('⚠️ Devis signé ' + (dec.numero || id) + ' : dossier non créé (' + (e && e.message || e) + ')'); } catch (e2) {} _signalerConversion(false, (dec.client || dec.numero || id) + ' — ' + (e && (e.code || e.message) || e)); }
     finally { _convDevisEnCours.delete(id); }
   }
 }

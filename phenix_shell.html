@@ -978,6 +978,9 @@ window.addEventListener('message', (ev) => {
       );
     } catch(e) {}
   }
+  // Résultat de la conversion « devis signé → dossier + contrat » (Dossier visible ou en arrière-plan)
+  if (msg.source === 'phenix-dossier' && msg.action === 'conversion-ok') { toast('✅ Devis signé — dossier créé, contrat prêt : ' + (msg.detail || '') + ' (voir la cloche)'); return; }
+  if (msg.source === 'phenix-dossier' && msg.action === 'conversion-erreur') { toast('⚠️ Devis signé : dossier NON créé — ' + (msg.detail || '')); return; }
   // Dossier ou Chantier demande à basculer vers un autre module
   if ((msg.source === 'phenix-dossier' || msg.source === 'phenix-chantier') && msg.action === 'open-module' && MODULES[msg.module]) {
     const navEl = document.querySelector('.shell-nav-item[data-module="' + msg.module + '"]');
