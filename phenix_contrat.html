@@ -374,7 +374,7 @@ if (window.parent !== window) {
           </select>
         </div>
         <div class="form-group"><label>Date du contrat</label><input type="date" id="f-date"></div>
-        <div class="form-group"><label>Honoraires / Prix (€ HT)</label><input type="number" id="f-montant"></div>
+        <div class="form-group"><label>Honoraires (€ HT)</label><input type="number" id="f-montant"></div>
         <div class="form-group"><label>Lieu de signature</label><input type="text" id="f-lieu" placeholder="Commune du projet"></div>
         <div class="form-group"><label>État du contrat</label>
           <select id="f-statut">
@@ -616,6 +616,13 @@ function echeDefaut(){
 }
 function echeCourant(){ return (echeState && echeState.v === 2) ? echeState : echeDefaut(); }
 function echeTotalHonos(){ return echeCourant().missions.filter(m => m.on).reduce((t, m) => t + (parseFloat(m.montant) || 0), 0); }
+// Honoraires à afficher : total des missions s'il est saisi, sinon le montant des honoraires du contrat (devis signé)
+// Nombre tolérant : « 9 500 », « 9500,50 € », 9500 …
+function numFR(v){ if (v == null || v === '') return 0; if (typeof v === 'number') return isFinite(v) ? v : 0; const t = String(v).replace(/[\s\u00a0\u202f€]/g, '').replace(',', '.').replace(/[^0-9.\-]/g, ''); const n = parseFloat(t); return isFinite(n) ? n : 0; }
+// Honoraires connus ailleurs (fiche Dossier, devis signé) quand le champ du contrat est vide ou à 0
+function honosSecours(){ return numFR(currentProjet && currentProjet.honoraires) || numFR(contratMeta.devis && contratMeta.devis.montantHt); }
+function honosChamp(){ const el = document.getElementById('f-montant'); let n = numFR(el && el.value); if (!n) { n = honosSecours(); if (n && el) el.value = n; } return n; }
+function honosAffiche(){ return echeTotalHonos() || honosChamp(); }
 const cap1 = t => t ? t.charAt(0).toUpperCase() + t.slice(1) : '';
 function echeTexte(){
   const ms = echeCourant().missions.filter(m => m.on);
@@ -670,7 +677,11 @@ async function completerProjet(){
     const f = await window._fbContrat.getProjet(currentProjet.projetId); if (!f) return;
     currentProjet._ficheManque = ['client','adresse','surface','email','tel'].filter(k => !f[k]);
     ['client','nom','adresse','surface','email','tel','ref','type'].forEach(k => { if (!currentProjet[k] && f[k]) currentProjet[k] = f[k]; });
-    if (!document.getElementById('f-montant').value && f.honoraires) document.getElementById('f-montant').value = f.honoraires;
+    if (f.honoraires && !numFR(currentProjet.honoraires)) currentProjet.honoraires = f.honoraires;
+    if (!numFR(document.getElementById('f-montant').value)) {
+      const n = numFR(f.honoraires) || numFR(contratMeta.devis && contratMeta.devis.montantHt);
+      if (n) document.getElementById('f-montant').value = n;
+    }
   } catch (e) { console.warn('Fiche projet illisible :', e && e.code); }
 }    // devis signé d'origine, date de création
 
@@ -784,7 +795,7 @@ async function chargerContratExistant(chercherAutre){
   const set = (id, v) => { const e = document.getElementById(id); if (e && v != null) e.value = v; };
   set('f-nature', ex.nature || 'maison_individuelle');
   set('f-date', ex.date || new Date().toISOString().slice(0,10));
-  set('f-montant', ex.montant || '');
+  set('f-montant', numFR(ex.montant) || numFR(document.getElementById('f-montant').value) || '');
   set('f-lieu', ex.lieu || document.getElementById('f-lieu').value || '');
   set('f-statut', ex.statut || 'brouillon');
   set('f-datesignature', ex.dateSignature || '');
@@ -849,7 +860,7 @@ function mergeFields(text){
     client: (currentProjet && currentProjet.client) || '(client à préciser)',
     adresse: (currentProjet && currentProjet.adresse) || '(adresse à préciser)',
     surface: (currentProjet && currentProjet.surface) || '—',
-    montant: document.getElementById('f-montant').value || '(montant à préciser)',
+    montant: (honosChamp() || '') || '(montant à préciser)',
     phasesListe,
     mediateur: '(coordonnées du médiateur de la consommation à compléter)',
     dureeRevision: '12',
@@ -874,7 +885,7 @@ function mergeFields(text){
     delaiRestitution: '30',
     delaiAmiable: '8',
     echeancierHonoraires: echeTexte(),
-    honosCg: (echeTotalHonos() ? 'soit ' + euro(echeTotalHonos()) + ' HT' : 'montant précisé au devis'),
+    honosCg: (honosAffiche() ? 'soit ' + euro(honosAffiche()) + ' HT' : 'montant précisé au devis'),
   };
   return text.replace(/\{\{(\w+)\}\}/g, (m,k) => map[k] !== undefined ? map[k] : m);
 }
@@ -987,7 +998,7 @@ async function saveContrat(){
 // ── Répartition des honoraires par phase (annexe du contrat) ──
 function repartitionCalc(){
   const act = PHASES.filter(p => selectedPhases[p]);
-  const m = parseFloat(document.getElementById('f-montant').value) || 0;
+  const m = honosChamp();
   const tot = act.reduce((t,p) => t + (parseFloat(repartState[p]) || 0), 0);
   return act.map(p => {
     const pct = tot > 0 ? (parseFloat(repartState[p]) || 0) / tot * 100 : 0;
@@ -1014,7 +1025,7 @@ function renderRepartition(full){
 
 // ── Décompte de fin de mission ───────────────────────────────
 function decompteCalc(){
-  const m = parseFloat(document.getElementById('f-montant').value) || 0;
+  const m = honosChamp();
   const acomptes = parseFloat(avancState.acomptes) || 0;
   const frais = parseFloat(avancState.frais) || 0;
   if (contractType === 'moe') {
@@ -1194,7 +1205,7 @@ function genererPDF(){
   const e = echeCourant();
   const para = t => escH(t).split(/\n\n+/).map(x => '<p>' + x.replace(/\n/g, '<br>') + '</p>').join('');
   const dv = contratMeta.devis;
-  const montant = parseFloat(document.getElementById('f-montant').value) || 0;
+  const montant = honosChamp();
   const natureSel = document.getElementById('f-nature'); const nature = natureSel ? natureSel.options[natureSel.selectedIndex].text : '';
   const estMoe = contractType === 'moe';
   const echeRows = e.missions.filter(m => m.on).map(m => { const b = parseFloat(m.montant) || 0;
@@ -1253,7 +1264,7 @@ h3{font-size:12.5px;color:#1E3A5F;margin:0 0 9px;padding:7px 12px;background:#F1
   <div><div class="plabel">${estMoe ? "Maître d'œuvre" : "Maître d'œuvre · contractant général"}</div><div class="pname">${escH(FIRM.nom)}</div><div class="pdetail">${escH(FIRM.representant)}<br>${escH(FIRM.adresse)}</div></div>
 </div>
 <div class="objet"><div><div class="objet-lbl">Opération</div><div class="objet-val">${escH(P.nom || client || '')}</div><div class="objet-det">${escH(P.adresse || 'Adresse à préciser')}${P.surface ? ' · ' + escH(P.surface) + ' m²' : ''}${nature ? ' · ' + escH(nature) : ''}</div></div>
-  <div class="mt"><div class="objet-lbl">${estMoe ? 'Honoraires' : 'Honoraires études et coordination'}</div><div class="objet-val">${estMoe ? (montant ? euro(montant) + ' HT' : '—') : (echeTotalHonos() ? euro(echeTotalHonos()) + ' HT' : '—')}</div></div></div>
+  <div class="mt"><div class="objet-lbl">${estMoe ? 'Honoraires' : 'Honoraires études et coordination'}</div><div class="objet-val">${estMoe ? (montant ? euro(montant) + ' HT' : '—') : (honosAffiche() ? euro(honosAffiche()) + ' HT' : '—')}</div></div></div>
 ${d.parts.map((p, pi) => { if (pi === d.parts.length - 1) return ''; const k = p.texte.indexOf(eT); const corps = (eT && k >= 0) ? para(p.texte.slice(0, k)) + echeTable + para(p.texte.slice(k + eT.length)) : para(p.texte);
   return '<div class="sec ' + ((eT && k >= 0) ? 'artl' : 'art') + '"><h3>Article ' + p.numero + ' — ' + escH(p.titre) + '</h3>' + corps + '</div>'; }).join('')}
 ${annexe}
