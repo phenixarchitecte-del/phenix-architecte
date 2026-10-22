@@ -13,7 +13,7 @@
 <script type="module">
 import { initializeApp }       from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import { getFirestore,
-         doc, setDoc, getDoc, getDocs, collection } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+         doc, setDoc, getDoc, getDocs, collection, query, where } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 import { getAuth, signInWithEmailAndPassword, signOut,
          onAuthStateChanged }  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 
@@ -74,6 +74,12 @@ window._fbContrat = {
     return snap.exists() ? snap.data() : null;
   },
   async completerFicheProjet(pid, champs) { await setDoc(doc(db, 'phenix_projets', String(pid)), champs, { merge: true }); },
+  async listProjets() { const snap = await getDocs(collection(db, 'phenix_projets')); return snap.docs.map(d => Object.assign({ _id: d.id }, d.data())); },
+  async devisAccepte(pid) {
+    const snap = await getDocs(query(collection(db, 'phenix_factures'), where('type', '==', 'devis')));
+    const l = snap.docs.map(d => d.data()).filter(f => String(f.projetId) === String(pid) && f.statut === 'accepte');
+    return l.length ? l[l.length - 1] : null;
+  },
   async listContrats() {
     const snap = await getDocs(collection(db, 'phenix_contrats'));
     return snap.docs.map(d => Object.assign({ _id: d.id }, d.data()));
@@ -306,6 +312,13 @@ if (window.parent !== window) {
     <div id="noProjectWarn" class="warn-box" style="display:none">
       <i class="ti ti-alert-triangle"></i>
       <div>Aucun projet transmis depuis Phénix Dossier. Ouvrez ce module depuis la fiche projet (bouton « Générer un contrat ») pour préremplir automatiquement les informations client.</div>
+    </div>
+
+    <div class="card" id="selCard" style="padding-top:1rem;padding-bottom:1rem">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <label for="selProjet" style="font-weight:600;white-space:nowrap"><i class="ti ti-switch-horizontal"></i> Projet</label>
+        <select id="selProjet" onchange="choisirProjet(this.value)" style="flex:1;min-width:240px"><option value="">Chargement des projets…</option></select>
+      </div>
     </div>
 
     <div class="card" id="listeCard">
@@ -752,6 +765,7 @@ async function ouvrirDepuisPayload(p){
   afficherProjet();
   renderPhaseChecks(); renderRepartition(); renderDecompte(); updateWarnings(); renderEche();
   renderListeContrats();
+  try { const sel = document.getElementById('selProjet'); if (sel && currentProjet) sel.value = String(currentProjet.projetId); } catch (e) {}
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
@@ -1115,12 +1129,35 @@ async function renderListeContrats(){
   catch(e) { box.innerHTML = '<div class="muted">Liste indisponible pour le moment.</div>'; return; }
   rows.sort((a,b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')));
   window._contratRows = rows;
+  renderSelecteur();
   if (!rows.length) { box.innerHTML = '<div class="muted">Aucun contrat pour l\'instant. Le premier sera préparé automatiquement à la prochaine signature de devis.</div>'; return; }
   box.innerHTML = rows.map((r,i) => {
     const p = r.projet || {};
     const st = r.statut || 'brouillon';
     return '<div class="liste-row" onclick="ouvrirContratListe(' + i + ')"><div class="nm">' + escH(p.client || p.nom || ('Projet ' + (r.projetId || r._id))) + '<div class="sb">' + escH(r.contractType === 'cg' ? 'Contractant général' : 'Maîtrise d\'œuvre') + (r.devis && r.devis.numero ? ' · devis ' + escH(r.devis.numero) : '') + (r.montant ? ' · ' + euro(r.montant) + ' HT' : '') + '</div></div><span class="stat ' + st + '">' + (STAT_LABEL[st] || st) + '</span></div>';
   }).join('');
+}
+// ── Sélecteur : passer d'un projet (et de son contrat) à un autre ──
+let _projetsSel = [];
+async function renderSelecteur(){
+  const sel = document.getElementById('selProjet'); if (!sel) return;
+  try { _projetsSel = await window._fbContrat.listProjets(); } catch (e) { sel.innerHTML = '<option value="">Projets indisponibles</option>'; return; }
+  const avec = new Set((window._contratRows || []).map(r => String(r.projetId || String(r._id).replace(/_(moe|cg)$/, ''))));
+  _projetsSel.sort((a, b) => String(a.nom || a.client || '').localeCompare(String(b.nom || b.client || ''), 'fr'));
+  const cur = currentProjet ? String(currentProjet.projetId) : '';
+  sel.innerHTML = '<option value="">— Choisir un projet —</option>' + _projetsSel.map(p => {
+    const id = String(p.id != null ? p.id : p._id);
+    return '<option value="' + escH(id) + '"' + (id === cur ? ' selected' : '') + '>' + escH((p.nom || p.client || ('Projet ' + id)) + (p.client && p.client !== p.nom ? ' — ' + p.client : '')) + (avec.has(id) ? '  ✓ contrat' : '') + (p.statut === 'cloture' ? '  (clôturé)' : '') + '</option>';
+  }).join('');
+}
+async function choisirProjet(id){
+  if (!id) return;
+  const p = _projetsSel.find(x => String(x.id != null ? x.id : x._id) === String(id)); if (!p) return;
+  const payload = { projetId: String(id), nom: p.nom || '', client: p.client || '', adresse: p.adresse || '', surface: p.surface || '', budget: p.budget || '', honoraires: p.honoraires || '', type: p.type || '', phase: p.phase || '', ref: p.ref || '', email: p.email || '', tel: p.tel || '' };
+  try { const dv = await window._fbContrat.devisAccepte(id); if (dv) payload.devis = { numero: String(dv.numero || ''), date: String(dv.dateEmission || ''), montantHt: parseFloat(dv.montantHt) || 0 }; } catch (e) {}
+  try { localStorage.setItem('phenix-open-in-contrat', JSON.stringify(payload)); } catch (e) {}
+  await ouvrirDepuisPayload(payload);
+  toast('Projet « ' + (p.nom || p.client || id) + ' » ouvert');
 }
 async function ouvrirContratListe(i){
   const r = (window._contratRows || [])[i]; if (!r) return;
@@ -1130,6 +1167,7 @@ async function ouvrirContratListe(i){
   await chargerContratExistant(false);
   await completerProjet(); lieuParDefaut();
   afficherProjet(); renderPhaseChecks(); renderRepartition(); renderDecompte(); updateWarnings(); renderEche();
+  try { const sel = document.getElementById('selProjet'); if (sel) sel.value = String(currentProjet.projetId); } catch (e) {}
   window.scrollTo({ top:0, behavior:'smooth' });
 }
 

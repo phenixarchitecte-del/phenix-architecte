@@ -5373,7 +5373,7 @@ function renderProjectTable() {
       <td>${progressHtml(avancementProjet(p))}</td>
       <td>${isRoleRestreint()?'🔒':(p.honoraires?fmtEur_d(p.honoraires):'—')}</td>
       <td>${statutBadge(p.statut)}</td>
-      <td><button class="btn btn-sm" onclick="event.stopPropagation();openProjectModal(${p.id})"><i class="ti ti-eye"></i></button></td>
+      <td style="white-space:nowrap"><button class="btn btn-sm" onclick="event.stopPropagation();openProjectModal(${p.id})" title="Voir la fiche"><i class="ti ti-eye"></i></button> <button class="btn btn-sm" onclick="event.stopPropagation();openInContrat(${p.id})" title="Rédiger le contrat de ce projet" style="color:var(--accent);border-color:var(--accent)"><i class="ti ti-file-signature"></i> Contrat</button></td>
     </tr>`).join('');
 }
 function renderProjectCards() {
@@ -5388,6 +5388,7 @@ function renderProjectCards() {
       <div class="pc-progress-label"><span>${p.phase||'—'}</span><strong>${avancementProjet(p)}%</strong></div>
       <div class="pc-progress-bar"><div class="pc-progress-fill" style="width:${avancementProjet(p)}%"></div></div>
       ${chantierReelHtml(p)}
+      <div style="margin-top:8px;text-align:right"><button class="btn btn-sm" onclick="event.stopPropagation();openInContrat(${p.id})" style="color:var(--accent);border-color:var(--accent)"><i class="ti ti-file-signature"></i> Contrat</button></div>
     </div>`).join('');
 }
 function toggleProjectView() {
@@ -5507,7 +5508,7 @@ function openProjectModal(id) {
       <button class="btn btn-sm" onclick="switchModalTab('historique')" style="color:var(--accent);border-color:var(--accent)"><i class="ti ti-history"></i> Voir l'historique</button>
       <button class="btn btn-sm" onclick="openInChiffrage(${id})" style="background:rgba(74,156,199,0.15);color:#4fa8f0;border-color:rgba(74,156,199,0.4)" title="Ouvrir ce projet dans Phénix Chiffrage"><i class="ti ti-calculator"></i> Ouvrir dans Chiffrage</button>
       <button class="btn btn-sm" onclick="openInFinancement(${id})" style="background:rgba(45,122,79,0.12);color:#3fbb7d;border-color:rgba(45,122,79,0.4)" title="Ouvrir le dossier de financement bancaire pour ce projet"><i class="ti ti-coin"></i> Dossier Financement</button>
-      <button class="btn btn-sm" onclick="openInContrat(${id})" style="background:rgba(27,45,91,0.1);color:#12233f;border-color:rgba(27,45,91,0.35)" title="Générer un contrat MOE ou contractant général pour ce projet"><i class="ti ti-file-signature"></i> Générer un contrat</button>
+      <button class="btn btn-sm" onclick="openInContrat(${id})" style="background:var(--accent-bg);color:var(--accent);border-color:var(--accent)" title="Générer un contrat MOE ou contractant général pour ce projet"><i class="ti ti-file-signature"></i> Générer un contrat</button>
     </div>`;
 
   // Historique
@@ -5880,7 +5881,11 @@ function openInContrat(id) {
   } catch (e) {}
   localStorage.setItem('phenix-open-in-contrat', JSON.stringify(payload));
   const contratUrl = 'phenix_contrat.html?projet=' + encodeURIComponent(p.id);
-  toast_d('📝 Ouverture du Générateur de Contrats…');
+  toast_d('📝 Ouverture du contrat de « ' + (p.client || p.nom || '') + ' »…');
+  // Dans le Shell : bascule vers Contrat AVEC l'ordre d'ouvrir ce projet (même si Contrat est déjà chargé)
+  if (window.parent && window.parent !== window) {
+    try { window.parent.postMessage({ source: 'phenix-dossier', action: 'open-module', module: 'contrat', order: { source: 'phenix-shell', action: 'ouvrir-contrat', projet: payload } }, '*'); return; } catch (e) {}
+  }
   setTimeout(() => phenixNavigateToModule('contrat', contratUrl), 400);
 }
 
