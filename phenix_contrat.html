@@ -73,6 +73,7 @@ window._fbContrat = {
     const snap = await getDoc(doc(db, 'phenix_projets', String(pid)));
     return snap.exists() ? snap.data() : null;
   },
+  async completerFicheProjet(pid, champs) { await setDoc(doc(db, 'phenix_projets', String(pid)), champs, { merge: true }); },
   async listContrats() {
     const snap = await getDocs(collection(db, 'phenix_contrats'));
     return snap.docs.map(d => Object.assign({ _id: d.id }, d.data()));
@@ -239,6 +240,11 @@ body{font-family:var(--font-sans);background-color:var(--bg);background-image:li
 .info-field{background:var(--bg);border-radius:var(--r-sm);padding:9px 12px}
 .info-field .lbl{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px}
 .info-field .val{font-size:13px;font-weight:600;color:var(--text)}
+.pj-in{width:100%;background:transparent;border:1px solid transparent;border-radius:5px;padding:3px 5px;margin-left:-5px;font-size:13px;font-weight:600;color:var(--text);font-family:inherit}
+.pj-in:hover,.pj-in:focus{border-color:var(--border);background:var(--bg2);outline:none}
+.pj-in.manque{border-color:var(--amber);background:var(--amber-bg)}
+.pj-in::placeholder{color:var(--text3);font-weight:400}
+@media(max-width:700px){.info-grid{grid-template-columns:1fr}.info-field{grid-column:auto!important}}
 .form-grid>*,.form-group input,.form-group select{min-width:0;max-width:100%}
 @media(max-width:600px){.form-grid{grid-template-columns:1fr}}
 </style>
@@ -310,13 +316,15 @@ if (window.parent !== window) {
 
     <div class="card" id="infoCard" style="display:none">
       <div class="card-title"><i class="ti ti-user"></i> Client &amp; projet</div>
+      <div class="muted" style="margin-bottom:.6rem">Ces informations sont reprises de Dossier. Complétez ou corrigez ce qui manque : elles figurent dans le contrat et seront aussi ajoutées à la fiche projet si elle était incomplète.</div>
       <div class="info-grid">
-        <div class="info-field"><div class="lbl">Client</div><div class="val" id="i-client">—</div></div>
-        <div class="info-field"><div class="lbl">Référence</div><div class="val" id="i-ref">—</div></div>
-        <div class="info-field" style="grid-column:span 2"><div class="lbl">Adresse du projet</div><div class="val" id="i-adresse">—</div></div>
-        <div class="info-field"><div class="lbl">Surface</div><div class="val" id="i-surface">—</div></div>
-        <div class="info-field" style="grid-column:span 2"><div class="lbl">Devis signé</div><div class="val" id="i-devis">—</div></div>
-      </div>
+        <div class="info-field"><div class="lbl">Client</div><input class="pj-in" data-k="client" id="i-client"></div>
+        <div class="info-field"><div class="lbl">Référence</div><input class="pj-in" data-k="ref" id="i-ref"></div>
+        <div class="info-field"><div class="lbl">Surface (m²)</div><input class="pj-in" data-k="surface" id="i-surface" inputmode="decimal"></div>
+        <div class="info-field" style="grid-column:span 2"><div class="lbl">Adresse du projet</div><input class="pj-in" data-k="adresse" id="i-adresse" placeholder="N° et rue, code postal, commune"></div>
+        <div class="info-field"><div class="lbl">Téléphone</div><input class="pj-in" data-k="tel" id="i-tel"></div>
+        <div class="info-field" style="grid-column:span 2"><div class="lbl">E-mail du client</div><input class="pj-in" data-k="email" id="i-email" type="email"></div>
+        <div class="info-field"><div class="lbl">Devis signé</div><div class="val" id="i-devis">—</div></div>
     </div>
 
     <div class="card">
@@ -647,6 +655,7 @@ async function completerProjet(){
   if (!currentProjet || !currentProjet.projetId || !window._fbContrat.getProjet) return;
   try {
     const f = await window._fbContrat.getProjet(currentProjet.projetId); if (!f) return;
+    currentProjet._ficheManque = ['client','adresse','surface','email','tel'].filter(k => !f[k]);
     ['client','nom','adresse','surface','email','tel','ref','type'].forEach(k => { if (!currentProjet[k] && f[k]) currentProjet[k] = f[k]; });
     if (!document.getElementById('f-montant').value && f.honoraires) document.getElementById('f-montant').value = f.honoraires;
   } catch (e) { console.warn('Fiche projet illisible :', e && e.code); }
@@ -688,10 +697,12 @@ function afficherProjet(){
     document.getElementById('infoCard').style.display = '';
     document.getElementById('pageTitle').textContent = 'Contrat — ' + (currentProjet.nom || currentProjet.client || '');
     document.getElementById('pageSubtitle').textContent = 'Projet ' + (currentProjet.ref || '');
-    document.getElementById('i-client').textContent  = currentProjet.client  || '—';
-    document.getElementById('i-ref').textContent      = currentProjet.ref    || '—';
-    document.getElementById('i-adresse').textContent  = currentProjet.adresse|| '—';
-    document.getElementById('i-surface').textContent  = currentProjet.surface ? currentProjet.surface + ' m²' : '—';
+    document.querySelectorAll('.pj-in').forEach(el => {
+      const k = el.dataset.k, v = currentProjet[k] == null ? '' : String(currentProjet[k]);
+      if (document.activeElement !== el) el.value = v;
+      el.classList.toggle('manque', !v && ['client','adresse','surface','email'].indexOf(k) >= 0);
+      if (!el.placeholder) el.placeholder = 'À compléter';
+    });
     const dv = contratMeta.devis;
     document.getElementById('i-devis').textContent = dv ? ('n° ' + (dv.numero || '—') + (dv.date ? ' du ' + dateFR(dv.date) : '') + (dv.montantHt ? ' · ' + euro(dv.montantHt) + ' HT' : '')) : '—';
   } else {
@@ -948,7 +959,14 @@ async function saveContrat(){
   const data = collectFormData();
   await window._fbContrat.saveContrat(id, data);
   contratMeta.createdAt = data.createdAt;
-  toast('✓ Contrat enregistré');
+  // La fiche projet de Dossier était incomplète : on y ajoute ce qui a été saisi ici (jamais d'écrasement d'une valeur existante)
+  let maj = 0;
+  try {
+    const manque = currentProjet._ficheManque || [], champs = {};
+    manque.forEach(k => { if (currentProjet[k]) champs[k] = currentProjet[k]; });
+    if (Object.keys(champs).length) { await window._fbContrat.completerFicheProjet(currentProjet.projetId, champs); maj = Object.keys(champs).length; currentProjet._ficheManque = manque.filter(k => !champs[k]); }
+  } catch (e) { console.warn('Fiche projet non complétée :', e); }
+  toast('✓ Contrat enregistré' + (maj ? ' — fiche projet de Dossier complétée' : ''));
   renderListeContrats();
 }
 
@@ -1250,6 +1268,15 @@ function genererWord(){
 }
 
 document.getElementById('f-nature').addEventListener('change', updateWarnings);
+// Champs client & projet modifiables : mis à jour dans le contrat ; la commune du projet devient le lieu de signature
+document.addEventListener('input', ev => {
+  const el = ev.target; if (!el.classList || !el.classList.contains('pj-in') || !currentProjet) return;
+  const k = el.dataset.k, avant = currentProjet[k];
+  currentProjet[k] = el.value.trim();
+  el.classList.toggle('manque', !currentProjet[k] && ['client','adresse','surface','email'].indexOf(k) >= 0);
+  if (k === 'adresse') { const l = document.getElementById('f-lieu'); if (!l.value || l.value === villeDe(avant)) l.value = villeDe(currentProjet.adresse); }
+  if (k === 'client' || k === 'ref') document.getElementById('pageTitle').textContent = 'Contrat — ' + (currentProjet.nom || currentProjet.client || '');
+});
 document.getElementById('f-montant').addEventListener('input', () => { renderRepartition(false); renderDecompte(); renderEche(); });
 
 // Ordre du shell : « ouvre le contrat de ce projet » (bascule automatique à la signature d'un devis)
