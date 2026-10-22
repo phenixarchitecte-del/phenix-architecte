@@ -467,13 +467,21 @@ function renderNC() {
   items.sort((a, b) => String(b.t || '').localeCompare(String(a.t || '')));
   const n = items.length;
   bell.style.display = ''; cnt.textContent = n > 9 ? '9+' : String(n); cnt.style.display = n ? 'flex' : 'none';
-  pan.innerHTML = '<div class="nc-h"><span>Notifications</span><span>' + (n ? '<a href="#" onclick="ncToutLu(event)" style="color:#2f6fc0;font-weight:600;text-decoration:none">Tout marquer lu</a>' : '') + '</span></div>' + (n ? items.slice(0, 40).map((x, i) => '<div class="nc-i" onclick="ncOpen(' + i + ')"><span>' + x.ico + '</span><div style="min-width:0;flex:1"><b>' + _ncEsc(x.h) + '</b>' + _ncEsc(String(x.txt).slice(0, 140)) + '</div><button title="Marquer comme lu" aria-label="Marquer comme lu" onclick="ncLu(event,' + i + ')" style="border:1px solid #cfd8ea;background:#fff;color:#2f6fc0;border-radius:7px;padding:3px 8px;cursor:pointer;font-size:12px;font-weight:700;flex:none">✓ Lu</button></div>').join('') : '<div class="nc-e">Rien de nouveau.</div>');
+  pan.innerHTML = '<div class="nc-h"><span>Notifications</span><span>' + (n ? '<a href="#" onclick="ncToutLu(event)" style="color:#2f6fc0;font-weight:600;text-decoration:none">Tout marquer lu</a>' : '') + '</span></div>' + (n ? items.slice(0, 40).map((x, i) => '<div class="nc-i" onclick="ncOpen(' + i + ')"><span>' + x.ico + '</span><div style="min-width:0;flex:1"><b>' + _ncEsc(x.h) + '</b>' + _ncEsc(String(x.txt).slice(0, 140)) + '</div><button title="Marquer comme lu" aria-label="Marquer comme lu" onclick="ncLu(event,' + i + ')" style="border:1px solid #cfd8ea;background:#fff;color:#2f6fc0;border-radius:7px;padding:3px 8px;cursor:pointer;font-size:12px;font-weight:700;flex:none">✓ Lu</button></div>').join('') : '<div class="nc-e">Rien de nouveau.</div>') +
+    '<div style="padding:10px 14px;border-top:1px solid #e6eaf2;font-size:12px;color:#6b7a99">' +
+    (_convAttente == null ? '' : (_convAttente ? '⏳ ' + _convAttente + ' devis signé(s) en attente de conversion en dossier.' : '✓ Aucun devis signé en attente de conversion.')) +
+    '<br><a href="#" onclick="ncTester(event)" style="color:#2f6fc0;font-weight:600;text-decoration:none">🔧 Envoyer une notification de test</a></div>';
   NC._items = items;
 }
 window.toggleNC = function(ev) { if (ev) ev.stopPropagation(); document.getElementById('ncPanel').classList.toggle('open'); };
 document.addEventListener('click', ev => { const p = document.getElementById('ncPanel'); if (p && p.classList.contains('open') && !p.contains(ev.target)) p.classList.remove('open'); });
 // Marquer lu : met le drapeau « lu » dans Firestore, la notification disparaît aussitôt (l'écoute ne renvoie que les non lues)
 function _ncMarquer(x) { if (x && x.col && x.id) { try { updateDoc(doc(db, x.col, String(x.id)), x.patch || { lu: true }).catch(e => console.warn('Marquer lu :', e && e.message)); } catch (e) {} } }
+window.ncTester = async function(ev) {
+  if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+  try { await setDoc(doc(db, 'phenix_notifs', 'test-' + Date.now()), { type: 'test', client: 'Test', vers: 'notification de test — tout fonctionne', par: 'Phénix', date: new Date().toISOString(), lu: false }); toast('✅ Test envoyé : elle doit apparaître dans la cloche.'); }
+  catch (e) { toast('⚠️ Test impossible : ' + (e && (e.code || e.message) || e) + ' — règles Firestore (phenix_notifs) ?'); }
+};
 window.ncLu = function(ev, i) { if (ev) { ev.stopPropagation(); ev.preventDefault(); } _ncMarquer((NC._items || [])[i]); };
 window.ncToutLu = function(ev) { if (ev) { ev.stopPropagation(); ev.preventDefault(); } (NC._items || []).forEach(_ncMarquer); };
 window.ncOpen = function(i) {
@@ -488,13 +496,14 @@ window.renderNC = renderNC;
 // ─── Moteur de conversion « devis signé → dossier + contrat » ───
 // Dès qu'un devis est signé (par l'assistante ou par Maxime), Dossier est chargé en arrière-plan (invisible) pour créer le dossier
 // et le contrat brouillon, puis Maxime reçoit une notification. Personne n'est déplacé de son écran.
-let _bgDossier = null, _unsubConv = null, _bgTimer = null;
+let _bgDossier = null, _unsubConv = null, _bgTimer = null, _convAttente = null;
 function startMoteurConversion(estAdmin) {
   if (_unsubConv) { try { _unsubConv(); } catch (e) {} _unsubConv = null; }
   if (!estAdmin) return;
   try {
     _unsubConv = onSnapshot(query(collection(db, 'phenix_devis_en_cours'), where('statut', '==', 'signe')), snap => {
       const attente = snap.docs.filter(d => !(d.data() || {}).projetCree).length;
+      _convAttente = attente; try { renderNC(); } catch (e) {}
       if (attente && !_bgDossier && shellCurrentModule !== 'dossier') {
         clearTimeout(_bgTimer);
         const f = document.createElement('iframe');
