@@ -69,6 +69,10 @@ window._fbContrat = {
     return snap.exists() ? snap.data() : null;
   },
   // [Contrat 20/10/2026] liste des contrats (brouillons créés à la signature d'un devis, envoyés, signés…)
+  async getProjet(pid) {   // fiche projet de Dossier : complète l'adresse, la surface, les coordonnées du client
+    const snap = await getDoc(doc(db, 'phenix_projets', String(pid)));
+    return snap.exists() ? snap.data() : null;
+  },
   async listContrats() {
     const snap = await getDocs(collection(db, 'phenix_contrats'));
     return snap.docs.map(d => Object.assign({ _id: d.id }, d.data()));
@@ -350,7 +354,7 @@ if (window.parent !== window) {
         </div>
         <div class="form-group"><label>Date du contrat</label><input type="date" id="f-date"></div>
         <div class="form-group"><label>Honoraires / Prix (€ HT)</label><input type="number" id="f-montant"></div>
-        <div class="form-group"><label>Lieu de signature</label><input type="text" id="f-lieu" placeholder="Saint-Georges-de-Mons"></div>
+        <div class="form-group"><label>Lieu de signature</label><input type="text" id="f-lieu" placeholder="Commune du projet"></div>
         <div class="form-group"><label>État du contrat</label>
           <select id="f-statut">
             <option value="brouillon">À établir / brouillon</option>
@@ -369,6 +373,12 @@ if (window.parent !== window) {
       </div>
     </div>
 
+    <div class="card" id="echeCard">
+      <div class="card-title"><i class="ti ti-calendar-dollar"></i> Échéancier des honoraires</div>
+      <div class="muted" style="margin-bottom:.9rem">Fixé par Phénix selon l'avancement du projet : aucun acompte sur les honoraires, chaque règlement accompagne un livrable. Adaptez les pourcentages et les livrables à ce client.</div>
+      <div id="echeBox"></div>
+    </div>
+
     <div class="card">
       <div class="card-title"><i class="ti ti-list-check"></i> Clauses du contrat</div>
       <div style="font-size:12px;color:var(--text2);margin-bottom:1rem">Cochez les clauses à inclure. Cliquez sur une clause pour voir / modifier son texte, ou demander une proposition adaptée par IA.</div>
@@ -385,7 +395,7 @@ if (window.parent !== window) {
   <div class="footer-actions">
     <button class="btn" onclick="saveContrat()"><i class="ti ti-device-floppy"></i> Enregistrer</button>
     <button class="btn" onclick="genererWord()"><i class="ti ti-file-word"></i> Télécharger en Word</button>
-    <button class="btn btn-primary" onclick="genererPDF()"><i class="ti ti-file-download"></i> Télécharger en PDF</button>
+    <button class="btn btn-primary" onclick="genererPDF()"><i class="ti ti-file-download"></i> PDF (mise en page Phénix)</button>
   </div>
 </div>
 
@@ -395,7 +405,7 @@ if (window.parent !== window) {
 const FIRM = {
   nom: "Phénix-Architecture EURL",
   siret: "987 989 316 00011",
-  adresse: "Saint-Georges-de-Mons, 63780, Auvergne",
+  adresse: "6 lieu-dit l'Étreille, 63780 Saint-Georges-de-Mons",
   representant: "Maxime Suchet, gérant",
   contact: "contact@phenixarchitecte.fr · 04 73 73 00 59",
   qualite: "maître d'œuvre (diplômé d'État en architecture, non inscrit à l'Ordre des architectes)"
@@ -414,11 +424,13 @@ const REPARTITION_DEFAUT = { ESQ:5, APS:10, APD:15, PC:10, DCE:10, ACT:5, DET:35
 const CLAUSES_MOE = [
   // ── Parties & objet ─────────────────────────────────────────
   { key:'parties', cat:'Parties & objet', label:"Identification des parties", defaultOn:true,
-    text:"ENTRE LES SOUSSIGNÉS :\n{{firmNom}}, EURL, SIRET {{firmSiret}}, sise {{firmAdresse}}, représentée par {{firmRepresentant}}, agissant en qualité de {{firmQualite}}, ci-après dénommée « le Maître d'Œuvre »,\nET\n{{client}}, ci-après dénommé « le Maître d'Ouvrage »,\nIl a été convenu ce qui suit :" },
+    text:"ENTRE LES SOUSSIGNÉS :\n{{firmNom}}, SIRET {{firmSiret}}, sise {{firmAdresse}}, représentée par {{firmRepresentant}}, agissant en qualité de {{firmQualite}}, ci-après dénommée « le Maître d'Œuvre »,\nET\n{{client}}, pour le bien situé {{adresse}}, ci-après dénommé « le Maître d'Ouvrage »,\nIl a été convenu ce qui suit :" },
   { key:'objet', cat:'Parties & objet', label:"Objet de la mission", defaultOn:true,
     text:"Le présent contrat a pour objet de définir les conditions dans lesquelles le Maître d'Œuvre assure une mission de maîtrise d'œuvre pour l'opération suivante : construction/rénovation sise {{adresse}}, d'une surface de {{surface}} m², ci-après « l'Opération ». Il formalise et complète le devis {{devisRef}} accepté par le Maître d'Ouvrage. En cas de contradiction entre le devis et le présent contrat, le présent contrat prévaut." },
   { key:'esprit_collaboration', cat:'Parties & objet', label:"Esprit de la collaboration", defaultOn:true,
     text:"Le présent contrat offre un cadre clair et équilibré à la collaboration entre les parties. Le Maître d'Ouvrage reste libre, à tout moment, de suspendre ou d'arrêter la mission, sans avoir à se justifier et sans pénalité (article « Liberté d'arrêter la mission »). En contrepartie, le travail effectivement réalisé par le Maître d'Œuvre jusqu'à cet arrêt est rémunéré à sa juste valeur : rien n'est dû pour ce qui n'a pas été fait, tout ce qui a été fait reste dû (article « Rémunération des prestations réalisées »). Les engagements relatifs à la propriété du dossier technique et à la valorisation de la mise en relation avec les entreprises complètent cet équilibre, dans un esprit de loyauté réciproque (articles 1103 et 1104 du Code civil)." },
+  { key:'amiable', cat:'Parties & objet', label:"Dialogue et résolution amiable des difficultés", defaultOn:true,
+    text:"Les parties attachent une importance essentielle à la qualité de leur relation : elles s'engagent à toujours privilégier le dialogue et à rechercher ensemble, de bonne foi, une solution à toute difficulté, aussi tôt que possible et avant qu'elle ne s'installe.\n\nToute difficulté est d'abord évoquée simplement, de vive voix ou par écrit ; la partie sollicitée y répond dans un délai de {{delaiAmiable}} jours et les parties se rencontrent si nécessaire, sur place ou à distance, pour trouver une issue satisfaisante pour chacune. Si aucune solution n'est trouvée, elles peuvent recourir à la médiation de la consommation prévue au présent contrat, ou à tout médiateur choisi d'un commun accord.\n\nCe n'est qu'à défaut de solution amiable que le litige peut être porté devant la juridiction compétente selon les règles légales ; le Maître d'Ouvrage consommateur peut saisir la juridiction du lieu où il demeurait lors de la conclusion du contrat ou de la survenance du fait dommageable (article R.631-3 du Code de la consommation). Les mesures d'urgence demeurent possibles." },
 
   // ── Mission ─────────────────────────────────────────────────
   { key:'mission', cat:'Mission', label:"Étendue de la mission (phases)", defaultOn:true,
@@ -443,10 +455,10 @@ const CLAUSES_MOE = [
     text:"La mise en relation avec des entreprises fiables et la coordination des artisans font partie intégrante du travail du Maître d'Œuvre au bénéfice du Maître d'Ouvrage ; le présent article vise à ce que ce travail soit justement reconnu, sans pour autant limiter la liberté de choix du Maître d'Ouvrage. Pendant la durée de la mission et {{dureeProtection}} mois suivant son terme, si le Maître d'Ouvrage contracte, directement ou indirectement (y compris via un tiers, une société liée ou un proche), avec une entreprise ou un artisan que le Maître d'Œuvre lui a personnellement présenté, mis en relation ou dont il a organisé la consultation dans le cadre de l'Opération, sans en informer préalablement le Maître d'Œuvre et sans son accord écrit, celui-ci pourra réclamer une indemnité forfaitaire égale à {{indemniteDossier}} % du montant HT des travaux confiés à cette entreprise, au titre de l'apport d'affaires réalisé.\n\nLa présente clause n'a pas pour effet de restreindre la liberté du Maître d'Ouvrage de sélectionner et contracter avec toute entreprise de son choix, garantie à l'article « Liberté de choix des entreprises » ; elle a pour seul objet de rémunérer la mise en relation effectuée par le Maître d'Œuvre, indépendamment de l'usage ou non des documents visés à l'article « Propriété du dossier »." },
 
   // ── Honoraires & paiement ───────────────────────────────────
-  { key:'honoraires', cat:'Honoraires & paiement', label:"Montant, répartition et échéancier des honoraires", defaultOn:true,
-    text:"Les honoraires du Maître d'Œuvre, tels qu'acceptés par le devis {{devisRef}}, s'élèvent à {{montant}} € HT (TVA en sus au taux en vigueur). Ils sont répartis par phase selon l'annexe « Répartition des honoraires par phase », qui sert de base au calcul des sommes dues en cas d'arrêt de la mission en cours de route.\n\nUn acompte de {{acomptePct}} % est dû à la signature ; il s'impute sur les honoraires des premières phases. Les honoraires de chaque phase sont exigibles à la remise des livrables de cette phase. Le cas échéant, ceux de la direction de l'exécution des travaux sont facturés mensuellement, au prorata de l'avancement constaté des travaux." },
+  { key:'honoraires', cat:'Honoraires & paiement', label:"Montant et échéancier des honoraires", defaultOn:true,
+    text:"Les honoraires du Maître d'Œuvre, tels qu'acceptés par le devis {{devisRef}}, s'élèvent à {{montant}} € HT (TVA en sus au taux en vigueur).\n\nAucun acompte n'est demandé : chaque règlement correspond à la remise d'un livrable. Les honoraires sont réglés par mission, selon l'échéancier suivant, fixé par le Maître d'Œuvre en fonction de l'avancement du projet :\n{{echeancierHonoraires}}\n\nLa répartition par phase figurant en annexe sert uniquement de base au calcul des sommes dues en cas d'arrêt de la mission en cours de route." },
   { key:'paiement', cat:'Honoraires & paiement', label:"Délai de paiement et retard", defaultOn:true,
-    text:"Les factures sont payables sous {{delaiPaiement}} jours à compter de leur réception, par virement. Tout retard de paiement entraîne de plein droit, dès le lendemain de l'échéance et sans mise en demeure préalable, des intérêts de retard au taux de {{tauxRetard}}. Lorsque le Maître d'Ouvrage agit à des fins professionnelles, s'appliquent en outre l'indemnité forfaitaire de 40 € pour frais de recouvrement et les pénalités prévues à l'article L.441-10 du Code de commerce." },
+    text:"Les factures sont payables sous {{delaiPaiement}} jours à compter de leur réception, par virement. En cas de retard, le Maître d'Œuvre adresse d'abord un simple rappel amiable : la plupart des oublis se règlent ainsi. Si le règlement n'intervient toujours pas dans les {{delaiMiseEnDemeure}} jours suivant ce rappel, les sommes dues peuvent porter intérêts au taux de {{tauxRetard}}. Lorsque le Maître d'Ouvrage agit à des fins professionnelles, s'appliquent en outre, conformément à la loi, l'indemnité forfaitaire de 40 € pour frais de recouvrement et les pénalités prévues à l'article L.441-10 du Code de commerce." },
   { key:'suspension', cat:'Honoraires & paiement', label:"Suspension de la mission pour impayé", defaultOn:true,
     text:"En cas de non-paiement d'une facture exigible, et après une mise en demeure restée sans effet pendant {{delaiMiseEnDemeure}} jours, le Maître d'Œuvre peut suspendre l'exécution de sa mission jusqu'au règlement des sommes dues (article 1219 du Code civil), sans que cette suspension puisse lui être reprochée ni engager sa responsabilité à raison des retards qui en résulteraient. Il en informe le Maître d'Ouvrage par écrit." },
   { key:'revision', cat:'Honoraires & paiement', label:"Révision des honoraires", defaultOn:false,
@@ -458,7 +470,7 @@ const CLAUSES_MOE = [
   { key:'prestations_acquises', cat:'Fin de mission & travail réalisé', label:"Rémunération des prestations réalisées (arrêt ou renonciation)", defaultOn:true,
     text:"Quelle que soit la cause de la fin de la mission (arrêt à l'initiative du Maître d'Ouvrage, renonciation à une phase, abandon du projet, accord amiable ou résiliation prononcée aux torts du Maître d'Ouvrage), sont dus au Maître d'Œuvre, et seulement eux :\n1° la totalité des honoraires des phases achevées au sens de l'article « Phases, livrables et validation », calculés selon l'annexe de répartition ;\n2° pour la phase en cours, les honoraires correspondant à l'avancement réel des prestations à la date de l'arrêt, constaté dans l'état d'avancement prévu à l'article suivant ;\n3° les frais et débours engagés et justifiés (déplacements, reprographie, frais de dépôt…), non encore remboursés.\n\nNe sont dus ni les honoraires des phases non commencées, ni aucune indemnité pour un travail non réalisé. Les acomptes déjà versés s'imputent sur les sommes dues ; s'ils les excèdent, le Maître d'Œuvre rembourse l'excédent dans un délai de {{delaiRestitution}} jours à compter de l'établissement de l'état d'avancement.\n\nLes honoraires des phases achevées sont définitivement acquis au Maître d'Œuvre. Ils ne sont pas remboursables et ne peuvent être remis en cause, même si le Maître d'Ouvrage renonce ensuite à tout ou partie du projet, confie la suite à un autre professionnel, fait réaliser les travaux sans maîtrise d'œuvre ou n'utilise pas les livrables, dès lors que ces phases ont été validées ou utilisées au sens de l'article « Phases, livrables et validation ». Seule une prestation non conforme à la mission contractuelle, signalée dans les conditions de ce même article, peut donner lieu à correction ou, à défaut, à une réduction proportionnée des honoraires de la phase concernée." },
   { key:'aucun_remboursement', cat:'Fin de mission & travail réalisé', label:"Prestations facturées : aucun remboursement", defaultOn:true,
-    text:"Le Maître d'Œuvre ne facture que des prestations déjà réalisées : chaque facture (hors acompte) est émise à la remise des livrables de la phase concernée ou à l'avancement constaté de la mission. Toute prestation facturée est donc réputée exécutée et rémunérée définitivement ; elle ne donne lieu à aucun remboursement, quels que soient la suite donnée au projet et l'usage que le Maître d'Ouvrage fait des livrables.\n\nSeul un geste commercial exceptionnel du Maître d'Œuvre, formalisé par un avenant écrit et signé des deux parties, peut déroger à cette règle. Cette clause ne prive pas le Maître d'Ouvrage des droits qu'il tient de la loi, notamment en cas de prestation non conforme signalée dans les conditions de l'article « Phases, livrables et validation », ni de la restitution du trop-perçu sur acompte prévue à l'article « Rémunération des prestations réalisées »." },
+    text:"Le Maître d'Œuvre ne facture que des prestations déjà réalisées : chaque facture est émise à la remise du livrable correspondant (aucun acompte n'est demandé sur les honoraires). Toute prestation facturée est donc réputée exécutée et rémunérée définitivement ; elle ne donne lieu à aucun remboursement, quels que soient la suite donnée au projet et l'usage que le Maître d'Ouvrage fait des livrables.\n\nSeul un geste commercial exceptionnel du Maître d'Œuvre, formalisé par un avenant écrit et signé des deux parties, peut déroger à cette règle. Cette clause ne prive pas le Maître d'Ouvrage des droits qu'il tient de la loi, notamment en cas de prestation non conforme signalée dans les conditions de l'article « Phases, livrables et validation », ni de la restitution du trop-perçu sur acompte prévue à l'article « Rémunération des prestations réalisées »." },
   { key:'etat_avancement', cat:'Fin de mission & travail réalisé', label:"État d'avancement et décompte de fin de mission", defaultOn:true,
     text:"Dans un délai de {{delaiEtat}} jours à compter de la notification de l'arrêt de la mission (ou de sa propre décision de résilier), le Maître d'Œuvre établit un état d'avancement chiffré, phase par phase : phases achevées, pourcentage d'avancement de la phase en cours, livrables remis avec leurs dates de remise, comptes rendus et pièces justificatives, frais engagés, acomptes reçus et solde. Cet état est communiqué au Maître d'Ouvrage.\n\nLe Maître d'Ouvrage dispose de {{delaiContestation}} jours pour le contester par écrit en précisant les points contestés ; à défaut, il est réputé accepté. La part non contestée est exigible immédiatement ; les parties s'efforcent de régler le surplus à l'amiable (article « Résolution amiable et litiges »). Les remises de livrables, courriers électroniques, comptes rendus et journaux d'activité du Maître d'Œuvre font foi de l'avancement réel, sauf preuve contraire.\n\nAprès règlement des sommes dues, le Maître d'Œuvre remet au Maître d'Ouvrage les livrables des phases réglées, dans leur état d'avancement à la date de l'arrêt." },
   { key:'poursuite_sans_moe', cat:'Fin de mission & travail réalisé', label:"Poursuite des travaux sans le Maître d'Œuvre", defaultOn:true,
@@ -475,8 +487,6 @@ const CLAUSES_MOE = [
     text:"Les parties conviennent que les échanges par courrier électronique, les documents déposés sur les espaces de partage du projet et les comptes rendus transmis par le Maître d'Œuvre valent écrits et constituent des modes de preuve recevables (articles 1366 et 1367 du Code civil). Le Maître d'Ouvrage désigne l'adresse électronique suivante pour les notifications et validations : {{emailClient}}." },
 
   // ── Litiges & protection du consommateur ────────────────────
-  { key:'amiable', cat:'Litiges', label:"Résolution amiable et litiges", defaultOn:true,
-    text:"Avant toute action contentieuse, les parties s'engagent à rechercher de bonne foi une solution amiable : échange écrit exposant le désaccord, réponse sous {{delaiAmiable}} jours, puis, à défaut d'accord, recours à la médiation prévue à l'article suivant. Les mesures d'urgence demeurent possibles. À défaut de solution amiable, le litige est porté devant la juridiction compétente selon les règles légales ; le Maître d'Ouvrage consommateur peut saisir la juridiction du lieu où il demeurait lors de la conclusion du contrat ou de la survenance du fait dommageable (article R.631-3 du Code de la consommation)." },
   { key:'mediation', cat:'Litiges', label:"Médiation de la consommation", defaultOn:true,
     text:"Conformément aux articles L.616-1 et suivants du Code de la consommation, en cas de litige non résolu à l'amiable, le Maître d'Ouvrage, s'il a la qualité de consommateur, peut recourir gratuitement au médiateur de la consommation dont les coordonnées sont : {{mediateur}}." },
   { key:'retractation', cat:'Litiges', label:"Droit de rétractation (contrat hors établissement ou à distance)", defaultOn:true,
@@ -492,65 +502,65 @@ const CLAUSES_MOE = [
 const CLAUSES_CG = [
   // ── Parties & objet ─────────────────────────────────────────
   { key:'parties_cg', cat:'Parties & objet', label:"Identification des parties", defaultOn:true,
-    text:"ENTRE LES SOUSSIGNÉS :\n{{firmNom}}, EURL, SIRET {{firmSiret}}, sise {{firmAdresse}}, représentée par {{firmRepresentant}}, agissant en qualité de contractant général, ci-après dénommée « l'Entreprise »,\nET\n{{client}}, ci-après dénommé « le Maître d'Ouvrage »,\nIl a été convenu ce qui suit :" },
-  { key:'objet_cg', cat:'Parties & objet', label:"Objet et prix forfaitaire", defaultOn:true,
-    text:"L'Entreprise s'engage à réaliser les travaux décrits en annexe (DPGF) sur le bien sis {{adresse}}, d'une surface de {{surface}} m², moyennant un prix global et forfaitaire de {{montant}} € HT, non révisable sauf travaux supplémentaires acceptés par avenant. Le présent contrat formalise et complète le devis {{devisRef}} accepté par le Maître d'Ouvrage ; en cas de contradiction, le présent contrat prévaut." },
+    text:"ENTRE LES SOUSSIGNÉS :\n{{firmNom}}, SIRET {{firmSiret}}, sise {{firmAdresse}}, représentée par {{firmRepresentant}}, agissant en qualité de contractant général, ci-après dénommée « le Maître d'Œuvre »,\nET\n{{client}}, pour le bien situé {{adresse}}, ci-après dénommé « le Maître d'Ouvrage »,\nIl a été convenu ce qui suit :" },
+  { key:'objet_cg', cat:'Parties & objet', label:"Objet et prix", defaultOn:true,
+    text:"Le Maître d'Œuvre s'engage à encadrer et faire réaliser les travaux de l'Opération sur le bien situé {{adresse}}, d'une surface de {{surface}} m². Le présent contrat formalise et complète le devis {{devisRef}} accepté par le Maître d'Ouvrage ; en cas de contradiction, le présent contrat prévaut.\n\nLe prix comprend les honoraires des études et de la coordination des travaux ({{honosCg}}).\n\nLe montant des travaux est étudié une première fois lors de la consultation préliminaire des entreprises, en fin de mission d'avant-projet. Par la suite, au cours du projet et jusqu'à son achèvement, ce montant peut être adapté en fonction des souhaits et des arbitrages du Maître d'Ouvrage, sous réserve de contraintes techniques avérées. L'accompagnement du Maître d'Œuvre a précisément pour objet d'adapter au mieux le projet aux besoins du Maître d'Ouvrage : le montant des travaux peut donc évoluer sensiblement. Le Maître d'Œuvre s'engage à en informer régulièrement le Maître d'Ouvrage, dans un souci de transparence et d'honnêteté. Lorsque le Maître d'Ouvrage souhaite arrêter un nouveau montant des travaux, il en informe le Maître d'Œuvre et ce nouveau montant est fixé par un avenant écrit signé des deux parties." },
   { key:'esprit_collaboration_cg', cat:'Parties & objet', label:"Esprit de la collaboration", defaultOn:true,
     text:"Le présent contrat offre un cadre clair et équilibré à la collaboration entre les parties. Le Maître d'Ouvrage reste libre d'arrêter l'opération avant son achèvement, sans pénalité (article « Liberté d'arrêter l'opération »). En contrepartie, ce qui a été réellement réalisé (études, travaux exécutés, fournitures et engagements non annulables) reste dû, et rien d'autre : jamais de prestation non réalisée. Les engagements relatifs à la propriété du dossier technique et à la valorisation de la coordination des artisans complètent cet équilibre, dans un esprit de loyauté réciproque (articles 1103 et 1104 du Code civil)." },
+  { key:'amiable_cg', cat:'Parties & objet', label:"Dialogue et résolution amiable des difficultés", defaultOn:true,
+    text:"Les parties attachent une importance essentielle à la qualité de leur relation : elles s'engagent à toujours privilégier le dialogue et à rechercher ensemble, de bonne foi, une solution à toute difficulté, aussi tôt que possible et avant qu'elle ne s'installe.\n\nToute difficulté est d'abord évoquée simplement, de vive voix ou par écrit ; la partie sollicitée y répond dans un délai de {{delaiAmiable}} jours et les parties se rencontrent si nécessaire, sur place ou à distance, pour trouver une issue satisfaisante pour chacune. Si aucune solution n'est trouvée, elles peuvent recourir à la médiation de la consommation prévue au présent contrat, ou à tout médiateur choisi d'un commun accord.\n\nCe n'est qu'à défaut de solution amiable que le litige peut être porté devant la juridiction compétente selon les règles légales ; le Maître d'Ouvrage consommateur peut saisir la juridiction du lieu où il demeurait lors de la conclusion du contrat ou de la survenance du fait dommageable (article R.631-3 du Code de la consommation). Les mesures d'urgence demeurent possibles." },
   { key:'obligations_mo_cg', cat:'Parties & objet', label:"Obligations du Maître d'Ouvrage", defaultOn:true,
-    text:"Le Maître d'Ouvrage s'engage à : fournir en temps utile les informations et documents nécessaires (titre de propriété, diagnostics, autorisations) et en garantir l'exactitude ; prendre ses décisions et valider les choix dans les délais convenus, faute de quoi les délais du chantier sont prolongés d'autant ; donner accès au bien ; régler le prix aux échéances prévues. Il s'interdit de faire intervenir sur le chantier, en dehors de l'Entreprise, d'autres intervenants sans en avoir préalablement informé l'Entreprise par écrit." },
+    text:"Le Maître d'Ouvrage s'engage à : fournir en temps utile les informations et documents nécessaires (titre de propriété, diagnostics, autorisations) et en garantir l'exactitude ; prendre ses décisions et valider les choix dans les délais convenus, faute de quoi les délais du chantier sont prolongés d'autant ; donner accès au bien ; régler le prix aux échéances prévues. Il s'interdit de faire intervenir sur le chantier, en dehors du Maître d'Œuvre, d'autres intervenants sans en avoir préalablement informé le Maître d'Œuvre par écrit." },
 
   // ── Prix & paiement ─────────────────────────────────────────
   { key:'echeancier', cat:'Prix & paiement', label:"Échéancier de paiement", defaultOn:true,
-    text:"Le prix est payé selon l'échéancier suivant, établi en fonction de l'avancement des travaux : acompte de {{acomptePct}} % à la signature, puis appels de fonds à chaque étape clé du chantier, payables sous {{delaiPaiement}} jours. Si le présent contrat relève du régime du CCMI, les plafonds légaux de l'article R.231-7 du Code de la construction et de l'habitation s'appliquent impérativement (15 % ouverture de chantier, 25 % fondations, 40 % mise hors d'eau, 60 % mise hors d'air, 75 % cloisons, 95 % achèvement, solde de 5 % à la réception)." },
-  { key:'paiement_cg', cat:'Prix & paiement', label:"Retard de paiement et suspension", defaultOn:true,
-    text:"Tout retard de paiement entraîne de plein droit, dès le lendemain de l'échéance, des intérêts de retard au taux de {{tauxRetard}}. Lorsque le Maître d'Ouvrage agit à des fins professionnelles, s'appliquent en outre l'indemnité forfaitaire de 40 € et les pénalités prévues à l'article L.441-10 du Code de commerce. Après une mise en demeure restée sans effet pendant {{delaiMiseEnDemeure}} jours, l'Entreprise peut suspendre le chantier jusqu'au règlement des sommes dues (article 1219 du Code civil), sans que les retards en résultant lui soient imputables." },
+    text:"Les honoraires des études et de la coordination des travaux ({{honosCg}}) ne donnent lieu à aucun acompte : chaque règlement correspond à la remise d'un livrable. Ils sont réglés par mission, selon l'échéancier suivant, fixé par le Maître d'Œuvre en fonction de l'avancement du projet :\n{{echeancierHonoraires}}\n\nLes travaux sont réglés selon les règles habituelles de règlement de chantier : un acompte de {{acomptePct}} % du montant des travaux à la commande des travaux, puis des situations établies à l'avancement constaté du chantier, le solde à la réception. L'échéancier détaillé des travaux est communiqué au Maître d'Ouvrage avant l'ouverture du chantier.\n\nLes factures sont payables sous {{delaiPaiement}} jours. Si le présent contrat relève du régime du CCMI, les plafonds légaux de l'article R.231-7 du Code de la construction et de l'habitation s'appliquent impérativement à la part travaux (15 % ouverture de chantier, 25 % fondations, 40 % mise hors d'eau, 60 % mise hors d'air, 75 % cloisons, 95 % achèvement, solde de 5 % à la réception)." },
+  { key:'paiement_cg', cat:'Prix & paiement', label:"Délai de paiement, retard et suspension", defaultOn:true,
+    text:"Les factures sont payables sous {{delaiPaiement}} jours à compter de leur réception, par virement. En cas de retard, le Maître d'Œuvre adresse d'abord un simple rappel amiable : la plupart des oublis se règlent ainsi. Si le règlement n'intervient toujours pas dans les {{delaiMiseEnDemeure}} jours suivant ce rappel, les sommes dues peuvent porter intérêts au taux de {{tauxRetard}}. Lorsque le Maître d'Ouvrage agit à des fins professionnelles, s'appliquent en outre, conformément à la loi, l'indemnité forfaitaire de 40 € pour frais de recouvrement et les pénalités prévues à l'article L.441-10 du Code de commerce.\n\nSi, malgré ce rappel puis une mise en demeure restée sans effet pendant {{delaiMiseEnDemeure}} jours, les sommes dues ne sont pas réglées, le Maître d'Œuvre peut, après en avoir informé le Maître d'Ouvrage par écrit, suspendre le chantier jusqu'au règlement (article 1219 du Code civil) ; les délais sont alors prolongés d'autant." },
 
   // ── Délais, exécution, garanties ────────────────────────────
-  { key:'delai', cat:'Délais', label:"Délai d'exécution et pénalités de retard", defaultOn:true,
-    text:"Les travaux débuteront le {{dateOuverture}} pour une durée prévisionnelle de {{dureeTravaux}}. Tout retard imputable à l'Entreprise, non justifié par une cause légitime (intempéries, décisions tardives du Maître d'Ouvrage, aléas découverts en cours de chantier, force majeure), donne lieu à une pénalité de {{penaliteRetard}} par jour calendaire de retard." },
+  { key:'delai', cat:'Délais', label:"Délai d'exécution et pénalités de retard", defaultOn:false,
+    text:"Les travaux débuteront le {{dateOuverture}} pour une durée prévisionnelle de {{dureeTravaux}}. Tout retard imputable au Maître d'Œuvre, non justifié par une cause légitime (intempéries, décisions tardives du Maître d'Ouvrage, aléas découverts en cours de chantier, force majeure), donne lieu à une pénalité de {{penaliteRetard}} par jour calendaire de retard." },
   { key:'decennale', cat:'Garanties & assurances', label:"Garantie décennale", defaultOn:true,
-    text:"L'Entreprise déclare être titulaire d'une assurance responsabilité civile décennale couvrant les travaux objet du présent contrat, conformément aux articles 1792 et suivants du Code civil, dont l'attestation est jointe en annexe." },
+    text:"Le Maître d'Œuvre déclare être titulaire d'une assurance responsabilité civile décennale couvrant les travaux objet du présent contrat, conformément aux articles 1792 et suivants du Code civil, dont l'attestation est jointe en annexe." },
   { key:'do', cat:'Garanties & assurances', label:"Assurance dommages-ouvrage", defaultOn:true,
     text:"Il est rappelé que le Maître d'Ouvrage a l'obligation légale de souscrire une assurance dommages-ouvrage avant l'ouverture du chantier, conformément à l'article L.242-1 du Code des assurances. Les références de cette police seront annexées au présent contrat." },
   { key:'garantie_livraison', cat:'Garanties & assurances', label:"Garantie de livraison à prix et délais convenus (obligatoire si CCMI)", defaultOn:false, risk:'ccmi',
-    text:"Si le présent contrat relève du régime du contrat de construction de maison individuelle, l'Entreprise fournit une garantie de livraison à prix et délais convenus, souscrite auprès d'un établissement habilité, dont l'attestation est annexée au contrat, conformément à l'article L.231-6 du Code de la construction et de l'habitation." },
+    text:"Si le présent contrat relève du régime du contrat de construction de maison individuelle, le Maître d'Œuvre fournit une garantie de livraison à prix et délais convenus, souscrite auprès d'un établissement habilité, dont l'attestation est annexée au contrat, conformément à l'article L.231-6 du Code de la construction et de l'habitation." },
   { key:'assurance_rcpro_cg', cat:'Garanties & assurances', label:"Assurance responsabilité civile professionnelle", defaultOn:true,
-    text:"L'Entreprise déclare être titulaire d'une assurance responsabilité civile professionnelle couvrant l'ensemble de son activité de contractant général, dont l'attestation est jointe en annexe." },
+    text:"Le Maître d'Œuvre déclare être titulaire d'une assurance responsabilité civile professionnelle couvrant l'ensemble de son activité de contractant général, dont l'attestation est jointe en annexe." },
   { key:'suspensives', cat:'Clauses suspensives', label:"Clauses suspensives (permis, financement, terrain)", defaultOn:true,
     text:"Le présent contrat est conclu sous les conditions suspensives suivantes : obtention du permis de construire ou de l'autorisation d'urbanisme nécessaire ; obtention par le Maître d'Ouvrage du ou des financements nécessaires ; le cas échéant, acquisition définitive du terrain d'assiette. À défaut de réalisation de l'une de ces conditions dans un délai de {{delaiSuspensive}}, le contrat est résolu de plein droit sans indemnité de part ni d'autre, sous réserve de la rémunération des études déjà réalisées à la demande du Maître d'Ouvrage, dues selon l'article « Rémunération des prestations réalisées »." },
   { key:'visite_chantier', cat:'Exécution', label:"Droit de visite du chantier", defaultOn:true, risk:'ccmi',
     text:"Le Maître d'Ouvrage dispose d'un droit de visite du chantier avant chaque appel de fonds et lors de la réception des travaux. Ce droit ne peut être restreint par une clause imposant un préavis excessif, une telle clause étant réputée non écrite conformément à l'article L.231-3 du Code de la construction et de l'habitation lorsque le contrat relève du régime CCMI." },
   { key:'reception', cat:'Exécution', label:"Réception des travaux et garantie de parfait achèvement", defaultOn:true,
     text:"La réception des travaux intervient contradictoirement entre les parties, avec ou sans réserves, à l'issue de laquelle court la garantie de parfait achèvement d'un an prévue à l'article 1792-6 du Code civil. Le Maître d'Ouvrage peut se faire assister d'un professionnel habilité lors de cette opération." },
-  { key:'penale', cat:'Fin de l\'opération & travail réalisé', label:"Clause pénale (manquement contractuel)", defaultOn:true,
+  { key:'penale', cat:'Fin de l\'opération & travail réalisé', label:"Clause pénale (manquement contractuel)", defaultOn:false,
     text:"En cas de manquement de l'une des parties à ses obligations essentielles, non réparé dans un délai de 15 jours suivant mise en demeure restée infructueuse, la partie défaillante sera redevable d'une pénalité forfaitaire de {{penaliteManquement}} au titre du préjudice subi, sans préjudice de dommages et intérêts complémentaires." },
 
   // ── Fin de l'opération & travail réalisé ────────────────────
   { key:'liberte_arret_cg', cat:'Fin de l\'opération & travail réalisé', label:"Liberté d'arrêter l'opération", defaultOn:true,
-    text:"Conformément à l'article 1794 du Code civil, le Maître d'Ouvrage peut à tout moment, sans avoir à en justifier les raisons, mettre fin à l'opération avant son achèvement, par lettre recommandée avec accusé de réception ou par courrier électronique avec accusé de lecture. L'arrêt prend effet dès réception de la notification ; l'Entreprise met alors le chantier en état de sécurité et de protection contre les intempéries, aux frais du Maître d'Ouvrage.\n\nLe Maître d'Ouvrage n'est redevable d'aucune pénalité. Par dérogation à la faculté d'indemnisation du gain manqué prévue par l'article 1794, l'indemnité due à ce titre est limitée à {{indemniteDedit}} % du prix HT des prestations restant à exécuter (aucune indemnité de ce type n'est due lorsque ce taux est nul). Il en va de même si l'opération est abandonnée pour quelque cause que ce soit (refus d'autorisation ou de financement, vente du bien, changement de projet)." },
+    text:"Conformément à l'article 1794 du Code civil, le Maître d'Ouvrage peut à tout moment, sans avoir à en justifier les raisons, mettre fin à l'opération avant son achèvement, par lettre recommandée avec accusé de réception ou par courrier électronique avec accusé de lecture. L'arrêt prend effet dès réception de la notification ; le Maître d'Œuvre met alors le chantier en état de sécurité et de protection contre les intempéries, aux frais du Maître d'Ouvrage.\n\nLe Maître d'Ouvrage n'est redevable d'aucune pénalité. Par dérogation à la faculté d'indemnisation du gain manqué prévue par l'article 1794, l'indemnité due à ce titre est limitée à {{indemniteDedit}} % du prix HT des prestations restant à exécuter (aucune indemnité de ce type n'est due lorsque ce taux est nul). Il en va de même si l'opération est abandonnée pour quelque cause que ce soit (refus d'autorisation ou de financement, vente du bien, changement de projet)." },
   { key:'prestations_acquises_cg', cat:'Fin de l\'opération & travail réalisé', label:"Rémunération des prestations réalisées (arrêt ou renonciation)", defaultOn:true,
-    text:"Quelle que soit la cause de la fin de l'opération (arrêt à l'initiative du Maître d'Ouvrage, abandon du projet, accord amiable ou résiliation prononcée aux torts du Maître d'Ouvrage), sont dus à l'Entreprise, et seulement eux :\n1° les études et prestations de conception réalisées, valorisées selon l'annexe de répartition ou, à défaut, au prorata de leur avancement réel ;\n2° les travaux exécutés à la date de l'arrêt, valorisés selon l'avancement constaté contradictoirement (situation de travaux) ;\n3° les fournitures et matériaux commandés ou livrés et les engagements pris auprès des artisans et fournisseurs dans le cadre du contrat qui ne peuvent être annulés, sur justificatifs, ces fournitures étant remises au Maître d'Ouvrage après paiement ;\n4° les frais de mise en sécurité du chantier et les frais et débours justifiés.\n\nNe sont dus ni les travaux non exécutés, ni aucune indemnité pour une prestation non réalisée (sous réserve de l'article « Liberté d'arrêter l'opération »). Les acomptes versés s'imputent sur les sommes dues ; s'ils les excèdent, l'Entreprise rembourse l'excédent dans un délai de {{delaiRestitution}} jours à compter de l'établissement de l'état d'avancement.\n\nLes études et travaux réalisés et validés ou utilisés sont définitivement acquis à l'Entreprise pour leur rémunération : celle-ci ne peut être remise en cause si le Maître d'Ouvrage confie ensuite la suite de l'opération à un tiers, y compris en utilisant les travaux déjà exécutés ou les documents élaborés. Seule une prestation non conforme au contrat, signalée par écrit, peut donner lieu à reprise ou, à défaut, à une réduction proportionnée du prix." },
+    text:"Quelle que soit la cause de la fin de l'opération (arrêt à l'initiative du Maître d'Ouvrage, abandon du projet, accord amiable ou résiliation prononcée aux torts du Maître d'Ouvrage), sont dus au Maître d'Œuvre, et seulement eux :\n1° les études et prestations de conception réalisées, valorisées selon l'annexe de répartition ou, à défaut, au prorata de leur avancement réel ;\n2° les travaux exécutés à la date de l'arrêt, valorisés selon l'avancement constaté contradictoirement (situation de travaux) ;\n3° les fournitures et matériaux commandés ou livrés et les engagements pris auprès des artisans et fournisseurs dans le cadre du contrat qui ne peuvent être annulés, sur justificatifs, ces fournitures étant remises au Maître d'Ouvrage après paiement ;\n4° les frais de mise en sécurité du chantier et les frais et débours justifiés.\n\nNe sont dus ni les travaux non exécutés, ni aucune indemnité pour une prestation non réalisée (sous réserve de l'article « Liberté d'arrêter l'opération »). Les acomptes versés s'imputent sur les sommes dues ; s'ils les excèdent, le Maître d'Œuvre rembourse l'excédent dans un délai de {{delaiRestitution}} jours à compter de l'établissement de l'état d'avancement.\n\nLes études et travaux réalisés et validés ou utilisés sont définitivement acquis au Maître d'Œuvre pour leur rémunération : celle-ci ne peut être remise en cause si le Maître d'Ouvrage confie ensuite la suite de l'opération à un tiers, y compris en utilisant les travaux déjà exécutés ou les documents élaborés. Seule une prestation non conforme au contrat, signalée par écrit, peut donner lieu à reprise ou, à défaut, à une réduction proportionnée du prix." },
   { key:'aucun_remboursement_cg', cat:'Fin de mission & travail réalisé', label:"Prestations facturées : aucun remboursement", defaultOn:true,
-    text:"L'Entreprise ne facture que des prestations déjà réalisées : chaque facture (hors acompte) est émise à l'avancement constaté des études et des travaux (situations). Toute prestation facturée est donc réputée exécutée et rémunérée définitivement ; elle ne donne lieu à aucun remboursement, quels que soient la suite donnée au projet et l'usage que le Maître d'Ouvrage fait des études et travaux réalisés.\n\nSeul un geste commercial exceptionnel de l'Entreprise, formalisé par un avenant écrit et signé des deux parties, peut déroger à cette règle. Cette clause ne prive pas le Maître d'Ouvrage des droits qu'il tient de la loi, notamment en cas de prestation non conforme signalée dans les conditions de l'article « Rémunération des prestations réalisées », ni de la restitution du trop-perçu sur acompte prévue à l'article « Rémunération des prestations réalisées »." },
+    text:"Le Maître d'Œuvre ne facture que des prestations déjà réalisées : chaque facture est émise à la remise d'un livrable d'études ou à l'avancement constaté des travaux (situations), à la seule exception de l'acompte de commande des travaux. Toute prestation facturée est donc réputée exécutée et rémunérée définitivement ; elle ne donne lieu à aucun remboursement, quels que soient la suite donnée au projet et l'usage que le Maître d'Ouvrage fait des études et travaux réalisés.\n\nSeul un geste commercial exceptionnel du Maître d'Œuvre, formalisé par un avenant écrit et signé des deux parties, peut déroger à cette règle. Cette clause ne prive pas le Maître d'Ouvrage des droits qu'il tient de la loi, notamment en cas de prestation non conforme signalée dans les conditions de l'article « Rémunération des prestations réalisées », ni de la restitution du trop-perçu sur acompte prévue à l'article « Rémunération des prestations réalisées »." },
   { key:'etat_avancement_cg', cat:'Fin de l\'opération & travail réalisé', label:"État d'avancement et constat contradictoire", defaultOn:true,
-    text:"Dans un délai de {{delaiEtat}} jours à compter de l'arrêt de l'opération, l'Entreprise établit un état d'avancement chiffré (études, travaux exécutés par lot, fournitures, engagements non annulables, frais, acomptes reçus et solde) et propose un constat contradictoire des travaux exécutés sur place. Le Maître d'Ouvrage dispose de {{delaiContestation}} jours pour contester cet état par écrit en précisant les points contestés ; à défaut, il est réputé accepté. La part non contestée est exigible immédiatement. À défaut d'accord sur le constat, les parties désignent d'un commun accord un expert amiable. Les situations de travaux, comptes rendus et journaux de chantier de l'Entreprise font foi de l'avancement réel, sauf preuve contraire." },
-  { key:'poursuite_sans_cg', cat:'Fin de l\'opération & travail réalisé', label:"Poursuite des travaux sans l'Entreprise", defaultOn:true,
-    text:"Si le Maître d'Ouvrage poursuit ou fait poursuivre les travaux sans l'Entreprise après l'arrêt, il assume seul la direction, la coordination, la sécurité et la réception du chantier ainsi que le choix et le contrôle des intervenants. L'Entreprise est déchargée de toute responsabilité pour les travaux et décisions postérieurs à l'arrêt, ainsi que pour leur raccordement aux ouvrages existants qu'elle a réalisés ; le Maître d'Ouvrage s'interdit de se prévaloir de son nom ou de son intervention pour ces travaux. L'abandon du chantier ne remet pas en cause la rémunération de ce qui a été réalisé." },
-  { key:'resiliation_cg_entreprise', cat:'Fin de l\'opération & travail réalisé', label:"Résiliation à l'initiative de l'Entreprise (manquement grave)", defaultOn:true,
-    text:"L'Entreprise peut mettre fin au contrat par lettre recommandée avec accusé de réception, un mois après une mise en demeure restée sans effet, en cas de manquement grave du Maître d'Ouvrage (non-paiement d'un appel de fonds, refus d'accès au chantier, entrave à l'exécution, intervention de tiers non convenue). Les sommes dues sont alors calculées selon l'article « Rémunération des prestations réalisées »." },
+    text:"Dans un délai de {{delaiEtat}} jours à compter de l'arrêt de l'opération, le Maître d'Œuvre établit un état d'avancement chiffré (études, travaux exécutés par lot, fournitures, engagements non annulables, frais, acomptes reçus et solde) et propose un constat contradictoire des travaux exécutés sur place. Le Maître d'Ouvrage dispose de {{delaiContestation}} jours pour contester cet état par écrit en précisant les points contestés ; à défaut, il est réputé accepté. La part non contestée est exigible immédiatement. À défaut d'accord sur le constat, les parties désignent d'un commun accord un expert amiable. Les situations de travaux, comptes rendus et journaux de chantier du Maître d'Œuvre font foi de l'avancement réel, sauf preuve contraire." },
+  { key:'poursuite_sans_cg', cat:'Fin de l\'opération & travail réalisé', label:"Poursuite des travaux sans le Maître d'Œuvre", defaultOn:true,
+    text:"Si le Maître d'Ouvrage poursuit ou fait poursuivre les travaux sans le Maître d'Œuvre après l'arrêt, il assume seul la direction, la coordination, la sécurité et la réception du chantier ainsi que le choix et le contrôle des intervenants. Le Maître d'Œuvre est déchargé de toute responsabilité pour les travaux et décisions postérieurs à l'arrêt, ainsi que pour leur raccordement aux ouvrages existants qu'il a réalisés ; le Maître d'Ouvrage s'interdit de se prévaloir de son nom ou de son intervention pour ces travaux. L'abandon du chantier ne remet pas en cause la rémunération de ce qui a été réalisé." },
+  { key:'resiliation_cg_entreprise', cat:'Fin de l\'opération & travail réalisé', label:"Résiliation à l'initiative du Maître d'Œuvre (manquement grave)", defaultOn:true,
+    text:"Le Maître d'Œuvre peut mettre fin au contrat par lettre recommandée avec accusé de réception, un mois après une mise en demeure restée sans effet, en cas de manquement grave du Maître d'Ouvrage (non-paiement d'un appel de fonds, refus d'accès au chantier, entrave à l'exécution, intervention de tiers non convenue). Les sommes dues sont alors calculées selon l'article « Rémunération des prestations réalisées »." },
 
   // ── Propriété & non-contournement ───────────────────────────
   { key:'propriete_dossier_cg', cat:'Propriété & non-contournement', label:"Propriété du dossier", defaultOn:true,
-    text:"Le dossier technique élaboré par l'Entreprise représente un travail approfondi d'étude et de coordination au service du projet du Maître d'Ouvrage ; le présent article a pour objet d'en préserver la valeur, dans l'intérêt de la collaboration engagée. L'Entreprise demeure seule titulaire des droits de propriété intellectuelle attachés aux documents qu'elle élabore dans le cadre de sa mission (plans, métrés, DPGF, descriptifs, mise en concurrence des artisans). Le Maître d'Ouvrage bénéficie d'un droit d'usage de ces documents strictement limité à la réalisation de l'Opération avec l'Entreprise ; ce droit prend effet au paiement des sommes correspondantes.\n\nToute communication de tout ou partie de ces documents à un artisan ou une entreprise non retenu par l'intermédiaire de l'Entreprise, sans que celle-ci en ait été informée, est subordonnée à son accord écrit préalable.\n\nEn cas de manquement, l'Entreprise pourra réclamer une indemnité forfaitaire égale à {{indemniteDossier}} % du montant HT des travaux concernés, sans préjudice de la réparation d'un préjudice plus important s'il en rapporte la preuve." },
+    text:"Le dossier technique élaboré par le Maître d'Œuvre représente un travail approfondi d'étude et de coordination au service du projet du Maître d'Ouvrage ; le présent article a pour objet d'en préserver la valeur, dans l'intérêt de la collaboration engagée. Le Maître d'Œuvre demeure seul titulaire des droits de propriété intellectuelle attachés aux documents qu'il élabore dans le cadre de sa mission (plans, métrés, DPGF, descriptifs, mise en concurrence des artisans). Le Maître d'Ouvrage bénéficie d'un droit d'usage de ces documents strictement limité à la réalisation de l'Opération avec le Maître d'Œuvre ; ce droit prend effet au paiement des sommes correspondantes.\n\nToute communication de tout ou partie de ces documents à un artisan ou une entreprise non retenu par l'intermédiaire du Maître d'Œuvre, sans que celui-ci en ait été informé, est subordonnée à son accord écrit préalable.\n\nEn cas de manquement, le Maître d'Œuvre pourra réclamer une indemnité forfaitaire égale à {{indemniteDossier}} % du montant HT des travaux concernés, sans préjudice de la réparation d'un préjudice plus important s'il en rapporte la preuve." },
   { key:'non_contournement_cg', cat:'Propriété & non-contournement', label:"Non-contournement (apport d'affaires)", defaultOn:true,
-    text:"La sélection et la coordination des artisans font partie intégrante du travail de l'Entreprise au bénéfice du Maître d'Ouvrage ; le présent article vise à ce que ce travail soit justement reconnu, sans pour autant limiter la liberté de choix du Maître d'Ouvrage. Pendant la durée du Chantier et {{dureeProtection}} mois suivant la réception des travaux, le Maître d'Ouvrage s'engage à ne pas contracter, directement ou indirectement (y compris via un tiers, une société liée ou un proche), avec un artisan ou une entreprise que l'Entreprise a identifié, consulté ou fait intervenir dans le cadre de l'Opération, sans en informer préalablement l'Entreprise et sans son accord écrit.\n\nEn cas de manquement, l'Entreprise pourra réclamer une indemnité forfaitaire égale à {{indemniteDossier}} % du montant HT des travaux confiés à cet artisan ou cette entreprise, au titre de l'apport d'affaires réalisé, sans préjudice de la réparation d'un préjudice plus important s'il en rapporte la preuve." },
+    text:"La sélection et la coordination des artisans font partie intégrante du travail du Maître d'Œuvre au bénéfice du Maître d'Ouvrage ; le présent article vise à ce que ce travail soit justement reconnu, sans pour autant limiter la liberté de choix du Maître d'Ouvrage. Pendant la durée du Chantier et {{dureeProtection}} mois suivant la réception des travaux, le Maître d'Ouvrage s'engage à ne pas contracter, directement ou indirectement (y compris via un tiers, une société liée ou un proche), avec un artisan ou une entreprise que le Maître d'Œuvre a identifié, consulté ou fait intervenir dans le cadre de l'Opération, sans en informer préalablement le Maître d'Œuvre et sans son accord écrit.\n\nEn cas de manquement, le Maître d'Œuvre pourra réclamer une indemnité forfaitaire égale à {{indemniteDossier}} % du montant HT des travaux confiés à cet artisan ou cette entreprise, au titre de l'apport d'affaires réalisé, sans préjudice de la réparation d'un préjudice plus important s'il en rapporte la preuve." },
 
   // ── Preuve, litiges, consommation ───────────────────────────
   { key:'preuve_cg', cat:'Litiges', label:"Communications électroniques et preuve", defaultOn:true,
-    text:"Les parties conviennent que les échanges par courrier électronique, les documents déposés sur les espaces de partage du projet, les comptes rendus et situations de travaux transmis par l'Entreprise valent écrits et constituent des modes de preuve recevables (articles 1366 et 1367 du Code civil). Le Maître d'Ouvrage désigne l'adresse électronique suivante pour les notifications et validations : {{emailClient}}." },
-  { key:'amiable_cg', cat:'Litiges', label:"Résolution amiable et litiges", defaultOn:true,
-    text:"Avant toute action contentieuse, les parties s'engagent à rechercher de bonne foi une solution amiable : échange écrit exposant le désaccord, réponse sous {{delaiAmiable}} jours, puis, à défaut d'accord, recours à la médiation prévue à l'article suivant. Les mesures d'urgence demeurent possibles. À défaut de solution amiable, le litige est porté devant la juridiction compétente selon les règles légales ; le Maître d'Ouvrage consommateur peut saisir la juridiction du lieu où il demeurait lors de la conclusion du contrat ou de la survenance du fait dommageable (article R.631-3 du Code de la consommation)." },
+    text:"Les parties conviennent que les échanges par courrier électronique, les documents déposés sur les espaces de partage du projet, les comptes rendus et situations de travaux transmis par le Maître d'Œuvre valent écrits et constituent des modes de preuve recevables (articles 1366 et 1367 du Code civil). Le Maître d'Ouvrage désigne l'adresse électronique suivante pour les notifications et validations : {{emailClient}}." },
   { key:'mediation_cg', cat:'Litiges', label:"Médiation de la consommation", defaultOn:true,
     text:"Conformément aux articles L.616-1 et suivants du Code de la consommation, en cas de litige non résolu à l'amiable, le Maître d'Ouvrage, s'il a la qualité de consommateur, peut recourir gratuitement au médiateur de la consommation dont les coordonnées sont : {{mediateur}}." },
   { key:'retractation_cg', cat:'Litiges', label:"Droit de rétractation (contrat hors établissement ou à distance)", defaultOn:true,
@@ -563,7 +573,84 @@ let clauseState = {};      // { key: {on:bool, text:string} }
 let selectedPhases = {};   // { ESQ:true, ... }
 let repartState = Object.assign({}, REPARTITION_DEFAUT);   // { ESQ:5, ... } — clé de répartition des honoraires par phase (modifiable)
 let avancState = { phases:{}, cg:{ etudes:'', travaux:'', fournitures:'', frais:'' }, acomptes:'', frais:'' };   // décompte de fin de mission
-let contratMeta = { devis:null, createdAt:'' };    // devis signé d'origine, date de création
+let contratMeta = { devis:null, createdAt:'' };
+// Échéancier des honoraires : null = valeurs par défaut, sinon { v:2, missions:[{key,titre,on,montant,rows:[{pct,liv}]}] }
+let echeState = null;
+const CLAUSES_VERSION = 3;   // 22/10/2026 (2) : missions, prix CG, retard adouci, Maître d'Œuvre partout, amiable en tête   // 22/10/2026 : échéancier 30/30/40 aux livrables, adresse du bien dans les parties
+const CLAUSES_MAJ_V2 = ['parties','parties_cg','honoraires','echeancier','aucun_remboursement','aucun_remboursement_cg'];
+// Missions de Phénix et leur échéancier (aucun acompte : chaque règlement accompagne un livrable)
+const SAV_DECL = "Après le dépôt, si la mairie demande des éléments complémentaires pour valider le dossier, leur production relève du service après-vente du Maître d'Œuvre et est entièrement comprise dans ses honoraires : le Maître d'Œuvre reste responsable du dossier tant qu'il n'est pas validé.";
+function echeDefaut(){
+  const has = k => !!selectedPhases[k];
+  const aucune = !Object.keys(selectedPhases).some(k => selectedPhases[k]);
+  const cg = contractType === 'cg';
+  return { v:2, missions:[
+    { key:'ap', titre:"Mission avant-projet", on: cg || aucune || has('ESQ') || has('APS') || has('APD'), montant:'',
+      rows:[ { pct:30, liv:"remise du plan préliminaire" }, { pct:60, liv:"remise du plan validé" }, { pct:10, liv:"remise du chiffrage" } ] },
+    { key:'decl', titre:"Mission de déclaration (autorisation d'urbanisme)", on: cg || aucune || has('PC'), montant:'',
+      rows:[ { pct:50, liv:"remise du dossier préliminaire" }, { pct:50, liv:"remise du dossier de dépôt" } ] },
+    { key:'ch', titre:"Mission chantier", on: cg || aucune || has('DET') || has('AOR'), montant:'',
+      rows:[ { pct:30, liv:"remise des pièces écrites de démarrage du chantier" }, { pct:30, liv:"compte rendu intermédiaire de chantier" }, { pct:40, liv:"remise des clés et fin de chantier" } ] },
+  ] };
+}
+function echeCourant(){ return (echeState && echeState.v === 2) ? echeState : echeDefaut(); }
+function echeTotalHonos(){ return echeCourant().missions.filter(m => m.on).reduce((t, m) => t + (parseFloat(m.montant) || 0), 0); }
+const cap1 = t => t ? t.charAt(0).toUpperCase() + t.slice(1) : '';
+function echeTexte(){
+  const ms = echeCourant().missions.filter(m => m.on);
+  if (!ms.length) return '(échéancier à préciser)';
+  return ms.map(m => {
+    const b = parseFloat(m.montant) || 0;
+    return m.titre + (b ? ' — ' + euro(b) + ' HT' : '') + ' :\n' + m.rows.map(r => '• ' + (parseFloat(r.pct) || 0) + ' %' + (b ? ' (' + euro(b * (parseFloat(r.pct) || 0) / 100) + ' HT)' : '') + ' — ' + (cap1(r.liv) || '(livrable à préciser)')).join('\n') +
+      (m.key === 'decl' ? '\n' + SAV_DECL : '');
+  }).join('\n\n');
+}
+function setEche(mi, ri, k, v){
+  const e = JSON.parse(JSON.stringify(echeCourant()));
+  const m = e.missions[mi];
+  if (k === 'on') m.on = !!v; else if (k === 'montant') m.montant = v; else m.rows[ri][k] = k === 'pct' ? (parseFloat(v) || 0) : v;
+  echeState = e; renderEche(document.activeElement && document.activeElement.id);
+}
+function resetEche(){ echeState = null; renderEche(); }
+function renderEche(focus){
+  const box = document.getElementById('echeBox'); if (!box) return;
+  const e = echeCourant();
+  let h = e.missions.map((m, mi) => {
+    const b = parseFloat(m.montant) || 0, tot = m.rows.reduce((t, r) => t + (parseFloat(r.pct) || 0), 0);
+    return '<div style="border:1px solid var(--border);border-radius:9px;padding:10px 12px;margin-bottom:10px;' + (m.on ? '' : 'opacity:.5') + '">' +
+      '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:' + (m.on ? '8px' : '0') + '"><label style="display:flex;gap:8px;align-items:center;flex:1;min-width:220px;font-weight:600;cursor:pointer"><input type="checkbox" ' + (m.on ? 'checked' : '') + ' onchange="setEche(' + mi + ',0,\'on\',this.checked)"> ' + escH(m.titre) + '</label>' +
+      (m.on ? '<span style="font-size:12px;color:var(--text2)">Montant HT</span><input type="number" id="eche-m' + mi + '" value="' + escH(m.montant || '') + '" oninput="setEche(' + mi + ',0,\'montant\',this.value)" style="width:120px" placeholder="€ HT">' : '') + '</div>' +
+      (m.on ? m.rows.map((r, ri) => '<div style="display:flex;gap:10px;align-items:center;margin-bottom:6px;flex-wrap:wrap"><div style="width:90px"><input type="number" id="eche-p' + mi + '-' + ri + '" value="' + r.pct + '" oninput="setEche(' + mi + ',' + ri + ',\'pct\',this.value)" style="width:70px"> %</div>' +
+        '<div style="flex:1;min-width:200px"><input type="text" id="eche-l' + mi + '-' + ri + '" value="' + escH(r.liv) + '" oninput="setEche(' + mi + ',' + ri + ',\'liv\',this.value)" style="width:100%"></div>' +
+        '<div style="width:110px;text-align:right;font-weight:600">' + (b ? euro(b * (parseFloat(r.pct) || 0) / 100) : '—') + '</div></div>').join('') +
+        '<div style="font-size:12px;color:' + (Math.abs(tot - 100) < 0.01 ? 'var(--green)' : 'var(--red)') + '">Total : ' + tot + ' %' + (Math.abs(tot - 100) < 0.01 ? '' : ' — doit faire 100 %') + '</div>' +
+        (m.key === 'decl' ? '<div class="muted" style="font-size:11.5px;margin-top:4px">Inclus au contrat : compléments demandés par la mairie après dépôt = service après-vente compris ; Phénix reste responsable du dossier jusqu\'à sa validation.</div>' : '') : '') + '</div>';
+  }).join('');
+  const T = echeTotalHonos(), M = parseFloat(document.getElementById('f-montant').value) || 0;
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;flex-wrap:wrap;gap:8px"><span>Total des missions cochées : <b>' + (T ? euro(T) + ' HT' : '—') + '</b>' +
+    (contractType === 'moe' && T && M && Math.abs(T - M) > 0.5 ? ' <span style="color:var(--red)">≠ honoraires du contrat (' + euro(M) + ')</span>' : '') + '</span>' +
+    (echeState ? '<button class="btn" style="padding:4px 10px;font-size:12px" onclick="resetEche()">Revenir aux valeurs par défaut</button>' : '') + '</div>';
+  box.innerHTML = h;
+  if (focus) { const el = document.getElementById(focus); if (el) { el.focus(); try { const v = el.value; el.value = ''; el.value = v; } catch (x) {} } }
+}
+// Commune du projet (lieu de signature : le client signe à l'adresse du projet)
+function villeDe(adr){
+  const a = String(adr || '').trim(); if (!a) return '';
+  let m = a.match(/\b\d{5}\s+([^,\d]+?)\s*(?:,|$)/); if (m) return m[1].trim();
+  m = a.match(/,\s*([^,]+?)\s*,?\s*\d{5}\s*$/); if (m) return m[1].trim();
+  const parts = a.split(',').map(x => x.replace(/\d{5}/g, '').trim()).filter(Boolean);
+  return parts.length > 1 ? parts[parts.length - 1] : a;
+}
+function lieuParDefaut(){ const el = document.getElementById('f-lieu'); if (el && !el.value && currentProjet && currentProjet.adresse) el.value = villeDe(currentProjet.adresse); }
+// Complète le projet avec la fiche de Dossier (adresse, surface, coordonnées) quand le contrat ne les a pas
+async function completerProjet(){
+  if (!currentProjet || !currentProjet.projetId || !window._fbContrat.getProjet) return;
+  try {
+    const f = await window._fbContrat.getProjet(currentProjet.projetId); if (!f) return;
+    ['client','nom','adresse','surface','email','tel','ref','type'].forEach(k => { if (!currentProjet[k] && f[k]) currentProjet[k] = f[k]; });
+    if (!document.getElementById('f-montant').value && f.honoraires) document.getElementById('f-montant').value = f.honoraires;
+  } catch (e) { console.warn('Fiche projet illisible :', e && e.code); }
+}    // devis signé d'origine, date de création
 
 const euro = n => (Number(n)||0).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2}).replace(/[\u202f\u00a0]/g,' ') + ' €';
 const dateFR = iso => { if(!iso) return ''; const m=String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[3]+'/'+m[2]+'/'+m[1] : String(iso); };
@@ -635,6 +722,7 @@ function resetEtat(){
   contractType = 'moe'; selectedPhases = {}; repartState = Object.assign({}, REPARTITION_DEFAUT);
   avancState = { phases:{}, cg:{ etudes:'', travaux:'', fournitures:'', frais:'' }, acomptes:'', frais:'' };
   contratMeta = { devis:null, createdAt:'' };
+  echeState = null;
   ['f-montant','f-lieu','f-datesignature'].forEach(i => { const e=document.getElementById(i); if(e) e.value=''; });
   document.getElementById('f-date').value = new Date().toISOString().slice(0,10);
   document.getElementById('f-nature').value = 'maison_individuelle';
@@ -649,8 +737,9 @@ async function ouvrirDepuisPayload(p){
   if (p.honoraires) document.getElementById('f-montant').value = p.honoraires;
   appliquerType('moe');
   await chargerContratExistant(true);
+  await completerProjet(); lieuParDefaut();
   afficherProjet();
-  renderPhaseChecks(); renderRepartition(); renderDecompte(); updateWarnings();
+  renderPhaseChecks(); renderRepartition(); renderDecompte(); updateWarnings(); renderEche();
   renderListeContrats();
   window.scrollTo({top:0,behavior:'smooth'});
 }
@@ -671,7 +760,7 @@ async function chargerContratExistant(chercherAutre){
   set('f-nature', ex.nature || 'maison_individuelle');
   set('f-date', ex.date || new Date().toISOString().slice(0,10));
   set('f-montant', ex.montant || '');
-  set('f-lieu', ex.lieu || '');
+  set('f-lieu', ex.lieu || document.getElementById('f-lieu').value || '');
   set('f-statut', ex.statut || 'brouillon');
   set('f-datesignature', ex.dateSignature || '');
   selectedPhases = ex.phases || {};
@@ -680,7 +769,13 @@ async function chargerContratExistant(chercherAutre){
   contratMeta.devis = ex.devis || contratMeta.devis;
   contratMeta.createdAt = ex.createdAt || '';
   if (ex.projet) currentProjet = Object.assign({}, ex.projet, currentProjet);
-  if (ex.clauses) Object.keys(ex.clauses).forEach(k => { if (clauseState[k]) clauseState[k] = ex.clauses[k]; });
+  echeState = ex.echeancier || null;
+  if (ex.clauses) Object.keys(ex.clauses).forEach(k => {
+    if (!clauseState[k]) return;
+    // contrat enregistré avant la mise à jour des clauses : on garde le choix coché/décoché, mais le nouveau texte
+    if (!(ex.clausesVersion >= CLAUSES_VERSION)) clauseState[k].on = !!(ex.clauses[k] && ex.clauses[k].on) && ['delai','penale'].indexOf(k) < 0;
+    else clauseState[k] = ex.clauses[k];
+  });
   renderClauses();
   return true;
 }
@@ -689,7 +784,7 @@ function renderPhaseChecks(){
   const box = document.getElementById('phaseChecks');
   box.innerHTML = PHASES.map(ph => `<div class="phase-chip ${selectedPhases[ph]?'on':''}" onclick="togglePhase('${ph}')" title="${PHASES_LABELS[ph]}">${ph}</div>`).join('');
 }
-function togglePhase(ph){ selectedPhases[ph] = !selectedPhases[ph]; renderPhaseChecks(); renderRepartition(); renderDecompte(); }
+function togglePhase(ph){ selectedPhases[ph] = !selectedPhases[ph]; renderPhaseChecks(); renderRepartition(); renderDecompte(); renderEche(); }
 
 function appliquerType(type){
   contractType = type;
@@ -699,11 +794,12 @@ function appliquerType(type){
   updateWarnings();
   initClauseState();
   renderClauses();
-  renderRepartition(); renderDecompte();
+  renderRepartition(); renderDecompte(); renderEche();
 }
 async function setContractType(type){
   appliquerType(type);
   try { await chargerContratExistant(false); } catch(e) {}
+  lieuParDefaut();
 }
 
 function updateWarnings(){
@@ -738,7 +834,7 @@ function mergeFields(text){
     delaiSuspensive: '3 mois',
     penaliteManquement: '(montant à préciser) €',
     indemniteDedit: '0',
-    dureeProtection: '24',
+    dureeProtection: '12',
     indemniteDossier: '15',
     // [Contrat 20/10/2026] nouveaux champs
     devisRef: (contratMeta.devis && contratMeta.devis.numero) ? ('n° ' + contratMeta.devis.numero + (contratMeta.devis.date ? ' du ' + dateFR(contratMeta.devis.date) : '')) : '(devis à préciser)',
@@ -746,12 +842,14 @@ function mergeFields(text){
     delaiValidation: '15',
     acomptePct: '30',
     delaiPaiement: '15',
-    tauxRetard: "le taux de l'intérêt légal majoré de 3 points",
+    tauxRetard: "l'intérêt légal",
     delaiMiseEnDemeure: '15',
     delaiEtat: '8',
     delaiContestation: '15',
     delaiRestitution: '30',
     delaiAmiable: '8',
+    echeancierHonoraires: echeTexte(),
+    honosCg: (echeTotalHonos() ? 'soit ' + euro(echeTotalHonos()) + ' HT' : 'montant précisé au devis'),
   };
   return text.replace(/\{\{(\w+)\}\}/g, (m,k) => map[k] !== undefined ? map[k] : m);
 }
@@ -837,6 +935,8 @@ function collectFormData(){
     repartition: repartState,
     avancement: avancState,
     clauses: clauseState,
+    clausesVersion: CLAUSES_VERSION,
+    echeancier: echeState,
     createdAt: contratMeta.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -1010,7 +1110,8 @@ async function ouvrirContratListe(i){
   resetEtat(); currentProjet = p; contratMeta.devis = r.devis || null;
   appliquerType(r.contractType || 'moe');
   await chargerContratExistant(false);
-  afficherProjet(); renderPhaseChecks(); renderRepartition(); renderDecompte(); updateWarnings();
+  await completerProjet(); lieuParDefaut();
+  afficherProjet(); renderPhaseChecks(); renderRepartition(); renderDecompte(); updateWarnings(); renderEche();
   window.scrollTo({ top:0, behavior:'smooth' });
 }
 
@@ -1030,52 +1131,89 @@ function assembleDocument(){
   return { title, date, lieu, parts, annexe };
 }
 
+// PDF : même mise en page que le devis / la synthèse de Chiffrage (document HTML imprimé en PDF)
 function genererPDF(){
-  const { jsPDF } = window.jspdf;
   const d = assembleDocument();
-  const doc = new jsPDF();
-  const navy=[27,45,91], accent=[74,156,199];
-  let y=20;
-  doc.setFont('helvetica','bold'); doc.setFontSize(16); doc.setTextColor(...navy);
-  doc.text(d.title, 15, y); y+=8;
-  doc.setDrawColor(...accent); doc.line(15,y,195,y); y+=8;
-  doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(74,96,128);
-  doc.text('Fait à ' + (d.lieu||'—') + ', le ' + (d.date||'—'), 15, y); y+=10;
-
-  d.parts.forEach(p => {
-    const bodyLines = doc.splitTextToSize(p.texte, 170);
-    if (y + 10 + bodyLines.length*4.6 > 285) { doc.addPage(); y=20; }
-    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(...navy);
-    doc.text('Article ' + p.numero + ' — ' + p.titre, 15, y); y+=6;
-    doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(15,30,61);
-    doc.text(bodyLines, 15, y); y += bodyLines.length*4.6 + 6;
-  });
-
-  if (d.annexe) {
-    if (y + 20 + d.annexe.rows.length * 6 > 275) { doc.addPage(); y=20; }
-    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(...navy);
-    doc.text(d.annexe.titre, 15, y); y += 7;
-    doc.setFontSize(9); doc.text('Phase', 15, y); doc.text('Part', 125, y); doc.text('Honoraires HT', 195, y, { align:'right' }); y += 2; doc.line(15, y, 195, y); y += 5;
-    doc.setFont('helvetica','normal'); doc.setTextColor(15,30,61);
-    d.annexe.rows.forEach(r => { doc.text(r.ph + ' — ' + r.label, 15, y); doc.text(r.pct.toFixed(1).replace('.',',') + ' %', 125, y); doc.text(euro(r.montant), 195, y, { align:'right' }); y += 5.5; });
-    doc.setFont('helvetica','bold'); doc.text('Total', 15, y); doc.text('100 %', 125, y); doc.text(euro(d.annexe.total), 195, y, { align:'right' }); y += 8;
-  }
-  if (y > 250) { doc.addPage(); y=20; }
-  y += 10;
-  doc.setFontSize(9.5); doc.setTextColor(15,30,61);
-  doc.text('Le Maître d\'Œuvre / L\'Entreprise', 20, y);
-  doc.text('Le Maître d\'Ouvrage', 130, y);
-  y += 25;
-  doc.text('Signature :', 20, y);
-  doc.text('Signature :', 130, y);
-
-  const pageCount = doc.internal.getNumberOfPages();
-  for (let i=1;i<=pageCount;i++){
-    doc.setPage(i); doc.setFontSize(8); doc.setTextColor(139,165,192); doc.setFont('helvetica','normal');
-    doc.text("Phénix-Architecture EURL · Maître d'œuvre · Saint-Georges-de-Mons (63780) · contact@phenixarchitecte.fr · 04 73 73 00 59", 15, 292);
-  }
-  const client = currentProjet ? (currentProjet.client||'client') : 'client';
-  doc.save('Contrat-' + (contractType==='moe'?'MOE':'CG') + '-' + client.replace(/\s+/g,'-') + '.pdf');
+  const P = currentProjet || {};
+  const e = echeCourant();
+  const para = t => escH(t).split(/\n\n+/).map(x => '<p>' + x.replace(/\n/g, '<br>') + '</p>').join('');
+  const dv = contratMeta.devis;
+  const montant = parseFloat(document.getElementById('f-montant').value) || 0;
+  const natureSel = document.getElementById('f-nature'); const nature = natureSel ? natureSel.options[natureSel.selectedIndex].text : '';
+  const estMoe = contractType === 'moe';
+  const echeRows = e.missions.filter(m => m.on).map(m => { const b = parseFloat(m.montant) || 0;
+    return '<tr class="mis"><td colspan="3">' + escH(m.titre) + '</td><td class="r">' + (b ? euro(b) + ' HT' : '') + '</td></tr>' +
+      m.rows.map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + escH(cap1(r.liv) || '—') + '</td><td class="r">' + (parseFloat(r.pct) || 0) + ' %</td><td class="r">' + (b ? euro(b * (parseFloat(r.pct) || 0) / 100) : '—') + '</td></tr>').join('') +
+      (m.key === 'decl' ? '<tr><td></td><td colspan="3" style="font-size:10px;color:#475569;font-style:italic">' + escH(SAV_DECL) + '</td></tr>' : ''); }).join('');
+  const annexe = d.annexe ? '<div class="sec keep"><h3>' + escH(d.annexe.titre) + '</h3><table><thead><tr><th>Phase</th><th class="r">Part</th><th class="r">Honoraires HT</th></tr></thead><tbody>' +
+    d.annexe.rows.map(r => '<tr><td>' + escH(r.ph + ' — ' + r.label) + '</td><td class="r">' + r.pct.toFixed(1).replace('.', ',') + ' %</td><td class="r">' + euro(r.montant) + '</td></tr>').join('') +
+    '<tr class="tot"><td>Total</td><td class="r">100 %</td><td class="r">' + euro(d.annexe.total) + '</td></tr></tbody></table></div>' : '';
+  const eT = echeTexte();
+  const echeTable = '<div class="keep" style="margin:4px 0 12px"><table><thead><tr><th style="width:8%">N°</th><th>Livrable remis</th><th class="r" style="width:12%">Part</th><th class="r" style="width:20%">Montant HT</th></tr></thead><tbody>' + echeRows + '</tbody></table></div>';
+  const client = P.client || '';
+  const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>${escH(d.title)} — ${escH(client)}</title>
+<style>*{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+body{font-family:'Segoe UI',Arial,sans-serif;color:#1E293B;background:#fff;font-size:12px}
+.page{max-width:800px;margin:0 auto;padding:28px 32px 40px}
+.header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:16px;border-bottom:3px solid #1E3A5F;margin-bottom:20px}
+.brand{font-size:22px;font-weight:800;color:#1E3A5F}.brand span{color:#3B82F6}
+.brand-sub{font-size:9.5px;color:#64748B;letter-spacing:.12em;text-transform:uppercase;margin-top:2px}
+.brand-contact{font-size:10px;color:#64748B;margin-top:6px;line-height:1.7}
+.doc-badge{background:#1E3A5F;color:#fff;font-size:11px;font-weight:700;padding:4px 12px;border-radius:4px;display:inline-block;margin-bottom:6px}
+.doc-ref{font-size:10.5px;color:#64748B;line-height:1.8;text-align:right}
+.parties{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:22px;background:#F8FAFC;border-radius:8px;padding:14px}
+.plabel{font-size:9px;font-weight:700;color:#94A3B8;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.pname{font-size:13px;font-weight:700;color:#1E3A5F}.pdetail{font-size:10.5px;color:#475569;margin-top:2px;line-height:1.6}
+.objet{background:#EFF6FF;border-left:4px solid #3B82F6;padding:12px 14px;margin-bottom:26px;border-radius:0 6px 6px 0;display:flex;justify-content:space-between;gap:12px}
+.objet-lbl{font-size:9px;font-weight:700;color:#3B82F6;letter-spacing:.1em;text-transform:uppercase;margin-bottom:2px}
+.objet-val{font-size:13px;font-weight:600;color:#1E3A5F}.objet-det{font-size:10.5px;color:#64748B;margin-top:1px}
+.objet .mt{text-align:right;white-space:nowrap}.objet .mt .objet-val{font-size:16px}
+table{width:100%;border-collapse:collapse;margin:6px 0 4px}
+thead th{background:#1E3A5F;padding:7px 10px;color:#93C5FD;font-size:10px;font-weight:700;letter-spacing:.06em;text-align:left}
+td{padding:8px 10px;font-size:11px;border-bottom:1px solid #E2E8F0;line-height:1.5}
+tbody tr:nth-child(even) td{background:#F8FAFC}
+.r{text-align:right;white-space:nowrap}tr.tot td{font-weight:700;color:#1E3A5F;background:#EFF6FF!important}tr.mis td{font-weight:700;color:#1E3A5F;background:#E0EAF7!important;font-size:11px}
+.sec{margin-bottom:22px}.keep,.art,.artl,.fin{break-inside:avoid;page-break-inside:avoid}
+h3{font-size:12.5px;color:#1E3A5F;margin:0 0 9px;padding:7px 12px;background:#F1F5F9;border-left:3px solid #1E3A5F;border-radius:0 4px 4px 0;break-after:avoid;page-break-after:avoid}
+.art p,.artl p{font-size:11.2px;line-height:1.75;color:#334155;margin:0 0 9px;padding:0 4px;text-align:justify}
+.note{font-size:10px;color:#64748B;margin-top:4px}
+.fait{margin:0 0 14px;font-size:11.5px;color:#1E3A5F;font-weight:600}
+.sigs{display:grid;grid-template-columns:1fr 1fr;gap:24px;break-inside:avoid;page-break-inside:avoid}
+.sig{border:1.5px solid #E2E8F0;border-radius:6px;padding:12px;min-height:130px}.fin{margin-top:0}.fin .fait{margin-top:26px}
+.sig-lbl{font-size:9px;font-weight:700;color:#94A3B8;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.sig-name{font-size:10.5px;color:#475569}
+.footer{text-align:center;font-size:9px;color:#94A3B8;border-top:1px solid #E2E8F0;padding-top:8px;margin-top:18px;line-height:1.8}
+.no-print{text-align:right;margin-bottom:14px}.no-print button{background:#1E3A5F;color:#fff;border:none;padding:8px 18px;border-radius:6px;font-size:12px;cursor:pointer}
+@media print{.no-print{display:none}@page{size:A4;margin:16mm 16mm 18mm}h3{break-after:avoid;page-break-after:avoid}p{orphans:3;widows:3}.page{padding:0;max-width:none}}
+</style></head><body><div class="page">
+<div class="no-print"><button onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF</button></div>
+<div class="header">
+  <div><div class="brand">Phénix<span>-Architecture</span></div><div class="brand-sub">Maître d'Œuvre · Contractant Général</div>
+  <div class="brand-contact">${escH(FIRM.adresse)}<br>04 73 73 00 59 · contact@phenixarchitecte.fr<br>SIRET ${escH(FIRM.siret)}</div></div>
+  <div><div class="doc-badge">${estMoe ? "CONTRAT DE MAÎTRISE D'ŒUVRE" : 'CONTRAT DE CONTRACTANT GÉNÉRAL'}</div><div class="doc-ref">${P.ref ? 'Projet : ' + escH(P.ref) + '<br>' : ''}${dv && dv.numero ? 'Devis signé : n° ' + escH(dv.numero) + (dv.date ? ' du ' + dateFR(dv.date) : '') + '<br>' : ''}Date : ${escH(d.date || '—')}</div></div>
+</div>
+<div class="parties">
+  <div><div class="plabel">Maître d'ouvrage</div><div class="pname">${escH(client || '—')}</div><div class="pdetail">${escH(P.adresse || '')}${P.email ? '<br>' + escH(P.email) : ''}${P.tel ? ' · ' + escH(P.tel) : ''}</div></div>
+  <div><div class="plabel">${estMoe ? "Maître d'œuvre" : "Maître d'œuvre · contractant général"}</div><div class="pname">${escH(FIRM.nom)}</div><div class="pdetail">${escH(FIRM.representant)}<br>${escH(FIRM.adresse)}</div></div>
+</div>
+<div class="objet"><div><div class="objet-lbl">Opération</div><div class="objet-val">${escH(P.nom || client || '')}</div><div class="objet-det">${escH(P.adresse || 'Adresse à préciser')}${P.surface ? ' · ' + escH(P.surface) + ' m²' : ''}${nature ? ' · ' + escH(nature) : ''}</div></div>
+  <div class="mt"><div class="objet-lbl">${estMoe ? 'Honoraires' : 'Honoraires études et coordination'}</div><div class="objet-val">${estMoe ? (montant ? euro(montant) + ' HT' : '—') : (echeTotalHonos() ? euro(echeTotalHonos()) + ' HT' : '—')}</div></div></div>
+${d.parts.map((p, pi) => { if (pi === d.parts.length - 1) return ''; const k = p.texte.indexOf(eT); const corps = (eT && k >= 0) ? para(p.texte.slice(0, k)) + echeTable + para(p.texte.slice(k + eT.length)) : para(p.texte);
+  return '<div class="sec ' + ((eT && k >= 0) ? 'artl' : 'art') + '"><h3>Article ' + p.numero + ' — ' + escH(p.titre) + '</h3>' + corps + '</div>'; }).join('')}
+${annexe}
+<div class="fin">${d.parts.length ? (p => '<div class="sec art"><h3>Article ' + p.numero + ' — ' + escH(p.titre) + '</h3>' + para(p.texte) + '</div>')(d.parts[d.parts.length - 1]) : ''}<div class="fait">Fait à ${escH(d.lieu || '—')}, le ${escH(d.date || '—')}, en deux exemplaires.</div>
+<div class="sigs">
+  <div class="sig"><div class="sig-lbl">Le Maître d'Œuvre</div><div class="sig-name">${escH(FIRM.representant)} — Phénix-Architecture</div></div>
+  <div class="sig"><div class="sig-lbl">Le Maître d'Ouvrage</div><div class="sig-name">${escH(client)}</div><div style="font-size:9.5px;color:#94A3B8;margin-top:4px">Signature précédée de « Lu et approuvé »</div></div>
+</div>
+<div class="footer">${escH(FIRM.nom)} · SIRET ${escH(FIRM.siret)} · ${escH(FIRM.adresse)}<br>contact@phenixarchitecte.fr · 04 73 73 00 59</div></div>
+</div></body></html>`;
+  const blob = new Blob([html], { type:'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener';
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1500);
+  toast('Contrat ouvert — « Imprimer / Enregistrer en PDF »');
 }
 
 function genererWord(){
@@ -1092,7 +1230,7 @@ function genererWord(){
       `<tr><td><b>Total</b></td><td align="right"><b>100 %</b></td><td align="right"><b>${euro(d.annexe.total)}</b></td></tr></table>`;
   }
   body += `<table style="width:100%;margin-top:40px"><tr>
-    <td style="width:50%">Le Maître d'Œuvre / L'Entreprise<br><br><br>Signature :</td>
+    <td style="width:50%">Le Maître d'Œuvre<br><br><br>Signature :</td>
     <td style="width:50%">Le Maître d'Ouvrage<br><br><br>Signature :</td>
   </tr></table>`;
 
@@ -1112,7 +1250,7 @@ function genererWord(){
 }
 
 document.getElementById('f-nature').addEventListener('change', updateWarnings);
-document.getElementById('f-montant').addEventListener('input', () => { renderRepartition(false); renderDecompte(); });
+document.getElementById('f-montant').addEventListener('input', () => { renderRepartition(false); renderDecompte(); renderEche(); });
 
 // Ordre du shell : « ouvre le contrat de ce projet » (bascule automatique à la signature d'un devis)
 window.addEventListener('message', ev => {
@@ -1130,7 +1268,8 @@ window.addEventListener('firebase-ready', async () => {
   loadHandoff();
   updateWarnings();
   try { await chargerContratExistant(true); } catch(e) { console.warn('Contrat existant illisible :', e); }
-  afficherProjet(); renderPhaseChecks(); renderRepartition(); renderDecompte(); updateWarnings();
+  await completerProjet(); lieuParDefaut();
+  afficherProjet(); renderPhaseChecks(); renderRepartition(); renderDecompte(); updateWarnings(); renderEche();
   renderListeContrats();
   try { window.parent.postMessage({ source:'phenix-contrat', ready:true }, '*'); } catch(e) {}
   if (window._contratPending) { const p = window._contratPending; window._contratPending = null; await ouvrirDepuisPayload(p); }
