@@ -1156,8 +1156,13 @@ function notifierStatut(it, avant, apres, motif){
   var de = normStatut(it.src, avant), vers = normStatut(it.src, apres);
   if (de === vers) return;
   var f = it.f;
+  // Devis signé : s'il n'a pas encore de dossier, c'est la conversion (Dossier) qui enverra la notification « dossier créé, contrat prêt ».
+  // S'il a DÉJÀ un dossier (devis repassé en attente puis re-signé), on notifie quand même, avec l'ouverture du contrat de ce dossier.
+  if (vers === 'accepte' && it.src === 'dec' && !f.projetCree) return;
+  if (!RESTREINT && vers !== 'accepte') return;   // Maxime n'est pas notifié de ses propres changements, sauf la signature
   var n = { id:'n-' + Date.now() + '-' + Math.floor(Math.random()*1000), type:'statut', devisId:String(f.id), src:it.src, client:nomClient(it), numero:f.numero || '',
             objet:f.objet || '', montantHt:parseFloat(f.montantHt) || 0, de:de, vers:vers, motif: vers === 'refuse' ? (motif || '') : '', par:ME, date:new Date().toISOString(), lu:false };
+  if (vers === 'accepte' && f.projetId) { n.projetId = String(f.projetId); n.projet = { projetId: String(f.projetId), client: nomClient(it), nom: nomClient(it), devis: { numero: f.numero || '', date: f.dateEmission || '', montantHt: parseFloat(f.montantHt) || 0 }, honoraires: String(parseFloat(f.montantHt) || '') }; }
   try { window._fb.saveNotif(n.id, JSON.parse(JSON.stringify(n))).catch(function(e){ console.warn('Notification non enregistrée :', e); }); }
   catch(e) { console.warn('Notification non enregistrée :', e); }
 }
@@ -1389,7 +1394,7 @@ async function persist(it, patch, okMsg){
     if (it.src === 'dec') await window._fb.saveDevisEnCours(f.id, patch);
     else await window._fb.saveFacture(f.id, patch);
     if (okMsg) toast(okMsg);
-    if (RESTREINT && patch.statut !== undefined) notifierStatut(it, avant.statut, patch.statut, patch.motifPerte);
+    if (patch.statut !== undefined) notifierStatut(it, avant.statut, patch.statut, patch.motifPerte);
     return true;
   } catch(e) {
     Object.keys(avant).forEach(function(k){ if (avant[k] === undefined) delete f[k]; else f[k] = avant[k]; });
