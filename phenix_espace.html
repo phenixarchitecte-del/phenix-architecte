@@ -185,7 +185,7 @@ onAuthStateChanged(auth, user => {
       if (!_restr) unsubC = onSnapshot(collection(db, 'phenix_chiffrage_assistante'), s => window.E.setChiffrage(lire(s)), e => window.E.onError(e, 'chiffrage'));
     }
     // [Accès] personnes assignables = fiches phenix_users (illisible pour un compte « tâches seulement » : liste de secours)
-    if (!_solo) unsubU = onSnapshot(collection(db, 'phenix_users'), s => { window.E.setUsers(lire(s).map(function(x){ return Object.assign({}, x, { email: x.email || x.id }); })); }, function(e){ console.warn('phenix_users :', e && e.code); });
+    if (!_solo) unsubU = onSnapshot(query(collection(db, 'phenix_users'), where('role', 'in', ['admin', 'assistante', 'equipe', 'chantier'])), s => { window.E.setUsers(lire(s).map(function(x){ return Object.assign({}, x, { email: x.email || x.id }); })); }, function(e){ console.warn('phenix_users :', e && e.code); });
     // ── Devis à relancer (ex-Relances) : devis en cours, notifications (admin seulement), factures-devis, contacts projets
     window.R.setUser(user.email || '');
     if (!_solo) {
