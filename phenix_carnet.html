@@ -4714,6 +4714,41 @@ window.dispatchEvent(new Event('fb-ready'));
     A.busy = false; vApply(); estimate(); render();
   }
 
+  /* ---------- métrés tirés de la maquette (pour le chiffrage IA dans Chiffrage) ---------- */
+  function metrics(){
+    var v = { }, fl = {}, a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3(), t = new THREE.Vector3();
+    var add = function(k, x){ v[k] = (v[k] || 0) + x; };
+    A.groups.forEach(function(g){
+      if(isHidden(g) || (A.src && !included(g))) return;
+      var cat = curCat(g), pos = g.geo.attributes.position, ix = g.geo.index, nt = ix ? ix.count/3 : pos.count/3;
+      for(var i = 0; i < nt; i++){
+        a.fromBufferAttribute(pos, ix ? ix.getX(i*3) : i*3); b.fromBufferAttribute(pos, ix ? ix.getX(i*3+1) : i*3+1); c.fromBufferAttribute(pos, ix ? ix.getX(i*3+2) : i*3+2);
+        n.subVectors(b, a).cross(t.subVectors(c, a)); var ar = n.length()/2; if(ar < 1e-6) continue; n.normalize(); var ny = Math.abs(n.y);
+        if(cat === 'roof' && n.y > .2) add('couverture', ar);
+        else if(cat === 'dalle' && n.y > .9){ var y = Math.round((a.y+b.y+c.y)/3*2)/2; fl[y] = (fl[y] || 0) + ar; }
+        else if(ny < .3 && (cat === 'wall' || cat === 'cloison' || cat === 'glass' || cat === 'frame' || cat === 'door')) add(cat, ar);
+      }
+    });
+    /* niveaux : faces supérieures des dalles regroupées par hauteur (écart < 0,6 m), sans les petites surfaces */
+    var ys = Object.keys(fl).map(parseFloat).sort(function(x, y){ return x - y; }), lv = [];
+    ys.forEach(function(y){ var l = lv[lv.length-1]; if(l && y - l.y1 < .6){ l.m2 += fl[y]; l.y1 = y; } else lv.push({ y:y, y1:y, m2:fl[y] }); });
+    lv = lv.filter(function(l){ return l.m2 >= 6; });
+    var bb = vBox(), sz = bb.getSize(new THREE.Vector3()), r1 = function(x){ return Math.round(x*10)/10; };
+    return {
+      emprise:[r1(sz.x), r1(sz.z)], hauteur:r1(bb.max.y),
+      planchers:lv.map(function(l, i){ return { niveau:i, altitude:r1(l.y), m2:r1(l.m2) }; }),
+      couverture_m2:r1(v.couverture || 0), murs_m2:r1((v.wall || 0)/2), cloisons_m2:r1((v.cloison || 0)/2),
+      vitrages_m2:r1((v.glass || 0)/2), menuiseries_m2:r1(((v.frame || 0) + (v.door || 0))/2), t:Date.now()
+    };
+  }
+  function metricsHtml(m){
+    if(!m) return '';
+    return '<dl class="atl-kv"><dt>Emprise</dt><dd>' + m.emprise.join(' × ').replace(/\./g,',') + ' m · hauteur ' + String(m.hauteur).replace('.',',') + ' m</dd>' +
+      (m.planchers.length ? '<dt>Planchers</dt><dd>' + m.planchers.map(function(p){ return 'niv. ' + p.niveau + ' : ' + String(p.m2).replace('.',',') + ' m²'; }).join(' · ') + '</dd>' : '') +
+      '<dt>Couverture</dt><dd>' + String(m.couverture_m2).replace('.',',') + ' m² (rampants)</dd><dt>Murs</dt><dd>≈ ' + String(m.murs_m2).replace('.',',') + ' m² (surface développée, ouvertures comprises)</dd>' +
+      '<dt>Cloisons</dt><dd>≈ ' + String(m.cloisons_m2).replace('.',',') + ' m²</dd><dt>Vitrages</dt><dd>≈ ' + String(m.vitrages_m2).replace('.',',') + ' m²</dd></dl>';
+  }
+
   /* ---------- export .glb ---------- */
   async function exportGlb(){
     await libs(); var sc = new THREE.Scene(), mats = {};
@@ -4733,6 +4768,7 @@ window.dispatchEvent(new Event('fb-ready'));
     var cfg = clone(A.cfg); A.busy = true; setMsg('Préparation…'); render();
     try{
       var m = S.fiche.maquette || {}, out = Object.assign({}, m, { layers:cfg.layers, spots:cfg.spots, views:cfg.views, stages:cfg.stages, colors:cfg.colors, cuts:cfg.cuts || null, on:true });
+      try{ out.metrics = metrics(); }catch(x){}
       if(A.src || A.glbOnly){ /* nouveau fichier : OBJ converti ici, ou .glb déposé tel quel */
         var buf;
         if(A.src){
@@ -4805,6 +4841,7 @@ window.dispatchEvent(new Event('fb-ready'));
         '<dt>Poids estimé</dt><dd>' + mo(A.est.bytes) + (A.est.bytes > 15*1048576 ? ' <em class="warn">lourd pour un téléphone</em>' : '') + '</dd>' +
         (A.xf ? '<dt>Repère</dt><dd>axe ' + A.xf.up.toUpperCase() + ' vertical, unité ' + (A.xf.unit === .001 ? 'mm' : A.xf.unit === .01 ? 'cm' : 'm') + ' → m</dd>' : '') + '</dl>' +
         (exc.length ? '<details><summary>' + exc.length + ' groupe(s) retirés du fichier · ' + nf(excT) + ' triangles</summary><ul class="atl-ul">' + exc.map(function(g){ return '<li>' + e(g.key) + ' <small>' + catLabel(curCat(g)) + '</small></li>'; }).join('') + '</ul><p class="cap">Pour en remettre un, changez sa catégorie dans « Calques ».</p></details>' : '') +
+        '<h3>Métrés de la maquette</h3><p class="cap">Repris par Chiffrage pour le chiffrage IA. Approximatifs : calculés sur les faces du modèle.</p>' + (function(){ try{ return metricsHtml(metrics()); }catch(x){ return ''; } })() +
         '<div class="atl-row"><button type="button" data-atl="dl">Télécharger le .glb</button>' + ((S.fiche.maquette || {}).n || (S.fiche.maquette || {}).url ? '<button type="button" data-atl="reload">Recharger la maquette en ligne</button>' : '') + '</div></section>';
     }
     h += '<details class="atl-help"><summary>Consigne d’export ArchiCAD</summary><ol><li>Garder des calques bien nommés (Murs, Cloisons, Dalles, Charpente, Toitures, Menuiseries, Escalier…). Le classement automatique s’en sert.</li><li>Fichier › Enregistrer sous › <b>Wavefront (.obj)</b>, avec le .mtl. Pas besoin des textures : la maquette est blanche.</li><li>Inutile de masquer le mobilier ou les luminaires : l’Atelier les retire du fichier.</li><li>Viser un fichier final de moins de 15 Mo pour le téléphone (le poids est affiché ici).</li></ol></details>';
@@ -4945,7 +4982,7 @@ window.dispatchEvent(new Event('fb-ready'));
     if(!A.groups.length){ await fromCurrent(); if(!A.groups.length){ A.tab = 'fichier'; setMsg('Déposez l’export ArchiCAD (.obj + .mtl) pour commencer.'); } }
     render(); vResize();
   }
-  window.PXAtelier = { open:open, close:close, _A:A, _apply:applyOps, _autoCat:autoCat, _export:exportGlb, _fromObj:fromObj, _send:sendPrompt };
+  window.PXAtelier = { open:open, close:close, _A:A, _metrics:function(){ return metrics(); }, _apply:applyOps, _autoCat:autoCat, _export:exportGlb, _fromObj:fromObj, _send:sendPrompt };
 })();
 </script>
 

@@ -7,6 +7,16 @@
 ══════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_chiffrage.html
 ──────────────────────────────────────────────────────────────────
+ 23/10/2026 — [Carnet] Le Carnet de projet passe AVANT le chiffrage :
+   1. Nouvelle page « Carnet » (menu, entre Projets et Lots & Chiffrage) et bouton
+      « Carnet » sur chaque carte projet : le Carnet du projet (lié à Phénix Dossier)
+      s'ouvre ici, avec la connexion du shell (relais des identifiants comme dans Chantier).
+      On y remplit la fiche, on règle la maquette dans l'Atelier, on ouvre l'accès client.
+   2. « Chiffrer avec le Carnet (IA) » : le moteur Neuf IA reçoit les choix du client,
+      la fiche (particularités, contraintes), les métrés de la maquette 3D (Atelier),
+      les plans PDF facultatifs et une consigne. Les lots vont dans le projet en cours
+      (l'ancien chiffrage peut être archivé, comme d'habitude).
+   Repérer : [Carnet].
  15/10/2026 — Base : phenix_chiffrage.html fourni le 15/10 (rien retiré).
    1. « AUCUNE ENTREPRISE » : chaque lot sans entreprise affiche une mention
       ROUGE (liste des lots, cartes mobiles, fiche du lot). Tous les lots créés
@@ -524,6 +534,9 @@ if (window.parent !== window) {
   <div class="nav-item active" onclick="showPage('chantiers')" id="nav-chantiers">
     <i class="ti ti-building-2" aria-hidden="true"></i> Projets
   </div>
+  <div class="nav-item" onclick="showPage('carnet')" id="nav-carnet">
+    <i class="ti ti-book-2" aria-hidden="true"></i> Carnet
+  </div>
   <div class="nav-item" onclick="showPage('chiffrage')" id="nav-chiffrage">
     <i class="ti ti-calculator" aria-hidden="true"></i> Lots & Chiffrage
   </div>
@@ -562,6 +575,22 @@ if (window.parent !== window) {
       </div>
     </div>
     <div id="chantier-grid-wrap" class="chantier-grid"><div class="loading">Chargement…</div></div>
+  </div>
+
+  <!-- PAGE CARNET [Carnet] : phase conception, avant le chiffrage -->
+  <div class="page" id="page-carnet">
+    <div class="page-header">
+      <div class="page-title">Carnet du projet</div>
+      <div class="page-sub">Avant le chiffrage : fiche, maquette 3D (Atelier) et choix de matières du client. Ses choix alimentent ensuite le chiffrage IA.</div>
+      <div class="page-actions" style="flex-wrap:wrap;gap:8px">
+        <select id="carnet-chantier-select" aria-label="Projet" onchange="carnetSelect(this.value)" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;background:var(--surface2);color:var(--text)"></select>
+        <button class="btn btn-outline" onclick="exportToCarnet()" style="border-color:#E8833A;color:#E8833A" title="Crée l'accès privé du client à son Carnet (phase conception, sans prix)"><i class="ti ti-user-share" aria-hidden="true"></i>Ouvrir l'accès au client</button>
+        <button class="btn btn-primary" onclick="carnetChiffrerModal()" style="background:linear-gradient(135deg,#E8833A,#2A5298);border-color:#E8833A"><i class="ti ti-robot" aria-hidden="true"></i>Chiffrer avec le Carnet (IA)</button>
+      </div>
+    </div>
+    <div id="carnet-etat" role="status" style="padding:8px 28px;font-size:12px;color:var(--text2);border-bottom:1px solid var(--border)"></div>
+    <div class="reno-ia-status" id="carnet-ia-status" style="margin:10px 28px 0;display:none"></div>
+    <div id="carnet-wrap" style="flex:1;min-height:520px;margin:12px 28px 20px;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:#0a1628"></div>
   </div>
 
   <!-- PAGE CHIFFRAGE -->
@@ -2117,7 +2146,14 @@ const auth = getAuth(app);
 window.addEventListener('message', function(_pxEv){
   var _pxD = _pxEv.data;
   if(_pxD && _pxD.source === 'phenix-shell' && _pxD.action === 'auto-login' && _pxD.email && _pxD.password && _pxEv.source === window.parent){
+    window._pxCreds = _pxD;   // [Carnet] gardé pour le Carnet intégré (page « Carnet »)
     signInWithEmailAndPassword(auth, _pxD.email, _pxD.password).catch(function(){});
+    try { var _cf = document.getElementById('carnet-frame'); if (_cf && _cf.contentWindow) _cf.contentWindow.postMessage(_pxD, (location.origin && location.origin !== 'null' ? location.origin : '*')); } catch(e) {}
+  }
+  // [Carnet] le Carnet intégré demande la connexion automatique : on lui redonne les identifiants validés par le Shell
+  var _cf2 = document.getElementById('carnet-frame');
+  if(_pxD && _pxD.readyForLogin && _cf2 && _pxEv.source === _cf2.contentWindow && window._pxCreds){
+    try { _cf2.contentWindow.postMessage(window._pxCreds, (location.origin && location.origin !== 'null' ? location.origin : '*')); } catch(e) {}
   }
 });
 // Signale au Shell que ce module est prêt à recevoir l'auto-login — le Shell
@@ -2549,6 +2585,7 @@ function showPage(page){
   document.getElementById('nav-'+page).classList.add('active');
   if(page==='chantiers'){renderChantierGrid();}
   if(page==='chiffrage'){renderChiffrage();}
+  if(page==='carnet'){renderCarnetPage();}
   if(page==='export'){renderExportSelects();}
   if(page==='metrages' && metrageState && metrageState.canvas){ setTimeout(resizeMetrageCanvas, 50); }
 }
@@ -3499,6 +3536,7 @@ function renderChantierGrid(){
       ${(()=>{const n=(c.lots||[]).filter(l=>!l.exclu&&lotEntrepriseEtat(l)==='aucune').length; return n?'<div style="margin-top:5px"><span class="no-ent"><i class="ti ti-alert-triangle" aria-hidden="true"></i> '+n+' lot'+(n>1?'s':'')+' sans entreprise</span></div>':'';})()}
       <div class="chantier-progress"><div class="chantier-progress-inner" style="width:${getProgress(c)}%"></div></div>
       <div style="display:flex;gap:8px;margin-top:14px">
+        <button class="btn btn-sm btn-outline" onclick="ouvrirCarnet(${i})" style="border-color:#E8833A;color:#E8833A" title="Carnet du projet : fiche, maquette, choix du client"><i class="ti ti-book-2" aria-hidden="true"></i>Carnet</button>
         <button class="btn btn-sm btn-primary" onclick="selectChantier(${i})"><i class="ti ti-calculator" aria-hidden="true"></i>Chiffrer</button>
         <button class="btn btn-sm btn-outline" onclick="editChantier(${i})"><i class="ti ti-edit" aria-hidden="true"></i></button>
         <button class="btn btn-sm btn-danger" onclick="deleteChantier(${i})"><i class="ti ti-trash" aria-hidden="true"></i></button>
@@ -4055,6 +4093,119 @@ async function voirChoixCarnet(){
   document.body.appendChild(ov);
 }
 window.voirChoixCarnet = voirChoixCarnet;
+
+// ── [Carnet] Page « Carnet » : le Carnet de projet avant le chiffrage ─────────
+//  Le Carnet (phenix_carnet.html) s'ouvre dans un cadre, sur le projet Dossier lié
+//  (localStorage phenix-carnet-last = projetId, comme dans Chantier). La connexion
+//  du shell lui est relayée (voir l'écouteur auto-login plus haut).
+function _carnetProjet(){ const i=state.currentChantier; return (i===null||i===undefined||!state.chantiers[i])?null:state.chantiers[i]; }
+function ouvrirCarnet(i){
+  state.currentChantier=i; state.currentLot=null;
+  const s=document.getElementById('chantier-select'); if(s) s.value=String(i);
+  showPage('carnet');
+}
+function carnetSelect(v){
+  state.currentChantier = v===''?null:parseInt(v,10); state.currentLot=null;
+  const s=document.getElementById('chantier-select'); if(s) s.value=v;
+  renderCarnetPage();
+}
+function _carnetEsc(t){ return String(t==null?'':t).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
+function renderCarnetPage(){
+  const sel=document.getElementById('carnet-chantier-select');
+  if(sel){ sel.innerHTML='<option value="">— Sélectionner un projet —</option>'; state.chantiers.forEach((c,i)=>sel.add(new Option(c.nom,i))); sel.value = (state.currentChantier===null||state.currentChantier===undefined)?'':String(state.currentChantier); }
+  const wrap=document.getElementById('carnet-wrap'), etat=document.getElementById('carnet-etat'); if(!wrap) return;
+  const c=_carnetProjet();
+  const msg=(h)=>{ const fr=document.getElementById('carnet-frame'); if(fr) fr.remove(); wrap.innerHTML='<div style="padding:40px 24px;text-align:center;color:#c9d6e8;font-size:14px;line-height:1.6">'+h+'</div>'; if(etat) etat.textContent=''; };
+  if(!c){ msg('Choisissez un projet pour ouvrir son Carnet.'); return; }
+  if(!c.projetId){ msg('Ce projet n\'est pas relié à un projet Phénix Dossier : le Carnet s\'appuie sur ce lien.<br><button class="btn btn-outline" style="margin-top:12px;border-color:#e6b95c;color:#e6b95c" onclick="ouvrirModalRaccorderDossier()"><i class="ti ti-link" aria-hidden="true"></i>Raccorder à Phénix Dossier</button>'); return; }
+  const pid=String(c.projetId);
+  try{ localStorage.setItem('phenix-carnet-last', pid); }catch(e){}
+  let fr=document.getElementById('carnet-frame');
+  if(!fr){ wrap.innerHTML='<iframe id="carnet-frame" src="phenix_carnet.html" style="width:100%;height:100%;min-height:520px;border:0;display:block" title="Carnet du projet '+_carnetEsc(c.nom||'')+'" allow="clipboard-write"></iframe>'; fr=document.getElementById('carnet-frame'); }
+  else if(fr.dataset.pid!==pid){ fr.src='phenix_carnet.html'; }
+  fr.dataset.pid=pid;
+  if(etat) etat.textContent='Lecture du Carnet…';
+  _carnetLireEtat(c).then(e=>{
+    if(!etat || String((_carnetProjet()||{}).projetId)!==pid) return;
+    const items=(e.choix&&e.choix.items)||[], conf=items.filter(i=>i.confirme).length, f=e.fiche||{}, m=f.maquette||{};
+    const st=!items.length?'aucun choix du client pour l\'instant':(conf+' choix confirmés sur '+items.length+(e.choix.statut==='valide'?' · validés':e.choix.statut==='modifie'?' · ⚠ modifiés depuis la validation':''));
+    etat.innerHTML='<b>Client</b> : '+_carnetEsc(st)+' · <b>Maquette</b> : '+((m.n||m.url)?(m.metrics?'en ligne, métrés disponibles':'en ligne (ouvrez l\'Atelier et enregistrez pour calculer les métrés)'):'pas encore de maquette (Fiche projet › Atelier maquette)')+' · <b>Accès client</b> : '+(c.clientEmail?_carnetEsc(c.clientEmail):'non créé');
+  }).catch(err=>{ if(etat) etat.textContent='Carnet non lu ('+((err&&err.code)||'connexion')+').'; });
+}
+async function _carnetLireEtat(c){
+  const r=await _phenixFbRefs(), pid=String(c.projetId);
+  const a=await Promise.all([r.getDoc(r.doc(r.db,'phenix_portail',pid,'etat','choix')), r.getDoc(r.doc(r.db,'phenix_portail',pid,'etat','fiche'))]);
+  return { choix:a[0].exists()?a[0].data():null, fiche:a[1].exists()?a[1].data():null };
+}
+function _carnetLignes(t){ return String(t||'').split(/\n+/).map(x=>x.trim()).filter(Boolean); }
+function _carnetNb(x){ return String(x).replace('.',','); }
+function carnetTexteIA(c, e){
+  const f=e.fiche||{}, items=(e.choix&&e.choix.items)||[], m=(f.maquette&&f.maquette.metrics)||null, L=[];
+  L.push('CARNET DE PROJET — '+(f.nom||c.nom||'Projet')+(f.clients||c.client?' (client : '+(f.clients||c.client)+')':''));
+  if(f.terrain||c.adresse) L.push('Terrain : '+(f.terrain||c.adresse));
+  if(parseFloat(f.surface)>0||parseFloat(c.surface)>0) L.push('Surface de plancher annoncée : '+(parseFloat(f.surface)||parseFloat(c.surface))+' m²');
+  const sp=_carnetLignes(f.specifs), rg=_carnetLignes(f.regl);
+  if(sp.length) L.push('Particularités du projet :\n'+sp.map(x=>'- '+x).join('\n'));
+  if(rg.length) L.push('Contraintes réglementaires :\n'+rg.map(x=>'- '+x).join('\n'));
+  if(items.length){
+    const conf=items.filter(i=>i.confirme).length;
+    L.push('CHOIX DU CLIENT ('+conf+' confirmés sur '+items.length+(e.choix.statut==='valide'?', validés':'')+') — poste : option retenue :\n'+items.map(i=>'- '+i.titre+' : '+i.libelle+(i.epaisseurMm?' '+i.epaisseurMm+' mm':'')+(i.confirme?'':' (proposition Phénix, non confirmée)')+(i.ecartPct?' [impact '+(i.ecartPct>0?'+':'')+_carnetNb(i.ecartPct)+' %]':'')+(i.note?' · remarque : '+i.note:'')).join('\n'));
+  } else L.push('CHOIX DU CLIENT : aucun pour l\'instant — retiens les standards Phénix.');
+  if(m){
+    L.push('MÉTRÉS DE LA MAQUETTE 3D (modèle ArchiCAD du projet) :\n- Emprise bâtie (rectangle englobant, annexes comprises) : '+m.emprise.join(' × ')+' m · hauteur '+m.hauteur+' m'+
+      (m.planchers&&m.planchers.length?'\n- Planchers (surface brute par niveau) : '+m.planchers.map(p=>'niveau '+p.niveau+' = '+p.m2+' m²').join(' ; '):'')+
+      '\n- Couverture (rampants) : '+m.couverture_m2+' m²\n- Murs (surface développée, approximative, ouvertures comprises) : '+m.murs_m2+' m²\n- Cloisons et doublages (approximatif) : '+m.cloisons_m2+' m²\n- Vitrages : '+m.vitrages_m2+' m²');
+  } else L.push('MÉTRÉS DE LA MAQUETTE : non disponibles (pas de maquette réglée dans l\'Atelier).');
+  return L.join('\n\n');
+}
+var CARNET_REGLES_IA = `
+
+DONNÉES DU CARNET DE PROJET — ELLES SONT PRIORITAIRES :
+- Les choix du client fixent les matériaux et systèmes de chaque lot : chiffre exactement l'option retenue, jamais une autre. Une « proposition Phénix non confirmée » se chiffre telle quelle.
+- Chaque choix doit se retrouver dans au moins un poste, avec le nom de l'option dans la désignation.
+- Les métrés de la maquette 3D sont la base des quantités (planchers par niveau, rampants de couverture, vitrages). « Murs » et « cloisons » sont des surfaces développées approximatives : recoupe-les avec les plans s'ils sont joints, sinon déduis environ 15 % d'ouvertures pour les murs.
+- Les particularités et contraintes de la fiche (terrain, accès, règlement) doivent apparaître dans les lots concernés (VRD, terrassement, fondations, façades…).
+- Les plans, s'ils sont joints, précisent le cloisonnement, les pièces et les menuiseries (cotes) ; en cas de contradiction sur un matériau, le choix du client l'emporte.`;
+var _carnetDernier = null;
+async function carnetChiffrerModal(){
+  const c=_carnetProjet();
+  if(!c){ showToast('Sélectionnez un projet d\'abord'); return; }
+  if(!c.projetId){ showToast('⚠️ Ce projet n\'est pas relié à Phénix Dossier : raccordez-le d\'abord'); return; }
+  let e; try{ e=await _carnetLireEtat(c); }catch(x){ showToast('⚠️ Lecture du Carnet impossible ('+((x&&x.code)||'connexion')+')'); return; }
+  _carnetDernier={ c, e };
+  const items=(e.choix&&e.choix.items)||[], conf=items.filter(i=>i.confirme).length, f=e.fiche||{}, m=(f.maquette&&f.maquette.metrics)||null;
+  const pct=v=>(v==null||v===0)?'':' <small style="color:var(--text3)">('+(v>0?'+':'−')+' '+_carnetNb(Math.abs(v))+' %)</small>';
+  const ov=document.createElement('div'); ov.className='modal-overlay open'; ov.id='carnet-ia-modal';
+  ov.innerHTML='<div class="modal" role="dialog" aria-modal="true" aria-labelledby="cim-t" style="max-width:780px;max-height:90vh;overflow:auto">'+
+    '<div class="modal-title" id="cim-t"><i class="ti ti-robot" style="color:#E8833A;margin-right:8px" aria-hidden="true"></i>Chiffrer avec le Carnet — '+_carnetEsc(c.nom||'')+'</div>'+
+    '<p style="margin:0 0 12px;font-size:13px;color:var(--text2)">L\'IA chiffre tous les lots à partir des choix du client, de la fiche et des métrés de la maquette. Les plans et la consigne sont facultatifs mais affinent le résultat. Rien n\'est créé avant votre validation.</p>'+
+    '<h4 style="margin:14px 0 6px;font-size:13px">1. Choix du client · '+conf+' confirmés sur '+items.length+'</h4>'+
+    (items.length?(conf?'':'<p style="color:#E8833A;font-size:12px;margin:0 0 6px">⚠ Aucun choix confirmé : les propositions Phénix seront chiffrées.</p>')+'<div style="max-height:180px;overflow:auto;font-size:12px;border:1px solid var(--border);border-radius:8px;padding:6px 10px">'+items.map(i=>'<div style="padding:3px 0"><b>'+_carnetEsc(i.titre)+'</b> : '+_carnetEsc(i.libelle)+(i.confirme?'':' <small style="color:var(--text3)">(proposition)</small>')+pct(i.ecartPct)+'</div>').join('')+'</div>':'<p style="font-size:12px;color:#E8833A;margin:0">Le client n\'a encore rien choisi : ouvrez-lui l\'accès, ou chiffrez sur les standards Phénix.</p>')+
+    '<h4 style="margin:14px 0 6px;font-size:13px">2. Fiche du projet</h4><p style="font-size:12px;margin:0;color:var(--text2)">'+(_carnetLignes(f.specifs).length||_carnetLignes(f.regl).length?_carnetEsc(_carnetLignes(f.specifs).concat(_carnetLignes(f.regl)).join(' · ')):'Aucune particularité ni contrainte saisie dans la fiche du Carnet.')+'</p>'+
+    '<h4 style="margin:14px 0 6px;font-size:13px">3. Métrés de la maquette</h4><p style="font-size:12px;margin:0;color:var(--text2)">'+(m?'Emprise '+_carnetNb(m.emprise.join(' × '))+' m · '+(m.planchers||[]).map(p=>'niv. '+p.niveau+' '+_carnetNb(p.m2)+' m²').join(' · ')+' · couverture '+_carnetNb(m.couverture_m2)+' m² · vitrages '+_carnetNb(m.vitrages_m2)+' m²':'Non disponibles : dans le Carnet, Fiche projet › Atelier maquette, déposez l\'OBJ d\'ArchiCAD puis enregistrez.')+'</p>'+
+    '<h4 style="margin:14px 0 6px;font-size:13px">4. Plans (facultatif)</h4><label class="btn btn-outline btn-sm" style="cursor:pointer"><i class="ti ti-file-type-pdf" aria-hidden="true"></i>Joindre le dossier PDF<input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" multiple style="display:none" onchange="carnetPlans(this.files)"></label> <span id="carnet-plans-n" style="font-size:12px;color:var(--text2)">'+(neufPages.length?neufPages.length+' page(s) déjà chargée(s) (Neuf IA)':'aucun plan')+'</span>'+
+    '<h4 style="margin:14px 0 6px;font-size:13px">5. Consigne (facultatif)</h4><textarea id="carnet-consigne" class="reno-prompt-textarea" rows="3" placeholder="Ex : vide sanitaire, mur de soutènement côté talus, accès camion difficile, garder la PAC existante du garage…"></textarea>'+
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn btn-outline" data-x="close">Annuler</button><button class="btn btn-primary" data-x="go" style="background:linear-gradient(135deg,#E8833A,#2A5298);border-color:#E8833A"><i class="ti ti-robot" aria-hidden="true"></i>Lancer le chiffrage IA</button></div></div>';
+  ov.addEventListener('click',function(ev){
+    const b=ev.target.closest('[data-x]');
+    if(ev.target===ov||(b&&b.dataset.x==='close')){ ov.remove(); return; }
+    if(b&&b.dataset.x==='go'){ const cons=(document.getElementById('carnet-consigne')||{}).value||''; ov.remove(); carnetLancerIA(cons); }
+  });
+  document.body.appendChild(ov);
+}
+async function carnetPlans(files){
+  const n=document.getElementById('carnet-plans-n'); if(n) n.textContent='Extraction des pages…';
+  try{ await neufHandleDossier(files); }catch(x){ console.error(x); }
+  if(n) n.textContent=neufPages.length?neufPages.length+' page(s) prête(s)':'aucune page exploitable';
+}
+async function carnetLancerIA(consigne){
+  const d=_carnetDernier; if(!d) return;
+  const idx=state.chantiers.indexOf(d.c);
+  showPage('carnet');
+  await neufLancerIA({ carnet:carnetTexteIA(d.c, d.e), consigne, destIdx:idx>=0?idx:state.currentChantier, statusId:'carnet-ia-status' });
+}
+window.ouvrirCarnet=ouvrirCarnet; window.carnetSelect=carnetSelect; window.renderCarnetPage=renderCarnetPage;
+window.carnetChiffrerModal=carnetChiffrerModal; window.carnetPlans=carnetPlans; window.carnetLancerIA=carnetLancerIA; window.carnetTexteIA=carnetTexteIA;
 
 // ── Passerelle vers Phénix Appels d'offres (pousser un DPGF pour chiffrage artisans) ──
 // ── Résolveur Firebase autonome ────────────────────────────────
@@ -5511,16 +5662,14 @@ function exportLotPDF(){
   const ref='LOT-'+new Date().toISOString().slice(0,10).replace(/-/g,'')+'-'+(lot.num||'').replace(/\D/g,'').padStart(2,'0');
   function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
-  let totalHT=0;
+  const entNom=lotEntrepriseNom(lot);
+  const cell='text-align:right;padding:6px 10px;font-size:11.5px;border:1px dashed #CBD5E1;background:#fff';
   const rows=(lot.postes||[]).map(p=>{
     const q=parseFloat(p.q)||0;
-    const pu=parseFloat(p.puArtisan)||parseFloat(p.pu)||0;
-    const total=q*pu;
-    totalHT+=total;
-    return `<tr><td style="padding:6px 10px;font-size:11.5px;color:#334155">${esc(p.n)}</td><td style="text-align:right;padding:6px 10px;font-size:11.5px;white-space:nowrap">${q} ${esc(p.u||'u')}</td><td style="text-align:right;padding:6px 10px;font-size:11.5px">${fmt(pu)} €</td><td style="text-align:right;padding:6px 10px;font-size:11.5px;font-weight:600">${fmt(total)} €</td></tr>`;
+    return `<tr><td style="padding:6px 10px;font-size:11.5px;color:#334155">${esc(p.n)}</td><td style="text-align:right;padding:6px 10px;font-size:11.5px;white-space:nowrap">${q} ${esc(p.u||'u')}</td><td style="${cell}">&nbsp;</td><td style="${cell}">&nbsp;</td></tr>`;
   }).join('');
 
-  const html=`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Bordereau ${esc(lot.nom)}</title>
+  const html=`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Consultation ${esc(lot.nom)}${entNom?' - '+esc(entNom):''}</title>
 <style>*{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}body{font-family:'Segoe UI',Arial,sans-serif;color:#1E293B;background:#fff;font-size:13px}
 .devis-page{max-width:800px;margin:0 auto;padding:28px 32px}
 .header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:16px;border-bottom:3px solid #1E3A5F;margin-bottom:20px}
@@ -5569,23 +5718,23 @@ tbody.tot tr.tot-row td{background:#fff !important;border:0;padding:14px 0 0}
 <div class="header">
   <div><div class="brand">Phénix<span>-Architecture</span></div><div class="brand-sub">Maître d'Œuvre · Contractant Général</div>
   <div class="brand-contact">6 lieu-dit l'Étreille — 63780 Saint-Georges-de-Mons<br>04 73 73 00 59 · contact@phenixarchitecte.fr<br>SIRET 987 989 316 00011</div></div>
-  <div><div class="doc-badge">DEMANDE DE CONFIRMATION</div><div class="doc-ref">Réf : ${ref}<br>Date : ${date}</div></div>
+  <div><div class="doc-badge">DEMANDE DE PRIX</div><div class="doc-ref">Réf : ${ref}<br>Date : ${date}</div></div>
 </div>
 <div class="parties">
   <div><div class="plabel">Chantier</div><div class="pname">${esc(c.nom)}</div><div class="pdetail">${esc(c.adresse||'')}</div></div>
-  <div><div class="plabel">Entreprise</div><div class="pname">________________________</div><div class="pdetail">À compléter par vos soins</div></div>
+  <div><div class="plabel">Entreprise</div>${entNom?`<div class="pname">${esc(entNom)}</div>`:`<div class="pname">________________________</div><div class="pdetail">À compléter par vos soins</div>`}</div>
 </div>
-<div class="objet"><div class="objet-lbl">Lot concerné</div><div class="objet-val">${esc(lot.num?lot.num+' — ':'')}${esc(lot.nom)}</div><div class="objet-det">Merci de vérifier les quantités et prix ci-dessous, et de nous retourner ce document signé ou annoté de vos corrections.</div></div>
-<table><thead><tr class="sp"><td colspan="4"></td></tr><tr><th style="width:45%">Désignation</th><th style="width:15%;text-align:right">Qté</th><th style="width:15%;text-align:right">PU HT</th><th style="width:25%;text-align:right">Total HT</th></tr></thead><tfoot class="sp"><tr><td colspan="4"></td></tr></tfoot>
+<div class="objet"><div class="objet-lbl">Lot concerné</div><div class="objet-val">${esc(lot.num?lot.num+' — ':'')}${esc(lot.nom)}</div><div class="objet-det">Merci de vérifier les quantités ci-dessous et de renseigner vos prix unitaires et totaux HT, puis de nous retourner ce document signé.</div></div>
+<table><thead><tr class="sp"><td colspan="4"></td></tr><tr><th style="width:45%">Désignation</th><th style="width:15%;text-align:right">Qté</th><th style="width:15%;text-align:right">PU HT proposé</th><th style="width:25%;text-align:right">Total HT proposé</th></tr></thead><tfoot class="sp"><tr><td colspan="4"></td></tr></tfoot>
 <tbody>${rows}</tbody></table>
 <div class="totaux">
-  <div class="trow main"><span class="lbl">TOTAL HT</span><span class="val">${fmt(totalHT)} €</span></div>
+  <div class="trow main"><span class="lbl">TOTAL HT proposé</span><span class="val">&nbsp;</span></div>
 </div>
 <div class="remarques"><div class="remarques-lbl">Remarques / corrections de l'entreprise</div></div>
-<div class="conditions"><strong>Merci de nous retourner ce document avec la mention "Bon pour accord" signée</strong>, ou de nous transmettre vos corrections avant le démarrage des travaux.</div>
+<div class="conditions"><strong>Merci de nous retourner ce document complété et signé</strong>, ou de nous transmettre vos remarques sur les quantités.</div>
 <div class="sigs">
   <div class="sig"><div class="sig-lbl">Établi par</div><div class="sig-name">Maxime Suchet — Phénix-Architecture</div></div>
-  <div class="sig"><div class="sig-lbl">Bon pour accord — Entreprise</div><div class="sig-name">Nom, date et signature</div></div>
+  <div class="sig"><div class="sig-lbl">Entreprise</div><div class="sig-name">Nom, date et signature</div></div>
 </div>
 <div class="footer">Phénix-Architecture · SIRET 987 989 316 00011 · 6 lieu-dit l'Étreille, 63780 Saint-Georges-de-Mons<br>contact@phenixarchitecte.fr · 04 73 73 00 59 · Document confidentiel</div>
 </div><\/body><\/html>`;
@@ -7839,15 +7988,17 @@ function neufReset() {
   document.getElementById('neuf-pdf-input').value = '';
 }
 
-async function neufLancerIA() {
+async function neufLancerIA(opts) {
+  /* [Carnet] opts = { carnet:texte du Carnet, consigne, destIdx, statusId } quand on chiffre depuis la page Carnet */
+  opts = (opts && typeof opts === 'object' && !opts.target) ? opts : {};
   const PROXY = 'https://phenix-proxy.phenixarchitecte.workers.dev';
-  if(!neufPages.length) { showToast('⚠️ Chargez d\'abord un dossier'); return; }
+  if(!neufPages.length && !opts.carnet) { showToast('⚠️ Chargez d\'abord un dossier'); return; }
 
   const hasPlan = neufPages.some(pg => neufDetectTypeFromTitre(pg.titre) === 'plan');
-  if(!hasPlan) showToast('⚠️ Aucun plan de niveau détecté — vérifiez le dossier chargé');
+  if(neufPages.length && !hasPlan) showToast('⚠️ Aucun plan de niveau détecté — vérifiez le dossier chargé');
 
-  const prompt = (document.getElementById('neuf-prompt')||{}).value?.trim()||'';
-  const statusEl = document.getElementById('neuf-ia-status');
+  const prompt = opts.carnet ? String(opts.consigne||'').trim() : ((document.getElementById('neuf-prompt')||{}).value?.trim()||'');
+  const statusEl = document.getElementById(opts.statusId || 'neuf-ia-status');
   statusEl.className = 'reno-ia-status running';
   statusEl.style.display = 'flex';
   statusEl.innerHTML = `<div class="ai-loading"><div class="ai-dot" style="background:#2A5298"></div><div class="ai-dot" style="background:#2A5298"></div><div class="ai-dot" style="background:#2A5298"></div></div><span>Analyse du dossier complet en cours sur ${neufPages.length} page(s)…</span>`;
@@ -7908,11 +8059,13 @@ SDB complète 7500€/ff, WC suspendu 1500€/u, PAC air/eau 8500€/u
 Porte int 450€/u, Carrelage sol 70€/m², Parquet 48€/m²
 Peinture murs 20€/m², Enduit façade 38€/m²
 Les pu_client = pu_artisan × 1.20 (marge 20% par défaut).
-Sois précis et exhaustif. Si une valeur n'est pas lisible, estime-la de façon cohérente avec le reste du dossier.`;
+Sois précis et exhaustif. Si une valeur n'est pas lisible, estime-la de façon cohérente avec le reste du dossier.` + (opts.carnet ? CARNET_REGLES_IA : '');
 
   const content = [];
-  if(prompt) content.push({type:'text', text:`PRÉCISIONS DU MAÎTRE D'ŒUVRE :\n${prompt}\n\nDOSSIER JOINT (${neufPages.length} pages) :`});
-  else content.push({type:'text', text:`Analyse ce dossier de ${neufPages.length} pages et génère le chiffrage complet de cette construction neuve :`});
+  if(opts.carnet) content.push({type:'text', text: opts.carnet + (neufPages.length ? '' : '\n\nAUCUN PLAN JOINT : base les quantités sur les métrés de la maquette et sur la fiche, en restant cohérent.')});
+  if(prompt) content.push({type:'text', text:`PRÉCISIONS DU MAÎTRE D'ŒUVRE :\n${prompt}` + (neufPages.length ? `\n\nDOSSIER JOINT (${neufPages.length} pages) :` : '')});
+  else if(neufPages.length) content.push({type:'text', text:`Analyse ce dossier de ${neufPages.length} pages et génère le chiffrage complet de cette construction neuve :`});
+  else content.push({type:'text', text:'Génère le chiffrage complet de cette construction neuve à partir du Carnet de projet ci-dessus.'});
 
   neufPages.forEach((pg, i) => {
     content.push({type:'text', text:`\n[PAGE ${i+1}/${neufPages.length} — "${pg.titre}"]`});
@@ -7954,6 +8107,14 @@ Sois précis et exhaustif. Si une valeur n'est pas lisible, estime-la de façon 
     document.getElementById('ia-chantier-type').value = 'Construction neuve';
 
     _ouvrirModalResultats(parsed);
+    /* [Carnet] les lots vont dans le projet en cours, pas dans un nouveau projet */
+    if(opts.destIdx != null && state.chantiers[opts.destIdx]){
+      const selD = document.getElementById('ia-dest-chantier'); if(selD) selD.value = String(opts.destIdx);
+      const nf = document.getElementById('ia-new-chantier-form'); if(nf) nf.style.display = 'none';
+      const nc = document.getElementById('ia-nom-chiffrage'); if(nc) nc.value = 'Chiffrage Carnet du ' + new Date().toLocaleDateString('fr-FR');
+      const sz = document.getElementById('ia-summary-zone'); if(sz) [].forEach.call(sz.querySelectorAll('div'), function(d){ if(/^Prescriptions/.test(d.textContent.trim())) d.innerHTML = '<strong>Base :</strong> choix du client, fiche et métrés du Carnet' + (neufPages.length ? ' + ' + neufPages.length + ' page(s) de plans' : ''); });
+      if (statusEl && statusEl.id === 'carnet-ia-status'){ statusEl.style.display = ''; statusEl.className = 'reno-ia-status'; statusEl.textContent = '✅ Chiffrage proposé : vérifiez les lots dans la fenêtre puis « Créer les lots ».'; }
+    }
 
   } catch(err) {
     statusEl.className = 'reno-ia-status error';
