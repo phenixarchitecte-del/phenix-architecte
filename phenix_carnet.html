@@ -2472,12 +2472,14 @@ function houseNav(){
   var b=$('h3-mbar');if(!b)return;
   var n=nConf(),tot=CATS.length;
   var h='<div class="h3-mhead"><div class="h3-mprice">'+(pctTxt(allDelta())||'0 %')+' <small>sur le budget</small></div><div class="h3-mprog"><i style="width:'+(n/tot*100).toFixed(0)+'%"></i></div><div class="h3-mt">'+n+' choix confirmés sur '+tot+'</div></div>';
+  /* [Atelier] Phénix : fiche et maquette en tête du menu (elles étaient cachées dans « Détails techniques ») */
+  if(S.owner)h+='<button class="h3-big" data-act="tab" data-id="fiche"><b>Fiche projet</b><span>Informations, contraintes, choix imposés</span><i>›</i></button><button class="h3-big" data-act="atl"><b>Maquette 3D</b><span>'+(mqOn()?'Ouvrir l’Atelier maquette':'Déposer l’export ArchiCAD (.obj + .mtl)')+'</span><i>›</i></button>';
   if(pub())h+='<button class="h3-big" data-act="hguide" data-id="open"><b>Mon projet</b><span>'+(n?'Reprendre là où vous en étiez':'Faire mes choix pas à pas')+'</span><i>›</i></button>';
   h+='<button class="h3-link" data-act="tab" data-id="synth">'+(S.owner?'Synthèse et prix':'Synthèse')+'</button>';
   if(pub())h+='<button class="h3-link" data-act="cat" data-id="send">Récapitulatif et envoi</button>';
   if(tabOk('plan'))h+='<button class="h3-link" data-act="tab" data-id="plan">Planning du chantier</button>';if(tabOk('jrnl'))h+='<button class="h3-link" data-act="tab" data-id="jrnl">'+(phase()==='chantier'||S.owner?'Journal de chantier':'Messages et journal')+'</button>';
   var tn={};TABS.forEach(function(t){tn[t[0]]=t[1]});
-  var det=['fiche','fond','dalle','vrd','murs','toit','menu','elec','plomb','chauf','plat','pein','sols','cuis','ext'].filter(function(id){return tn[id]&&(id!=='fiche'||S.owner)&&tabOk(id)});
+  var det=['fond','dalle','vrd','murs','toit','menu','elec','plomb','chauf','plat','pein','sols','cuis','ext'].filter(function(id){return tn[id]&&(id!=='fiche'||S.owner)&&tabOk(id)});
   if(det.length)h+='<details class="h3-acc h3-det"><summary>Détails techniques<em>'+det.length+'</em></summary>'+det.map(function(id){return '<button data-act="tab" data-id="'+id+'">'+tn[id]+'</button>'}).join('')+'</details>';
   b.innerHTML=h;
 }
