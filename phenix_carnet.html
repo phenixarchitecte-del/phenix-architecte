@@ -217,7 +217,8 @@ html,body{margin:0}
 .login{position:fixed;inset:0;z-index:100;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto}
 .lgc{width:100%;max-width:380px;display:flex;flex-direction:column;gap:8px}
 .lgc label{font-size:13px;color:var(--muted);margin-top:6px}.lgc .btn{margin-top:12px}
-.login{display:none!important}.ubar{display:none!important}
+/* [Atelier] 24/10 : l'écran de connexion et la barre projet étaient masqués en permanence (héritage de la démo plein écran) : sans connexion automatique, le carnet restait sur la maison de démonstration */
+.login{z-index:99000}body.tab-maison:not(.h3-stg) .ubar{display:none!important}
 /* [Atelier] portail maquette (propriétaire) */
 body.atl-open{overflow:hidden}
 .atl{position:fixed;inset:0;z-index:100000;display:flex;flex-direction:column;background:var(--bg);color:var(--ink);font-family:var(--fs-body);font-size:14px}
@@ -2324,6 +2325,8 @@ var ST=[
   '.h3-s{font:400 14px/1.45 var(--fs-body);color:rgba(255,255,255,.74);max-width:46ch}',
   'body.tab-maison .h3-menubtn{border:1px solid rgba(255,255,255,.42);border-radius:99px;padding:9px 19px;font-size:11.5px;letter-spacing:.24em;background:rgba(8,16,30,.35);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);text-shadow:none}',
   'body.tab-maison .h3-menubtn:hover{border-color:#e8c27a;color:#e8c27a}',
+  '.h3-ownbtn{position:absolute;z-index:8;top:calc(env(safe-area-inset-top,0px) + 12px);right:calc(env(safe-area-inset-right,0px) + 150px);border:1px solid #e8c27a;border-radius:99px;padding:9px 17px;font:600 11.5px var(--fs-body);letter-spacing:.14em;text-transform:uppercase;color:#0a1628;background:#e8c27a;cursor:pointer}',
+  '.h3-ownbtn:hover{background:#f3d79c}body.h3-stg .h3-ownbtn{display:none}@media(max-width:520px){.h3-ownbtn{right:auto;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 58px)}}',
   'body.tab-maison:not(.h3-stg) .h3-bar{background:linear-gradient(to top,rgba(5,10,20,.9) 18%,rgba(5,10,20,0))}',
   'body.tab-maison .h3-pill{background:rgba(255,255,255,.09);border:1px solid rgba(232,194,122,.6);color:#fff;border-radius:99px;box-shadow:0 8px 30px rgba(0,0,0,.45);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);padding:13px 22px;font:500 13.5px var(--fs-body);letter-spacing:.02em}',
   'body.tab-maison .h3-pill b{color:#e8c27a;font-weight:600;letter-spacing:.04em}',
@@ -2386,6 +2389,7 @@ function houseLook(){
 function houseHtml(){
   return '<div class="h3-wrap"><div class="h3-host" id="h3-host"></div><div class="h3-brand"><i></i><span>Phénix</span><small>Maîtrise d’œuvre</small></div><div class="h3-hero" id="h3-hero"></div><div class="h3-stage" id="h3-stage"></div>'+
    '<button class="h3-menubtn" id="h3-menubtn" data-act="hmenu" data-id="open" aria-haspopup="dialog">Menu</button>'+
+   '<button class="h3-ownbtn" id="h3-ownbtn" data-act="atl" hidden>Maquette 3D</button>'+
    '<div class="h3-bar" id="h3-bar"></div><div class="h3-guide" id="h3-guide" hidden></div>'+
    '<div class="h3-menu" id="h3-menu" hidden role="dialog" aria-label="Menu"><button class="h3-menubtn h3-menux" data-act="hmenu" data-id="close">Fermer</button>'+
    '<div class="h3-menuin"><div class="h3-mbar" id="h3-mbar"></div><div id="h3-side"></div></div></div></div>';
@@ -2653,6 +2657,7 @@ function houseRender(){
   var p=$('p-maison');if(!p)return;
   if(!p.getAttribute('data-built')){p.setAttribute('data-built','1');p.innerHTML=houseHtml();houseBar()}
   var side=$('h3-side');if(side)side.innerHTML=houseSide();
+  var ob=$('h3-ownbtn');if(ob){ob.hidden=!S.owner;ob.textContent=mqOn()?'Maquette 3D':'Déposer la maquette 3D';ob.title='Atelier maquette : export ArchiCAD, calques, pastilles, vues, étapes';}
   var stp=$('h3-stage');if(stp&&!stp.getAttribute('data-k')&&false)stp.innerHTML=houseStageHtml();
   var on=(S.tab==='maison');
   if(!on&&HS.timer)houseStop();
@@ -2799,6 +2804,12 @@ document.addEventListener("change",function(e){var c=e.target.getAttribute&&e.ta
 $("panels").innerHTML=TABS.map(function(t){return '<section class="panel" id="p-'+t[0]+'" role="tabpanel" hidden></section>'}).join('');
 var h=(location.hash||"").replace("#","");
 S.tab="maison";if($("p-"+h)&&h!=="fiche")S.tab=h;
+/* [Carnet] Chiffrage (page Carnet) demande d'ouvrir un projet précis */
+window.addEventListener('message',function(ev){
+  var d=ev.data;if(!d||d.source!=='phenix-chiffrage'||d.action!=='carnet-open'||ev.source!==window.parent)return;
+  var pid=String(d.pid||'');if(!pid)return;lsSet('phenix-carnet-last',pid);
+  if(S.owner&&S.chList&&S.chList.some(function(c){return c.id===pid})&&S.cid!==pid){openProject(pid);renderUbar()}
+});
 /* [Atelier] passerelle vers le module Atelier maquette (le carnet vit dans cette fonction fermée) */
 window.PXC={S:S,HZ:HZ,ST:ST,mqLoader:mqLoader,mqB64:mqB64,saveFiche:saveFiche,logJ:logJ};
 renderAll();
@@ -2838,6 +2849,8 @@ if (window.parent !== window) {
     }
   });
   try { window.parent.postMessage({ source: 'phenix-module', readyForLogin: true }, '*'); } catch (e) {}
+  /* [Atelier] on redemande la connexion si elle n'est pas arrivée (module parent chargé après nous) */
+  [1500, 4000, 8000].forEach(t => setTimeout(() => { if (!auth.currentUser) { try { window.parent.postMessage({ source: 'phenix-module', readyForLogin: true }, '*'); } catch (e) {} } }, t));
 }
 
 window._fb = {

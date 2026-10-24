@@ -4109,6 +4109,8 @@ function carnetSelect(v){
   const s=document.getElementById('chantier-select'); if(s) s.value=v;
   renderCarnetPage();
 }
+/* demande au Carnet intégré d'ouvrir le projet choisi (sans recharger la page) */
+function _carnetPoste(){ const fr=document.getElementById('carnet-frame'); if(!fr||!fr.contentWindow) return; try{ fr.contentWindow.postMessage({source:'phenix-chiffrage',action:'carnet-open',pid:fr.dataset.pid}, (location.origin&&location.origin!=='null')?location.origin:'*'); }catch(e){} }
 function _carnetEsc(t){ return String(t==null?'':t).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
 function renderCarnetPage(){
   const sel=document.getElementById('carnet-chantier-select');
@@ -4121,9 +4123,11 @@ function renderCarnetPage(){
   const pid=String(c.projetId);
   try{ localStorage.setItem('phenix-carnet-last', pid); }catch(e){}
   let fr=document.getElementById('carnet-frame');
-  if(!fr){ wrap.innerHTML='<iframe id="carnet-frame" src="phenix_carnet.html" style="width:100%;height:100%;min-height:520px;border:0;display:block" title="Carnet du projet '+_carnetEsc(c.nom||'')+'" allow="clipboard-write"></iframe>'; fr=document.getElementById('carnet-frame'); }
-  else if(fr.dataset.pid!==pid){ fr.src='phenix_carnet.html'; }
-  fr.dataset.pid=pid;
+  if(!fr){
+    wrap.innerHTML='<iframe id="carnet-frame" src="phenix_carnet.html" style="width:100%;height:100%;min-height:520px;border:0;display:block" title="Carnet du projet" allow="clipboard-write"></iframe>'; fr=document.getElementById('carnet-frame');
+    fr.addEventListener('load',function(){ _carnetPoste(); });
+  }
+  fr.dataset.pid=pid; _carnetPoste();
   if(etat) etat.textContent='Lecture du Carnet…';
   _carnetLireEtat(c).then(e=>{
     if(!etat || String((_carnetProjet()||{}).projetId)!==pid) return;
