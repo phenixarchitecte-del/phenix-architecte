@@ -43,6 +43,11 @@
      que ses propres notifications ; le message « vous a assigné » est ajouté.
    Repérer : [Journal].
 ══════════════════════════════════════════════════════════════════════
+ 25/10/2026 (2) — Synthèse 3D en tête du menu et page d'accueil de l'administrateur (le moteur de conversion des devis signés
+   tourne toujours en arrière-plan). Bulles de notification (toast) : fond sombre, le texte blanc était illisible sur fond clair.
+ 25/10/2026 — SYNTHÈSE 3D (phenix_synthese.html) : entrée de menu « Synthèse 3D » (administrateur seulement) ; un clic sur une
+   parcelle ouvre le dossier dans Dossier (message phenix-synthese / ouvrir-dossier). Repérer : [Synthèse 3D].
+   v42 : « ouvrir-module » (débloquer un dossier depuis sa fiche) → Dossier, Chantier, Chiffrage, Contrats ou Relances ; accusé « ack-module ».
 -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -207,7 +212,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 .empty i{font-size:36px;display:block;margin-bottom:8px;opacity:.4}
 
 /* ── TOAST ── */
-.toast{position:fixed;bottom:20px;right:20px;background:var(--ink);color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;z-index:9999;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast{position:fixed;bottom:20px;right:20px;background:#12233f;color:#fff;border:1px solid rgba(120,170,220,.35);box-shadow:0 8px 28px rgba(0,0,0,.45);padding:10px 18px;border-radius:10px;font-size:13px;z-index:9999;opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.show{opacity:1}
 
 @media(max-width:600px){.card-top{flex-direction:column}.card-due{text-align:left}}
@@ -244,6 +249,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 
   <!-- SIDEBAR -->
   <div class="shell-nav">
+    <div class="shell-nav-item" data-view="module" data-module="synthese" data-tip="Synthèse 3D — tous les dossiers en un coup d'œil" onclick="shellOpenModule('synthese',this)"><i class="ti ti-building-community"></i><span class="lbl">Synthèse 3D</span></div>
     <div class="shell-nav-item active" data-view="module" data-module="dossier" data-tip="Tableau de bord" onclick="shellOpenModule('dossier',this)"><i class="ti ti-layout-dashboard"></i><span class="lbl">Dossier</span><span class="nav-badge" id="navBadgeTaches">0</span></div>
     <div class="shell-nav-item" data-view="module" data-module="contrat" data-tip="Contrats" onclick="shellOpenModule('contrat',this)"><i class="ti ti-signature"></i><span class="lbl">Contrats</span></div>
     <div class="shell-nav-item" data-view="module" data-module="chiffrage" data-tip="Chiffrage" onclick="shellOpenModule('chiffrage',this)"><i class="ti ti-calculator"></i><span class="lbl">Chiffrage</span></div>
@@ -404,10 +410,11 @@ onAuthStateChanged(auth, async user => {
     }
     const _restreint = window.appliquerRestrictionsShell ? window.appliquerRestrictionsShell(me, _estAdmin ? { role: 'admin' } : _fiche) : false;
     { const nj = document.querySelector('.shell-nav-item[data-module="journal"]'); if (nj) nj.style.display = (me === SHELL_ADMIN_EMAIL.toLowerCase()) ? '' : 'none'; }   // [Journal]
+    { const ns = document.querySelector('.shell-nav-item[data-module="synthese"]'); if (ns) ns.style.display = (me === SHELL_ADMIN_EMAIL.toLowerCase()) ? '' : 'none'; }   // [Synthèse 3D]
     try { if (!sessionStorage.getItem('phenix_jrn_conn')) { sessionStorage.setItem('phenix_jrn_conn', '1'); window.phenixJournal('shell', 'connexion', 'application', 'Connexion à Phénix'); } } catch (e) {}
     if (!_restreint) { startListeners(); startNotifs(); startNotifsTaches(); startNotifsCentre(me === SHELL_ADMIN_EMAIL.toLowerCase()); startMoteurConversion(me === SHELL_ADMIN_EMAIL.toLowerCase()); }
     // Dossier = page d'accueil du shell, ouverte automatiquement à la connexion (Relances pour un compte restreint)
-    const _accueil = _restreint ? window._phenixAccueil : 'dossier';
+    const _accueil = _restreint ? window._phenixAccueil : (me === SHELL_ADMIN_EMAIL.toLowerCase() ? 'synthese' : 'dossier');   // [Synthèse 3D] page d'accueil de l'administrateur
     shellOpenModule(_accueil, document.querySelector('.shell-nav-item[data-module="' + _accueil + '"]'));
     window._accueilFait = true;   // [Espace assistante] à partir d'ici, ouvrir Dossier = avoir vu les notifications de tâches
   } else {
@@ -827,6 +834,7 @@ const MODULES = {
   carnet:       { src: 'phenix_carnet.html',            title: 'Carnet — projet client et choix' },
   relances:     { src: 'phenix_espace.html#devis',         title: 'Devis à relancer' },   // [Fusion] onglet de Mon espace
   journal:      { src: 'phenix_journal.html',            title: 'Journal d\'activité — qui a fait quoi' },
+  synthese:     { src: 'phenix_synthese.html',           title: 'Synthèse 3D — tous les dossiers' },   // [Synthèse 3D]
   espace:       { src: 'phenix_espace.html',             title: 'Mon espace — devis à relancer, tâches et projets' },
   contrat:      { src: 'phenix_contrat.html',            title: 'Contrats — MOE / contractant général' },
   chantier:     { src: 'phenix_chantier.html',           title: 'Chantier — suivi de travaux' },
@@ -928,6 +936,7 @@ window.shellOpenModule = function(name, el, order) {
   if (!mod) return;
   if (window._phenixRestreint && window._phenixModules.indexOf(name) < 0) return;
   if (name === 'journal' && me !== SHELL_ADMIN_EMAIL.toLowerCase()) return;   // [Journal]
+  if (name === 'synthese' && me !== SHELL_ADMIN_EMAIL.toLowerCase()) return;   // [Synthèse 3D] marges et impayés : administrateur seulement
   if (name === 'dossier' && !window._phenixRestreint && window._accueilFait && window.marquerNotifsTachesLues) window.marquerNotifsTachesLues();   // [Espace assistante]
   shellShowView('module', el);
   const container = document.getElementById('module-frame-container');
@@ -990,6 +999,37 @@ window.addEventListener('message', (ev) => {
   // Résultat de la conversion « devis signé → dossier + contrat » (Dossier visible ou en arrière-plan)
   if (msg.source === 'phenix-dossier' && msg.action === 'conversion-ok') { toast('✅ Devis signé — dossier créé, contrat prêt : ' + (msg.detail || '') + ' (voir la cloche)'); return; }
   if (msg.source === 'phenix-dossier' && msg.action === 'conversion-erreur') { toast('⚠️ Devis signé : dossier NON créé — ' + (msg.detail || '')); return; }
+  // [Synthèse 3D] clic sur une parcelle → ouvre le dossier dans Dossier (ou la liste des devis à relancer pour un devis non signé)
+  if (msg.source === 'phenix-synthese' && msg.action === 'ouvrir-dossier' && msg.projetId != null) {
+    if (msg.devis) { shellOpenModule('relances', document.querySelector('.shell-nav-item[data-module="relances"]')); return; }
+    const pid = /^\d+$/.test(String(msg.projetId)) ? Number(msg.projetId) : msg.projetId;
+    if (window.shellOpenProjet) window.shellOpenProjet(pid);
+    return;
+  }
+  // [Synthèse 3D · v42] « débloquer » : la fiche d'un dossier bloqué demande d'ouvrir le module qui lève le blocage.
+  // On accuse réception (sinon la Synthèse se replie sur « ouvrir-dossier »).
+  if (msg.source === 'phenix-synthese' && msg.action === 'ouvrir-module' && msg.projetId != null) {
+    try { ev.source && ev.source.postMessage({ source:'phenix-shell', action:'ack-module' }, '*'); } catch(e) {}
+    const pid = /^\d+$/.test(String(msg.projetId)) ? Number(msg.projetId) : msg.projetId;
+    const m = msg.module;
+    // Facturation, marge, pièces du permis : tout est dans la fiche du dossier (module Dossier)
+    if (!m || m === 'dossier' || m === 'permis' || !MODULES[m]) {
+      const el = document.querySelector('.shell-nav-item[data-module="dossier"]');
+      const ord = { source:'phenix-shell', action:'open-projet', id: pid, onglet: msg.onglet || null, groupe: msg.groupe || null };
+      const deja = shellCurrentModule === 'dossier' && shellCurrentFrame;
+      shellOpenModule('dossier', el, ord);
+      if (deja) { try { shellCurrentFrame.contentWindow.postMessage(ord, '*'); } catch(e) {} shellPendingOrder = null; }
+      return;
+    }
+    if (m === 'relances') { shellOpenModule('relances', document.querySelector('.shell-nav-item[data-module="relances"]')); return; }
+    // Chantier, Chiffrage, Contrats : le module s'ouvre ; l'ordre « open-projet » lui est transmis (ignoré s'il ne le gère pas)
+    const ord = { source:'phenix-shell', action:'open-projet', id: pid, onglet: msg.onglet || null, groupe: msg.groupe || null };
+    const deja = shellCurrentModule === m && shellCurrentFrame;
+    shellOpenModule(m, document.querySelector('.shell-nav-item[data-module="' + m + '"]'), ord);
+    if (deja) { try { shellCurrentFrame.contentWindow.postMessage(ord, '*'); } catch(e) {} shellPendingOrder = null; }
+    else if (shellCurrentFrame) shellCurrentFrame.addEventListener('load', () => setTimeout(() => { try { shellCurrentFrame.contentWindow.postMessage(ord, '*'); } catch(e) {} }, 1500), { once: true });
+    return;
+  }
   // Dossier ou Chantier demande à basculer vers un autre module
   if ((msg.source === 'phenix-dossier' || msg.source === 'phenix-chantier') && msg.action === 'open-module' && MODULES[msg.module]) {
     const navEl = document.querySelector('.shell-nav-item[data-module="' + msg.module + '"]');

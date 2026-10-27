@@ -5,6 +5,8 @@
 ══════════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_dossier.html
 ──────────────────────────────────────────────────────────────────────
+ 27/10/2026 — SYNTHÈSE 3D : ordre « open-projet » avec onglet: 'checklist' (+ groupe: 'f3'…) → ouvre l'onglet Checklist sur ce
+   dossier, la fiche du livret dépliée et à l'écran (bouton « Checklist F3 (2/8) » de la Synthèse). Repérer : [Synthèse 3D].
  20/10/2026 — CONTRAT : un devis signé (signature par l'assistante, import de devis signé ou devis passé à « Accepté »)
  prépare automatiquement un contrat brouillon (collection phenix_contrats, id projet_moe) et ouvre Phénix Contrat
  (declencherContratDepuisDevis). Jamais d'écrasement d'un contrat existant. Repérer : [Contrat].
@@ -6452,7 +6454,7 @@ function renderChecklist(id) {
       const gPct = gc.total ? Math.round(gc.faits / gc.total * 100) : 0;
       const groupOpen = openSet.has(g.id) && !gc.na;
       return `
-      <div class="card checklist-group" style="margin-bottom:10px;padding:0;overflow:hidden${gc.na?';opacity:.72':''}">
+      <div class="card checklist-group" data-groupe="${g.id}" style="margin-bottom:10px;padding:0;overflow:hidden${gc.na?';opacity:.72':''}">
         <div class="checklist-group-header" onclick="${gc.na?'':`toggleChecklistGroup(this,'${g.id}')`}" style="cursor:${gc.na?'default':'pointer'};padding:14px 16px;display:flex;align-items:center;justify-content:space-between;background:${gc.na?'var(--red-bg)':(gPct===100?'var(--green-bg)':'var(--bg)')}">
           <div style="display:flex;align-items:center;gap:10px;min-width:0">
             <label onclick="event.stopPropagation()" title="Marquer non applicable à ce dossier" style="display:flex;align-items:center;flex-shrink:0;cursor:pointer">
@@ -11230,7 +11232,22 @@ window.addEventListener('message', (ev) => {
     setTimeout(() => tryRun(fn, tries + 1), 300);
   }
 
-  if (msg.action === 'open-projet' && msg.id != null) {
+  if (msg.action === 'open-projet' && msg.id != null && msg.onglet === 'checklist') {
+    // [Synthèse 3D] « Checklist F3 (2/8) » : ouvrir l'onglet Checklist sur ce dossier, la fiche du livret dépliée et à l'écran
+    tryRun(() => {
+      try {
+        const p = stateDossier.projets.find(x => x.id == msg.id);
+        if (!p) { openProjectModal(msg.id); return; }
+        checklistSelectedId = p.id;
+        if (msg.groupe) (checklistOpenGroups[p.id] || (checklistOpenGroups[p.id] = new Set())).add(msg.groupe);
+        show_d('checklist', document.querySelector(`#app-dossier .nav-item[onclick*="show_d('checklist'"]`));
+        setTimeout(() => {
+          const g = msg.groupe && document.querySelector('#checklistContent [data-groupe="' + msg.groupe + '"]');
+          const cible = g || document.getElementById('checklistContent'); if (cible) { cible.style.scrollMarginTop = '72px'; cible.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+        }, 80);
+      } catch(e) { try { openProjectModal(msg.id); } catch(_) {} }
+    });
+  } else if (msg.action === 'open-projet' && msg.id != null) {
     tryRun(() => { try { openProjectModal(msg.id); } catch(e) {} });
   } else if (msg.action === 'nouveau-projet-devis' && msg.devis) {
     // Devis signé suivi dans le module « Devis en cours » : on pré-remplit « Nouveau projet »
