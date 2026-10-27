@@ -374,7 +374,8 @@ if (window.parent !== window) {
           </select>
         </div>
         <div class="form-group"><label>Date du contrat</label><input type="date" id="f-date"></div>
-        <div class="form-group"><label>Honoraires (€ HT)</label><input type="number" id="f-montant"></div>
+        <div class="form-group"><label id="lbl-montant">Honoraires (€ HT)</label><input type="number" id="f-montant"></div>
+        <div class="form-group" id="travauxBlock" style="display:none"><label>Montant prévisionnel des travaux (€ HT)</label><input type="number" id="f-travaux" placeholder="Budget travaux de la fiche projet"></div>
         <div class="form-group"><label>Lieu de signature</label><input type="text" id="f-lieu" placeholder="Commune du projet"></div>
         <div class="form-group"><label>État du contrat</label>
           <select id="f-statut">
@@ -525,7 +526,7 @@ const CLAUSES_CG = [
   { key:'parties_cg', cat:'Parties & objet', label:"Identification des parties", defaultOn:true,
     text:"ENTRE LES SOUSSIGNÉS :\n{{firmNom}}, SIRET {{firmSiret}}, sise {{firmAdresse}}, représentée par {{firmRepresentant}}, agissant en qualité de contractant général, ci-après dénommée « le Maître d'Œuvre »,\nET\n{{client}}, pour le bien situé {{adresse}}, ci-après dénommé « le Maître d'Ouvrage »,\nIl a été convenu ce qui suit :" },
   { key:'objet_cg', cat:'Parties & objet', label:"Objet et prix", defaultOn:true,
-    text:"Le Maître d'Œuvre s'engage à encadrer et faire réaliser les travaux de l'Opération sur le bien situé {{adresse}}, d'une surface de {{surface}} m². Le présent contrat formalise et complète le devis {{devisRef}} accepté par le Maître d'Ouvrage ; en cas de contradiction, le présent contrat prévaut.\n\nLe prix comprend les honoraires des études et de la coordination des travaux ({{honosCg}}).\n\nLe montant des travaux est étudié une première fois lors de la consultation préliminaire des entreprises, en fin de mission d'avant-projet. Par la suite, au cours du projet et jusqu'à son achèvement, ce montant peut être adapté en fonction des souhaits et des arbitrages du Maître d'Ouvrage, sous réserve de contraintes techniques avérées. L'accompagnement du Maître d'Œuvre a précisément pour objet d'adapter au mieux le projet aux besoins du Maître d'Ouvrage : le montant des travaux peut donc évoluer sensiblement. Le Maître d'Œuvre s'engage à en informer régulièrement le Maître d'Ouvrage, dans un souci de transparence et d'honnêteté. Lorsque le Maître d'Ouvrage souhaite arrêter un nouveau montant des travaux, il en informe le Maître d'Œuvre et ce nouveau montant est fixé par un avenant écrit signé des deux parties." },
+    text:"Le Maître d'Œuvre s'engage à encadrer et faire réaliser les travaux de l'Opération sur le bien situé {{adresse}}, d'une surface de {{surface}} m². Le présent contrat formalise et complète le devis {{devisRef}} accepté par le Maître d'Ouvrage ; en cas de contradiction, le présent contrat prévaut.\n\nLe prix comprend les honoraires des études et de la coordination des travaux ({{honosCg}}).\n\nLe montant prévisionnel des travaux est actuellement estimé à {{travauxCg}}. Ce montant est étudié une première fois lors de la consultation préliminaire des entreprises, en fin de mission d'avant-projet. Par la suite, au cours du projet et jusqu'à son achèvement, ce montant peut être adapté en fonction des souhaits et des arbitrages du Maître d'Ouvrage, sous réserve de contraintes techniques avérées. L'accompagnement du Maître d'Œuvre a précisément pour objet d'adapter au mieux le projet aux besoins du Maître d'Ouvrage : le montant des travaux peut donc évoluer sensiblement. Le Maître d'Œuvre s'engage à en informer régulièrement le Maître d'Ouvrage, dans un souci de transparence et d'honnêteté. Lorsque le Maître d'Ouvrage souhaite arrêter un nouveau montant des travaux, il en informe le Maître d'Œuvre et ce nouveau montant est fixé par un avenant écrit signé des deux parties." },
   { key:'esprit_collaboration_cg', cat:'Parties & objet', label:"Esprit de la collaboration", defaultOn:true,
     text:"Le présent contrat offre un cadre clair et équilibré à la collaboration entre les parties. Le Maître d'Ouvrage reste libre d'arrêter l'opération avant son achèvement, sans pénalité (article « Liberté d'arrêter l'opération »). En contrepartie, ce qui a été réellement réalisé (études, travaux exécutés, fournitures et engagements non annulables) reste dû, et rien d'autre : jamais de prestation non réalisée. Les engagements relatifs à la propriété du dossier technique et à la valorisation de la coordination des artisans complètent cet équilibre, dans un esprit de loyauté réciproque (articles 1103 et 1104 du Code civil)." },
   { key:'amiable_cg', cat:'Parties & objet', label:"Dialogue et résolution amiable des difficultés", defaultOn:true,
@@ -601,18 +602,28 @@ const CLAUSES_VERSION = 3;   // 22/10/2026 (2) : missions, prix CG, retard adouc
 const CLAUSES_MAJ_V2 = ['parties','parties_cg','honoraires','echeancier','aucun_remboursement','aucun_remboursement_cg'];
 // Missions de Phénix et leur échéancier (aucun acompte : chaque règlement accompagne un livrable)
 const SAV_DECL = "Après le dépôt, si la mairie demande des éléments complémentaires pour valider le dossier, leur production relève du service après-vente du Maître d'Œuvre et est entièrement comprise dans ses honoraires : le Maître d'Œuvre reste responsable du dossier tant qu'il n'est pas validé.";
+// Poids des missions dans les honoraires (issus de la répartition par phase : avant-projet 30 %, déclaration 10 %, chantier 60 %)
+const ECHE_POIDS = { ap:30, decl:10, ch:60 };
+function echeVentiler(e){
+  const tot = honosChamp(); const act = e.missions.filter(m => m.on);
+  if (!tot || !act.length) return e;
+  const sw = act.reduce((t, m) => t + ECHE_POIDS[m.key], 0);
+  let reste = Math.round(tot * 100);
+  act.forEach((m, i) => { const c = i === act.length - 1 ? reste : Math.round(tot * 100 * ECHE_POIDS[m.key] / sw); reste -= c; m.montant = String(c / 100); });
+  return e;
+}
 function echeDefaut(){
   const has = k => !!selectedPhases[k];
   const aucune = !Object.keys(selectedPhases).some(k => selectedPhases[k]);
   const cg = contractType === 'cg';
-  return { v:2, missions:[
+  return echeVentiler({ v:2, missions:[
     { key:'ap', titre:"Mission avant-projet", on: cg || aucune || has('ESQ') || has('APS') || has('APD'), montant:'',
       rows:[ { pct:30, liv:"remise du plan préliminaire" }, { pct:60, liv:"remise du plan validé" }, { pct:10, liv:"remise du chiffrage" } ] },
     { key:'decl', titre:"Mission de déclaration (autorisation d'urbanisme)", on: cg || aucune || has('PC'), montant:'',
       rows:[ { pct:50, liv:"remise du dossier préliminaire" }, { pct:50, liv:"remise du dossier de dépôt" } ] },
     { key:'ch', titre:"Mission chantier", on: cg || aucune || has('DET') || has('AOR'), montant:'',
       rows:[ { pct:30, liv:"remise des pièces écrites de démarrage du chantier" }, { pct:30, liv:"compte rendu intermédiaire de chantier" }, { pct:40, liv:"remise des clés et fin de chantier" } ] },
-  ] };
+  ] });
 }
 function echeCourant(){ return (echeState && echeState.v === 2) ? echeState : echeDefaut(); }
 function echeTotalHonos(){ return echeCourant().missions.filter(m => m.on).reduce((t, m) => t + (parseFloat(m.montant) || 0), 0); }
@@ -623,6 +634,8 @@ function numFR(v){ if (v == null || v === '') return 0; if (typeof v === 'number
 function honosSecours(){ return numFR(currentProjet && currentProjet.honoraires) || numFR(contratMeta.devis && contratMeta.devis.montantHt); }
 function honosChamp(){ const el = document.getElementById('f-montant'); let n = numFR(el && el.value); if (!n) { n = honosSecours(); if (n && el) el.value = n; } return n; }
 function honosAffiche(){ return echeTotalHonos() || honosChamp(); }
+// Montant des travaux (contractant général) : champ du contrat, sinon « Budget travaux HT » de la fiche projet
+function travauxChamp(){ const el = document.getElementById('f-travaux'); let n = numFR(el && el.value); if (!n) { n = numFR(currentProjet && currentProjet.budget); if (n && el) el.value = n; } return n; }
 const cap1 = t => t ? t.charAt(0).toUpperCase() + t.slice(1) : '';
 function echeTexte(){
   const ms = echeCourant().missions.filter(m => m.on);
@@ -656,7 +669,7 @@ function renderEche(focus){
   }).join('');
   const T = echeTotalHonos(), M = parseFloat(document.getElementById('f-montant').value) || 0;
   h += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;flex-wrap:wrap;gap:8px"><span>Total des missions cochées : <b>' + (T ? euro(T) + ' HT' : '—') + '</b>' +
-    (contractType === 'moe' && T && M && Math.abs(T - M) > 0.5 ? ' <span style="color:var(--red)">≠ honoraires du contrat (' + euro(M) + ')</span>' : '') + '</span>' +
+    (T && M && Math.abs(T - M) > 0.5 ? ' <span style="color:var(--red)">≠ honoraires du contrat (' + euro(M) + ')</span>' : '') + '</span>' +
     (echeState ? '<button class="btn" style="padding:4px 10px;font-size:12px" onclick="resetEche()">Revenir aux valeurs par défaut</button>' : '') + '</div>';
   box.innerHTML = h;
   if (focus) { const el = document.getElementById(focus); if (el) { el.focus(); try { const v = el.value; el.value = ''; el.value = v; } catch (x) {} } }
@@ -676,7 +689,7 @@ async function completerProjet(){
   try {
     const f = await window._fbContrat.getProjet(currentProjet.projetId); if (!f) return;
     currentProjet._ficheManque = ['client','adresse','surface','email','tel'].filter(k => !f[k]);
-    ['client','nom','adresse','surface','email','tel','ref','type'].forEach(k => { if (!currentProjet[k] && f[k]) currentProjet[k] = f[k]; });
+    ['client','nom','adresse','surface','email','tel','ref','type','budget'].forEach(k => { if (!currentProjet[k] && f[k]) currentProjet[k] = f[k]; });
     if (f.honoraires && !numFR(currentProjet.honoraires)) currentProjet.honoraires = f.honoraires;
     if (!numFR(document.getElementById('f-montant').value)) {
       const n = numFR(f.honoraires) || numFR(contratMeta.devis && contratMeta.devis.montantHt);
@@ -758,7 +771,7 @@ function resetEtat(){
   avancState = { phases:{}, cg:{ etudes:'', travaux:'', fournitures:'', frais:'' }, acomptes:'', frais:'' };
   contratMeta = { devis:null, createdAt:'' };
   echeState = null;
-  ['f-montant','f-lieu','f-datesignature'].forEach(i => { const e=document.getElementById(i); if(e) e.value=''; });
+  ['f-montant','f-travaux','f-lieu','f-datesignature'].forEach(i => { const e=document.getElementById(i); if(e) e.value=''; });
   document.getElementById('f-date').value = new Date().toISOString().slice(0,10);
   document.getElementById('f-nature').value = 'maison_individuelle';
   document.getElementById('f-statut').value = 'brouillon';
@@ -797,6 +810,7 @@ async function chargerContratExistant(chercherAutre){
   set('f-date', ex.date || new Date().toISOString().slice(0,10));
   set('f-montant', numFR(ex.montant) || numFR(document.getElementById('f-montant').value) || '');
   set('f-lieu', ex.lieu || document.getElementById('f-lieu').value || '');
+  set('f-travaux', numFR(ex.travaux) || numFR(document.getElementById('f-travaux').value) || '');
   set('f-statut', ex.statut || 'brouillon');
   set('f-datesignature', ex.dateSignature || '');
   selectedPhases = ex.phases || {};
@@ -812,6 +826,9 @@ async function chargerContratExistant(chercherAutre){
     if (!(ex.clausesVersion >= CLAUSES_VERSION)) clauseState[k].on = !!(ex.clauses[k] && ex.clauses[k].on) && ['delai','penale'].indexOf(k) < 0;
     else clauseState[k] = ex.clauses[k];
   });
+  // contrat enregistré avant l'ajout du montant des travaux : on complète la clause « Objet et prix » sans toucher au reste du texte
+  if (clauseState.objet_cg && clauseState.objet_cg.text.indexOf('{{travauxCg}}') < 0)
+    clauseState.objet_cg.text = clauseState.objet_cg.text.replace("Le montant des travaux est étudié une première fois", "Le montant prévisionnel des travaux est actuellement estimé à {{travauxCg}}. Ce montant est étudié une première fois");
   renderClauses();
   return true;
 }
@@ -827,6 +844,9 @@ function appliquerType(type){
   document.getElementById('typebtn-moe').classList.toggle('active', type==='moe');
   document.getElementById('typebtn-cg').classList.toggle('active', type==='cg');
   document.getElementById('phaseBlock').style.display = type==='moe' ? '' : 'none';
+  document.getElementById('travauxBlock').style.display = type==='cg' ? '' : 'none';
+  document.getElementById('lbl-montant').textContent = type==='cg' ? 'Honoraires études et coordination (€ HT)' : 'Honoraires (€ HT)';
+  if (type==='cg') travauxChamp();
   updateWarnings();
   initClauseState();
   renderClauses();
@@ -885,6 +905,7 @@ function mergeFields(text){
     delaiRestitution: '30',
     delaiAmiable: '8',
     echeancierHonoraires: echeTexte(),
+    travauxCg: (travauxChamp() ? euro(travauxChamp()) + ' HT' : "(montant à préciser après la consultation des entreprises)"),
     honosCg: (honosAffiche() ? 'soit ' + euro(honosAffiche()) + ' HT' : 'montant précisé au devis'),
   };
   return text.replace(/\{\{(\w+)\}\}/g, (m,k) => map[k] !== undefined ? map[k] : m);
@@ -964,6 +985,7 @@ function collectFormData(){
     nature: document.getElementById('f-nature').value,
     date: document.getElementById('f-date').value,
     montant: document.getElementById('f-montant').value,
+    travaux: document.getElementById('f-travaux').value,
     lieu: document.getElementById('f-lieu').value,
     statut: document.getElementById('f-statut').value,
     dateSignature: document.getElementById('f-datesignature').value,
@@ -1037,14 +1059,29 @@ function decompteCalc(){
     const honos = rows.reduce((s,r) => s + r.du, 0);
     return { rows, honos, frais, acomptes, total: honos + frais, solde: honos + frais - acomptes, m };
   }
-  const c = avancState.cg || {};
-  const honos = ['etudes','travaux','fournitures'].reduce((s,k) => s + (parseFloat(c[k]) || 0), 0);
+  const c = avancState.cg || {}, mis = avancState.cgMissions || {};
+  const rows = echeCourant().missions.filter(x => x.on).map(x => {
+    const a = mis[x.key] || { etat:'non', pct:0 };
+    const k = a.etat === 'fait' ? 1 : a.etat === 'cours' ? Math.min(100, Math.max(0, parseFloat(a.pct) || 0)) / 100 : 0;
+    const montant = parseFloat(x.montant) || 0;
+    return { key:x.key, ph:x.key, label:x.titre, montant, etat:a.etat || 'non', avanc:k * 100, du: Math.round(montant * k * 100) / 100 };
+  });
+  const etudes = rows.length ? rows.reduce((t, r) => t + r.du, 0) : (parseFloat(c.etudes) || 0);   // ancien format : montant saisi à la main
+  const travaux = parseFloat(c.travaux) || 0, fournitures = parseFloat(c.fournitures) || 0;
+  const honos = etudes + travaux + fournitures;
   const fr = parseFloat(c.frais) || 0;
-  return { rows:[], honos, frais:fr, acomptes, total: honos + fr, solde: honos + fr - acomptes, m };
+  return { rows, cg:true, etudes, travaux, fournitures, honos, frais:fr, acomptes, total: honos + fr, solde: honos + fr - acomptes, m };
 }
 function setAv(ph, champ, v){ avancState.phases[ph] = Object.assign({ etat:'non', pct:0 }, avancState.phases[ph] || {}, { [champ]: v }); renderDecompte(); }
 function setAvGlobal(champ, v){ avancState[champ] = v; renderDecompte(true); }
-function setAvCg(champ, v){ avancState.cg = avancState.cg || {}; avancState.cg[champ] = v; renderDecompte(true); }
+function setAvCg(champ, v){
+  avancState.cg = avancState.cg || {}; avancState.cg[champ] = v;
+  const T = travauxChamp();
+  if (champ === 'travauxPct' && T) avancState.cg.travaux = String(Math.round(T * (parseFloat(v) || 0)) / 100);   // % d'avancement → montant exécuté
+  if (champ === 'travaux' && T) avancState.cg.travauxPct = String(Math.round((parseFloat(v) || 0) / T * 1000) / 10);   // montant exécuté → %
+  renderDecompte(true);
+}
+function setAvMis(key, champ, v){ avancState.cgMissions = avancState.cgMissions || {}; avancState.cgMissions[key] = Object.assign({ etat:'non', pct:0 }, avancState.cgMissions[key] || {}, { [champ]: v }); renderDecompte(); }
 function renderDecompte(garderFocus){
   const box = document.getElementById('decompteBox'); if (!box) return;
   const d = decompteCalc();
@@ -1059,12 +1096,18 @@ function renderDecompte(garderFocus){
         '<td class="r">' + euro(r.montant) + '</td><td class="r"><b>' + euro(r.du) + '</b></td></tr>').join('') +
       '</table>';
   } else {
-    const c = avancState.cg || {};
-    h += '<div class="form-grid"><div class="form-group"><label>Études / conception réalisées (€ HT)</label><input type="number" id="av-cg-etudes" value="' + (c.etudes||'') + '" oninput="setAvCg(\'etudes\',this.value)"></div>' +
+    const c = avancState.cg || {}, T = travauxChamp();
+    if (d.rows.length) h += '<table class="tbl"><tr><th>Mission (honoraires)</th><th>État</th><th class="r">Avancement</th><th class="r">Honoraires de la mission</th><th class="r">Dû</th></tr>' +
+      d.rows.map(r => '<tr><td>' + escH(r.label) + '</td>' +
+        '<td><select onchange="setAvMis(\'' + r.key + '\',\'etat\',this.value)"><option value="non"' + (r.etat==='non'?' selected':'') + '>Non commencée</option><option value="cours"' + (r.etat==='cours'?' selected':'') + '>En cours</option><option value="fait"' + (r.etat==='fait'?' selected':'') + '>Achevée / validée</option></select></td>' +
+        '<td class="r">' + (r.etat === 'cours' ? '<input type="number" min="0" max="100" step="5" value="' + (((avancState.cgMissions || {})[r.key] || {}).pct || 0) + '" onchange="setAvMis(\'' + r.key + '\',\'pct\',this.value)"> %' : (r.etat === 'fait' ? '100 %' : '0 %')) + '</td>' +
+        '<td class="r">' + euro(r.montant) + '</td><td class="r"><b>' + euro(r.du) + '</b></td></tr>').join('') + '</table>';
+    h += '<div class="form-grid" style="margin-top:12px">' +
+      '<div class="form-group"><label>Avancement des travaux (%)' + (T ? ' — sur ' + euro(T) + ' HT' : '') + '</label><input type="number" min="0" max="100" step="5" id="av-cg-travauxPct" value="' + (c.travauxPct||'') + '" oninput="setAvCg(\'travauxPct\',this.value)"' + (T ? '' : ' disabled placeholder="renseignez le montant des travaux"') + '></div>' +
       '<div class="form-group"><label>Travaux exécutés à la date de l\'arrêt (€ HT)</label><input type="number" id="av-cg-travaux" value="' + (c.travaux||'') + '" oninput="setAvCg(\'travaux\',this.value)"></div>' +
       '<div class="form-group"><label>Fournitures / engagements non annulables (€ HT)</label><input type="number" id="av-cg-fournitures" value="' + (c.fournitures||'') + '" oninput="setAvCg(\'fournitures\',this.value)"></div>' +
       '<div class="form-group"><label>Mise en sécurité du chantier, frais et débours (€ HT)</label><input type="number" id="av-cg-frais" value="' + (c.frais||'') + '" oninput="setAvCg(\'frais\',this.value)"></div></div>' +
-      '<div class="muted">Les travaux exécutés s\'établissent d\'après la dernière situation de travaux (Phénix Chantier), validée par constat contradictoire.</div>';
+      '<div class="muted">Les honoraires par mission viennent de l\'échéancier du contrat ; les travaux exécutés s\'établissent d\'après la dernière situation de travaux (Phénix Chantier), validée par constat contradictoire.</div>';
   }
   if (contractType === 'moe') {
     h += '<div class="form-grid" style="margin-top:12px"><div class="form-group"><label>Frais et débours justifiés (€ HT)</label><input type="number" id="av-frais" value="' + (avancState.frais||'') + '" oninput="setAvGlobal(\'frais\',this.value)"></div>' +
@@ -1114,7 +1157,9 @@ function genererDecomptePDF(){
     });
   } else {
     const c = avancState.cg || {};
-    [['Études / conception réalisées', c.etudes], ['Travaux exécutés', c.travaux], ['Fournitures / engagements non annulables', c.fournitures]].forEach(x => { doc.text(x[0], 15, y); doc.text(euro(parseFloat(x[1]) || 0), 177, y); y += 5.5; });
+    const lignesCg = d.rows.length ? d.rows.map(r => [r.label + ' (' + Math.round(r.avanc) + ' %)', r.du]) : [['Études / conception réalisées', d.etudes]];
+    lignesCg.push(['Travaux exécutés', d.travaux], ['Fournitures / engagements non annulables', d.fournitures]);
+    lignesCg.forEach(x => { doc.text(String(x[0]).slice(0, 78), 15, y); doc.text(euro(parseFloat(x[1]) || 0), 177, y); y += 5.5; });
   }
   y += 3; doc.line(15, y, 195, y); y += 6;
   const lg = (t, v, b) => { doc.setFont('helvetica', b ? 'bold' : 'normal'); doc.text(t, 15, y); doc.text(v, 195, y, { align:'right' }); y += 6; };
@@ -1264,7 +1309,7 @@ h3{font-size:12.5px;color:#1E3A5F;margin:0 0 9px;padding:7px 12px;background:#F1
   <div><div class="plabel">${estMoe ? "Maître d'œuvre" : "Maître d'œuvre · contractant général"}</div><div class="pname">${escH(FIRM.nom)}</div><div class="pdetail">${escH(FIRM.representant)}<br>${escH(FIRM.adresse)}</div></div>
 </div>
 <div class="objet"><div><div class="objet-lbl">Opération</div><div class="objet-val">${escH(P.nom || client || '')}</div><div class="objet-det">${escH(P.adresse || 'Adresse à préciser')}${P.surface ? ' · ' + escH(P.surface) + ' m²' : ''}${nature ? ' · ' + escH(nature) : ''}</div></div>
-  <div class="mt"><div class="objet-lbl">${estMoe ? 'Honoraires' : 'Honoraires études et coordination'}</div><div class="objet-val">${estMoe ? (montant ? euro(montant) + ' HT' : '—') : (honosAffiche() ? euro(honosAffiche()) + ' HT' : '—')}</div></div></div>
+  <div class="mt"><div class="objet-lbl">${estMoe ? 'Honoraires' : 'Honoraires études et coordination'}</div><div class="objet-val">${estMoe ? (montant ? euro(montant) + ' HT' : '—') : (honosAffiche() ? euro(honosAffiche()) + ' HT' : '—')}</div>${!estMoe && travauxChamp() ? '<div class="objet-lbl" style="margin-top:6px">Travaux (prévisionnel)</div><div class="objet-val">' + euro(travauxChamp()) + ' HT</div>' : ''}</div></div>
 ${d.parts.map((p, pi) => { if (pi === d.parts.length - 1) return ''; const k = p.texte.indexOf(eT); const corps = (eT && k >= 0) ? para(p.texte.slice(0, k)) + echeTable + para(p.texte.slice(k + eT.length)) : para(p.texte);
   return '<div class="sec ' + ((eT && k >= 0) ? 'artl' : 'art') + '"><h3>Article ' + p.numero + ' — ' + escH(p.titre) + '</h3>' + corps + '</div>'; }).join('')}
 ${annexe}
@@ -1327,6 +1372,7 @@ document.addEventListener('input', ev => {
   if (k === 'client' || k === 'ref') document.getElementById('pageTitle').textContent = 'Contrat — ' + (currentProjet.nom || currentProjet.client || '');
 });
 document.getElementById('f-montant').addEventListener('input', () => { renderRepartition(false); renderDecompte(); renderEche(); });
+document.getElementById('f-travaux').addEventListener('input', () => renderDecompte());
 
 // Ordre du shell : « ouvre le contrat de ce projet » (bascule automatique à la signature d'un devis)
 window.addEventListener('message', ev => {
