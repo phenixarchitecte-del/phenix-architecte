@@ -602,12 +602,34 @@ const CLAUSES_VERSION = 3;   // 22/10/2026 (2) : missions, prix CG, retard adouc
 const CLAUSES_MAJ_V2 = ['parties','parties_cg','honoraires','echeancier','aucun_remboursement','aucun_remboursement_cg'];
 // Missions de Phénix et leur échéancier (aucun acompte : chaque règlement accompagne un livrable)
 const SAV_DECL = "Après le dépôt, si la mairie demande des éléments complémentaires pour valider le dossier, leur production relève du service après-vente du Maître d'Œuvre et est entièrement comprise dans ses honoraires : le Maître d'Œuvre reste responsable du dossier tant qu'il n'est pas validé.";
+// Montants par mission lus sur les lignes du devis signé (ex. « Missions d'études Avant-Projet », « Déclaration Administrative », « suivi de chantier PRO/DCE/DET »)
+function echeMontantsDevis(){
+  const L = contratMeta.devis && contratMeta.devis.lignes; if (!Array.isArray(L) || !L.length) return null;
+  const out = { ap:0, decl:0, ch:0 }; let ok = 0;
+  L.forEach(l => {
+    const t = String((l && (l.libelle || l.designation)) || '').toLowerCase(), m = numFR(l && l.montantHt);
+    if (!m) return;
+    const k = /d[ée]claration|permis|urbanisme|autorisation|administrati/.test(t) ? 'decl'
+            : /chantier|\bdce\b|\bdet\b|\bpro\b|suivi|r[ée]ception|ex[ée]cution/.test(t) ? 'ch'
+            : /avant[- ]?projet|esquisse|\baps\b|\bapd\b|conception|[ée]tude/.test(t) ? 'ap' : null;
+    if (k) { out[k] += m; ok++; }
+  });
+  return ok ? out : null;
+}
 // Poids des missions dans les honoraires (issus de la répartition par phase : avant-projet 30 %, déclaration 10 %, chantier 60 %)
 const ECHE_POIDS = { ap:30, decl:10, ch:60 };
 function echeVentiler(e){
-  const tot = honosChamp(); const act = e.missions.filter(m => m.on);
+  const tot = honosChamp(); let act = e.missions.filter(m => m.on);
   if (!tot || !act.length) return e;
+  const dv = echeMontantsDevis();
+  let totDv = 0;
+  if (dv) {   // montants du devis signé pour les missions qu'il couvre ; le reste (s'il y en a) est réparti au prorata des poids habituels
+    act.forEach(m => { if (dv[m.key] > 0) { m.montant = String(Math.round(dv[m.key] * 100) / 100); totDv += dv[m.key]; } });
+    act = act.filter(m => !(dv[m.key] > 0));
+    if (!act.length) return e;
+  }
   const sw = act.reduce((t, m) => t + ECHE_POIDS[m.key], 0);
+  if (dv) { const reste0 = Math.max(0, tot - totDv); if (reste0 <= 0) return e; act.forEach(m => { m.montant = String(Math.round(reste0 * 100 * ECHE_POIDS[m.key] / sw) / 100); }); return e; }
   let reste = Math.round(tot * 100);
   act.forEach((m, i) => { const c = i === act.length - 1 ? reste : Math.round(tot * 100 * ECHE_POIDS[m.key] / sw); reste -= c; m.montant = String(c / 100); });
   return e;
@@ -765,6 +787,18 @@ function loadHandoff(){
   if (currentProjet && currentProjet.honoraires) document.getElementById('f-montant').value = currentProjet.honoraires;
 }
 
+// Lignes du devis signé (montants par mission) : lues dans la facturation de Dossier si le contrat ne les a pas encore
+async function chargerLignesDevis(){
+  try {
+    if (!currentProjet || !currentProjet.projetId || !window._fbContrat.devisAccepte) return;
+    if (contratMeta.devis && Array.isArray(contratMeta.devis.lignes) && contratMeta.devis.lignes.length) return;
+    const dv = await window._fbContrat.devisAccepte(currentProjet.projetId);
+    if (!dv || !Array.isArray(dv.lignes) || !dv.lignes.length) return;
+    const lignes = dv.lignes.map(l => ({ libelle: String(l.libelle || ''), montantHt: numFR(l.montantHt) }));
+    contratMeta.devis = Object.assign({ numero: String(dv.numero || ''), date: String(dv.dateEmission || ''), montantHt: parseFloat(dv.montantHt) || 0 }, contratMeta.devis || {}, { lignes });
+  } catch (e) { console.warn('Lignes du devis illisibles :', e && e.code); }
+}
+
 // Remet le formulaire à zéro (changement de projet)
 function resetEtat(){
   contractType = 'moe'; selectedPhases = {}; repartState = Object.assign({}, REPARTITION_DEFAUT);
@@ -785,7 +819,7 @@ async function ouvrirDepuisPayload(p){
   if (p.honoraires) document.getElementById('f-montant').value = p.honoraires;
   appliquerType('moe');
   await chargerContratExistant(true);
-  await completerProjet(); lieuParDefaut();
+  await completerProjet(); await chargerLignesDevis(); lieuParDefaut();
   afficherProjet();
   renderPhaseChecks(); renderRepartition(); renderDecompte(); updateWarnings(); renderEche();
   renderListeContrats();
@@ -1018,9 +1052,25 @@ async function saveContrat(){
 }
 
 // ── Répartition des honoraires par phase (annexe du contrat) ──
+const PH_GROUPE = { ESQ:'ap', APS:'ap', APD:'ap', PC:'decl', DCE:'ch', ACT:'ch', DET:'ch', AOR:'ch' };
 function repartitionCalc(){
   const act = PHASES.filter(p => selectedPhases[p]);
   const m = honosChamp();
+  const dv = echeMontantsDevis();
+  if (dv && act.length) {   // montants du devis signé : chaque mission est répartie entre ses phases selon les poids
+    const grp = {}; act.forEach(p => { (grp[PH_GROUPE[p]] = grp[PH_GROUPE[p]] || []).push(p); });
+    const W = ps => ps.reduce((t, p) => t + (parseFloat(repartState[p]) || 0), 0);
+    const alloc = Object.keys(grp).reduce((t, g) => t + (dv[g] > 0 ? dv[g] : 0), 0);
+    const sans = Object.keys(grp).filter(g => !(dv[g] > 0)), wsans = sans.reduce((t, g) => t + W(grp[g]), 0);
+    const amt = {};
+    Object.keys(grp).forEach(g => {
+      const ps = grp[g], w = W(ps);
+      const G = dv[g] > 0 ? dv[g] : (wsans > 0 ? Math.max(0, m - alloc) * w / wsans : 0);
+      ps.forEach(p => { amt[p] = w > 0 ? G * (parseFloat(repartState[p]) || 0) / w : G / ps.length; });
+    });
+    const tt = act.reduce((t, p) => t + amt[p], 0);
+    return act.map(p => ({ ph:p, label:PHASES_LABELS[p], pct: tt > 0 ? amt[p] / tt * 100 : 0, montant: Math.round(amt[p] * 100) / 100 }));
+  }
   const tot = act.reduce((t,p) => t + (parseFloat(repartState[p]) || 0), 0);
   return act.map(p => {
     const pct = tot > 0 ? (parseFloat(repartState[p]) || 0) / tot * 100 : 0;
@@ -1042,7 +1092,7 @@ function renderRepartition(full){
     '<table class="tbl" style="margin-top:6px"><tr><th>Phase</th><th class="r">Poids</th><th class="r">Part retenue</th><th class="r">Honoraires HT</th></tr>' +
     rows.map(r => '<tr><td>' + escH(r.ph) + ' — ' + escH(r.label) + '</td><td class="r"><input type="number" min="0" step="1" value="' + (repartState[r.ph] || 0) + '" oninput="setRepart(\'' + r.ph + '\', this.value)"></td><td class="r" id="rp-p-' + r.ph + '">' + r.pct.toFixed(1).replace('.',',') + ' %</td><td class="r" id="rp-m-' + r.ph + '">' + euro(r.montant) + '</td></tr>').join('') +
     '<tr class="tot"><td>Total</td><td></td><td class="r">100 %</td><td class="r" id="rp-tot">' + euro(rows.reduce((s,r) => s + r.montant, 0)) + '</td></tr></table>' +
-    '<div class="phase-chips-note">Ces parts servent de base au calcul de ce qui est dû si la mission s\'arrête en cours de route. Pondérations indicatives, modifiables ; elles sont ramenées à 100 % sur les phases sélectionnées.</div>';
+    '<div class="phase-chips-note">Ces parts servent de base au calcul de ce qui est dû si la mission s\'arrête en cours de route. Pondérations indicatives, modifiables ; elles sont ramenées à 100 % sur les phases sélectionnées.' + (echeMontantsDevis() ? ' <b>Les totaux par mission sont ceux du devis signé</b> ; les poids ne servent qu\'à répartir chaque mission entre ses phases.' : '') + '</div>';
 }
 
 // ── Décompte de fin de mission ───────────────────────────────
@@ -1221,7 +1271,7 @@ async function ouvrirContratListe(i){
   resetEtat(); currentProjet = p; contratMeta.devis = r.devis || null;
   appliquerType(r.contractType || 'moe');
   await chargerContratExistant(false);
-  await completerProjet(); lieuParDefaut();
+  await completerProjet(); await chargerLignesDevis(); lieuParDefaut();
   afficherProjet(); renderPhaseChecks(); renderRepartition(); renderDecompte(); updateWarnings(); renderEche();
   try { const sel = document.getElementById('selProjet'); if (sel) sel.value = String(currentProjet.projetId); } catch (e) {}
   window.scrollTo({ top:0, behavior:'smooth' });
@@ -1390,7 +1440,7 @@ window.addEventListener('firebase-ready', async () => {
   loadHandoff();
   updateWarnings();
   try { await chargerContratExistant(true); } catch(e) { console.warn('Contrat existant illisible :', e); }
-  await completerProjet(); lieuParDefaut();
+  await completerProjet(); await chargerLignesDevis(); lieuParDefaut();
   afficherProjet(); renderPhaseChecks(); renderRepartition(); renderDecompte(); updateWarnings(); renderEche();
   renderListeContrats();
   try { window.parent.postMessage({ source:'phenix-contrat', ready:true }, '*'); } catch(e) {}
