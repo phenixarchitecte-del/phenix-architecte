@@ -48,6 +48,7 @@
  25/10/2026 — SYNTHÈSE 3D (phenix_synthese.html) : entrée de menu « Synthèse 3D » (administrateur seulement) ; un clic sur une
    parcelle ouvre le dossier dans Dossier (message phenix-synthese / ouvrir-dossier). Repérer : [Synthèse 3D].
    v42 : « ouvrir-module » (débloquer un dossier depuis sa fiche) → Dossier, Chantier, Chiffrage, Contrats ou Relances ; accusé « ack-module ».
+   27/10/2026 — Chantier signale « prêt » (phenix-chantier) : l'ordre « open-projet » de la Synthèse lui est transmis (page Lots / Planning).
 -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -979,7 +980,7 @@ window.shellOpenProjet = function(id, nom) {
 window.addEventListener('message', (ev) => {
   const msg = ev.data;
   if (!msg || !msg.source) return;
-  if ((msg.source === 'phenix-dossier' || msg.source === 'phenix-relances' || msg.source === 'phenix-espace' || msg.source === 'phenix-contrat') && msg.ready && shellPendingOrder && shellCurrentFrame && !(_bgDossier && ev.source === _bgDossier.contentWindow)) {
+  if ((msg.source === 'phenix-dossier' || msg.source === 'phenix-relances' || msg.source === 'phenix-espace' || msg.source === 'phenix-contrat' || msg.source === 'phenix-chantier') && msg.ready && shellPendingOrder && shellCurrentFrame && !(_bgDossier && ev.source === _bgDossier.contentWindow)) {
     try { shellCurrentFrame.contentWindow.postMessage(shellPendingOrder, '*'); } catch(e) {}
     shellPendingOrder = null;
   }

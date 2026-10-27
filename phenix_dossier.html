@@ -5,6 +5,8 @@
 ══════════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_dossier.html
 ──────────────────────────────────────────────────────────────────────
+ 27/10/2026 (2) — CORRECTIF : un ordre du shell (ouvrir un projet, la checklist) attendait au plus 4,5 s le chargement des projets ;
+   à l'ouverture de Dossier depuis la Synthèse (connexion + chargement), c'était trop court et l'ordre était perdu. Attente portée à ~18 s.
  27/10/2026 — SYNTHÈSE 3D : ordre « open-projet » avec onglet: 'checklist' (+ groupe: 'f3'…) → ouvre l'onglet Checklist sur ce
    dossier, la fiche du livret dépliée et à l'écran (bouton « Checklist F3 (2/8) » de la Synthèse). Repérer : [Synthèse 3D].
  20/10/2026 — CONTRAT : un devis signé (signature par l'assistante, import de devis signé ou devis passé à « Accepté »)
@@ -11228,7 +11230,7 @@ window.addEventListener('message', (ev) => {
   function tryRun(fn, tries) {
     tries = tries || 0;
     const ready = stateDossier && Array.isArray(stateDossier.projets) && stateDossier.projets.length > 0;
-    if (ready || tries > 15) { fn(); return; }
+    if (ready || tries > 60) { fn(); return; }   // jusqu'à ~18 s : à l'ouverture depuis le shell, la connexion et le chargement des projets peuvent dépasser 4 s
     setTimeout(() => tryRun(fn, tries + 1), 300);
   }
 

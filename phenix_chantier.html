@@ -32,6 +32,14 @@
       visibilité par entreprise et par client (client : non par défaut). Collection phenix_ch_plans. Repérer : [Plans].
    Repérer : [Journal], [Espace assistante], « Aucune entreprise ».
 ══════════════════════════════════════════════════════════════════
+ 27/10/2026 — [Avancement] AVANCEMENT DES LOTS RÉGLABLE EN UN CLIC (demande : « je ne sais pas où régler l'avancement »).
+   Page Lots : la colonne Avancement est un champ % modifiable directement (enregistré aussitôt, sans ouvrir la fiche du lot),
+   avec l'avancement ATTENDU d'après les dates du lot (« ⚠ attendu 80 % ») ; bandeau en tête de page : avancement réel
+   du chantier (pondéré par le montant des lots, comme la Synthèse 3D) / attendu, et le mode d'emploi.
+   Ordre du shell « open-projet » (Synthèse 3D) : ouvre le chantier du dossier sur Lots (onglet avancement), Planning
+   ou Réserves (réception). Signal « prêt » envoyé au shell.
+   Avancement d'un chantier partout (tableau de bord, chantiers, synthèse PDF, gestion) = moyenne des lots PONDÉRÉE par
+   leur montant HT (avant : moyenne simple), identique à la Synthèse 3D. Repérer : [Avancement].
 -->
 
 <meta charset="UTF-8">
@@ -4427,7 +4435,7 @@ function renderChantiers() {
     state.chantiers.map(c => {
       const lots = sortLotsInPlace(state.lots.filter(l => l.chantierId == c.id));
       const ttc = lots.reduce((s, l) => s + (l.ht * (1 + l.tva / 100)), 0);
-      const av = lots.length ? Math.round(lots.reduce((s, l) => s + (parseFloat(l.av) || 0), 0) / lots.length) : 0;
+      const av = avLots(lots);
       return `<div class="card" style="margin:0;border-top:3px solid #4A9CC7">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
           <div>
@@ -4708,7 +4716,7 @@ function exportLotsPDF() {
     const lots = sortLotsInPlace(state.lots.filter(l => l.chantierId == c.id));
     const tHT  = lots.reduce((s,l)=>s+l.ht,0);
     const tTTC = lots.reduce((s,l)=>s+l.ht*(1+l.tva/100),0);
-    const av   = lots.length ? Math.round(lots.reduce((s,l)=>s+(parseFloat(l.av)||0),0)/lots.length) : 0;
+    const av   = avLots(lots);
 
     let o = '<div class="ch-section">';
     o += '<div class="ch-header"><h2>'+ esc(c.nom)+'</h2><div class="ch-meta">';
@@ -4826,6 +4834,42 @@ function moveLot(id, dir){
 function lotSansEntreprise(l) { return !l.interv && !l.entrepriseNom && !l.devisArtisan; }
 function lotSansEntrepriseBadge() { return '<span class="no-ent" title="Aucun devis artisan importé et aucun intervenant attribué"><i class="ti ti-alert-triangle"></i> Aucune entreprise</span>'; }
 
+/* [Avancement] avancement d'un ensemble de lots, PONDÉRÉ par leur montant HT (un petit lot pèse moins que le gros œuvre) ;
+   moyenne simple si aucun montant n'est saisi. Même calcul que la Synthèse 3D. brut=true : sans arrondi. */
+function avLots(lots, brut) {
+  if (!lots || !lots.length) return 0;
+  const tot = lots.reduce((s, l) => s + (parseFloat(l.ht) || 0), 0);
+  const v = tot > 0 ? lots.reduce((s, l) => s + (parseFloat(l.av) || 0) * (parseFloat(l.ht) || 0), 0) / tot
+                    : lots.reduce((s, l) => s + (parseFloat(l.av) || 0), 0) / lots.length;
+  return brut ? v : Math.round(v);
+}
+/* [Avancement] avancement attendu d'un lot d'après ses dates (linéaire entre début et fin) ; null sans dates */
+function lotAttendu(l, auj) {
+  if (!l.debut || !l.fin) return null;
+  const a = new Date(l.debut).getTime(), b = new Date(l.fin).getTime(), n = (auj || new Date()).getTime();
+  if (!(b > a)) return null;
+  return Math.round(Math.max(0, Math.min(1, (n - a) / (b - a))) * 100);
+}
+/* [Avancement] avancement réel / attendu d'un chantier, pondéré par le montant HT des lots (même calcul que la Synthèse 3D) */
+function avancementChantier(chId) {
+  const lots = state.lots.filter(l => l.chantierId == chId), tot = lots.reduce((s, l) => s + (+l.ht || 0), 0);
+  if (!lots.length) return null;
+  const poids = l => tot ? (+l.ht || 0) / tot : 1 / lots.length;
+  const reel = avLots(lots, true);
+  const avecDates = lots.filter(l => lotAttendu(l) != null);
+  const att = avecDates.length ? lots.reduce((s, l) => { const a = lotAttendu(l); return s + (a == null ? (+l.av || 0) : a) * poids(l); }, 0) : null;
+  return { reel: Math.round(reel), attendu: att == null ? null : Math.round(att), retard: lots.filter(l => { const a = lotAttendu(l); return a != null && a - (+l.av || 0) >= 10; }) };
+}
+/* [Avancement] saisie directe du % d'un lot depuis la page Lots */
+function setLotAv(id, v) {
+  const l = state.lots.find(x => x.id == id); if (!l) return;
+  const n = Math.max(0, Math.min(100, Math.round(parseFloat(String(v).replace(',', '.')) || 0)));
+  if ((+l.av || 0) === n) return;
+  l.av = n;
+  if (n > 0 && n < 100 && l.statut === 'attribue') l.statut = 'en_cours';   // un lot attribué qui avance passe « En cours »
+  saveLocal(); renderLots(); updateBadges();
+  toast('✅ ' + l.nom + ' : ' + n + ' % enregistré');
+}
 function renderLots() {
   const filter = document.getElementById('lots-filter-ch')?.value || activeChantier;
   const lots = sortLotsInPlace(filter ? state.lots.filter(l => l.chantierId == filter) : [...state.lots]);
@@ -4847,9 +4891,14 @@ function renderLots() {
         <td style="text-align:right;font-weight:600">${fmtEur(l.ht)}</td>
         <td class="td-muted">${l.tva}%</td>
         <td style="text-align:right;font-weight:700;color:var(--navy)">${fmtEur(ttc)}</td>
-        <td style="min-width:100px">
-          <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2);margin-bottom:3px"><span>${l.av || 0}%</span></div>
-          <div class="prog-bar"><div class="prog-fill ${l.statut==='termine'?'g':''}" style="width:${l.av||0}%"></div></div>
+        <td style="min-width:150px">${(() => { const att = lotAttendu(l), av = +l.av || 0, ret = att != null && att - av >= 10; return `
+          <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2);margin-bottom:3px">
+            <input type="number" class="lot-av-input" data-lot="${l.id}" min="0" max="100" step="5" value="${av}" onchange="setLotAv(${l.id}, this.value)" onkeydown="if(event.key==='Enter')this.blur()"
+              title="Avancement du lot : tapez le pourcentage, il est enregistré aussitôt" aria-label="Avancement de ${esc(l.nom)} en %"
+              style="width:56px;padding:3px 6px;border:1px solid ${ret ? 'var(--red)' : 'var(--border)'};border-radius:6px;font:inherit;font-size:12px;font-weight:700;color:var(--text);background:var(--bg3)"> %
+            ${att != null && (att > 0 || av > 0) ? `<span style="font-size:10.5px;${ret ? 'color:var(--red);font-weight:700' : 'color:var(--text3)'}" title="D'après les dates de début et de fin du lot">${ret ? '⚠ ' : ''}attendu ${att} %</span>` : ''}
+          </div>
+          <div class="prog-bar"><div class="prog-fill ${l.statut==='termine'?'g':''}" style="width:${av}%"></div></div>`; })()}
         </td>
         <td class="td-muted" style="white-space:nowrap;font-size:11px">${l.debut?fmtDate(l.debut):'—'}<br>${l.fin?`<span style="color:${isLate?'var(--red)':'inherit'}">${fmtDate(l.fin)}</span>`:'—'}</td>
         <td>${statLotBadge(l.statut)}</td>
@@ -4868,7 +4917,14 @@ function renderLots() {
   const totalTTC = lots.reduce((s, l) => s + l.ht * (1 + l.tva / 100), 0);
   const termines = lots.filter(l => l.statut === 'termine').length;
   const sansEnt = lots.filter(l => lotSansEntreprise(l)).length;
-  document.getElementById('lots-kpi').innerHTML = `
+  // [Avancement] bandeau : où régler l'avancement, et où en est le chantier filtré
+  const _avCh = filter ? avancementChantier(filter) : null;
+  const _aide = `<div style="grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;padding:10px 14px;border:1px solid var(--accent);border-radius:10px;background:var(--accent-bg);font-size:12.5px;color:var(--text)">
+      <span><i class="ti ti-pencil" style="color:var(--accent)"></i> <strong>Avancement</strong> : tapez le % de chaque lot dans la colonne Avancement, il est enregistré aussitôt.</span>
+      ${_avCh ? `<span style="font-weight:700">Chantier : ${_avCh.reel} % réalisé${_avCh.attendu != null ? ` · attendu ${_avCh.attendu} %` : ''}</span>
+      ${_avCh.retard.length ? `<span style="color:var(--red);font-weight:700">⚠ ${_avCh.retard.length} lot(s) en dessous de l'attendu</span>` : (_avCh.attendu != null ? '<span style="font-weight:600;color:var(--green)">✔ Dans les temps</span>' : '')}` : '<span>Choisissez un chantier pour voir son avancement.</span>'}
+    </div>`;
+  document.getElementById('lots-kpi').innerHTML = _aide + `
     <div class="metric" style="${sansEnt ? 'border-color:#f1b9b3' : ''}"><div class="metric-icon" style="${sansEnt ? 'background:#fdeceb;color:#C0392B' : ''}"><i class="ti ti-alert-triangle"></i></div><div class="metric-label">Sans entreprise</div><div class="metric-value" style="${sansEnt ? 'color:#C0392B' : ''}">${sansEnt}</div><div class="metric-sub">${sansEnt ? 'lot(s) à confier' : 'tous les lots sont attribués'}</div></div>
     <div class="metric"><div class="metric-icon"><i class="ti ti-list-check"></i></div><div class="metric-label">Nombre de lots</div><div class="metric-value">${lots.length}</div><div class="metric-sub">${termines} terminé(s)</div></div>
     <div class="metric"><div class="metric-icon"><i class="ti ti-cash"></i></div><div class="metric-label">Total HT</div><div class="metric-value" style="font-size:20px">${fmtEur(totalHT)}</div></div>
@@ -4921,6 +4977,33 @@ function annSync() {
   });
   if (ch) { try { saveLocal(); renderIntervenants(); } catch (e) {} }
 }
+/* [Avancement] ordre du shell « open-projet » (Synthèse 3D) : ouvrir le chantier du dossier sur la bonne page.
+   onglet : 'avancement' (défaut) → Lots ; 'planning' → Planning ; 'reception' → Réserves. */
+window.addEventListener('message', ev => {
+  const d = ev.data; if (!d || d.source !== 'phenix-shell' || d.action !== 'open-projet' || d.id == null) return;
+  let essais = 0;
+  (function ouvrir() {
+    const c = state && state.chantiers && state.chantiers.find(x => String(x.projetId) === String(d.id) || String(x.id) === String(d.id));
+    if (!c) { if (essais++ < 40) { setTimeout(ouvrir, 400); return; } toast('⚠️ Aucun chantier relié à ce dossier dans Chantier.'); return; }
+    if (window._chOuvert === c.id + '|' + d.onglet && Date.now() - (window._chOuvertT || 0) < 4000) return;   // ordre reçu deux fois
+    window._chOuvert = c.id + '|' + d.onglet; window._chOuvertT = Date.now();
+    activeChantier = String(c.id);
+    const sel = document.getElementById('sidebarChantierSelect'); if (sel) sel.value = c.id;
+    const page = d.onglet === 'planning' ? 'planning' : d.onglet === 'reception' ? 'reserves' : 'lots';
+    show(page, navEl(page));
+    const f = document.getElementById({ lots: 'lots-filter-ch', planning: 'planning-filter-ch', reserves: 'res-filter-ch' }[page]);
+    if (f) { f.value = c.id; f.dispatchEvent(new Event('change')); }
+    if (page === 'lots') setTimeout(() => {
+      // premier lot en dessous de l'attendu (sinon le premier lot) : champ sélectionné, prêt à taper
+      const lots = state.lots.filter(l => l.chantierId == c.id);
+      const ecart = l => { const a = lotAttendu(l); return a == null ? -1 : a - (+l.av || 0); };
+      const cible = lots.slice().sort((x, y) => ecart(y) - ecart(x))[0];   // le lot le plus en retard
+      const inp = cible && document.querySelector('.lot-av-input[data-lot="' + cible.id + '"]');
+      if (inp) { inp.scrollIntoView({ block: 'center' }); inp.focus(); inp.select(); }
+    }, 150);
+  })();
+});
+try { if (window.parent !== window) window.parent.postMessage({ source: 'phenix-chantier', ready: true }, '*'); } catch (e) {}
 /* [Centre de notifications] le shell peut ouvrir directement une page (et une conversation) de Chantier */
 window.addEventListener('message', ev => {
   const d = ev.data; if (!d || d.source !== 'phenix-shell' || d.action !== 'goto-page' || !d.page) return;
@@ -6486,7 +6569,7 @@ function renderDashboard() {
   } else {
     avDiv.innerHTML = filterCh.map(c => {
       const lots = sortLotsInPlace(state.lots.filter(l => l.chantierId == c.id));
-      const av = lots.length ? Math.round(lots.reduce((s, l) => s + (parseFloat(l.av)||0), 0) / lots.length) : 0;
+      const av = avLots(lots);
       const avColor = av < 30 ? 'var(--red)' : av < 70 ? '#F5A623' : 'var(--green)';
       return `<div style="margin-bottom:10px">
         <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
@@ -6843,7 +6926,7 @@ function exportSynthesePDF() {
     const facHT  = facs.reduce((s,f)=>s+f.ht,0);
     const payHT  = facs.filter(f=>f.statut==='payee').reduce((s,f)=>s+f.ht,0);
     const hon    = (parseFloat(c.honoraires)||0)+(parseFloat(c.commissions)||0);
-    const av     = lots.length ? Math.round(lots.reduce((s,l)=>s+(parseFloat(l.av)||0),0)/lots.length) : 0;
+    const av     = avLots(lots);
     const avCol  = av<30?'#C0392B':av<70?'#F5A623':'#2D7A4F';
 
     let o = '<div class="ch-section'+(isFirst?'':' page-break"')+'">';
@@ -7042,7 +7125,7 @@ function exportSynthesePDF() {
   const gBudget = allLots.reduce((s,l)=>s+l.ht*(1+l.tva/100),0);
   const gFac    = allFacs.reduce((s,f)=>s+f.ht,0);
   const gHon    = chantiersList.reduce((s,c)=>s+(parseFloat(c.honoraires)||0)+(parseFloat(c.commissions)||0),0);
-  const gAv     = chantiersList.length ? Math.round(chantiersList.map(c=>{const cl=state.lots.filter(l=>l.chantierId==c.id);return cl.length?cl.reduce((s,l)=>s+(parseFloat(l.av)||0),0)/cl.length:0;}).reduce((a,b)=>a+b,0)/chantiersList.length) : 0;
+  const gAv     = chantiersList.length ? Math.round(chantiersList.map(c=>{const cl=state.lots.filter(l=>l.chantierId==c.id);return avLots(cl, true);}).reduce((a,b)=>a+b,0)/chantiersList.length) : 0;
 
   let body = chantiersList.map((c,i) => buildCh(c, i===0)).join('<div style="height:20px"></div>');
 
