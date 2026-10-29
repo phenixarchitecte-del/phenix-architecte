@@ -3,6 +3,10 @@
 <title>Phénix-Architecture · Carnet de projet</title>
 <!--
  HISTORIQUE DES MODIFICATIONS — phenix_carnet.html (version 3D)
+ 29/10/2026 — CORRECTIF CLIGNOTEMENT (projet Faure) : la maison de démonstration démarrait derrière l'écran de connexion ;
+   la vraie fiche arrivait ensuite avec une maquette → rechargement de la page → même chose → boucle sans fin.
+   La 3D attend maintenant la fiche du projet (ou ?demo) ; un seul rechargement automatique par projet toutes les 30 s.
+   Repérer : [Correctif 29/10].
  23/10/2026 — ATELIER MAQUETTE (Fiche projet › Maquette 3D › « Ouvrir l'Atelier maquette », propriétaire uniquement) :
    dépôt de l'OBJ + MTL d'ArchiCAD converti en .glb dans le navigateur (mm → m, recentrage, axe Z → Y, triangulation, mobilier/luminaires/isolants retirés),
    classement des calques par catégorie, pastilles placées à la souris, points de vue (vue d'accueil + coordonnées ArchiCAD pour Twinmotion),
@@ -1840,7 +1844,7 @@ function openProject(cid){
     var d=s.data()||{};if(d.sid===S.sid||(S.owner&&S.dirty)){if(first)softRender();return}
     S.fiche=mergeFiche(d,baseF);
     if(S.owner&&phase()==='chantier'&&!S.lotsTried){S.lotsTried=true;syncLots(true,true)}
-    if(HS.inited&&HS.engine&&HS.engine!==mqEngine()){location.reload();return}
+    if(HS.inited&&HS.engine&&HS.engine!==mqEngine()){if(mqRechargePermis()){location.reload();return}S.mqMsg='La maquette de ce projet a changé : rechargez la page pour l’afficher.'}
     softRender();
   },eh));
   S.unsubs.push(S.db.doc('suivi/choix').onSnapshot(function(s){
@@ -2598,6 +2602,8 @@ function houseMenu(open){
 /* [Maquette 3D par projet] moteur : maquette du projet (.glb) si la fiche en porte une, sinon la maison phare */
 function mqOn(){var m=S.fiche&&S.fiche.maquette;return !!(m&&m.on&&(m.n||m.url))}
 function mqEngine(){return mqOn()?'model':'house'}
+/* [Correctif 29/10] garde-fou : au plus un rechargement automatique par projet toutes les 30 s (jamais de boucle) */
+function mqRechargePermis(){try{var k='pxc-recharge',o=JSON.parse(sessionStorage.getItem(k)||'null'),t=Date.now();if(o&&o.cid===S.cid&&t-o.t<30000)return false;sessionStorage.setItem(k,JSON.stringify({cid:S.cid,t:t}));return true}catch(e){return false}}
 function mqB64(buf){var u=new Uint8Array(buf),o=[];for(var i=0;i<u.length;i+=0x8000)o.push(String.fromCharCode.apply(null,u.subarray(i,i+0x8000)));return btoa(o.join(''))}
 function mqLoader(){
   var m=S.fiche.maquette||{};
@@ -2664,7 +2670,10 @@ function houseRender(){
   if(!on&&HS.menu)houseMenu(false);if(!on){try{document.body.classList.remove('h3-gopen','h3-gmini')}catch(e){}if(HS.rev&&window.PXHouse&&PXHouse.ready){HS.rev=false;PXHouse.setStage(null)}}else if(HS.guide)houseGuide();
   houseBody();
   try{document.body.classList.toggle('tab-maison',on)}catch(e){}
-  if(on&&!HS.inited&&!HS.failed&&(!S.db||S.ficheLoaded)){
+  /* [Correctif 29/10] la 3D ne démarre qu'avec la VRAIE fiche du projet (connexion faite, fiche lue) : avant, la maison de
+     démonstration démarrait derrière l'écran de connexion, puis la fiche arrivait avec une maquette → rechargement → même
+     chose au rechargement suivant… boucle sans fin (clignotement). Sans connexion : seulement en démonstration (?demo). */
+  if(on&&!HS.inited&&!HS.failed&&(S.db?S.ficheLoaded:/[?&]demo\b/.test(location.search))){
     HS.inited=true;HS.engine=mqEngine();
     var isM=HS.engine==='model',evR=isM?'px3dm-ready':'px3d-ready';
     var go=function(){try{if(isM){window.PXModel.loader=mqLoader;window.PXModel.cfg=S.fiche.maquette||{};window.PXHouse=window.PXModel}window.PXHouse.init($('h3-host'),HZ,function(id){houseCat(id)});window.PXHouse.update(houseStates());window.PXHouse.setLook(houseLook());window.PXHouse.setActive(S.tab==='maison');if(HS.stage!=null)window.PXHouse.setStage(HS.stage);houseApplyReal();houseBar()}catch(e){try{console.error('H3ERR '+(e&&e.stack||e))}catch(_){}houseFail()}};
