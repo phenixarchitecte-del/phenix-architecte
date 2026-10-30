@@ -8,6 +8,7 @@
 ══════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_chantier2.html
 ──────────────────────────────────────────────────────────────────
+ 30/10/2026 (2) — Accès : l'adresse administrateur est reconnue même sans rôle dans phenix_users (comme l'ancien Chantier).
  30/10/2026 — [Chantier 2] NOUVEAU MODULE CHANTIER, construit À CÔTÉ de phenix_chantier.html (l'ancien reste intact).
    Principe : la maquette 3D est l'écran d'accueil ; deux façons de travailler :
    • TERRAIN (Surface Pro, tactile + vocal) : maquette, pastilles par lot, étape réelle, photos et réserves rangées
@@ -616,12 +617,14 @@ function startData(){
   var n = 0, any = function(){ ensureChantier(); if (S.mode === 'terrain') { renderSide(); renderTiles(); renderDock(); applyStage(); renderTop(); } else { renderBureau(); renderTabs(); } };
   ['chantiers', 'lots', 'intervenants', 'reserves', 'crs'].forEach(function(k){ FB.listen(k, function(a, pend){ D[k] = a; S.pending = !!pend; any(); }); });
 }
+var ADMIN_EMAILS = ['contact@phenixarchitecte.fr'];   /* même repli que l'ancien Chantier */
 function authed(email){
   FB.role(email.toLowerCase()).then(function(role){
     S.role = role || ''; S.user = email;
+    if (['admin', 'equipe', 'chantier'].indexOf(S.role) < 0 && ADMIN_EMAILS.indexOf(email.toLowerCase()) >= 0) S.role = 'admin';
     if (['admin', 'equipe', 'chantier'].indexOf(S.role) < 0) { $('app').innerHTML = '<div class="card" style="margin:24px">Ce module est réservé à l\'équipe Phénix.</div>'; return; }
     $('login').style.display = 'none'; if (S.role === 'chantier') S.mode = 'terrain'; setMode(S.mode); startData();
-  }).catch(function(){ $('login').style.display = 'none'; setMode(S.mode); startData(); });
+  }).catch(function(e){ console.warn('Rôle illisible', e && e.message); if (ADMIN_EMAILS.indexOf(String(email).toLowerCase()) >= 0) { S.role = 'admin'; $('login').style.display = 'none'; setMode(S.mode); startData(); } else $('app').innerHTML = '<div class="card" style="margin:24px">Accès impossible (rôle illisible).</div>'; });
 }
 function init(){
   S.mode = lk('px2.mode') === 'bureau' ? 'bureau' : 'terrain';
