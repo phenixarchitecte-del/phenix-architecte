@@ -75,7 +75,9 @@ h1,h2,h3{margin:0;font-weight:400;font-family:var(--fd)}
 /* pastilles du moteur partagé */
 .h3-cv{display:block;width:100%;height:100%;outline:0;touch-action:none}
 .h3-layer{position:absolute;inset:0;pointer-events:none;overflow:hidden}
-.h3-sp{position:absolute;left:0;top:0;will-change:transform}.h3-sp[data-state=todo] .h3-dot,.h3-dot{background:#fff;border-style:dashed;border-color:#8a9bb2}.h3-sp[data-state] .h3-dot{border-style:solid;border-color:#fff}.h3-sp[data-state=todo] .h3-dot{border-style:dashed;border-color:#8a9bb2}
+.h3-sp{position:absolute;left:0;top:0;will-change:transform}
+.h3-dot{background:#fff}
+.h3-sp[data-state=todo] .h3-dot{background:#fff;border:5px solid #8a9bb2}
 .h3-dot{pointer-events:auto;position:absolute;left:-20px;top:-20px;width:40px;height:40px;border-radius:50%;border:3px solid #fff;background:#8a9bb2;padding:0;color:#06121f;font:700 18px/34px var(--fs);text-align:center}
 .h3-dot::after{content:""}
 .h3-sp[data-state=doing] .h3-dot{background:linear-gradient(90deg,var(--accent) 50%,#fff 50%)}
@@ -168,6 +170,7 @@ if (!DEMO) {
     listen(key, cb) { return S.onSnapshot(S.collection(db, COLS[key]), { includeMetadataChanges: true }, snap => { const a = []; snap.forEach(d => a.push(d.data())); cb(a, snap.metadata.hasPendingWrites); }, e => console.warn(key, e && e.message)); },
     save(key, obj) { return S.setDoc(S.doc(db, COLS[key], String(obj.id)), obj); },
     del(key, id) { return S.deleteDoc(S.doc(db, COLS[key], String(id))); },
+    async delMedia(id) { const m = await S.getDoc(S.doc(db, MEDIA, id)); const n = m.exists() ? (m.data().parts || 0) : 0; for (let i = 0; i < n; i++) await S.deleteDoc(S.doc(db, MEDIA, id + '__' + i)); await S.deleteDoc(S.doc(db, MEDIA, id)); },
     async fiche(pid) { const s = await S.getDoc(S.doc(db, 'phenix_portail', String(pid), 'etat', 'fiche')); return s.exists() ? s.data() : null; },
     async chunk(pid, i) { const s = await S.getDoc(S.doc(db, 'phenix_portail', String(pid), 'maquette', 'c' + i)); return s.exists() ? (s.data().d || '') : ''; },
     putMedia(id, du, kind) {
