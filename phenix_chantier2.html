@@ -167,6 +167,7 @@ if (!DEMO) {
     async role(email) { const s = await S.getDoc(S.doc(db, 'phenix_users', email)); return s.exists() ? (s.data().role || '') : ''; },
     listen(key, cb) { return S.onSnapshot(S.collection(db, COLS[key]), { includeMetadataChanges: true }, snap => { const a = []; snap.forEach(d => a.push(d.data())); cb(a, snap.metadata.hasPendingWrites); }, e => console.warn(key, e && e.message)); },
     save(key, obj) { return S.setDoc(S.doc(db, COLS[key], String(obj.id)), obj); },
+    del(key, id) { return S.deleteDoc(S.doc(db, COLS[key], String(id))); },
     async fiche(pid) { const s = await S.getDoc(S.doc(db, 'phenix_portail', String(pid), 'etat', 'fiche')); return s.exists() ? s.data() : null; },
     async chunk(pid, i) { const s = await S.getDoc(S.doc(db, 'phenix_portail', String(pid), 'maquette', 'c' + i)); return s.exists() ? (s.data().d || '') : ''; },
     putMedia(id, du, kind) {
@@ -212,7 +213,13 @@ function frDate(iso){ if (!iso) return ''; var p = String(iso).slice(0, 10).spli
 function norm(s){ return String(s || '').toLowerCase().replace(/œ/g, 'oe').replace(/æ/g, 'ae').normalize('NFD').replace(/[̀-ͯ]/g, ''); }
 function toast(m){ var t = document.createElement('div'); t.className = 'toast'; t.textContent = m; document.body.appendChild(t); setTimeout(function(){ t.remove(); }, 3200); }
 function lk(key, v){ try{ if (v === undefined) return localStorage.getItem(key); localStorage.setItem(key, v); }catch(e){ return null; } }
-function stOf(lot){ var s = lot.statut; return s === 'termine' ? 'done' : s === 'en_cours' ? 'doing' : s === 'reserve' ? 'issue' : 'todo'; }
+function stOf(lot){   /* le statut écrit par l'ancien module est souvent « attribué » même quand le lot avance : on tient compte du % fait */
+  var s = lot.statut, av = +lot.av || 0;
+  if (s === 'reserve') return 'issue';
+  if (s === 'termine' || av >= 100) return 'done';
+  if (s === 'en_cours' || av > 0) return 'doing';
+  return 'todo';
+}
 function stHtml(k){ var s = LOT_ST[k]; return '<span class="st" style="color:' + s[1] + '">' + ico(k) + s[0] + '</span>'; }
 function zoneOf(lot){ for (var i = 0; i < ZONE_RE.length; i++) if (ZONE_RE[i][1].test(lot.nom || '')) return ZONE_RE[i][0]; return null; }
 function phaseIdx(n){ for (var i = 0; i < PHASES.length; i++) if (n >= PHASES[i][1] && n <= PHASES[i][2]) return i; return -1; }
@@ -222,8 +229,8 @@ var D = { chantiers:[], lots:[], intervenants:[], reserves:[], crs:[] };
 var S = { mode:'terrain', tab:'lots', view:'liste', zoom:'mois', cid:null, lotId:null, role:'', pending:false, online:navigator.onLine, real:false, in3d:'out', maq:null, user:'' };
 function chantier(){ return D.chantiers.filter(function(c){ return c.id == S.cid; })[0] || null; }
 function lotsOf(){ return D.lots.filter(function(l){ return l.chantierId == S.cid; }).sort(function(a, b){ return String(a.nom).localeCompare(String(b.nom), 'fr', {numeric:true}); }); }
-function lotNum(l, i){ var m = /^\s*(\d+)/.exec(l.nom || ''); return m ? m[1] : String(i + 1).padStart(2, '0'); }
-function lotLabel(l){ return String(l.nom || '').replace(/^\s*\d+\s*[—\-–.:]\s*/, ''); }
+function lotNum(l, i){ var m = /^\s*(?:lot\s*)?(\d+)/i.exec(l.nom || ''); return m ? m[1].padStart(2, '0') : String(i + 1).padStart(2, '0'); }
+function lotLabel(l){ var n = String(l.nom || '').replace(/^\s*(?:lot\s*)?\d+\s*[—\-–.:]?\s*/i, '').trim(); return n || String(l.nom || ''); }
 function entrepriseOf(l){ if (l.interv){ var iv = D.intervenants.filter(function(x){ return x.id == l.interv; })[0]; if (iv) return iv.nom; } return l.entrepriseNom || ''; }
 function save(key, obj){ if (FB.demo) return Promise.resolve(); return FB.save(key, obj).catch(function(e){ toast('⚠ Enregistrement impossible : ' + (e && e.message || e)); }); }
 
