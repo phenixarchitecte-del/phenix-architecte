@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Phénix-Architecture · Chantier (nouvelle version)</title>
+<!--
+══════════════════════════════════════════════════════════════════
+ HISTORIQUE DES MODIFICATIONS — phenix_chantier2.html
+──────────────────────────────────────────────────────────────────
+ 30/10/2026 — [Chantier 2] NOUVEAU MODULE CHANTIER, construit À CÔTÉ de phenix_chantier.html (l'ancien reste intact).
+   Principe : la maquette 3D est l'écran d'accueil ; deux façons de travailler :
+   • TERRAIN (Surface Pro, tactile + vocal) : maquette, pastilles par lot, étape réelle, photos et réserves rangées
+     automatiquement dans la visite en cours, UN SEUL compte rendu vocal par visite.
+   • BUREAU (ordinateur) : Lots (liste), Planning (Gantt), Réserves, À traiter (validation du compte rendu).
+   Moteur 3D : phenix_maquette3d.js, le même que le Carnet (écrit une seule fois). [Moteur partagé]
+   Mêmes collections Firestore que l'ancien Chantier (phenix_ch_*) : aucune nouvelle collection, aucune règle à changer.
+   Pas encore repris : Finances (suivi, situations), Plans et pastilles, Messages artisans, Équipe & accès (→ Paramètres du shell).
+══════════════════════════════════════════════════════════════════
+-->
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+<style>
+:root{--bg:#0a1628;--pan:#101f38;--pan2:#16283f;--text:#e5ecf3;--text2:#a9bbd0;--text3:#8fb5da;--accent:#4fa8f0;--green:#4fd18b;--amber:#e6b95c;--red:#e0776c;--line:rgba(120,170,220,.22);--fs:'DM Sans',system-ui,sans-serif;--fd:'DM Serif Display',Georgia,serif}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:var(--fs);-webkit-tap-highlight-color:transparent}
+button{font-family:var(--fs);cursor:pointer;color:var(--text)}
+input,select,textarea{font-family:var(--fs);color:var(--text);background:#0a1628;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:15px}
+textarea{width:100%;resize:vertical;min-height:70px;line-height:1.45}
+.btn{min-height:48px;padding:0 18px;border-radius:12px;border:1px solid rgba(120,170,220,.35);background:var(--pan2);font:600 15px var(--fs);display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.btn.pri{background:var(--accent);color:#06121f;border:0;font-weight:700}
+.btn.ghost{background:transparent}
+.btn.big{min-height:60px;font-size:17px;border-radius:16px;padding:0 24px}
+.btn[disabled]{opacity:.45;cursor:default}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;border:1px solid var(--line);font:600 13px var(--fs);background:rgba(255,255,255,.04)}
+.chip.blue{background:rgba(79,168,240,.14);border-color:rgba(79,168,240,.5);color:#cfe6fb}
+.chip.amber{border-color:rgba(230,185,92,.6);color:#f3dfb0}
+.seg{display:inline-flex;padding:4px;border-radius:14px;background:var(--pan);border:1px solid var(--line)}
+.seg button{min-height:44px;padding:0 18px;border-radius:10px;border:0;background:transparent;font:500 15px var(--fs);color:#b8c9dc}
+.seg button[aria-pressed=true]{background:var(--accent);color:#06121f;font-weight:700}
+.seg.light button[aria-pressed=true]{background:var(--text);color:var(--bg)}
+.eyebrow{font-size:12px;letter-spacing:.12em;color:var(--text3);font-weight:600;text-transform:uppercase}
+.card{background:var(--pan);border:1px solid var(--line);border-radius:18px;padding:16px}
+.muted{color:var(--text2);font-size:14px;line-height:1.45}
+h1,h2,h3{margin:0;font-weight:400;font-family:var(--fd)}
+#app{display:flex;flex-direction:column;height:100%}
+#top{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--line)}
+#top .nm{font:400 26px/1.1 var(--fd)}
+#top .sp{flex:1}
+#tabs{display:flex;gap:6px;padding:0 18px;border-bottom:1px solid var(--line);overflow-x:auto}
+#tabs[hidden]{display:none}
+#tabs button{min-height:48px;padding:0 18px;border:0;border-bottom:3px solid transparent;background:transparent;font:500 15px var(--fs);color:#b8c9dc;white-space:nowrap}
+#tabs button[aria-current=page]{border-bottom-color:var(--accent);color:var(--text);font-weight:700}
+.badge{min-width:22px;height:22px;padding:0 6px;border-radius:11px;background:var(--text);color:var(--bg);font-size:13px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;margin-left:8px}
+/* TERRAIN */
+#terrain{flex:1;min-height:0;display:flex;gap:14px;padding:14px 18px 0}
+#stage{flex:1;min-width:0;position:relative;border-radius:18px;overflow:hidden;background:linear-gradient(180deg,#14294b,#0d1d36);border:1px solid var(--line)}
+#h3-host{position:absolute;inset:0}
+#tiles{position:absolute;inset:0;overflow:auto;padding:16px;display:none;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;align-content:start}
+.tile{min-height:92px;text-align:left;padding:14px;border-radius:16px;border:1px solid var(--line);background:var(--pan2);display:flex;flex-direction:column;gap:6px}
+.tile[aria-pressed=true]{border:2px solid var(--accent);background:rgba(79,168,240,.12)}
+.tile b{font-size:16px}
+#stagebar{position:absolute;left:12px;top:12px;display:flex;gap:8px;flex-wrap:wrap;z-index:7}
+#side{width:340px;flex-shrink:0;display:flex;flex-direction:column;gap:12px;overflow:auto}
+#dock{display:flex;align-items:center;gap:8px;padding:12px 18px 16px;overflow-x:auto}
+.ph{min-height:48px;padding:0 14px;border-radius:12px;border:1px solid var(--line);background:transparent;font:500 14px var(--fs);color:#c3d3e6;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.ph[aria-current=step]{border:2px solid var(--accent);background:rgba(79,168,240,.14);color:#fff;font-weight:700}
+.ph.past{color:var(--text2)}
+#mic{position:absolute;right:16px;bottom:16px;z-index:8;min-height:68px;padding:0 26px;border-radius:34px;border:0;background:var(--accent);color:#06121f;font:700 18px var(--fs);display:flex;align-items:center;gap:10px;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+.st{display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:14px}
+.bar{height:10px;border-radius:5px;background:rgba(255,255,255,.1);overflow:hidden}
+.bar i{display:block;height:100%;background:repeating-linear-gradient(135deg,#4fa8f0 0 6px,#2f6fc0 6px 12px)}
+/* pastilles du moteur partagé */
+.h3-cv{display:block;width:100%;height:100%;outline:0;touch-action:none}
+.h3-layer{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.h3-sp{position:absolute;left:0;top:0;will-change:transform}.h3-sp[data-state=todo] .h3-dot,.h3-dot{background:#fff;border-style:dashed;border-color:#8a9bb2}.h3-sp[data-state] .h3-dot{border-style:solid;border-color:#fff}.h3-sp[data-state=todo] .h3-dot{border-style:dashed;border-color:#8a9bb2}
+.h3-dot{pointer-events:auto;position:absolute;left:-20px;top:-20px;width:40px;height:40px;border-radius:50%;border:3px solid #fff;background:#8a9bb2;padding:0;color:#06121f;font:700 18px/34px var(--fs);text-align:center}
+.h3-dot::after{content:""}
+.h3-sp[data-state=doing] .h3-dot{background:linear-gradient(90deg,var(--accent) 50%,#fff 50%)}
+.h3-sp[data-state=done] .h3-dot{background:var(--green)}.h3-sp[data-state=done] .h3-dot::after{content:"✓"}
+.h3-sp[data-state=issue] .h3-dot{background:var(--red);color:#fff}.h3-sp[data-state=issue] .h3-dot::after{content:"!"}
+.h3-sp.back .h3-dot{opacity:.5}
+.h3-line,.h3-lab{display:none}
+.h3-sp.open .h3-line{display:block;position:absolute;left:0;bottom:22px;width:2px;height:40px;margin-left:-1px;background:#fff}
+.h3-sp.open .h3-lab{display:block;pointer-events:auto;position:absolute;left:0;transform:translateX(-50%);bottom:62px;white-space:nowrap;text-align:left;background:#fff;color:#0a1628;border:0;border-radius:10px;padding:8px 14px;font:700 14px var(--fs)}
+.h3-lab small{display:block;font:400 12px var(--fs);color:#4a5a78}.h3-lab em{display:none}
+.h3-sp.flip.open .h3-line{bottom:auto;top:22px}.h3-sp.flip.open .h3-lab{bottom:auto;top:62px}
+/* DICTÉE / FEUILLES */
+#overlay{position:fixed;inset:0;background:var(--bg);z-index:50;display:none;flex-direction:column;overflow:auto}
+#overlay.on{display:flex}
+.sheetbg{position:fixed;inset:0;background:rgba(5,10,20,.7);z-index:60;display:flex;align-items:flex-end;justify-content:center}
+.sheet{width:min(640px,100%);background:var(--pan);border:1px solid var(--line);border-radius:22px 22px 0 0;padding:20px;display:flex;flex-direction:column;gap:12px;max-height:90vh;overflow:auto}
+.rub{display:flex;flex-direction:column;gap:6px;padding:12px 14px;border-radius:14px;background:var(--pan2)}
+.rub.miss{border:2px dashed var(--amber)}
+.rec{width:14px;height:14px;border-radius:50%;background:var(--red);animation:pul 1.2s infinite}
+@keyframes pul{50%{opacity:.25}}
+/* BUREAU */
+#bureau{flex:1;min-height:0;overflow:auto;padding:16px 18px 40px;display:none}
+.tbl{border-radius:16px;background:var(--pan);border:1px solid var(--line);overflow-x:auto}
+.row{display:grid;grid-template-columns:44px minmax(150px,240px) 150px 90px minmax(120px,1fr);align-items:center;min-height:60px;border-top:1px solid rgba(120,170,220,.16);padding-right:14px}
+.row.h{min-height:40px;border-top:0;font-size:12px;letter-spacing:.08em;color:var(--text3);font-weight:600}
+.row.sel{background:rgba(79,168,240,.1)}
+.row>*:first-child{padding-left:14px}
+.gantt{position:relative}
+.gl{position:sticky;left:0;z-index:2;width:230px;flex-shrink:0;height:56px;display:flex;align-items:center;padding:0 12px;border-right:1px solid var(--line);background:var(--pan)}
+.grow{display:flex;border-top:1px solid rgba(120,170,220,.16);position:relative}
+.gb{position:absolute;top:17px;height:22px;border-radius:6px;touch-action:none;cursor:grab}
+.gb.done{background:var(--green)}.gb.doing{border:2px solid var(--accent);background:rgba(79,168,240,.12);overflow:hidden}.gb.todo{border:2px dashed #9fb2c6}
+.gb .hd{position:absolute;top:0;bottom:0;width:10px;cursor:ew-resize}.gb .hd.l{left:0}.gb .hd.r{right:0}
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:12px 20px;border-radius:12px;font-weight:600;z-index:99}
+@media(max-width:900px){#terrain{flex-direction:column}#side{width:auto;flex-direction:row;flex-wrap:wrap}#stage{min-height:46vh;flex:none}}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="top"></div>
+  <div id="tabs" hidden></div>
+  <div id="terrain">
+    <div id="stage">
+      <div id="h3-host"></div>
+      <div id="tiles"></div>
+      <div id="stagebar"></div>
+      <button id="mic" type="button"></button>
+    </div>
+    <div id="side"></div>
+  </div>
+  <div id="dock"></div>
+  <div id="bureau"></div>
+</div>
+<div id="overlay"></div>
+<div id="login" style="position:fixed;inset:0;z-index:200;display:none;align-items:center;justify-content:center;background:var(--bg)">
+  <div class="card" style="width:min(380px,92vw);display:flex;flex-direction:column;gap:12px">
+    <h2 style="font-size:24px">Chantier · connexion</h2>
+    <input id="lg-e" type="email" placeholder="Adresse e-mail" autocomplete="username">
+    <input id="lg-p" type="password" placeholder="Mot de passe" autocomplete="current-password">
+    <button class="btn pri" id="lg-go" type="button">Se connecter</button>
+    <div class="muted" id="lg-m"></div>
+  </div>
+</div>
+
+<!-- Moteur 3D partagé avec le Carnet [Moteur partagé] -->
+<script type="module" src="phenix_maquette3d.js"></script>
+
+<!-- Firebase : mêmes projet, App Check et collections que l'ancien Chantier -->
+<script type="module">
+const DEMO = /[?&]demo\b/.test(location.search);
+window.FB = { demo: DEMO, ready: false };
+if (!DEMO) {
+  const A = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+  const S = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+  const U = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
+  const AC = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js');
+  const app = A.initializeApp({ apiKey:"AIzaSyCjNKNvS6p3nqE6-_Gw9I397ZtXm2FG1ew", authDomain:"phenix-architecte-9151b.firebaseapp.com", projectId:"phenix-architecte-9151b", storageBucket:"phenix-architecte-9151b.firebasestorage.app", messagingSenderId:"811231684720", appId:"1:811231684720:web:413fa324ae43c07607acb5" });
+  try { AC.initializeAppCheck(app, { provider: new AC.ReCaptchaV3Provider('6LeObWktAAAAAL9eyppDRtLp5yZTyBaF4ZNKXNIO'), isTokenAutoRefreshEnabled: true }); } catch (e) { console.warn('App Check', e); }
+  let db;
+  try { db = S.initializeFirestore(app, { localCache: S.persistentLocalCache({ tabManager: S.persistentMultipleTabManager() }) }); } catch (e) { db = S.getFirestore(app); }
+  const auth = U.getAuth(app);
+  const COLS = { chantiers:'phenix_ch_chantiers', lots:'phenix_ch_lots', intervenants:'phenix_ch_intervenants', reserves:'phenix_ch_reserves', crs:'phenix_ch_crs' };
+  const MEDIA = 'phenix_media', CH = 700000;
+  Object.assign(window.FB, {
+    ready: true,
+    login: (e, p) => U.signInWithEmailAndPassword(auth, e, p),
+    onAuth: cb => U.onAuthStateChanged(auth, cb),
+    user: () => auth.currentUser,
+    async role(email) { const s = await S.getDoc(S.doc(db, 'phenix_users', email)); return s.exists() ? (s.data().role || '') : ''; },
+    listen(key, cb) { return S.onSnapshot(S.collection(db, COLS[key]), { includeMetadataChanges: true }, snap => { const a = []; snap.forEach(d => a.push(d.data())); cb(a, snap.metadata.hasPendingWrites); }, e => console.warn(key, e && e.message)); },
+    save(key, obj) { return S.setDoc(S.doc(db, COLS[key], String(obj.id)), obj); },
+    async fiche(pid) { const s = await S.getDoc(S.doc(db, 'phenix_portail', String(pid), 'etat', 'fiche')); return s.exists() ? s.data() : null; },
+    async chunk(pid, i) { const s = await S.getDoc(S.doc(db, 'phenix_portail', String(pid), 'maquette', 'c' + i)); return s.exists() ? (s.data().d || '') : ''; },
+    putMedia(id, du, kind) {
+      const parts = []; for (let i = 0; i < du.length; i += CH) parts.push(du.slice(i, i + CH));
+      const w = [S.setDoc(S.doc(db, MEDIA, id), { kind: kind || 'photo', name: '', parts: parts.length, createdAt: new Date().toISOString() })];
+      parts.forEach((p, i) => w.push(S.setDoc(S.doc(db, MEDIA, id + '__' + i), { d: p })));
+      return Promise.all(w);
+    },
+    async getMedia(id) { const m = await S.getDoc(S.doc(db, MEDIA, id)); if (!m.exists()) return null; let du = ''; for (let i = 0; i < (m.data().parts || 0); i++) { const c = await S.getDoc(S.doc(db, MEDIA, id + '__' + i)); if (c.exists()) du += c.data().d || ''; } return du; },
+    publishClient(pid, payload) { return S.setDoc(S.doc(db, 'phenix_chantier_client', String(pid)), payload); }
+  });
+  // connexion automatique quand le module est ouvert dans le Shell (identique à l'ancien Chantier)
+  window.addEventListener('message', ev => { const d = ev.data; if (d && d.source === 'phenix-shell' && d.action === 'auto-login' && d.email && d.password && ev.source === window.parent) U.signInWithEmailAndPassword(auth, d.email, d.password).catch(() => {}); });
+  try { window.parent.postMessage({ source: 'phenix-module', readyForLogin: true }, '*'); } catch (e) {}
+  [1500, 4000, 8000].forEach(t => setTimeout(() => { if (!auth.currentUser) { try { window.parent.postMessage({ source: 'phenix-module', readyForLogin: true }, '*'); } catch (e) {} } }, t));
+}
+window.dispatchEvent(new Event('fb-loaded'));
+</script>
+
+<script>
+'use strict';
+/* ═══════════ Constantes ═══════════ */
+var ETAPES = ['Terrassement','Réseaux enterrés','Fouilles et ferraillage','Coulage des semelles','Dalle sur terre-plein','Liaison fondations – murs','Montée des murs','Linteaux','Chaînage haut et pignons','Charpente : fermes','Charpente : pannes','Charpente : chevrons','Écran et liteaux','Couverture','Pose des menuiseries','Isolation : doublage','Faux plafonds et isolation toit','Cloisons','Plomberie','Électricité','Chauffage','Plaques de plâtre et portes','Sols et peinture','Cuisine et salle de bain','Mobilier','Extérieurs et réception'];
+var PHASES = [['Préparation',1,2],['Gros œuvre',3,9],['Hors d\'eau',10,15],['Second œuvre',16,22],['Finitions',23,25],['Réception',26,26]];
+var HZ = [['couverture','Couverture'],['murs','Gros œuvre et murs'],['menuiseries','Menuiseries'],['porte','Portes'],['volets','Volets'],['plancher','Planchers'],['cloture','Clôture'],['portail','Portail'],['allee','Allée']].map(function(z){ return {id:z[0], t:z[1], m:'out'}; });
+var ZONE_RE = [['couverture',/couvert|toit|charpent|zinc|tuile/i],['menuiseries',/menuis|fen[eê]tr|baie|vitr/i],['porte',/porte/i],['volets',/volet/i],['plancher',/dalle|plancher|chape/i],['portail',/portail/i],['cloture',/cl[oô]ture/i],['allee',/all[ée]e|terrasse|vrd/i],['murs',/gros|ma[cç]on|mur|fa[cç]ade|fondation|terrass|enduit/i]];
+var LOT_ST = { done:['Terminé','var(--green)'], doing:['En cours','var(--accent)'], todo:['À venir','var(--text2)'], issue:['Avec réserves','var(--red)'] };
+/* icône + mot : jamais la couleur seule (Maxime est daltonien) */
+function ico(k){
+  var c = LOT_ST[k][1], a = 'width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="' + c + '" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0"';
+  if (k === 'done') return '<svg ' + a + '><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+  if (k === 'doing') return '<svg ' + a + '><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="' + c + '" stroke="none"/></svg>';
+  if (k === 'issue') return '<svg ' + a + '><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.2v.1"/></svg>';
+  return '<svg ' + a + ' stroke-dasharray="3.5 3.5"><circle cx="12" cy="12" r="8"/></svg>';
+}
+
+/* ═══════════ Utilitaires ═══════════ */
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function uid(){ return Date.now() * 1000 + Math.floor(Math.random() * 1000); }
+function today(){ return new Date().toISOString().slice(0, 10); }
+function frDate(iso){ if (!iso) return ''; var p = String(iso).slice(0, 10).split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : iso; }
+function norm(s){ return String(s || '').toLowerCase().replace(/œ/g, 'oe').replace(/æ/g, 'ae').normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+function toast(m){ var t = document.createElement('div'); t.className = 'toast'; t.textContent = m; document.body.appendChild(t); setTimeout(function(){ t.remove(); }, 3200); }
+function lk(key, v){ try{ if (v === undefined) return localStorage.getItem(key); localStorage.setItem(key, v); }catch(e){ return null; } }
+function stOf(lot){ var s = lot.statut; return s === 'termine' ? 'done' : s === 'en_cours' ? 'doing' : s === 'reserve' ? 'issue' : 'todo'; }
+function stHtml(k){ var s = LOT_ST[k]; return '<span class="st" style="color:' + s[1] + '">' + ico(k) + s[0] + '</span>'; }
+function zoneOf(lot){ for (var i = 0; i < ZONE_RE.length; i++) if (ZONE_RE[i][1].test(lot.nom || '')) return ZONE_RE[i][0]; return null; }
+function phaseIdx(n){ for (var i = 0; i < PHASES.length; i++) if (n >= PHASES[i][1] && n <= PHASES[i][2]) return i; return -1; }
+
+/* ═══════════ Données ═══════════ */
+var D = { chantiers:[], lots:[], intervenants:[], reserves:[], crs:[] };
+var S = { mode:'terrain', tab:'lots', view:'liste', zoom:'mois', cid:null, lotId:null, role:'', pending:false, online:navigator.onLine, real:false, in3d:'out', maq:null, user:'' };
+function chantier(){ return D.chantiers.filter(function(c){ return c.id == S.cid; })[0] || null; }
+function lotsOf(){ return D.lots.filter(function(l){ return l.chantierId == S.cid; }).sort(function(a, b){ return String(a.nom).localeCompare(String(b.nom), 'fr', {numeric:true}); }); }
+function lotNum(l, i){ var m = /^\s*(\d+)/.exec(l.nom || ''); return m ? m[1] : String(i + 1).padStart(2, '0'); }
+function lotLabel(l){ return String(l.nom || '').replace(/^\s*\d+\s*[—\-–.:]\s*/, ''); }
+function entrepriseOf(l){ if (l.interv){ var iv = D.intervenants.filter(function(x){ return x.id == l.interv; })[0]; if (iv) return iv.nom; } return l.entrepriseNom || ''; }
+function save(key, obj){ if (FB.demo) return Promise.resolve(); return FB.save(key, obj).catch(function(e){ toast('⚠ Enregistrement impossible : ' + (e && e.message || e)); }); }
+
+function demoSeed(){
+  var c = {id:1, nom:'Maison Faure', projetId:'faure', statut:'actif', etape:12, fin:'2027-02-15'};
+  D.chantiers = [c];
+  function L(id, nom, st, av, d, f, ent){ return {id:id, chantierId:1, nom:nom, statut:st, av:av, debut:d, fin:f, entrepriseNom:ent}; }
+  D.lots = [L(11,'01 — Gros œuvre','termine',100,'2026-09-07','2026-10-15','[Entreprise maçonnerie]'), L(12,'02 — Charpente','termine',100,'2026-10-11','2026-10-22','[Entreprise charpente]'), L(14,'04 — Couverture','en_cours',60,'2026-10-19','2026-11-19','[Entreprise couverture]'), L(15,'05 — Menuiseries extérieures','attribue',0,'2026-11-15','2026-12-03','[Entreprise menuiseries]'), L(16,'06 — Électricité','attribue',0,'2026-11-29','2026-12-17','[Entreprise électricité]'), L(17,'07 — Plomberie','chiffrage',0,'2026-11-29','2026-12-17',''), L(18,'08 — Isolation, plâtrerie','attribue',0,'2026-12-13','2027-01-14','[Entreprise plâtrerie]')];
+  D.reserves = []; D.crs = [];
+  S.cid = 1;
+}
+
+/* ═══════════ Visite en cours (stockée sur l'appareil, IndexedDB : fonctionne sans réseau) ═══════════ */
+var VIS = null;
+function idb(){ return new Promise(function(ok, ko){ var r = indexedDB.open('px-chantier2', 1); r.onupgradeneeded = function(){ r.result.createObjectStore('visit'); }; r.onsuccess = function(){ ok(r.result); }; r.onerror = function(){ ko(r.error); }; }); }
+function visGet(cid){ return idb().then(function(db){ return new Promise(function(ok){ var q = db.transaction('visit').objectStore('visit').get(String(cid)); q.onsuccess = function(){ ok(q.result || null); }; q.onerror = function(){ ok(null); }; }); }).catch(function(){ return null; }); }
+function visPut(){ if (!VIS) return Promise.resolve(); return idb().then(function(db){ return new Promise(function(ok){ var t = db.transaction('visit', 'readwrite'); t.objectStore('visit').put(VIS, String(VIS.cid)); t.oncomplete = ok; t.onerror = ok; }); }).catch(function(){}); }
+function visDel(cid){ return idb().then(function(db){ return new Promise(function(ok){ var t = db.transaction('visit', 'readwrite'); t.objectStore('visit').delete(String(cid)); t.oncomplete = ok; t.onerror = ok; }); }).catch(function(){}); }
+function visStart(){ VIS = { cid:S.cid, start:new Date().toISOString(), photos:[], reserves:[], notes:'' }; return visPut(); }
+function visAge(){ if (!VIS) return ''; var m = Math.max(0, Math.round((Date.now() - new Date(VIS.start)) / 60000)); return m < 60 ? m + ' min' : Math.floor(m / 60) + ' h ' + String(m % 60).padStart(2, '0'); }
+
+/* Photo : redimensionnée (1400 px max, JPEG) pour rester légère */
+function readPhoto(file){
+  return new Promise(function(ok, ko){
+    var fr = new FileReader();
+    fr.onload = function(){ var im = new Image(); im.onload = function(){ var k = Math.min(1, 1400 / Math.max(im.width, im.height)), c = document.createElement('canvas'); c.width = Math.round(im.width * k); c.height = Math.round(im.height * k); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); ok(c.toDataURL('image/jpeg', .72)); }; im.onerror = ko; im.src = fr.result; };
+    fr.onerror = ko; fr.readAsDataURL(file);
+  });
+}
+function pickPhoto(cb){ var i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.setAttribute('capture', 'environment'); i.onchange = function(){ if (i.files && i.files[0]) readPhoto(i.files[0]).then(cb).catch(function(){ toast('Photo illisible.'); }); }; i.click(); }
+
+/* ═══════════ Maquette 3D (moteur partagé) ═══════════ */
+var M3 = { inited:false, failed:false, cid:null };
+function zoneStates(){
+  var out = {};
+  lotsOf().forEach(function(l){ var z = zoneOf(l); if (!z) return; var k = stOf(l), prev = out[z];
+    var rank = RANK;
+    if (!prev || rank[k] > rank[prev.state]) out[z] = { state:k, sub:lotLabel(l) + ' · ' + (l.av || 0) + ' %' }; });
+  return out;
+}
+function loadMaquette(){
+  var c = chantier();
+  if (FB.demo && window.__DEMO_GLB) {   /* essai : maquette de démonstration injectée par le banc d'essai */
+    showTiles(false); var P0 = window.PXModel, go0 = function(){ var P = window.PXModel; P.loader = function(){ return Promise.resolve(window.__DEMO_GLB); }; P.cfg = window.__DEMO_CFG || {}; P.init($('h3-host'), HZ, function(id){ pickZone(id); }); P.update(zoneStates()); P.setActive(true); M3.inited = true; };
+    if (P0) go0(); else window.addEventListener('px3dm-ready', go0, {once:true}); return;
+  }
+  if (!c || FB.demo || !c.projetId) { showTiles(true); return; }
+  if (M3.cid === c.id) return; M3.cid = c.id; M3.inited = false; showTiles(false);
+  FB.fiche(c.projetId).then(function(f){
+    var m = f && f.maquette; if (!(m && m.on && (m.n || m.url))) { showTiles(true); return; }
+    S.maq = m;
+    var go = function(){
+      try{
+        var P = window.PXModel;
+        if (P.ready) { showTiles(true); return; }   /* une maquette est déjà chargée dans cette page : rechargement requis pour en changer */
+        P.loader = function(){
+          if (m.url) return fetch(m.url).then(function(r){ if (!r.ok) throw new Error('http ' + r.status); return r.arrayBuffer(); });
+          var jobs = []; for (var i = 0; i < m.n; i++) jobs.push(FB.chunk(c.projetId, m.k ? m.k + '_' + i : i));
+          return Promise.all(jobs).then(function(a){ var b = atob(a.join('')), u = new Uint8Array(b.length); for (var k = 0; k < b.length; k++) u[k] = b.charCodeAt(k); return u.buffer; });
+        };
+        P.cfg = m;
+        P.init($('h3-host'), HZ, function(id){ pickZone(id); });
+        P.update(zoneStates()); P.setActive(S.mode === 'terrain');
+        M3.inited = true; applyStage();
+      }catch(e){ console.error(e); showTiles(true); }
+    };
+    if (window.PXModel) go(); else { window.addEventListener('px3dm-ready', go, {once:true}); setTimeout(function(){ if (!window.PXModel) showTiles(true); }, 12000); }
+  }).catch(function(){ showTiles(true); });
+  window.addEventListener('px3d-fail', function(){ showTiles(true); }, {once:true});
+}
+function showTiles(on){ M3.failed = on; $('tiles').style.display = on ? 'grid' : 'none'; $('h3-host').style.display = on ? 'none' : 'block'; renderStageBar(); renderTiles(); }
+function applyStage(){
+  var P = window.PXModel; if (!(P && P.ready && M3.inited)) return;
+  try{ P.update(zoneStates()); P.setStage(S.real ? (chantier() && chantier().etape) || null : null); }catch(e){}
+}
+var RANK = { issue:3, doing:2, todo:1, done:0 };
+function pickZone(zoneId){   /* plusieurs lots sur une zone : celui qui demande l'attention (réserve > en cours > à venir > terminé) */
+  var l = lotsOf().filter(function(x){ return zoneOf(x) === zoneId; }).sort(function(a, b){ return RANK[stOf(b)] - RANK[stOf(a)]; })[0];
+  if (l){ S.lotId = l.id; renderSide(); renderTiles(); } }
+
+/* ═══════════ Écran Terrain ═══════════ */
+function renderTop(){
+  var c = chantier(), h = '<div><div class="eyebrow">Phénix-Architecture</div>';
+  if (D.chantiers.length > 1) h += '<select id="sel-ch" aria-label="Chantier" style="font:400 22px var(--fd);padding:4px 10px">' + D.chantiers.map(function(x){ return '<option value="' + esc(x.id) + '"' + (x.id == S.cid ? ' selected' : '') + '>' + esc(x.nom || x.id) + '</option>'; }).join('') + '</select>';
+  else h += '<div class="nm">' + esc(c ? c.nom : 'Aucun chantier') + '</div>';
+  h += '</div>';
+  if (c && c.etape) h += '<span class="chip blue">Étape ' + c.etape + ' sur 26 · ' + esc(PHASES[phaseIdx(c.etape)] ? PHASES[phaseIdx(c.etape)][0] : '') + '</span>';
+  h += '<span class="sp"></span>';
+  if (VIS) h += '<span class="chip blue">● Visite en cours · ' + visAge() + '</span>';
+  h += '<span class="chip">' + (!S.online ? '⚠ Hors ligne : tout est gardé sur la tablette' : S.pending ? '⟳ Envoi en cours…' : '✓ Synchronisé') + '</span>';
+  if (S.role !== 'chantier') h += '<span class="seg"><button type="button" data-mode="terrain" aria-pressed="' + (S.mode === 'terrain') + '">Terrain</button><button type="button" data-mode="bureau" aria-pressed="' + (S.mode === 'bureau') + '">Bureau</button></span>';
+  $('top').innerHTML = h;
+  var sc = $('sel-ch'); if (sc) sc.onchange = function(){ S.cid = sc.value; if (D.chantiers.filter(function(x){ return String(x.id) === sc.value; })[0]) S.cid = D.chantiers.filter(function(x){ return String(x.id) === sc.value; })[0].id; lk('px2.cid', String(S.cid)); S.lotId = null; M3.cid = null; boot2(); };
+  [].forEach.call($('top').querySelectorAll('[data-mode]'), function(b){ b.onclick = function(){ setMode(b.getAttribute('data-mode')); }; });
+  $('tabs').hidden = S.mode !== 'bureau';
+}
+function setMode(m){
+  S.mode = m; lk('px2.mode', m);
+  $('terrain').style.display = m === 'terrain' ? 'flex' : 'none'; $('dock').style.display = m === 'terrain' ? 'flex' : 'none'; $('bureau').style.display = m === 'bureau' ? 'block' : 'none';
+  try{ if (window.PXModel && PXModel.ready) PXModel.setActive(m === 'terrain'); }catch(e){}
+  renderAll();
+}
+function renderStageBar(){
+  var h = '';
+  if (!M3.failed) {
+    h += '<span class="seg"><button type="button" data-real="0" aria-pressed="' + !S.real + '">Lots</button><button type="button" data-real="1" aria-pressed="' + S.real + '">Avancement réel</button></span>';
+    h += '<span class="seg"><button type="button" data-in="out" aria-pressed="' + (S.in3d === 'out') + '">Extérieur</button><button type="button" data-in="in" aria-pressed="' + (S.in3d === 'in') + '">Intérieur</button></span>';
+  }
+  $('stagebar').innerHTML = h;
+  [].forEach.call($('stagebar').querySelectorAll('[data-real]'), function(b){ b.onclick = function(){ S.real = b.getAttribute('data-real') === '1'; applyStage(); renderStageBar(); }; });
+  [].forEach.call($('stagebar').querySelectorAll('[data-in]'), function(b){ b.onclick = function(){ S.in3d = b.getAttribute('data-in'); try{ PXModel.setMode(S.in3d); }catch(e){} renderStageBar(); }; });
+}
+function renderTiles(){
+  var ls = lotsOf(); if (!M3.failed) return;
+  $('tiles').innerHTML = ls.length ? ls.map(function(l, i){ return '<button class="tile" type="button" data-lot="' + l.id + '" aria-pressed="' + (l.id == S.lotId) + '"><span class="eyebrow">Lot ' + esc(lotNum(l, i)) + '</span><b>' + esc(lotLabel(l)) + '</b>' + stHtml(stOf(l)) + '<span class="muted">' + (l.av || 0) + ' % fait</span></button>'; }).join('') : '<div class="muted" style="padding:20px">Aucun lot pour ce chantier. Ils se créent au Bureau (« Importer depuis Chiffrage »).</div>';
+  [].forEach.call($('tiles').querySelectorAll('[data-lot]'), function(b){ b.onclick = function(){ S.lotId = +b.getAttribute('data-lot'); renderSide(); renderTiles(); }; });
+}
+function renderSide(){
+  var l = D.lots.filter(function(x){ return x.id == S.lotId; })[0], h = '';
+  if (l) {
+    var k = stOf(l), ent = entrepriseOf(l);
+    h += '<div class="card" style="display:flex;flex-direction:column;gap:10px"><div class="eyebrow">Lot ' + esc(lotNum(l, lotsOf().indexOf(l))) + '</div><h2 style="font-size:26px;line-height:1.15">' + esc(lotLabel(l)) + '</h2>' + stHtml(k) +
+      '<div class="muted">' + (ent ? esc(ent) : '<span style="color:#f3dfb0;font-weight:600">⚠ Aucune entreprise</span>') + '</div>' +
+      '<div class="bar" aria-hidden="true"><i style="width:' + Math.min(100, l.av || 0) + '%"></i></div><div style="font-weight:700">' + (l.av || 0) + ' % fait</div>' +
+      '<button class="btn" type="button" id="b-photo">📷 Photographier ce lot</button><button class="btn" type="button" id="b-res">⚑ Poser une réserve</button></div>';
+  } else h += '<div class="card muted">Touchez un lot sur la maquette pour le photographier ou poser une réserve.</div>';
+  h += '<div class="card" style="display:flex;flex-direction:column;gap:6px"><div class="eyebrow">' + (VIS ? 'Cette visite · démarrée à ' + new Date(VIS.start).toTimeString().slice(0, 5) : 'Visite') + '</div>';
+  if (VIS) h += '<div style="font-weight:600">📷 ' + VIS.photos.length + ' photo' + (VIS.photos.length > 1 ? 's' : '') + '</div><div class="muted">rangées par lot dans le compte rendu</div><div style="font-weight:600;margin-top:6px">⚑ ' + VIS.reserves.length + ' réserve' + (VIS.reserves.length > 1 ? 's' : '') + '</div><div class="muted">posées pendant la visite</div><button class="btn ghost" type="button" id="b-abandon" style="margin-top:6px">Abandonner cette visite</button>';
+  else h += '<div class="muted">Démarrez la visite : photos et réserves iront dans un seul compte rendu.</div><button class="btn pri" type="button" id="b-start">Démarrer la visite</button>';
+  h += '</div>';
+  $('side').innerHTML = h;
+  var b;
+  if ((b = $('b-photo'))) b.onclick = function(){ needVisit(function(){ pickPhoto(function(du){ VIS.photos.push({ id:uid(), dataUrl:du, lotId:l.id, t:new Date().toISOString() }); visPut(); toast('Photo rangée dans ' + lotLabel(l)); renderSide(); renderTop(); renderMic(); }); }); };
+  if ((b = $('b-res'))) b.onclick = function(){ needVisit(function(){ sheetReserve(l); }); };
+  if ((b = $('b-start'))) b.onclick = function(){ visStart().then(function(){ renderAll(); }); };
+  if ((b = $('b-abandon'))) b.onclick = function(){ if (confirm('Abandonner la visite ? Photos et réserves de cette visite seront perdues.')) { visDel(S.cid); VIS = null; renderAll(); } };
+}
+function needVisit(fn){ if (VIS) return fn(); visStart().then(function(){ renderAll(); fn(); }); }
+function renderDock(){
+  var c = chantier(), n = c && c.etape || 0, h = '';
+  PHASES.forEach(function(p, i){ var cur = n >= p[1] && n <= p[2]; h += '<button class="ph' + (n > p[2] ? ' past' : '') + '" type="button" data-ph="' + p[1] + '"' + (cur ? ' aria-current="step"' : '') + '>' + (n > p[2] ? '✓ ' : cur ? '▸ ' : '') + esc(p[0]) + '</button>'; });
+  h += '<span class="sp" style="flex:1"></span><span class="muted">' + (n ? 'Étape ' + n + ' sur 26 : ' + esc(ETAPES[n - 1]) : 'Étape non renseignée') + '</span>';
+  $('dock').innerHTML = h;
+  [].forEach.call($('dock').querySelectorAll('[data-ph]'), function(b){ b.onclick = function(){ sheetEtape(+b.getAttribute('data-ph')); }; });
+}
+function sheetEtape(from){
+  var c = chantier(); if (!c) return; var ph = PHASES[phaseIdx(from)];
+  var bg = document.createElement('div'); bg.className = 'sheetbg';
+  var opts = ''; for (var i = ph[1]; i <= ph[2]; i++) opts += '<button class="btn big" type="button" data-e="' + i + '" style="justify-content:flex-start;' + (c.etape === i ? 'border:2px solid var(--accent)' : '') + '">' + (c.etape === i ? '▸ ' : '') + i + ' · ' + esc(ETAPES[i - 1]) + '</button>';
+  bg.innerHTML = '<div class="sheet"><div class="eyebrow">Étape réelle du chantier</div><h2 style="font-size:26px">' + esc(ph[0]) + '</h2>' + opts + '<button class="btn ghost" type="button" data-x="1">Fermer</button></div>';
+  document.body.appendChild(bg);
+  bg.onclick = function(e){ if (e.target === bg || e.target.getAttribute('data-x')) bg.remove(); };
+  [].forEach.call(bg.querySelectorAll('[data-e]'), function(b){ b.onclick = function(){ setEtape(+b.getAttribute('data-e')); bg.remove(); }; });
+}
+function setEtape(n){
+  var c = chantier(); if (!c || c.etape === n) return;
+  c.etape = n; c.etapeMaj = new Date().toISOString(); save('chantiers', c);
+  if (!FB.demo && c.projetId) { var pi = phaseIdx(n); FB.publishClient(c.projetId, { projetId:String(c.projetId), chantierNom:c.nom || '', etape:n, nbEtapes:26, etapeNom:ETAPES[n - 1], phase:pi + 1, phaseNom:PHASES[pi][0], statut:c.statut || '', fin:c.fin || '', etapeMaj:c.etapeMaj, updatedAt:new Date().toISOString() }).catch(function(){}); }
+  renderTop(); renderDock(); applyStage(); toast('Étape ' + n + ' : ' + ETAPES[n - 1]);
+}
+function renderMic(){ var b = $('mic'); b.innerHTML = '<span aria-hidden="true" style="font-size:24px">🎙</span> Dicter le compte rendu'; b.onclick = function(){ needVisit(function(){ openDictee(); }); }; }
+
+/* Réserve posée pendant la visite (rangée dans la visite, pas dans une note à part) */
+function sheetReserve(l){
+  var bg = document.createElement('div'); bg.className = 'sheetbg', photo = null;
+  bg.innerHTML = '<div class="sheet"><div class="eyebrow">Réserve · ' + esc(l ? lotLabel(l) : 'sans lot') + '</div><textarea id="r-t" placeholder="Décrivez la réserve (ou dictez avec le micro du clavier)" rows="3"></textarea><input id="r-lieu" placeholder="Lieu (ex. mur est, séjour)"><div id="r-ph" class="muted">Aucune photo</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" type="button" id="r-pic">📷 Ajouter une photo</button><span style="flex:1"></span><button class="btn ghost" type="button" data-x="1">Annuler</button><button class="btn pri" type="button" id="r-ok">Poser la réserve</button></div></div>';
+  var photo = null;
+  document.body.appendChild(bg);
+  bg.onclick = function(e){ if (e.target === bg || e.target.getAttribute('data-x')) bg.remove(); };
+  bg.querySelector('#r-pic').onclick = function(){ pickPhoto(function(du){ photo = du; bg.querySelector('#r-ph').innerHTML = '<img src="' + du + '" alt="" style="height:90px;border-radius:10px">'; }); };
+  bg.querySelector('#r-ok').onclick = function(){
+    var t = bg.querySelector('#r-t').value.trim(); if (!t) { toast('Décrivez la réserve.'); return; }
+    var r = { id:uid(), titre:t.length > 70 ? t.slice(0, 67) + '…' : t, description:t, lieu:bg.querySelector('#r-lieu').value.trim(), lotId:l ? l.id : null, t:new Date().toISOString() };
+    if (photo) { var pid = uid(); VIS.photos.push({ id:pid, dataUrl:photo, lotId:l ? l.id : null, t:r.t, reserveId:r.id }); r.photoId = pid; }
+    VIS.reserves.push(r); visPut(); bg.remove(); toast('Réserve posée'); renderSide(); renderTop();
+  };
+}
+
+/* ═══════════ Compte rendu : UNE dictée par visite, un seul document ═══════════ */
+var REC = { on:false, sr:null, text:'', interim:'' };
+var MARKERS = [['meteo',/m[eé]t[eé]o/i],['presents',/pr[eé]sents?\b|participants?/i],['avancement',/avancement|avanc[eé]e?s?\b/i],['reserves',/r[eé]serves?\b/i],['decisions',/d[eé]cisions?\b/i],['prochaine',/prochaine?s? (r[eé]union|visite|rendez[- ]vous|rdv)|prochain rendez[- ]vous/i]];
+function parseDictee(text){
+  var found = [], out = { meteo:'', presents:'', avancement:'', reserves:'', decisions:'', prochaine:'' };
+  MARKERS.forEach(function(m){ var x = m[1].exec(text); if (x) found.push({ k:m[0], i:x.index, len:x[0].length }); });
+  found.sort(function(a, b){ return a.i - b.i; });
+  if (!found.length) { out.avancement = text.trim(); return out; }
+  if (found[0].i > 0) out.avancement = text.slice(0, found[0].i).trim();
+  found.forEach(function(f, n){ var end = n + 1 < found.length ? found[n + 1].i : text.length, seg = text.slice(f.i + f.len, end).replace(/^[\s:,.\-–]+/, '').replace(/[\s,]+$/, '').trim(); out[f.k] = (out[f.k] ? out[f.k] + ' ' : '') + seg; });
+  return out;
+}
+function proposeAv(text){
+  var res = [], t = norm(text);
+  lotsOf().forEach(function(l){
+    var words = norm(lotLabel(l)).split(/[^a-z0-9]+/).filter(function(w){ return w.length >= 4; }); if (!words.length) return;
+    for (var i = 0; i < words.length; i++) {
+      var re = new RegExp('(^|[^a-z0-9])' + words[i] + '[a-z]{0,3}[^0-9]{0,40}?(\\d{1,3})\\s*(%|pour ?cent)', 'i'), m = re.exec(t);
+      if (m) { var v = Math.max(0, Math.min(100, +m[2])); if (v !== (l.av || 0)) res.push({ lotId:l.id, from:l.av || 0, to:v, on:true }); break; }
+    }
+  });
+  return res;
+}
+function openDictee(){
+  var o = $('overlay'); o.className = 'on'; REC.text = VIS.notes || ''; REC.interim = '';
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  o.innerHTML = '<div id="top2" style="padding:14px 18px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:center"><div><div class="eyebrow">Fin de visite · compte rendu unique</div><div class="nm" style="font:400 24px var(--fd)">' + esc(chantier() ? chantier().nom : '') + ' · ' + frDate(today()) + '</div></div><span style="flex:1"></span><button class="btn ghost" type="button" id="d-back">← Retour à la maquette</button></div>' +
+    '<div style="display:flex;gap:14px;padding:14px 18px;flex-wrap:wrap;align-items:flex-start"><div class="card" style="flex:1 1 360px;max-width:460px;display:flex;flex-direction:column;gap:12px"><h2 style="font-size:26px">Dites tout, une fois.</h2><div class="muted">Avancement, réserves, décisions, présents, météo, prochaine réunion : parlez dans l\'ordre que vous voulez. Les photos et réserves de la visite sont déjà dans le document.</div>' +
+    '<div style="display:flex;align-items:center;gap:10px;min-height:32px"><span id="d-led"></span><span id="d-state" style="font-weight:600"></span></div><textarea id="d-txt" rows="8" placeholder="' + (SR ? 'Appuyez sur « Dicter » puis parlez…' : 'La dictée n\'est pas disponible sur ce navigateur : utilisez le micro du clavier de la tablette.') + '"></textarea><div class="eyebrow">Rubriques entendues</div><div id="d-chips" style="display:flex;flex-wrap:wrap;gap:8px"></div>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' + (SR ? '<button class="btn big pri" type="button" id="d-rec">🎙 Dicter</button>' : '') + '<button class="btn big" type="button" id="d-end">Terminer la dictée</button></div></div>' +
+    '<div class="card" id="d-doc" style="flex:2 1 460px;display:flex;flex-direction:column;gap:10px"></div></div>';
+  var ta = $('d-txt'); ta.value = REC.text;
+  ta.oninput = function(){ REC.text = ta.value; VIS.notes = ta.value; visPut(); renderDoc(); };
+  $('d-back').onclick = function(){ stopRec(); o.className = ''; o.innerHTML = ''; renderAll(); };
+  if ($('d-rec')) $('d-rec').onclick = function(){ REC.on ? stopRec() : startRec(SR); };
+  $('d-end').onclick = function(){ stopRec(); renderDoc(true); };
+  renderDoc(); stateRec();
+}
+function stateRec(){ var l = $('d-led'), s = $('d-state'), b = $('d-rec'); if (!l) return; l.className = REC.on ? 'rec' : ''; s.textContent = REC.on ? 'Écoute en cours…' : 'Micro arrêté'; if (b) b.textContent = REC.on ? '■ Arrêter' : '🎙 Dicter'; }
+function startRec(SR){
+  var sr = new SR(); sr.lang = 'fr-FR'; sr.continuous = true; sr.interimResults = true; REC.sr = sr; REC.on = true;
+  sr.onresult = function(ev){ var fin = '', itm = ''; for (var i = ev.resultIndex; i < ev.results.length; i++) { var t = ev.results[i][0].transcript; if (ev.results[i].isFinal) fin += t + ' '; else itm += t; }
+    if (fin) { REC.text = (REC.text ? REC.text.replace(/\s+$/, '') + ' ' : '') + fin.trim(); VIS.notes = REC.text; visPut(); }
+    var ta = $('d-txt'); if (ta) { ta.value = REC.text + (itm ? ' ' + itm : ''); ta.scrollTop = ta.scrollHeight; } renderDoc(); };
+  sr.onend = function(){ if (REC.on) { try{ sr.start(); }catch(e){ REC.on = false; stateRec(); } } else stateRec(); };
+  sr.onerror = function(e){ if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { REC.on = false; toast('Micro refusé : autorisez-le dans le navigateur.'); stateRec(); } };
+  try{ sr.start(); }catch(e){ REC.on = false; }
+  stateRec();
+}
+function stopRec(){ REC.on = false; try{ if (REC.sr) REC.sr.stop(); }catch(e){} stateRec(); }
+var CRD = { meteo:'', presents:'', avancement:'', reserves:'', decisions:'', prochaine:'', props:[], touched:false };
+function renderDoc(final){
+  var doc = $('d-doc'); if (!doc) return;
+  var p = parseDictee(REC.text), chips = $('d-chips');
+  if (!CRD.touched || !final) { /* tant que l'on dicte, le document suit la dictée */ if (!CRD.touched) { Object.keys(p).forEach(function(k){ CRD[k] = p[k]; }); CRD.props = proposeAv(REC.text); } }
+  if (final) { CRD.touched = true; Object.keys(p).forEach(function(k){ CRD[k] = p[k]; }); CRD.props = proposeAv(REC.text); }
+  var names = { meteo:'Météo', presents:'Présents', avancement:'Avancement', reserves:'Réserves', decisions:'Décisions', prochaine:'Prochaine réunion' };
+  if (chips) chips.innerHTML = Object.keys(names).map(function(k){ var ok = !!(CRD[k] || (k === 'reserves' && VIS.reserves.length)); return '<span class="chip' + (ok ? '' : ' amber') + '" style="' + (ok ? '' : 'border-style:dashed') + '">' + (ok ? '✓ ' : '⚠ ') + names[k] + '</span>'; }).join('');
+  var lotName = function(id){ var l = D.lots.filter(function(x){ return x.id == id; })[0]; return l ? lotLabel(l) : 'Sans lot'; };
+  var h = '<div class="eyebrow">Compte rendu · ' + esc(chantier() ? chantier().nom : '') + ' · ' + frDate(today()) + '</div>';
+  var F = function(k, label, rows){ return '<div class="rub' + (CRD[k] ? '' : ' miss') + '"><div class="eyebrow">' + label + '</div>' + (final ? '<textarea data-f="' + k + '" rows="' + (rows || 2) + '">' + esc(CRD[k]) + '</textarea>' : '<div>' + (CRD[k] ? esc(CRD[k]) : '<span class="muted">Non dit' + (k === 'prochaine' ? ' : à compléter ou passer' : '') + '</span>') + '</div>') + '</div>'; };
+  h += F('meteo', 'Météo', 1) + F('presents', 'Présents', 1) + F('avancement', 'Avancement', 3);
+  if (CRD.props.length) h += '<div class="rub"><div class="eyebrow">Avancement proposé par lot · à confirmer au Bureau</div>' + CRD.props.map(function(q, i){ return '<label style="display:flex;gap:10px;align-items:center;min-height:44px"><input type="checkbox" data-p="' + i + '"' + (q.on ? ' checked' : '') + ' style="width:22px;height:22px"> <b>' + esc(lotName(q.lotId)) + '</b> : ' + q.from + ' % → ' + q.to + ' %</label>'; }).join('') + '</div>';
+  h += '<div class="rub' + (VIS.reserves.length || CRD.reserves ? '' : ' miss') + '"><div class="eyebrow">Réserves</div>' + VIS.reserves.map(function(r){ return '<div>⚑ ' + esc(r.titre) + ' <span class="muted">· ' + esc(lotName(r.lotId)) + (r.lieu ? ', ' + esc(r.lieu) : '') + (r.photoId ? ' · 1 photo' : '') + '</span></div>'; }).join('') + (final ? '<textarea data-f="reserves" rows="2" placeholder="Autres réserves dites à voix haute">' + esc(CRD.reserves) + '</textarea>' : (CRD.reserves ? '<div>' + esc(CRD.reserves) + '</div>' : (VIS.reserves.length ? '' : '<span class="muted">Aucune réserve dite</span>'))) + '</div>';
+  h += F('decisions', 'Décisions', 3) + F('prochaine', 'Prochaine réunion', 1);
+  h += '<div class="rub"><div class="eyebrow">Photos (' + VIS.photos.length + ')</div><div style="display:flex;gap:6px;flex-wrap:wrap">' + (VIS.photos.length ? VIS.photos.map(function(ph){ return '<figure style="margin:0"><img src="' + ph.dataUrl + '" alt="" style="width:92px;height:68px;object-fit:cover;border-radius:8px;display:block"><figcaption class="muted" style="font-size:11px;max-width:92px">' + esc(lotName(ph.lotId)) + '</figcaption></figure>'; }).join('') : '<span class="muted">Aucune photo pendant cette visite</span>') + '</div></div>';
+  if (final) h += '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn big pri" type="button" id="d-send">Envoyer le compte rendu</button><button class="btn big ghost" type="button" id="d-edit">Reprendre la dictée</button></div><div class="muted">Le compte rendu arrive dans « À traiter » au Bureau : rien n\'est appliqué aux lots avant validation.</div>';
+  doc.innerHTML = h;
+  [].forEach.call(doc.querySelectorAll('[data-f]'), function(t){ t.oninput = function(){ CRD[t.getAttribute('data-f')] = t.value; }; });
+  [].forEach.call(doc.querySelectorAll('[data-p]'), function(c){ c.onchange = function(){ CRD.props[+c.getAttribute('data-p')].on = c.checked; }; });
+  if ($('d-edit')) $('d-edit').onclick = function(){ CRD.touched = false; renderDoc(); };
+  if ($('d-send')) $('d-send').onclick = sendCR;
+}
+function nextNum(){
+  var n = 0; D.crs.filter(function(c){ return c.chantierId == S.cid; }).forEach(function(c){ var m = /(\d+)\s*$/.exec(c.num || ''); if (m) n = Math.max(n, +m[1]); });
+  return 'CR-' + String(n + 1).padStart(2, '0');
+}
+function sendCR(){
+  var c = chantier(); if (!c) return;
+  var photos = VIS.photos.map(function(ph){ var mid = 'm_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 9); ph.mediaId = mid; if (!FB.demo) FB.putMedia(mid, ph.dataUrl, 'photo').catch(function(){}); return { mediaId:mid, lotId:ph.lotId, reserveId:ph.reserveId || null, caption:'', dataUrl: FB.demo ? ph.dataUrl : undefined }; });
+  var cr = { id:uid(), num:nextNum(), chantierId:c.id, date:today(), auteur:'Phénix-Architecture', presents:CRD.presents, meteo:CRD.meteo, avancement:CRD.avancement,
+    reserves:(VIS.reserves.map(function(r){ return '• ' + r.titre + (r.lieu ? ' (' + r.lieu + ')' : ''); }).concat(CRD.reserves ? [CRD.reserves] : [])).join('\n'),
+    decisions:CRD.decisions, prochaine:CRD.prochaine, photos:photos.map(function(p){ var o = {}; Object.keys(p).forEach(function(k){ if (p[k] !== undefined) o[k] = p[k]; }); return o; }), plans:[], source:'vocal', createdAt:new Date().toISOString(),
+    visite:{ debut:VIS.start, fin:new Date().toISOString() }, aValider:true,
+    propositions:CRD.props.filter(function(q){ return q.on; }).map(function(q){ return { lotId:q.lotId, de:q.from, a:q.to }; }),
+    reservesNouvelles:VIS.reserves.map(function(r){ return { id:r.id, titre:r.titre, description:r.description, lieu:r.lieu, lotId:r.lotId, photoMediaId:r.photoId ? (VIS.photos.filter(function(p){ return p.id === r.photoId; })[0] || {}).mediaId || null : null }; }) };
+  D.crs.push(cr); save('crs', cr);
+  visDel(S.cid); VIS = null; CRD = { meteo:'', presents:'', avancement:'', reserves:'', decisions:'', prochaine:'', props:[], touched:false };
+  $('overlay').className = ''; $('overlay').innerHTML = ''; toast('Compte rendu ' + cr.num + ' envoyé : il attend votre validation au Bureau.'); renderAll();
+}
+
+/* ═══════════ Mode Bureau ═══════════ */
+function renderTabs(){
+  var pend = D.crs.filter(function(c){ return c.aValider && c.chantierId == S.cid; }).length;
+  var T = [['lots', 'Lots et planning'], ['reserves', 'Réserves'], ['atraiter', 'À traiter']];
+  $('tabs').innerHTML = T.map(function(t){ return '<button type="button" data-tab="' + t[0] + '"' + (S.tab === t[0] ? ' aria-current="page"' : '') + '>' + t[1] + (t[0] === 'atraiter' && pend ? '<span class="badge">' + pend + '</span>' : '') + '</button>'; }).join('') + '<span style="flex:1"></span><button type="button" id="old-ch" title="Finances, plans et pastilles, messages : pas encore repris dans cette version">Finances, plans, messages (ancien module) ↗</button>';
+  [].forEach.call($('tabs').querySelectorAll('[data-tab]'), function(b){ b.onclick = function(){ S.tab = b.getAttribute('data-tab'); renderBureau(); renderTabs(); }; });
+  $('old-ch').onclick = function(){ window.open('phenix_chantier.html', '_blank'); };
+}
+function renderBureau(){
+  var b = $('bureau'); if (S.mode !== 'bureau') return;
+  if (S.tab === 'lots') b.innerHTML = S.view === 'liste' ? viewListe() : viewPlanning();
+  else if (S.tab === 'reserves') b.innerHTML = viewReserves();
+  else b.innerHTML = viewATraiter();
+  bindBureau();
+}
+function lotsHead(){
+  return '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:12px"><h2 style="font-size:24px">' + (S.view === 'liste' ? 'Lots' : 'Planning') + '</h2><span class="seg light"><button type="button" data-view="liste" aria-pressed="' + (S.view === 'liste') + '">Liste</button><button type="button" data-view="planning" aria-pressed="' + (S.view === 'planning') + '">Planning</button></span>' +
+    (S.view === 'planning' ? '<span class="seg light"><button type="button" data-zoom="mois" aria-pressed="' + (S.zoom === 'mois') + '">Mois</button><button type="button" data-zoom="sem" aria-pressed="' + (S.zoom === 'sem') + '">Semaines</button></span><button class="btn" type="button" id="g-today">Aller à aujourd\'hui</button><span class="muted">Glissez une barre pour décaler un lot, tirez ses bords pour changer les dates.</span>' : '<span class="muted">' + lotsOf().length + ' lots</span>') + '</div>';
+}
+function viewListe(){
+  var ls = lotsOf(), r = rangeDates(ls), h = lotsHead() + '<div class="tbl"><div style="min-width:620px"><div class="row h"><span></span><span>LOT</span><span>STATUT</span><span>FAIT</span><span>PÉRIODE</span></div>';
+  ls.forEach(function(l, i){
+    var k = stOf(l), ent = entrepriseOf(l), a = r.pos(l.debut), z = r.pos(l.fin);
+    h += '<div class="row' + (l.id == S.lotId ? ' sel' : '') + '" data-row="' + l.id + '"><span class="muted" style="font-weight:600">' + esc(lotNum(l, i)) + '</span><div><div style="font-weight:600">' + esc(lotLabel(l)) + '</div><div class="muted" style="font-size:13px">' + (ent ? esc(ent) : '<span style="color:#f3dfb0;font-weight:600">⚠ Aucune entreprise</span>') + '</div></div>' +
+      '<select data-statut="' + l.id + '" aria-label="Statut" style="min-height:44px">' + [['chiffrage', 'Chiffrage'], ['ao', 'Appel d\'offres'], ['attribue', 'Attribué'], ['en_cours', 'En cours'], ['termine', 'Terminé'], ['reserve', 'Avec réserves']].map(function(o){ return '<option value="' + o[0] + '"' + (l.statut === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>' +
+      '<span><input type="number" min="0" max="100" value="' + (l.av || 0) + '" data-av="' + l.id + '" aria-label="Pourcentage fait" style="width:76px;min-height:44px"> %</span>' +
+      '<div style="position:relative;height:60px"><div style="position:absolute;left:0;right:0;top:29px;height:2px;background:rgba(120,170,220,.2)"></div><div style="position:absolute;left:' + r.todayPct + '%;top:14px;bottom:14px;width:2px;background:var(--text);opacity:.7"></div>' + (a != null && z != null ? '<div class="gb ' + k + '" style="left:' + a + '%;width:' + Math.max(1.5, z - a) + '%;top:24px;height:12px;cursor:default"></div>' : '') + '</div></div>';
+  });
+  return h + '</div></div><div class="muted" style="margin-top:10px">Les dates se règlent dans la vue Planning. Le statut est écrit avec une icône et un mot : jamais par la couleur seule.</div>';
+}
+function rangeDates(ls){
+  var ds = []; ls.forEach(function(l){ if (l.debut) ds.push(new Date(l.debut)); if (l.fin) ds.push(new Date(l.fin)); });
+  var now = new Date(); ds.push(now);
+  var min = new Date(Math.min.apply(null, ds)), max = new Date(Math.max.apply(null, ds));
+  min.setDate(min.getDate() - 7); max.setDate(max.getDate() + 14); var tot = Math.max(30, (max - min) / 864e5);
+  return { min:min, max:max, tot:tot, pos:function(iso){ return iso ? Math.max(0, Math.min(100, (new Date(iso) - min) / 864e5 / tot * 100)) : null; }, todayPct:Math.max(0, Math.min(100, (now - min) / 864e5 / tot * 100)) };
+}
+function viewPlanning(){
+  var ls = lotsOf(), r = rangeDates(ls), ppd = S.zoom === 'mois' ? 5 : 14, W = Math.round(r.tot * ppd), h = lotsHead();
+  h += '<div class="tbl" id="g-scroll" style="overflow-x:auto"><div style="min-width:' + (230 + W) + 'px"><div style="display:flex"><div class="gl" style="height:36px;font-size:12px;letter-spacing:.08em;color:var(--text3);font-weight:600">LOT</div><div style="position:relative;width:' + W + 'px;height:36px">';
+  var d = new Date(r.min); d.setDate(1); if (d < r.min) d.setMonth(d.getMonth() + 1);
+  while (d < r.max) { h += '<span style="position:absolute;left:' + Math.round((d - r.min) / 864e5 * ppd) + 'px;top:10px;padding-left:6px;font-size:12px;letter-spacing:.08em;color:var(--text3);font-weight:600;border-left:1px solid var(--line);height:26px">' + d.toLocaleDateString('fr-FR', {month:'short'}).toUpperCase() + '</span>'; d.setMonth(d.getMonth() + 1); }
+  h += '</div></div>';
+  ls.forEach(function(l, i){
+    var k = stOf(l), a = l.debut ? Math.round((new Date(l.debut) - r.min) / 864e5 * ppd) : null, w = l.fin && l.debut ? Math.max(12, Math.round((new Date(l.fin) - new Date(l.debut)) / 864e5 * ppd)) : 0;
+    h += '<div class="grow"><div class="gl" style="background:' + (l.id == S.lotId ? '#14304f' : 'var(--pan)') + '"><div><div style="font-size:14px;font-weight:600;white-space:nowrap">' + esc(lotNum(l, i)) + ' · ' + esc(lotLabel(l)) + '</div><div class="muted" style="font-size:12px">' + LOT_ST[k][0] + ' · ' + (l.av || 0) + ' %</div></div></div><div style="position:relative;width:' + W + 'px;height:56px"><div style="position:absolute;left:' + Math.round((r.todayPct / 100) * r.tot * ppd) + 'px;top:0;bottom:0;width:2px;background:var(--text);opacity:.7"></div>' +
+      (a != null && w ? '<div class="gb ' + k + '" data-bar="' + l.id + '" style="left:' + a + 'px;width:' + w + 'px"><div class="hd l"></div>' + (k === 'doing' ? '<div style="width:' + Math.min(100, l.av || 0) + '%;height:100%;background:repeating-linear-gradient(135deg,#4fa8f0 0 6px,#2f6fc0 6px 12px)"></div>' : '') + '<div class="hd r"></div></div>' : '<span class="muted" style="position:absolute;left:12px;top:18px">Pas de dates : glissez ici pour en poser</span>') + '</div></div>';
+  });
+  return h + '</div></div><div class="muted" style="margin-top:10px">Plein = terminé · hachuré = en cours (la part hachurée est la part faite) · pointillé = à venir · trait blanc = aujourd\'hui. La colonne des lots reste fixe quand on défile.</div>';
+}
+function viewReserves(){
+  var rs = D.reserves.filter(function(x){ return x.chantierId == S.cid; }), open = rs.filter(function(x){ return x.statut === 'ouverte' || x.statut === 'en_cours'; });
+  var lotName = function(id){ var l = D.lots.filter(function(x){ return x.id == id; })[0]; return l ? lotLabel(l) : '—'; };
+  var h = '<h2 style="font-size:24px;margin-bottom:12px">Réserves</h2><div class="muted" style="margin-bottom:10px">' + open.length + ' ouverte' + (open.length > 1 ? 's' : '') + ' sur ' + rs.length + '. Les nouvelles arrivent par le compte rendu de visite (« À traiter »).</div>';
+  if (!rs.length) return h + '<div class="card muted">Aucune réserve pour ce chantier.</div>';
+  h += '<div class="tbl"><div style="min-width:560px">' + rs.map(function(r){ var op = r.statut === 'ouverte' || r.statut === 'en_cours'; return '<div class="row" style="grid-template-columns:44px minmax(180px,1fr) 160px 170px"><span class="muted">' + esc(r.ref || '') + '</span><div><div style="font-weight:600">' + esc(r.titre) + '</div><div class="muted" style="font-size:13px">' + esc(lotName(r.lotId)) + (r.lieu ? ' · ' + esc(r.lieu) : '') + '</div></div><span class="st" style="color:' + (op ? 'var(--red)' : 'var(--green)') + '">' + (op ? '⚑ Ouverte' : '✓ Levée') + '</span><select data-rstat="' + r.id + '" style="min-height:44px">' + [['ouverte', 'Ouverte'], ['en_cours', 'En cours'], ['levee', 'Levée'], ['verifiee', 'Vérifiée']].map(function(o){ return '<option value="' + o[0] + '"' + (r.statut === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>'; }).join('') + '</div></div>';
+  return h;
+}
+function viewATraiter(){
+  var items = D.crs.filter(function(c){ return c.aValider && c.chantierId == S.cid; });
+  var h = '<h2 style="font-size:24px;margin-bottom:12px">À traiter</h2>';
+  if (!items.length) return h + '<div class="card muted">Rien à traiter. Les comptes rendus de visite arrivent ici pour validation.</div><div class="muted" style="margin-top:10px">Les messages des artisans et les situations de travaux ne sont pas encore repris dans cette version (ancien module).</div>';
+  var lotName = function(id){ var l = D.lots.filter(function(x){ return x.id == id; })[0]; return l ? lotLabel(l) : 'Sans lot'; };
+  return h + items.map(function(c){
+    return '<div class="card" style="max-width:720px;margin-bottom:14px;display:flex;flex-direction:column;gap:10px"><div class="eyebrow">Compte rendu à valider · ' + esc(c.num) + ' · ' + frDate(c.date) + '</div><h2 style="font-size:24px">Visite du ' + frDate(c.date) + '</h2>' +
+      [['Météo', c.meteo], ['Présents', c.presents], ['Avancement', c.avancement]].map(function(x){ return x[1] ? '<div class="rub"><div class="eyebrow">' + x[0] + '</div><div>' + esc(x[1]) + '</div></div>' : ''; }).join('') +
+      ((c.propositions || []).length ? '<div class="rub"><div class="eyebrow">Avancement proposé</div>' + c.propositions.map(function(q){ return '<div>' + esc(lotName(q.lotId)) + ' : ' + q.de + ' % → <b>' + q.a + ' %</b></div>'; }).join('') + '<div class="muted">Appliqué aux lots à la validation.</div></div>' : '') +
+      (c.reserves ? '<div class="rub"><div class="eyebrow">Réserves</div><div style="white-space:pre-line">' + esc(c.reserves) + '</div><div class="muted">' + (c.reservesNouvelles || []).length + ' ajoutée' + ((c.reservesNouvelles || []).length > 1 ? 's' : '') + ' aux Réserves à la validation.</div></div>' : '') +
+      (c.decisions ? '<div class="rub"><div class="eyebrow">Décisions</div><div>' + esc(c.decisions) + '</div></div>' : '') +
+      '<div class="rub' + (c.prochaine ? '' : ' miss') + '"><div class="eyebrow">Prochaine réunion</div>' + (c.prochaine ? '<div>' + esc(c.prochaine) + '</div>' : '<div class="muted">Non définie</div>') + '</div>' +
+      '<div class="muted">📷 ' + (c.photos || []).length + ' photo' + ((c.photos || []).length > 1 ? 's' : '') + ' · visible du client : <b>non</b> (interne)</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn big pri" type="button" data-valid="' + c.id + '">✓ Valider et classer au dossier</button><button class="btn big ghost" type="button" data-ignore="' + c.id + '">Ignorer</button></div></div>';
+  }).join('');
+}
+function bindBureau(){
+  var b = $('bureau'), q = function(s, f){ [].forEach.call(b.querySelectorAll(s), f); };
+  q('[data-view]', function(x){ x.onclick = function(){ S.view = x.getAttribute('data-view'); renderBureau(); }; });
+  q('[data-zoom]', function(x){ x.onclick = function(){ S.zoom = x.getAttribute('data-zoom'); renderBureau(); }; });
+  if ($('g-today')) $('g-today').onclick = function(){ var g = $('g-scroll'), r = rangeDates(lotsOf()), ppd = S.zoom === 'mois' ? 5 : 14; g.scrollLeft = Math.max(0, (r.todayPct / 100) * r.tot * ppd - g.clientWidth / 2 + 230); };
+  q('[data-row]', function(x){ x.onclick = function(e){ if (e.target.closest('select,input')) return; S.lotId = +x.getAttribute('data-row'); renderBureau(); }; });
+  q('[data-statut]', function(x){ x.onchange = function(){ var l = D.lots.filter(function(y){ return y.id == x.getAttribute('data-statut'); })[0]; if (!l) return; l.statut = x.value; if (l.statut === 'termine') l.av = 100; save('lots', l); renderBureau(); }; });
+  q('[data-av]', function(x){ x.onchange = function(){ var l = D.lots.filter(function(y){ return y.id == x.getAttribute('data-av'); })[0]; if (!l) return; l.av = Math.max(0, Math.min(100, parseFloat(x.value) || 0)); if (l.av > 0 && l.av < 100 && l.statut === 'attribue') l.statut = 'en_cours'; if (l.av === 100) l.statut = 'termine'; save('lots', l); renderBureau(); }; });
+  q('[data-rstat]', function(x){ x.onchange = function(){ var r = D.reserves.filter(function(y){ return y.id == x.getAttribute('data-rstat'); })[0]; if (!r) return; r.statut = x.value; r.dateLevee = (x.value === 'levee' || x.value === 'verifiee') ? (r.dateLevee || today()) : ''; save('reserves', r); renderBureau(); }; });
+  q('[data-valid]', function(x){ x.onclick = function(){ validerCR(+x.getAttribute('data-valid')); }; });
+  q('[data-ignore]', function(x){ x.onclick = function(){ var c = D.crs.filter(function(y){ return y.id == x.getAttribute('data-ignore'); })[0]; if (c && confirm('Ignorer : le compte rendu reste enregistré mais rien n\'est appliqué aux lots ni aux réserves.')) { c.aValider = false; c.ignore = true; save('crs', c); renderBureau(); renderTabs(); } }; });
+  q('[data-bar]', function(x){ barDrag(x); });
+}
+function validerCR(id){
+  var c = D.crs.filter(function(y){ return y.id == id; })[0]; if (!c) return;
+  (c.propositions || []).forEach(function(q){ var l = D.lots.filter(function(y){ return y.id == q.lotId; })[0]; if (!l) return; l.av = q.a; if (q.a > 0 && q.a < 100 && l.statut === 'attribue') l.statut = 'en_cours'; if (q.a === 100) l.statut = 'termine'; save('lots', l); });
+  var n = D.reserves.filter(function(r){ return r.chantierId == c.chantierId; }).length;
+  (c.reservesNouvelles || []).forEach(function(r){ n++; var photos = r.photoMediaId ? [{ mediaId:r.photoMediaId, caption:'' }] : []; var rs = { id:uid(), chantierId:c.chantierId, ref:'R' + String(n).padStart(2, '0'), titre:r.titre, description:r.description || '', lieu:r.lieu || '', lotId:r.lotId || null, intervId:null, priorite:'normale', origine:'visite ' + c.num, echeance:'', statut:'ouverte', dateLevee:'', photos:photos }; D.reserves.push(rs); save('reserves', rs); });
+  c.aValider = false; c.valideLe = new Date().toISOString(); save('crs', c);
+  toast('Compte rendu validé : lots et réserves mis à jour.'); renderBureau(); renderTabs();
+}
+/* Glisser une barre du Planning : décaler / changer les dates (jour entier) */
+function barDrag(el){
+  var lot = D.lots.filter(function(y){ return y.id == el.getAttribute('data-bar'); })[0]; if (!lot) return;
+  var ppd = S.zoom === 'mois' ? 5 : 14, x0, l0, w0, mode = null;
+  el.onpointerdown = function(e){ mode = e.target.classList.contains('l') ? 'l' : e.target.classList.contains('r') ? 'r' : 'm'; x0 = e.clientX; l0 = parseFloat(el.style.left); w0 = parseFloat(el.style.width); el.setPointerCapture(e.pointerId); e.preventDefault(); };
+  el.onpointermove = function(e){ if (!mode) return; var dx = Math.round((e.clientX - x0) / ppd) * ppd; if (mode === 'm') el.style.left = (l0 + dx) + 'px'; else if (mode === 'l') { el.style.left = (l0 + dx) + 'px'; el.style.width = Math.max(ppd, w0 - dx) + 'px'; } else el.style.width = Math.max(ppd, w0 + dx) + 'px'; };
+  el.onpointerup = function(){
+    if (!mode) return; mode = null; var r = rangeDates(lotsOf()), a = parseFloat(el.style.left), w = parseFloat(el.style.width);
+    var iso = function(px){ var d = new Date(r.min.getTime() + Math.round(px / ppd) * 864e5); return d.toISOString().slice(0, 10); };
+    lot.debut = iso(a); lot.fin = iso(a + w); save('lots', lot); renderBureau();
+  };
+}
+
+/* ═══════════ Démarrage ═══════════ */
+function renderAll(){ renderTop(); renderTabs(); if (S.mode === 'terrain') { renderStageBar(); renderTiles(); renderSide(); renderDock(); renderMic(); applyStage(); } else renderBureau(); }
+function boot2(){
+  var c = chantier(); if (!c) { renderAll(); return; }
+  visGet(c.id).then(function(v){ VIS = v; renderAll(); loadMaquette(); });
+}
+function ensureChantier(){
+  if (S.cid != null && chantier()) return;
+  var want = lk('px2.cid'), act = D.chantiers.filter(function(c){ return c.statut !== 'termine' && c.statut !== 'archive'; });
+  var pick = D.chantiers.filter(function(c){ return String(c.id) === want; })[0] || act[0] || D.chantiers[0];
+  if (pick) { S.cid = pick.id; boot2(); }
+}
+function startData(){
+  var n = 0, any = function(){ ensureChantier(); if (S.mode === 'terrain') { renderSide(); renderTiles(); renderDock(); applyStage(); renderTop(); } else { renderBureau(); renderTabs(); } };
+  ['chantiers', 'lots', 'intervenants', 'reserves', 'crs'].forEach(function(k){ FB.listen(k, function(a, pend){ D[k] = a; S.pending = !!pend; any(); }); });
+}
+function authed(email){
+  FB.role(email.toLowerCase()).then(function(role){
+    S.role = role || ''; S.user = email;
+    if (['admin', 'equipe', 'chantier'].indexOf(S.role) < 0) { $('app').innerHTML = '<div class="card" style="margin:24px">Ce module est réservé à l\'équipe Phénix.</div>'; return; }
+    $('login').style.display = 'none'; if (S.role === 'chantier') S.mode = 'terrain'; setMode(S.mode); startData();
+  }).catch(function(){ $('login').style.display = 'none'; setMode(S.mode); startData(); });
+}
+function init(){
+  S.mode = lk('px2.mode') === 'bureau' ? 'bureau' : 'terrain';
+  window.addEventListener('online', function(){ S.online = true; renderTop(); }); window.addEventListener('offline', function(){ S.online = false; renderTop(); });
+  /* ordres du Shell : ouvrir le chantier d'un dossier */
+  window.addEventListener('message', function(ev){ var d = ev.data; if (!d || d.source !== 'phenix-shell' || d.action !== 'open-projet' || d.id == null) return; var c = D.chantiers.filter(function(x){ return String(x.projetId) === String(d.id); })[0]; if (c) { S.cid = c.id; M3.cid = null; if (d.onglet === 'avancement' || d.onglet === 'planning') { S.mode = 'bureau'; S.tab = 'lots'; S.view = d.onglet === 'planning' ? 'planning' : 'liste'; } else if (d.onglet === 'reception') { S.mode = 'bureau'; S.tab = 'reserves'; } setMode(S.mode); boot2(); } });
+  try { window.parent.postMessage({ source:'phenix-chantier', ready:true }, '*'); } catch (e) {}
+  if (FB.demo) { demoSeed(); setMode(S.mode); boot2(); return; }
+  $('lg-go').onclick = function(){ FB.login($('lg-e').value.trim(), $('lg-p').value).catch(function(){ $('lg-m').textContent = 'Connexion refusée.'; }); };
+  FB.onAuth(function(u){ if (u) authed(u.email); else if (window.parent === window) $('login').style.display = 'flex'; });
+}
+if (window.FB) init(); else window.addEventListener('fb-loaded', init, {once:true});
+</script>
+</body>
+</html>
