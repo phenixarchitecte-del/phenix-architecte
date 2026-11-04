@@ -5,6 +5,12 @@
 ══════════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_dossier.html
 ──────────────────────────────────────────────────────────────────────
+ 04/11/2026 — CHECKLIST DE L'ALTERNANTE (portail « Mon espace », onglet Checklist). Dossier reste la source de vérité :
+   1. publie le modèle de checklist (ids calculés ici) dans phenix_projets_assistante/_checklist_modele ;
+   2. ajoute checklist + checklistNA à la copie filtrée des projets (aucune donnée financière) ;
+   3. reprend les coches faites par l'alternante (collection phenix_checklist_equipe, une ligne par coche), les applique au
+      projet, met à jour l'avancement puis supprime la ligne. Seul le compte administrateur les traite.
+   Repérer : [Checklist équipe].
  27/10/2026 (2) — CORRECTIF : un ordre du shell (ouvrir un projet, la checklist) attendait au plus 4,5 s le chargement des projets ;
    à l'ouverture de Dossier depuis la Synthèse (connexion + chargement), c'était trop court et l'ordre était perdu. Attente portée à ~18 s.
  27/10/2026 — SYNTHÈSE 3D : ordre « open-projet » avec onglet: 'checklist' (+ groupe: 'f3'…) → ouvre l'onglet Checklist sur ce
@@ -151,6 +157,13 @@ window._fb = {
   // [Espace assistante] copie FILTRÉE des projets, lue par le portail « Mon espace »
   async saveProjetAssistante(p) { await setDoc(doc(db, 'phenix_projets_assistante', String(p.id)), p); },
   async deleteProjetAssistante(id) { await deleteDoc(doc(db, 'phenix_projets_assistante', String(id))); },
+  // [Checklist équipe] coches faites par l'alternante dans « Mon espace » : une ligne par coche, reprise puis supprimée par Dossier
+  listenChecklistOps(callback, onError) {
+    return onSnapshot(collection(db, 'phenix_checklist_equipe'), snap => {
+      const l = []; snap.forEach(d => { const x = d.data() || {}; x.opId = d.id; l.push(x); }); callback(l);
+    }, err => { if (onError) onError(err); });
+  },
+  async deleteChecklistOp(id) { await deleteDoc(doc(db, 'phenix_checklist_equipe', String(id))); },
 
   // Sauvegarde un projet (crée ou met à jour)
   async saveProjet(p) {
@@ -5591,6 +5604,7 @@ function projetPourAssistante(p) {
     id: p.id, ref: p.ref || '', nom: p.nom || '', client: p.client || '', tel: p.tel || '', email: p.email || '', adresse: p.adresse || '',
     type: p.type || '', mission: p.mission || '', phase: p.phase || '', statut: p.statut || '', avancement: avancementProjet(p),
     date: p.date || '', surface: p.surface || '', artisans, echeances,
+    checklist: Object.assign({}, p.checklist || {}), checklistNA: Object.assign({}, p.checklistNA || {}),   // [Checklist équipe] cases cochées / groupes non applicables (aucune donnée financière)
     infos: { etat: inf.etat || '', prochaine: inf.prochaine || '', adire: inf.adire || '', aeviter: inf.aeviter || '', faq: inf.faq || '' },
   };
 }
@@ -5606,9 +5620,74 @@ async function syncAssistanteProjet(p, force) {
 }
 async function syncAssistanteTout(force) {
   let n = 0;
+  try { await publierModeleChecklist(force); } catch(e) { console.warn('Modèle checklist :', e); }   // [Checklist équipe]
   for (const p of (stateDossier.projets || [])) { try { if (await syncAssistanteProjet(p, force)) n++; } catch(e) { console.warn('Synchro assistante :', e); } }
   return n;
 }
+
+// ═══════════════════════════════════════════════════════════════
+//  [Checklist équipe] — onglet Checklist du portail « Mon espace »
+//  Le modèle (CHECKLIST_TEMPLATE) reste ICI, source de vérité : il est
+//  publié avec ses identifiants déjà calculés, pour que le portail n'ait
+//  jamais une copie différente. Les coches de l'alternante arrivent une
+//  par une dans phenix_checklist_equipe ; Dossier les applique au projet.
+// ═══════════════════════════════════════════════════════════════
+const _MODELE_CK_ID = '_checklist_modele';
+let _modeleCkHash = '';
+async function publierModeleChecklist(force) {
+  if (!window._fb || !window._fb.saveProjetAssistante) return false;
+  if (typeof getCurrentUserRole === 'function' && getCurrentUserRole() !== 'admin') return false;
+  const groupes = CHECKLIST_TEMPLATE.map(g => ({
+    id: g.id, titre: g.titre, icone: g.icone,
+    sousGroupes: g.sousGroupes.map(sg => ({ id: sg.id, titre: sg.titre, taches: sg.taches.map(t => ({ id: _checklistItemId(g.id, sg.id, t), texte: t })) })),
+  }));
+  const h = JSON.stringify(groupes);
+  if (!force && _modeleCkHash === h) return false;
+  await window._fb.saveProjetAssistante({ id: _MODELE_CK_ID, groupes, maj: new Date().toISOString() });
+  _modeleCkHash = h;
+  return true;
+}
+let _ckOps = [], _ckBusy = false;
+async function appliquerCochesEquipe() {
+  if (_ckBusy || !_ckOps.length) return;
+  if (typeof getCurrentUserRole === 'function' && getCurrentUserRole() !== 'admin') return;   // seul le compte de Maxime traite les coches
+  if (!stateDossier.projets || !stateDossier.projets.length) return;                           // projets pas encore chargés : on repasse après
+  _ckBusy = true;
+  const traites = new Set();
+  try {
+    const ops = _ckOps.slice().sort((a, b) => String(a.at || '') < String(b.at || '') ? -1 : 1);
+    const parProjet = {};
+    ops.forEach(o => { (parProjet[String(o.projetId)] = parProjet[String(o.projetId)] || []).push(o); });
+    for (const pid of Object.keys(parProjet)) {
+      const p = stateDossier.projets.find(x => String(x.id) === pid);
+      if (p) {
+        if (!p.checklist) p.checklist = {};
+        parProjet[pid].forEach(o => { if (o.v) p.checklist[o.itemId] = true; else delete p.checklist[o.itemId]; });
+        p.avancementAuto = true; p.avancement = avancementProjet(p);
+        await saveProjet(p);
+        try { await syncAssistanteProjet(p, true); } catch(e) {}   // la copie du portail est à jour AVANT de supprimer les lignes (pas de clignotement)
+      }
+      for (const o of parProjet[pid]) { try { await window._fb.deleteChecklistOp(o.opId); } catch(e) { console.warn('Coche équipe non supprimée :', e); } traites.add(o.opId); }
+    }
+  } catch(e) { console.warn('Coches équipe :', e); }
+  finally { _ckBusy = false; }
+  if (_ckOps.some(o => !traites.has(o.opId))) setTimeout(appliquerCochesEquipe, 400);   // coches arrivées pendant le traitement
+}
+let _ckListening = false;
+function demarrerCochesEquipe(essai) {
+  essai = essai || 0;
+  try {
+    if (_ckListening) return;
+    // Connexion pas encore faite (ou fonctions pas prêtes) : on réessaie quelques secondes plus tard
+    const prete = window._fb && window._fb.listenChecklistOps && typeof emailUtilisateurCourant === 'function' && emailUtilisateurCourant();
+    if (!prete) { if (essai < 30) setTimeout(() => demarrerCochesEquipe(essai + 1), 3000); return; }
+    if (typeof getCurrentUserRole === 'function' && getCurrentUserRole() !== 'admin') return;
+    _ckListening = true;
+    window._fb.listenChecklistOps(l => { _ckOps = l || []; appliquerCochesEquipe(); }, e => console.warn('phenix_checklist_equipe :', e && e.code));
+  } catch(e) { console.warn('Coches équipe non démarrées :', e); }
+}
+setTimeout(demarrerCochesEquipe, 6000);
+setInterval(() => { if (_ckOps.length) appliquerCochesEquipe(); }, 15000);   // reprise si les projets arrivent après la première coche
 async function syncAssistanteBouton() {
   const n = await syncAssistanteTout(true);
   toast_d('✅ ' + n + ' projet(s) synchronisé(s) pour l\'assistante.');

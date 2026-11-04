@@ -9,6 +9,13 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 <title>Phénix-Architecture · Mon espace</title>
 <!--
+ 04/11/2026 — ONGLET « CHECKLIST » pour l'alternante (compte « tâches seulement », ?taches=1). Elle choisit un projet, voit les fiches
+   du livret de process (F1 à F11…) et coche les tâches réalisées. Elle ne lit JAMAIS phenix_projets (finances) :
+   • lecture : phenix_projets_assistante (copie filtrée) → cases déjà cochées + modèle de checklist (doc _checklist_modele, publié par Dossier) ;
+   • écriture : une ligne par coche dans phenix_checklist_equipe (projetId, itemId, v, par, at), reprise puis supprimée par Dossier ;
+   • l'affichage superpose les coches en attente à la copie, donc elle voit son travail tout de suite, même si Dossier est fermé.
+   Les groupes « non applicables » (décidés par Maxime) s'affichent mais ne se cochent pas. Repérer : [Checklist équipe], ck*.
+══════════════════════════════════════════════════════════════════════
  17/10/2026 — FUSION COMPLÈTE : l'ancien module Relances (phenix_relances.html) et le portail à deux onglets
    (phenix_assistante.html) sont intégrés ici. Onglets : Tâches · Projets · Devis à relancer. Ce fichier remplace les trois.
    Pour l'assistante (?restreint=1) l'onglet Devis s'ouvre en premier. Repérer : #rel-view, rsheet, window.R.
@@ -105,6 +112,8 @@ try { window.parent.postMessage({ source:'phenix-module', readyForLogin:true }, 
 window._fb = {
   saveTache:      (id, patch) => setDoc(doc(db, 'phenix_taches', String(id)), patch, { merge: true }),
   saveNotifTache: (id, data)  => setDoc(doc(db, 'phenix_notifs_taches', String(id)), data, { merge: true }),
+  // [Checklist équipe] une coche = une ligne (jamais modifiée ensuite) ; Dossier la reprend puis la supprime
+  saveChecklistOp: (id, data) => setDoc(doc(db, 'phenix_checklist_equipe', String(id)), data),
   logout: () => signOut(auth),
 };
 
@@ -159,7 +168,7 @@ Object.assign(window._fb, {
   };
 })();
 
-let unsubT = null, unsubP = null, unsubC = null, unsubS = null, unsubL = null, unsubU = null, unsubD = null, unsubN = null, unsubF = null, unsubRP = null;
+let unsubT = null, unsubP = null, unsubC = null, unsubS = null, unsubL = null, unsubU = null, unsubD = null, unsubN = null, unsubF = null, unsubRP = null, unsubK = null;
 const lire = snap => { const l = []; snap.forEach(d => { const x = d.data(); if (x && x.id == null) x.id = d.id; l.push(x); }); return l; };
 onAuthStateChanged(auth, user => {
   const ov = document.getElementById('phenix-login');
@@ -173,6 +182,7 @@ onAuthStateChanged(auth, user => {
   if (unsubN) { unsubN(); unsubN = null; }
   if (unsubF) { unsubF(); unsubF = null; }
   if (unsubRP) { unsubRP(); unsubRP = null; }
+  if (unsubK) { unsubK(); unsubK = null; }
   if (user) {
     if (ov) ov.style.display = 'none';
     window.E.setUser(user.email || '');
@@ -180,8 +190,14 @@ onAuthStateChanged(auth, user => {
     const _qT = _solo ? query(collection(db, 'phenix_taches'), where('assigneA', '==', String(user.email || '').toLowerCase())) : collection(db, 'phenix_taches');
     unsubT = onSnapshot(_qT, s => window.E.setTaches(lire(s)),  e => window.E.onError(e, 'tâches'));
     const _restr = /[?&]restreint=1/.test(location.search);
+    // [Checklist équipe] copie filtrée des projets : lue aussi par le compte « tâches seulement » (cases cochées + modèle de checklist)
+    unsubP = onSnapshot(collection(db, 'phenix_projets_assistante'), s => window.E.setProjets(lire(s)), e => window.E.onError(e, 'projets'));
+    if (_solo) {
+      // ses propres coches en attente (Dossier les reprend puis les supprime) : requête limitée à ses lignes, comme pour les tâches
+      const _qK = query(collection(db, 'phenix_checklist_equipe'), where('par', '==', String(user.email || '').toLowerCase()));
+      unsubK = onSnapshot(_qK, s => window.E.setCkOps(lire(s)), e => window.E.onError(e, 'coches'));
+    }
     if (!_solo) {
-      unsubP = onSnapshot(collection(db, 'phenix_projets_assistante'), s => window.E.setProjets(lire(s)), e => window.E.onError(e, 'projets'));
       if (!_restr) unsubC = onSnapshot(collection(db, 'phenix_chiffrage_assistante'), s => window.E.setChiffrage(lire(s)), e => window.E.onError(e, 'chiffrage'));
     }
     // [Accès] personnes assignables = fiches phenix_users (illisible pour un compte « tâches seulement » : liste de secours)
@@ -197,7 +213,7 @@ onAuthStateChanged(auth, user => {
     // [Accès] suivi de chantier et planning de chantier retirés : l'assistante n'a que les devis et les tâches
   } else {
     window.R.setFactures([]); window.R.setProjets([]); window.R.setDevis([]);
-    window.E.setTaches([]); window.E.setProjets([]); window.E.setChiffrage([]); window.E.setSuivi([]);
+    window.E.setTaches([]); window.E.setProjets([]); window.E.setChiffrage([]); window.E.setSuivi([]); window.E.setCkOps([]);
     if (ov) ov.style.display = 'flex';
   }
 });
@@ -313,6 +329,23 @@ select.field{appearance:auto}
 .alerte b{color:#fff}
 .dire{background:var(--accent-bg);border:1px solid rgba(79,168,240,.35);border-radius:var(--r-md);padding:10px 12px;font-size:13px;color:var(--text);margin-bottom:10px}
 .dire small{display:block;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;font-size:10px;margin-bottom:3px}
+/* [Checklist équipe] — l'état « fait » est doublé d'un texte barré et d'un ✓, jamais porté par la couleur seule */
+.ck-g{padding:0;overflow:hidden;border-left-width:1px}
+.ck-g.fini{border-color:rgba(79,209,139,.45)}
+.ck-h{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;min-height:54px;background:transparent;border:none;color:var(--text);text-align:left;font-size:14px;font-weight:600}
+.ck-h .t{min-width:0}
+.ck-h small{display:block;font-size:12px;color:var(--text2);font-weight:400;margin-top:1px}
+.ck-h .r{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.ck-h .chev{transition:transform .15s}
+.ck-g.open .ck-h .chev{transform:rotate(180deg)}
+.ck-b{display:none;border-top:1px solid var(--border);padding:2px 14px 10px}
+.ck-g.open .ck-b{display:block}
+.ck-sg{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);margin:12px 0 2px;font-weight:600}
+.ck-i{display:flex;align-items:flex-start;gap:12px;padding:11px 0;min-height:46px;font-size:13.5px;line-height:1.4;border-bottom:1px solid rgba(120,170,220,.08);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.ck-i:last-child{border-bottom:none}
+.ck-i input{width:24px;height:24px;flex-shrink:0;margin:0;accent-color:var(--accent);cursor:pointer}
+.ck-i.fait span{color:var(--text3);text-decoration:line-through}
+.ck-na{font-size:12px;color:var(--text2);padding:0 14px 12px}
 
 /* ── Onglet Devis : règles issues de phenix_relances.html ── */
 .card.cloture{border-left-color:#b48cf0}
@@ -391,9 +424,10 @@ select.field{appearance:auto}
 
   <div id="err"></div>
 
-  <style>html.solo #tabs [data-v=projets],html.solo #tabs [data-v=devis]{display:none!important}</style>
+  <style>html.solo #tabs [data-v=projets],html.solo #tabs [data-v=devis]{display:none!important}html:not(.solo) #tabs [data-v=checklist]{display:none!important}</style>
   <div class="tabs" id="tabs">
     <button class="tab active" data-v="taches" onclick="E.vue('taches')">Tâches <span class="n" id="n-taches">0</span></button>
+    <button class="tab" data-v="checklist" onclick="E.vue('checklist')">Checklist</button>
     <button class="tab" data-v="projets" onclick="E.vue('projets')">Projets <span class="n" id="n-projets">0</span></button>
     <button class="tab" data-v="devis" onclick="E.vue('devis')">Devis à relancer <span class="n" id="n-devis">0</span></button>
   </div>
@@ -461,7 +495,8 @@ var RESTREINT = /[?&]restreint=1/.test(location.search);
 // [Accès] ?taches=1 : compte « tâches seulement » (alternante) — uniquement les tâches qui lui sont assignées, ni projets ni devis
 var TACHES_SEULES = /[?&]taches=1/.test(location.search);
 if (TACHES_SEULES) { try { document.documentElement.classList.add('solo'); } catch (e) {} }
-var S = { me:'', taches:[], projets:[], chiffrage:{}, suivi:{}, v:(!TACHES_SEULES && (/#devis/.test(location.hash) || (RESTREINT && !/#taches/.test(location.hash)))) ? 'devis' : 'taches', filtre:'all', q:'', qp:'', projetId:null, tasksReady:false };
+var S = { me:'', taches:[], projets:[], chiffrage:{}, suivi:{}, v:(!TACHES_SEULES && (/#devis/.test(location.hash) || (RESTREINT && !/#taches/.test(location.hash)))) ? 'devis' : (TACHES_SEULES && /#checklist/.test(location.hash) ? 'checklist' : 'taches'), filtre:'all', q:'', qp:'', projetId:null, tasksReady:false,
+  modele:null, ckOps:[], ckProjet:null, ckQ:'', ckErr:{} };   // [Checklist équipe]
 
 function iso(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function todayISO(){ return iso(new Date()); }
@@ -808,33 +843,147 @@ function renderFiche(){
   window.scrollTo(0, 0);
 }
 
+/* ═══════════ RENDU : CHECKLIST (alternante) — [Checklist équipe] ═══════════ */
+var CK_OPEN = {};   // projetId → { groupeId: true } : groupes dépliés, conservés d'un rendu à l'autre (la synchro temps réel re-dessine la page)
+var CK_TEXTE = null, CK_TEXTE_DE = null;   // itemId → texte de la tâche (pour le journal)
+function ckTexte(itemId){
+  if (S.modele && CK_TEXTE_DE !== S.modele) {
+    CK_TEXTE = {}; CK_TEXTE_DE = S.modele;
+    (S.modele.groupes || []).forEach(function(g){ g.sousGroupes.forEach(function(sg){ sg.taches.forEach(function(t){ CK_TEXTE[t.id] = t.texte; }); }); });
+  }
+  return (CK_TEXTE && CK_TEXTE[itemId]) || '';
+}
+// Cases cochées = copie de Dossier + MES coches pas encore reprises par Dossier (dans l'ordre où elles ont été faites)
+function ckFaits(p){
+  var m = {}, k, base = p.checklist || {};
+  for (k in base) if (base[k]) m[k] = true;
+  S.ckOps.filter(function(o){ return o && String(o.projetId) === String(p.id); })
+    .sort(function(a,b){ return String(a.at||'') < String(b.at||'') ? -1 : 1; })
+    .forEach(function(o){ if (o.v) m[o.itemId] = true; else delete m[o.itemId]; });
+  return m;
+}
+function ckCompte(p){
+  var done = ckFaits(p), na = p.checklistNA || {}, total = 0, faits = 0, parG = {};
+  ((S.modele && S.modele.groupes) || []).forEach(function(g){
+    var gt = 0, gf = 0;
+    g.sousGroupes.forEach(function(sg){ sg.taches.forEach(function(t){ gt++; if (done[t.id]) gf++; }); });
+    parG[g.id] = { total:gt, faits:gf, na:!!na[g.id] };
+    if (!na[g.id]) { total += gt; faits += gf; }   // un groupe non applicable ne compte ni comme fait, ni comme à faire
+  });
+  return { total:total, faits:faits, parG:parG, done:done };
+}
+function ckBanniere(){
+  var h = '';
+  if (S.ckErr.projets) h += '<div class="banner">⚠️ Les projets ne sont pas lisibles : accès refusé par les règles Firestore (collection phenix_projets_assistante). Prévenez Maxime.</div>';
+  if (S.ckErr.coches) h += '<div class="banner">⚠️ Vos coches ne peuvent pas être lues : accès refusé par les règles Firestore (collection phenix_checklist_equipe). Prévenez Maxime.</div>';
+  return h;
+}
+function renderChecklist(){
+  var ban = ckBanniere();
+  if (S.ckProjet != null) { renderCkFiche(ban); return; }
+  if (!S.modele) {
+    $('view').innerHTML = ban + (S.ckErr.projets ? '' : '<div class="empty"><div class="big">☑️</div>La checklist n\'est pas encore disponible.<br><small>Maxime doit ouvrir Dossier une fois pour la publier.</small></div>');
+    return;
+  }
+  var q = S.ckQ.toLowerCase();
+  var l = S.projets.filter(function(p){ return !q || ((p.nom||'') + ' ' + (p.client||'') + ' ' + (p.ref||'')).toLowerCase().indexOf(q) >= 0; })
+    .sort(function(a,b){ return String(a.nom||'').localeCompare(String(b.nom||'')); });
+  var h = ban + '<input class="search" id="qk" placeholder="Rechercher un projet ou un client…" value="' + esc(S.ckQ) + '" oninput="E.setQk(this.value)">';
+  if (!S.projets.length) h += '<div class="empty"><div class="big">📁</div>Aucun projet disponible pour l\'instant.<br><small>Maxime doit ouvrir Dossier pour les synchroniser.</small></div>';
+  h += l.map(function(p){
+    var c = ckCompte(p), pct = c.total ? Math.round(c.faits / c.total * 100) : 0;
+    return '<div class="card click" onclick="E.ckOuvrir(\'' + esc(p.id) + '\')"><div class="c-top"><div><div class="c-client">' + esc(p.nom || p.client) + '</div><div class="c-objet">' + esc(p.client || '') + '</div></div>' +
+      '<span class="chip ' + (pct >= 100 ? 'green' : 'blue') + '">' + (pct >= 100 ? '✓ ' : '') + pct + ' %</span></div>' +
+      '<div class="bar" style="margin-top:9px"><i style="width:' + pct + '%"></i></div>' +
+      '<div class="c-objet" style="margin-top:4px">' + c.faits + ' / ' + c.total + ' tâches réalisées' + (p.phase ? ' · phase ' + esc(p.phase) : '') + '</div></div>';
+  }).join('');
+  $('view').innerHTML = h;
+}
+function renderCkFiche(ban){
+  var p = projetDe(S.ckProjet); if (!p || !S.modele) { S.ckProjet = null; renderChecklist(); return; }
+  var c = ckCompte(p), pct = c.total ? Math.round(c.faits / c.total * 100) : 0, groupes = S.modele.groupes || [];
+  if (!CK_OPEN[p.id]) {   // première ouverture de ce dossier : on déplie le premier groupe pas terminé (les « non applicables » sont ignorés)
+    CK_OPEN[p.id] = {};
+    for (var i = 0; i < groupes.length; i++) { var gc0 = c.parG[groupes[i].id]; if (!gc0.na && gc0.faits < gc0.total) { CK_OPEN[p.id][groupes[i].id] = true; break; } }
+  }
+  var open = CK_OPEN[p.id], pid = esc(p.id);
+  var h = ban + '<button class="btn ghost back" onclick="E.ckFermer()"><i class="ti ti-arrow-left"></i> Tous les projets</button>' +
+    '<div class="box" style="margin-bottom:10px"><div class="c-client" style="font-size:20px">' + esc(p.nom || p.client) + '</div><div class="c-objet">' + esc(p.client || '') + (p.phase ? ' · phase ' + esc(p.phase) : '') + '</div>' +
+    '<div class="bar" style="margin-top:10px;height:10px"><i style="width:' + pct + '%"></i></div>' +
+    '<div class="c-objet" style="margin-top:5px"><b style="color:#fff">' + c.faits + ' / ' + c.total + '</b> tâches réalisées · ' + pct + ' %</div></div>';
+  h += groupes.map(function(g){
+    var gc = c.parG[g.id], gp = gc.total ? Math.round(gc.faits / gc.total * 100) : 0, fini = !gc.na && gc.total > 0 && gc.faits >= gc.total, ouvert = !!open[g.id] && !gc.na;
+    var badge = gc.na ? '<span class="chip red">N/A</span>' : (fini ? '<span class="chip green">✓ Terminé</span>' : '<span class="chip">' + gp + ' %</span>');
+    var body = '';
+    if (gc.na) body = '<div class="ck-na">Groupe non applicable à ce dossier (décision de Maxime).</div>';
+    else body = '<div class="ck-b">' + g.sousGroupes.map(function(sg){
+      return (g.sousGroupes.length > 1 || sg.titre !== 'Déroulé' ? '<div class="ck-sg">' + esc(sg.titre) + '</div>' : '') + sg.taches.map(function(t){
+        var fait = !!c.done[t.id];
+        return '<label class="ck-i' + (fait ? ' fait' : '') + '"><input type="checkbox"' + (fait ? ' checked' : '') + ' onchange="E.ckToggle(\'' + pid + '\',\'' + esc(t.id) + '\',this.checked)"><span>' + esc(t.texte) + '</span></label>';
+      }).join('');
+    }).join('') + '</div>';
+    return '<div class="card ck-g' + (ouvert ? ' open' : '') + (fini ? ' fini' : '') + '" data-g="' + esc(g.id) + '">' +
+      '<button class="ck-h" ' + (gc.na ? 'disabled style="cursor:default;opacity:.8"' : 'onclick="E.ckGroupe(this,\'' + pid + '\',\'' + esc(g.id) + '\')"') + '>' +
+      '<div class="t"><span' + (gc.na ? ' style="text-decoration:line-through"' : '') + '>' + esc(g.titre) + '</span><small>' + (gc.na ? 'Non applicable à ce dossier' : gc.faits + ' / ' + gc.total + ' tâches') + '</small></div>' +
+      '<div class="r">' + badge + (gc.na ? '' : '<i class="ti ti-chevron-down chev"></i>') + '</div></button>' + body + '</div>';
+  }).join('');
+  var y = window.scrollY;   // la synchro temps réel re-dessine la page à chaque coche : on garde la position de lecture
+  $('view').innerHTML = h;
+  window.scrollTo(0, y);
+}
+async function ckToggle(projetId, itemId, v){
+  var p = projetDe(projetId); if (!p) return;
+  var id = rid('ck');
+  try { await window._fb.saveChecklistOp(id, { projetId:String(projetId), itemId:String(itemId), v:!!v, par:S.me, at:now() }); }
+  catch(e){ toast('⚠️ Coche non enregistrée : ' + (e && e.code === 'permission-denied' ? 'accès refusé (règles Firestore)' : (e && e.message) || e)); return; }
+  jr('modifie', 'checklist', ckTexte(itemId) || itemId, { projetId:String(projetId), projetNom:p.nom || p.client || '', detail: v ? 'tâche cochée' : 'tâche décochée' });
+}
+
 /* ═══════════ ORCHESTRATION ═══════════ */
+function vueActive(){ return S.v === 'taches' ? renderTaches : S.v === 'checklist' ? renderChecklist : renderProjets; }
 function render(){
   document.querySelectorAll('#tabs .tab').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-v') === S.v); });
   $('n-projets').textContent = S.projets.length;
   var dv = S.v === 'devis';
   $('view').style.display = dv ? 'none' : ''; $('rel-view').style.display = dv ? '' : 'none';
   if (dv) return;
-  if (document.activeElement && (document.activeElement.id === 'q' || document.activeElement.id === 'qp')) {   // ne pas casser la saisie en cours
+  if (document.activeElement && (document.activeElement.id === 'q' || document.activeElement.id === 'qp' || document.activeElement.id === 'qk')) {   // ne pas casser la saisie en cours
     var id = document.activeElement.id, pos = document.activeElement.selectionStart;
-    (S.v === 'taches' ? renderTaches : renderProjets)();
+    vueActive()();
     var el = $(id); if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch(e){} }
     return;
   }
-  (S.v === 'taches' ? renderTaches : renderProjets)();
+  vueActive()();
 }
 window.E = {
   restreint: RESTREINT,
   setUser: function(email){ S.me = String(email||'').toLowerCase(); $('who').textContent = S.me + (RESTREINT ? '' : ' · aperçu de l\'espace assistante'); render(); },
   setUsers: function(l){ try { majAssignables((l||[]).map(function(x){ return Object.assign({}, x, { email: x.email || x.id }); })); } catch(e){} render(); },
   setTaches: function(l){ S.taches = l || []; S.tasksReady = true; render(); },
-  setProjets: function(l){ S.projets = l || []; render(); },
+  setProjets: function(l){
+    // [Checklist équipe] le document _checklist_modele (publié par Dossier) n'est pas un projet : on le met de côté
+    var ps = [], mod = null; (l || []).forEach(function(x){ if (x && String(x.id) === '_checklist_modele') mod = x; else ps.push(x); });
+    S.projets = ps; S.modele = mod; S.ckErr.projets = false; render();
+  },
+  setCkOps: function(l){ S.ckOps = l || []; S.ckErr.coches = false; render(); },
   onError: function(err, quoi){
     var perm = err && err.code === 'permission-denied';
+    if (TACHES_SEULES && (quoi === 'projets' || quoi === 'coches')) { S.ckErr[quoi] = true; render(); return; }   // compte « tâches seulement » : message dans l'onglet Checklist, pas sur les tâches
     $('err').innerHTML = '<div class="banner">⚠️ Lecture des ' + esc(quoi || 'données') + ' impossible' + (perm ? ' : accès refusé par les règles Firestore (voir la règle à ajouter pour ' + (quoi === 'projets' ? 'phenix_projets_assistante' : quoi === 'chiffrage' ? 'phenix_chiffrage_assistante' : quoi === 'suivi' ? 'phenix_chantier_assistante' : quoi === 'planning' ? 'phenix_planning_assistante' : 'phenix_taches') + ').' : ' : ' + esc((err && err.message) || err)) + '</div>';
   },
-  vue: function(v){ if (TACHES_SEULES) v = 'taches'; S.v = v; if (v === 'projets') S.projetId = null; render(); },
-  setQ: function(v){ S.q = v; render(); }, setQp: function(v){ S.qp = v; render(); },
+  vue: function(v){ if (TACHES_SEULES && v !== 'checklist') v = 'taches'; S.v = v; if (v === 'projets') S.projetId = null; render(); },
+  setQ: function(v){ S.q = v; render(); }, setQp: function(v){ S.qp = v; render(); }, setQk: function(v){ S.ckQ = v; render(); },
+  // [Checklist équipe]
+  ckOuvrir: function(id){ S.ckProjet = id; render(); window.scrollTo(0, 0);
+    try { var p = projetDe(id), k = 'k' + id; window.__consult = window.__consult || {};
+      if (p && (!window.__consult[k] || Date.now() - window.__consult[k] > 600000)) { window.__consult[k] = Date.now(); jr('consulte', 'checklist', p.nom || p.client || p.ref, { projetId:String(p.id), projetNom:p.nom || p.client || '' }); } } catch(e){} },
+  ckFermer: function(){ S.ckProjet = null; render(); window.scrollTo(0, 0); },
+  ckGroupe: function(btn, pid, gid){
+    var g = btn.closest('.ck-g'); if (!g) return;
+    var o = g.classList.toggle('open'), m = CK_OPEN[pid] || (CK_OPEN[pid] = {});
+    if (o) m[gid] = true; else delete m[gid];
+  },
+  ckToggle: ckToggle,
   setFiltre: function(f){ S.filtre = f; render(); },
   ouvrirProjet: function(id){
     S.v = 'projets'; S.projetId = id; render();
