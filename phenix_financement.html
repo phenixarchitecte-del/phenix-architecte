@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="phenix_pdf.js"></script>   <!-- charte PDF Phénix commune (logo, police, pagination) -->
 <title>Phénix-Architecture · Dossier Financement</title>
 
 <script type="module">
@@ -608,144 +609,57 @@ function fillForm(data) {
 
 // ── Génération du PDF de synthèse des travaux ──
 function genererPDF() {
-  const { jsPDF } = window.jspdf;
-  const docPdf = new jsPDF();
-  const navy = [27, 45, 91];
-  const accent = [74, 156, 199];
-  const ink = [15, 30, 61];
-  let y = 18;
-
-  function ensure(h) { if (y + h > 275) { docPdf.addPage(); y = 20; } }
-  function section(titre) {
-    ensure(20);
-    docPdf.setFont('helvetica', 'bold'); docPdf.setFontSize(12); docPdf.setTextColor(...navy);
-    docPdf.text(titre, 15, y); y += 3;
-    docPdf.setDrawColor(...accent); docPdf.line(15, y, 195, y); y += 7;
-    docPdf.setFontSize(10); docPdf.setTextColor(...ink);
-  }
-  function ligne(label, valeur) {
-    docPdf.setFont('helvetica', 'bold');
-    docPdf.text(label, 15, y);
-    docPdf.setFont('helvetica', 'normal');
-    const x = 15 + docPdf.getTextWidth(label) + 3;
-    const lines = docPdf.splitTextToSize(String(valeur), 195 - x);
-    docPdf.text(lines, x, y);
-    y += 6 * lines.length;
-  }
-
-  // ── En-tête entreprise ──
-  docPdf.setFont('helvetica', 'bold'); docPdf.setFontSize(18); docPdf.setTextColor(...navy);
-  docPdf.text('Phénix-Architecture', 15, y); y += 6;
-  docPdf.setFontSize(10); docPdf.setTextColor(...accent);
-  docPdf.text('Maîtrise d\'œuvre · Contractant général', 15, y); y += 5;
-  docPdf.setFont('helvetica', 'normal'); docPdf.setFontSize(8.5); docPdf.setTextColor(90, 105, 130);
-  docPdf.text('Phénix-Architecture EURL · SIRET 987 989 316 00011', 15, y); y += 4;
-  docPdf.text('6 lieu-dit l\'Étreille, 63780 Saint-Georges-de-Mons', 15, y); y += 4;
-  docPdf.text('04 73 73 00 59 · contact@phenixarchitecte.fr · phenix-architecte.fr', 15, y); y += 5;
-  docPdf.setDrawColor(...accent); docPdf.line(15, y, 195, y); y += 9;
-
-  docPdf.setFont('helvetica', 'bold'); docPdf.setFontSize(14); docPdf.setTextColor(...navy);
-  docPdf.text('Dossier de synthèse des travaux', 15, y); y += 9;
-  docPdf.setFontSize(10); docPdf.setTextColor(...ink);
-
-  // ── Client & projet ──
-  const client = document.getElementById('i-client').value || '—';
-  const adresse = document.getElementById('i-adresse').value || '—';
+  const client = document.getElementById('i-client').value || '';
+  const adresse = document.getElementById('i-adresse').value || '';
   const surfaceVal = document.getElementById('i-surface').value;
-  const ref = document.getElementById('i-ref').value || '—';
-  ligne('Client :', client);
-  ligne('Référence projet :', ref);
-  ligne('Adresse du projet :', adresse);
-  ligne('Surface :', surfaceVal ? surfaceVal + ' m²' : '—');
-  y += 6;
-
-  // ── Synthèse des travaux (lots du chiffrage) ──
-  const ch = currentDossier.chiffrage;
-  if (ch && ch.lots && ch.lots.length) {
-    section('Synthèse des travaux');
-    const xNum = 17, xDes = 38, xHt = 140, xTva = 156, xTtc = 193;
-    const entete = () => {
-      docPdf.setFont('helvetica', 'bold'); docPdf.setFontSize(9);
-      docPdf.text('Lot', xNum, y); docPdf.text('Désignation', xDes, y);
-      docPdf.text('Montant HT', xHt, y, { align: 'right' }); docPdf.text('TVA', xTva + 4, y, { align: 'right' });
-      docPdf.text('Montant TTC', xTtc, y, { align: 'right' });
-      y += 2; docPdf.setDrawColor(...navy); docPdf.line(15, y, 195, y); y += 5;
-    };
-    entete();
-    docPdf.setFontSize(9);
-    ch.lots.forEach(l => {
-      if (y > 272) { docPdf.addPage(); y = 20; entete(); docPdf.setFontSize(9); }
-      docPdf.setFont('helvetica', 'normal'); docPdf.setTextColor(...ink);
-      docPdf.text(String(l.num || ''), xNum, y);
-      docPdf.text(docPdf.splitTextToSize(String(l.nom || ''), 98)[0], xDes, y);
-      docPdf.text(fmtEur(l.montantHt), xHt, y, { align: 'right' });
-      docPdf.text((l.tva || 20) + ' %', xTva + 4, y, { align: 'right' });
-      docPdf.setFont('helvetica', 'bold');
-      docPdf.text(fmtEur(l.montantTtc), xTtc, y, { align: 'right' });
-      y += 6;
-    });
-    ensure(14);
-    docPdf.setDrawColor(...navy); docPdf.line(15, y - 3, 195, y - 3); y += 2;
-    docPdf.setFont('helvetica', 'bold'); docPdf.setFontSize(10); docPdf.setTextColor(...navy);
-    docPdf.text('TOTAL', xNum, y);
-    docPdf.text(fmtEur(ch.totalHt), xHt, y, { align: 'right' });
-    docPdf.text(fmtEur(ch.totalTtc), xTtc, y, { align: 'right' });
-    docPdf.setTextColor(...ink);
-    y += 12;
-  }
-
-  // ── Calendrier ──
-  const cal = currentDossier.calendrier || {};
-  section('Calendrier prévisionnel');
-  docPdf.setFont('helvetica', 'normal');
-  docPdf.text('Démarrage prévisionnel : ' + (cal.dateDemarrage || '—'), 20, y); y += 6;
-  docPdf.text('Durée estimée : ' + (cal.dureeTravaux ? cal.dureeTravaux + ' mois' : '—'), 20, y); y += 6;
-  if (cal.jalons) {
-    const jalonsLines = docPdf.splitTextToSize(cal.jalons, 170);
-    docPdf.text(jalonsLines, 20, y);
-    y += jalonsLines.length * 5;
-  }
-  y += 6;
-
-  // ── Pièces du dossier ──
-  section('Pièces du dossier');
-  docPdf.setFontSize(9.5);
-  const cl = currentDossier.checklist || {};
-  CHECKLIST_DEFS.forEach(def => {
-    ensure(8);
-    const item = cl[def.key] || { status: 'manquant' };
-    const statusLabel = item.status === 'obtenu' ? 'Obtenu' : item.status === 'attente' ? 'En attente' : 'Manquant';
-    docPdf.setTextColor(...ink);
-    docPdf.setFont('helvetica', 'normal');
-    docPdf.text('• ' + def.label, 20, y);
-    docPdf.setFont('helvetica', 'bold');
-    docPdf.text(statusLabel, 165, y);   // statut en toutes lettres (lisible sans couleur)
-    y += 6;
+  const ref = document.getElementById('i-ref').value || '';
+  const px = PhenixPDF.create({
+    titre: 'Dossier de synthèse des travaux',
+    sousTitre: 'Édité le ' + new Date().toLocaleDateString('fr-FR')
   });
 
-  // ── Notes ──
+  // Client & projet
+  px.ligne('Client :', client);
+  px.ligne('Référence projet :', ref);
+  px.ligne('Adresse du projet :', adresse);
+  px.ligne('Surface :', surfaceVal ? surfaceVal + ' m²' : '');
+  px.y += 6;
+
+  // Synthèse des travaux (lots du chiffrage)
+  const ch = currentDossier.chiffrage;
+  if (ch && ch.lots && ch.lots.length) {
+    px.section('Synthèse des travaux', 30);
+    px.tableau({
+      colonnes: [
+        { titre: 'Lot', x: 17 },
+        { titre: 'Désignation', x: 38, w: 78 },
+        { titre: 'Montant HT', x: 150, align: 'right' },
+        { titre: 'TVA', x: 168, align: 'right' },
+        { titre: 'Montant TTC', x: 193, align: 'right', gras: true }
+      ],
+      lignes: ch.lots.map(l => [l.num || '', l.nom || '', fmtEur(l.montantHt), (l.tva || 20) + ' %', fmtEur(l.montantTtc)]),
+      total: ['TOTAL', '', fmtEur(ch.totalHt), '', fmtEur(ch.totalTtc)]
+    });
+  }
+
+  // Calendrier (bloc insécable)
+  const cal = currentDossier.calendrier || {};
+  const lignesCal = ['Démarrage prévisionnel : ' + (cal.dateDemarrage || '—'), 'Durée estimée : ' + (cal.dureeTravaux ? cal.dureeTravaux + ' mois' : '—')];
+  px.bloc(lignesCal, { titre: 'Calendrier prévisionnel' });
+  if (cal.jalons) px.paragraphe(cal.jalons);
+
+  // Pièces du dossier (bloc insécable ; statut en toutes lettres)
+  const cl = currentDossier.checklist || {};
+  px.bloc(CHECKLIST_DEFS.map(def => {
+    const item = cl[def.key] || { status: 'manquant' };
+    return { texte: '• ' + def.label, droite: item.status === 'obtenu' ? 'Obtenu' : item.status === 'attente' ? 'En attente' : 'Manquant' };
+  }), { titre: 'Pièces du dossier', taille: 9.5, xDroite: 190 });
+
+  // Notes
   const notes = (document.getElementById('f-notes').value || '').trim();
-  if (notes) {
-    y += 4; section('Notes');
-    docPdf.setFont('helvetica', 'normal');
-    const nl = docPdf.splitTextToSize(notes, 175);
-    nl.forEach(t => { ensure(6); docPdf.text(t, 20, y); y += 5; });
-  }
+  if (notes) { px.section('Notes', 14); px.paragraphe(notes); }
 
-  // ── Pied de page ──
-  const pageCount = docPdf.internal.getNumberOfPages();
-  for (let i = 1; i <= pageCount; i++) {
-    docPdf.setPage(i);
-    docPdf.setFontSize(7.5);
-    docPdf.setTextColor(120, 135, 160);
-    docPdf.setFont('helvetica', 'normal');
-    docPdf.text('Phénix-Architecture EURL · Maîtrise d\'œuvre · Contractant général · SIRET 987 989 316 00011', 105, 285, { align: 'center' });
-    docPdf.text('6 lieu-dit l\'Étreille, 63780 Saint-Georges-de-Mons · 04 73 73 00 59 · contact@phenixarchitecte.fr', 105, 289, { align: 'center' });
-    docPdf.text('Page ' + i + ' / ' + pageCount, 195, 289, { align: 'right' });
-  }
-
-  const filename = 'Dossier-travaux-' + (client !== '—' ? client.replace(/\s+/g, '-') : 'client') + '.pdf';
-  docPdf.save(filename);
+  px.enregistrer('Dossier-travaux-' + (client ? client.replace(/\s+/g, '-') : 'client') + '.pdf');
 }
 
 // ── Démarrage ──
