@@ -5,6 +5,9 @@
 ══════════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_dossier.html
 ──────────────────────────────────────────────────────────────────────
+ 05/11/2026 — SYNTHÈSE 3D, MISSIONS : chaque case cochée (par Maxime ou par l'alternante) mémorise sa date dans p.checklistDerniere (AAAA-MM-JJ), copiée aussi
+   dans phenix_projets_assistante. La Synthèse crée une mission « faire avancer le dossier » après 15 jours sans coche. Depuis la Synthèse, la
+   première tâche non cochée de la fiche ouverte est surlignée.
  04/11/2026 — CHECKLIST DE L'ALTERNANTE (portail « Mon espace », onglet Checklist). Dossier reste la source de vérité :
    1. publie le modèle de checklist (ids calculés ici) dans phenix_projets_assistante/_checklist_modele ;
    2. ajoute checklist + checklistNA à la copie filtrée des projets (aucune donnée financière) ;
@@ -5604,7 +5607,7 @@ function projetPourAssistante(p) {
     id: p.id, ref: p.ref || '', nom: p.nom || '', client: p.client || '', tel: p.tel || '', email: p.email || '', adresse: p.adresse || '',
     type: p.type || '', mission: p.mission || '', phase: p.phase || '', statut: p.statut || '', avancement: avancementProjet(p),
     date: p.date || '', surface: p.surface || '', artisans, echeances,
-    checklist: Object.assign({}, p.checklist || {}), checklistNA: Object.assign({}, p.checklistNA || {}),   // [Checklist équipe] cases cochées / groupes non applicables (aucune donnée financière)
+    checklist: Object.assign({}, p.checklist || {}), checklistNA: Object.assign({}, p.checklistNA || {}), checklistDerniere: p.checklistDerniere || '',   // [Checklist équipe] cases cochées / groupes non applicables (aucune donnée financière)
     infos: { etat: inf.etat || '', prochaine: inf.prochaine || '', adire: inf.adire || '', aeviter: inf.aeviter || '', faq: inf.faq || '' },
   };
 }
@@ -5662,7 +5665,7 @@ async function appliquerCochesEquipe() {
       const p = stateDossier.projets.find(x => String(x.id) === pid);
       if (p) {
         if (!p.checklist) p.checklist = {};
-        parProjet[pid].forEach(o => { if (o.v) p.checklist[o.itemId] = true; else delete p.checklist[o.itemId]; });
+        parProjet[pid].forEach(o => { if (o.v) { p.checklist[o.itemId] = true; const j = String(o.at || '').slice(0,10) || _jourLocalISO(); if (!p.checklistDerniere || j > p.checklistDerniere) p.checklistDerniere = j; } else delete p.checklist[o.itemId]; });
         p.avancementAuto = true; p.avancement = avancementProjet(p);
         await saveProjet(p);
         try { await syncAssistanteProjet(p, true); } catch(e) {}   // la copie du portail est à jour AVANT de supprimer les lignes (pas de clignotement)
@@ -6584,11 +6587,14 @@ function toggleChecklistGroup(headerEl, groupId) {
   if (isOpen) openSet.delete(groupId); else openSet.add(groupId);
 }
 
+// Date du jour (heure locale) au format AAAA-MM-JJ
+function _jourLocalISO(d) { d = d || new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+
 async function toggleChecklistItem(projetId, itemId, valeur) {
   const p = stateDossier.projets.find(x => x.id == projetId);
   if (!p) return;
   if (!p.checklist) p.checklist = {};
-  if (valeur) p.checklist[itemId] = true; else delete p.checklist[itemId];
+  if (valeur) { p.checklist[itemId] = true; p.checklistDerniere = _jourLocalISO(); } else delete p.checklist[itemId];   // [Synthèse 3D] date de la dernière case cochée : sans coche depuis 15 j, la Synthèse crée une mission
   p.avancementAuto = true; p.avancement = avancementProjet(p);   // valeur mémorisée pour les autres modules
   await saveProjet(p);
   if (typeof renderChecklistOverview === 'function') renderChecklistOverview();
@@ -11324,7 +11330,9 @@ window.addEventListener('message', (ev) => {
         show_d('checklist', document.querySelector(`#app-dossier .nav-item[onclick*="show_d('checklist'"]`));
         setTimeout(() => {
           const g = msg.groupe && document.querySelector('#checklistContent [data-groupe="' + msg.groupe + '"]');
-          const cible = g || document.getElementById('checklistContent'); if (cible) { cible.style.scrollMarginTop = '72px'; cible.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+          let cible = g || document.getElementById('checklistContent');
+          if (g) { const t = Array.from(g.querySelectorAll('input[type=checkbox]')).find(c => !c.checked && !c.disabled); if (t) { const li = t.closest('label') || t.parentElement; if (li) { li.style.transition = 'background .4s'; li.style.background = 'rgba(245,158,11,.25)'; li.style.borderRadius = '6px'; setTimeout(() => { li.style.background = ''; }, 4000); cible = li; } } }   // la première tâche non cochée est mise en évidence
+          if (cible) { cible.style.scrollMarginTop = '72px'; cible.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
         }, 80);
       } catch(e) { try { openProjectModal(msg.id); } catch(_) {} }
     });
