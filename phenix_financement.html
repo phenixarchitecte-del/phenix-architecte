@@ -294,7 +294,6 @@ if (window.parent !== window) {
         </table>
       </div>
       <div id="chiffrageEcart" role="status" style="display:none;margin-top:10px;padding:8px 12px;border:1px solid #e6b95c;border-radius:6px;font-size:12px"></div>
-      <button class="btn btn-sm" style="margin-top:10px" onclick="utiliserMontantChiffrage()"><i class="ti ti-arrow-down"></i> Utiliser ce montant dans le plan de financement</button>
       <button class="btn btn-sm" style="margin-top:10px" onclick="loadChiffrageLive(true)"><i class="ti ti-refresh"></i> Actualiser depuis Chiffrage</button>
     </div>
 
@@ -307,7 +306,7 @@ if (window.parent !== window) {
         <button class="btn btn-sm" style="margin-left:auto;padding:4px 10px" onclick="refreshMarketRates(true)" id="rateRefreshBtn"><i class="ti ti-refresh"></i> Actualiser</button>
       </div>
       <div class="form-grid">
-        <div class="form-group"><label>Coût total des travaux (€ TTC)</label><input type="number" id="f-cout-total" oninput="calcMensualite()"></div>
+        <div class="form-group"><label>Coût total des travaux (€ TTC)</label><input type="number" id="f-cout-total" oninput="calcMensualite()" title="Repris automatiquement du chiffrage — modifiez le chiffrage pour changer ce montant"></div>
         <div class="form-group"><label>Apport personnel (€)</label><input type="number" id="f-apport" oninput="calcMensualite()"></div>
         <div class="form-group"><label>Montant du prêt sollicité (€)</label><input type="number" id="f-montant-pret" oninput="calcMensualite()"></div>
         <div class="form-group"><label>Durée souhaitée (années)</label><input type="number" id="f-duree" value="20" oninput="calcMensualite()"></div>
@@ -533,8 +532,10 @@ async function loadChiffrageLive(manual) {
     };
     currentDossier.chiffrage = chiffrageData;
     renderChiffrageSynthese(chiffrageData);
-    const cout = parseFloat(document.getElementById('f-cout-total').value) || 0, ecart = document.getElementById('chiffrageEcart');
-    if (ecart) { const d = cout && Math.abs(cout - Math.round(chiffrageData.totalTtc)) > 1; ecart.style.display = d ? '' : 'none'; if (d) ecart.textContent = 'Le coût total du plan de financement (' + fmtEur(cout) + ') ne correspond plus au chiffrage (' + fmtEur(chiffrageData.totalTtc) + '). Cliquez sur « Utiliser ce montant » pour le mettre à jour.'; }
+    // Le coût total est toujours celui du chiffrage (TTC) : aucune estimation de frais en plus
+    const fc = document.getElementById('f-cout-total'); fc.value = Math.round(chiffrageData.totalTtc); fc.readOnly = true;   // verrouillé tant qu'un chiffrage existe
+    calcMensualite();
+    const ecart = document.getElementById('chiffrageEcart'); if (ecart) ecart.style.display = 'none';
     if (manual) toast('✓ Synthèse actualisée depuis Chiffrage');
   } catch(e) {
     console.error('loadChiffrageLive error:', e);

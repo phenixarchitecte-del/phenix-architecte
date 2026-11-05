@@ -4255,7 +4255,7 @@ function renderFinancementPage(){
   let fr=document.getElementById('financement-frame');
   if(fr && fr.dataset.pid===pid) return;   // déjà ouvert sur ce projet
   try{ localStorage.setItem('phenix-open-in-financement', JSON.stringify({ projetId:pid, nom:c.nom||'', client:c.client||'', adresse:c.adresse||'', surface:c.surface||'', budget:'', type:c.type||'', phase:c.phase||'', ref:c.ref||'', _source:'phenix_chiffrage', _ts:Date.now() })); }catch(e){}
-  wrap.innerHTML='<iframe id="financement-frame" src="phenix_financement.html?projet='+encodeURIComponent(pid)+'" style="width:100%;height:100%;min-height:520px;border:0;display:block" title="Dossier de financement"></iframe>';
+  wrap.innerHTML='<iframe id="financement-frame" src="phenix_financement.html?projet='+encodeURIComponent(pid)+'&v=20261105b" style="width:100%;height:100%;min-height:520px;border:0;display:block" title="Dossier de financement"></iframe>';
   document.getElementById('financement-frame').dataset.pid=pid;
 }
 window.finSelect=finSelect; window.finEnvoyer=finEnvoyer; window.renderFinancementPage=renderFinancementPage;
