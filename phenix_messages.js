@@ -50,10 +50,11 @@
         'Merci beaucoup d’avance, et à très vite sur le chantier !',
       sms:
         '{salutation},\n\n' +
-        'C’est Maxime de Phénix-Architecture, j’espère que tout va bien !\n\n' +
-        'Pour le chantier {chantier}, pourriez-vous m’envoyer votre attestation de décennale en cours de validité par mail à ' + EXPEDITEUR.mail + ' ?\n\n' +
-        'Si vous avez besoin d’un coup de main pour l’obtenir, appelez-moi, avec plaisir.\n\n' +
-        'Merci beaucoup !'
+        'C’est Maxime Suchet (Phénix-Architecture).\n\n' +
+        'Pour le chantier {chantier}, pourriez-vous m’envoyer votre attestation de décennale en cours de validité par mail à ' + EXPEDITEUR.mail + ' ? ' +
+        'Il nous faut ce document pour contractualiser le chantier.\n\n' +
+        'Merci beaucoup\n\n' +
+        'Phénix-Architecture \uD83D\uDC26\u200D\uD83D\uDD25'
     }
   };
 
