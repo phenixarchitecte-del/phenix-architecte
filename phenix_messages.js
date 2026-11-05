@@ -41,8 +41,7 @@
         '{siValidite}' +
         'Pourriez-vous nous la transmettre par retour de mail à ' + EXPEDITEUR.mail + ' dès que possible ?\n' +
         'Sans cette pièce, nous ne pouvons pas finaliser votre engagement sur le chantier.\n\n' +
-        'Je reste disponible si vous avez la moindre question.\n\n' +
-        '{signature}',
+        'Je reste disponible si vous avez la moindre question.',
       sms:
         '{salutation}, ici Maxime Suchet (Phénix-Architecture). Pour le chantier {chantier}, ' +
         'pouvez-vous m’envoyer votre attestation de décennale en cours de validité par mail à ' +
@@ -107,7 +106,7 @@
       siValidite: vars.dateValidite
         ? 'Celle dont nous disposons est valable jusqu\u2019au ' + dateFr(vars.dateValidite) + ' : merci de nous envoyer une version à jour.\n'
         : '',
-      signature: signature()
+      signature: ''
     };
     return {
       modele: idModele,
