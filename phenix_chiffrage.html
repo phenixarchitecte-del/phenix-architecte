@@ -212,6 +212,9 @@ tr:hover td{background:var(--accent-bg)}
 /* CHANTIERS PAGE */
 .chantier-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;padding:24px 28px}
 .chantier-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r-lg);padding:20px;cursor:pointer;transition:all .15s;box-shadow:var(--shadow)}
+.chantier-card{min-width:0;box-sizing:border-box}
+.chantier-actions .btn{flex:0 0 auto;max-width:100%}
+.chantier-actions .btn:nth-child(-n+2){flex:1 1 auto}
 .chantier-card:hover{border-color:var(--accent);box-shadow:0 2px 12px rgba(74,156,199,.2)}
 .chantier-card.selected{border-color:var(--accent);background:var(--accent-bg)}
 .chantier-card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
@@ -3601,7 +3604,7 @@ function renderChantierGrid(){
       <div style="font-size:11px;color:var(--text3);margin-top:2px">${(c.lots||[]).length} lot(s) · Achat artisan : ${fmt(htArtisan)} € · Marge : <strong style="color:${margeEur>=0?'#2D7A4F':'#C0392B'}">${margePct}%</strong></div>
       ${(()=>{const n=(c.lots||[]).filter(l=>!l.exclu&&lotEntrepriseEtat(l)==='aucune').length; return n?'<div style="margin-top:5px"><span class="no-ent"><i class="ti ti-alert-triangle" aria-hidden="true"></i> '+n+' lot'+(n>1?'s':'')+' sans entreprise</span></div>':'';})()}
       <div class="chantier-progress"><div class="chantier-progress-inner" style="width:${getProgress(c)}%"></div></div>
-      <div style="display:flex;gap:8px;margin-top:14px">
+      <div class="chantier-actions" style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
         <button class="btn btn-sm btn-outline" onclick="ouvrirCarnet(${i})" style="border-color:#E8833A;color:#E8833A" title="Carnet du projet : fiche, maquette, choix du client"><i class="ti ti-book-2" aria-hidden="true"></i>Carnet</button>
         <button class="btn btn-sm btn-primary" onclick="selectChantier(${i})"><i class="ti ti-calculator" aria-hidden="true"></i>Chiffrer</button>
         <button class="btn btn-sm btn-outline" onclick="editChantier(${i})"><i class="ti ti-edit" aria-hidden="true"></i></button>

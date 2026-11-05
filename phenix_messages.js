@@ -13,6 +13,10 @@
      PhenixMsg.ouvrirSms('06 12 34 56 78', m);         // appli SMS du téléphone
      PhenixMsg.copier(m.sms);                          // PC : copier le SMS
 
+   ESPRIT PHÉNIX (ton de tous les messages) : 1) bienveillance, 2) aide à la construction, 3) accessibilité — toujours au service des autres.
+   Concrètement : chaleureux, « je » (Maxime), merci d'abord, une raison positive à la demande, une main tendue (« appelez-moi, avec plaisir »), jamais de ton
+   de reproche ni de menace ; pas de formule de politesse finale ni de signature (Maxime a la sienne dans Outlook, Aptos 12).
+
    Ajouter un nouveau message (chantier, relance de devis, rendez-vous…) = ajouter un modèle
    dans MODELES, puis l'appeler par son identifiant. Voir le skill « phenix-messages ».
    ===================================================================== */
@@ -32,20 +36,24 @@
   var MODELES = {
     decennale: {
       libelle: 'Demande d’attestation de décennale',
-      sujet: 'Chantier {chantier} — attestation de décennale à nous transmettre',
+      sujet: 'Chantier {chantier} — votre attestation de décennale, merci d’avance !',
       mail:
         '{salutation},\n\n' +
-        'Dans le cadre du chantier {chantier}{siLot}, pour lequel vous avez établi un devis, ' +
-        'nous avons besoin de votre attestation d’assurance décennale en cours de validité, ' +
-        'qui mentionne les activités couvertes{siMetier}.\n\n' +
+        'J’espère que vous allez bien et que vos chantiers avancent comme vous le souhaitez !\n\n' +
+        'Merci encore pour votre devis sur le chantier {chantier}{siLot} : c’est un vrai plaisir de construire ce projet avec vous. ' +
+        'Pour avancer sereinement, j’aurais besoin de votre attestation d’assurance décennale en cours de validité, ' +
+        'avec les activités couvertes{siMetier}. Elle protège tout le monde, vous comme le client, et nous permet de valider votre engagement.\n\n' +
         '{siValidite}' +
-        'Pourriez-vous nous la transmettre par retour de mail à ' + EXPEDITEUR.mail + ' dès que possible ?\n' +
-        'Sans cette pièce, nous ne pouvons pas finaliser votre engagement sur le chantier.\n\n' +
-        'Je reste disponible si vous avez la moindre question.',
+        'Vous pouvez me l’envoyer par retour de mail à ' + EXPEDITEUR.mail + ' (un PDF, c’est l’idéal).\n\n' +
+        'Et si vous avez la moindre difficulté à l’obtenir auprès de votre assureur, dites-le-moi : je vous donne volontiers un coup de main, ' +
+        'un simple appel au ' + EXPEDITEUR.tel + ' suffit.\n\n' +
+        'Merci beaucoup d’avance, et à très vite sur le chantier !',
       sms:
-        '{salutation}, ici Maxime Suchet (Phénix-Architecture). Pour le chantier {chantier}, ' +
-        'pouvez-vous m’envoyer votre attestation de décennale en cours de validité par mail à ' +
-        EXPEDITEUR.mail + ' ? Merci.'
+        '{salutation},\n\n' +
+        'C’est Maxime de Phénix-Architecture, j’espère que tout va bien !\n\n' +
+        'Pour le chantier {chantier}, pourriez-vous m’envoyer votre attestation de décennale en cours de validité par mail à ' + EXPEDITEUR.mail + ' ?\n\n' +
+        'Si vous avez besoin d’un coup de main pour l’obtenir, appelez-moi, avec plaisir.\n\n' +
+        'Merci beaucoup !'
     }
   };
 
@@ -104,7 +112,7 @@
       siLot: vars.lot ? ' (lot : ' + vars.lot + ')' : '',
       siMetier: vars.metier ? ' (' + vars.metier + ')' : '',
       siValidite: vars.dateValidite
-        ? 'Celle dont nous disposons est valable jusqu\u2019au ' + dateFr(vars.dateValidite) + ' : merci de nous envoyer une version à jour.\n'
+        ? 'Celle que j\u2019ai est valable jusqu\u2019au ' + dateFr(vars.dateValidite) + ' : auriez-vous la version à jour ?\n\n'
         : '',
       signature: ''
     };
@@ -127,7 +135,7 @@
     // Numéro au format international (+33…) : l'appli « Lien avec Windows » retrouve ainsi la conversation existante ou en crée une nouvelle.
     var n = normTel(tel).replace(/\s/g, '').replace(/^0/, '+33');
     var iphone = global.navigator && /iPhone|iPad/i.test(navigator.userAgent);
-    return 'sms:' + n + (iphone ? '?&body=' : '?body=') + encodeURIComponent(msg.sms);
+    return 'sms:' + n + (iphone ? '?&body=' : '?body=') + encodeURIComponent(msg.sms.replace(/\n/g, '\r\n'));   // sauts de ligne conservés (RFC 5724 : %0D%0A)
   }
   function _ouvrir(url) {
     var a = document.createElement('a');
