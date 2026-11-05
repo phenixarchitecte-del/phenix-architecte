@@ -7,6 +7,7 @@
 ══════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_chiffrage.html
 ──────────────────────────────────────────────────────────────────
+ 05/11/2026 — [Financement] Nouvelle page « Financement » (menu, avant Export) : le dossier de financement (phenix_financement.html) s'ouvre dans un cadre sur le projet Dossier lié, comme le Carnet ; bouton « Envoyer le chiffrage au dossier ».
  23/10/2026 — [Carnet] Le Carnet de projet passe AVANT le chiffrage :
    1. Nouvelle page « Carnet » (menu, entre Projets et Lots & Chiffrage) et bouton
       « Carnet » sur chaque carte projet : le Carnet du projet (lié à Phénix Dossier)
@@ -552,6 +553,9 @@ if (window.parent !== window) {
   <div class="nav-item" onclick="showPage('surface')" id="nav-surface">
     <i class="ti ti-ruler-2" aria-hidden="true"></i> Chiffrage Surface
   </div>
+  <div class="nav-item" onclick="showPage('financement')" id="nav-financement">
+    <i class="ti ti-building-bank" aria-hidden="true"></i> Financement
+  </div>
   <div class="nav-item" onclick="showPage('export')" id="nav-export">
     <i class="ti ti-file-export" aria-hidden="true"></i> Export
   </div>
@@ -591,6 +595,19 @@ if (window.parent !== window) {
     <div id="carnet-etat" role="status" style="padding:8px 28px;font-size:12px;color:var(--text2);border-bottom:1px solid var(--border)"></div>
     <div class="reno-ia-status" id="carnet-ia-status" style="margin:10px 28px 0;display:none"></div>
     <div id="carnet-wrap" style="flex:1;min-height:520px;margin:12px 28px 20px;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:#0a1628"></div>
+  </div>
+
+  <!-- PAGE FINANCEMENT [Financement] : le dossier de financement du projet, à la suite du chiffrage -->
+  <div class="page" id="page-financement">
+    <div class="page-header">
+      <div class="page-title">Dossier de financement</div>
+      <div class="page-sub">Plan de financement, pièces à réunir et simulation de mensualité du projet. Le chiffrage s'y reprend en un clic.</div>
+      <div class="page-actions" style="flex-wrap:wrap;gap:8px">
+        <select id="fin-chantier-select" aria-label="Projet" onchange="finSelect(this.value)" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;background:var(--surface2);color:var(--text)"></select>
+        <button class="btn btn-primary" onclick="finEnvoyer()" title="Envoie les lots et le total TTC du chiffrage vers le dossier de financement de ce projet"><i class="ti ti-send" aria-hidden="true"></i>Envoyer le chiffrage au dossier</button>
+      </div>
+    </div>
+    <div id="fin-wrap" style="flex:1;min-height:520px;margin:12px 28px 20px;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:#0a1628"></div>
   </div>
 
   <!-- PAGE CHIFFRAGE -->
@@ -2149,8 +2166,13 @@ window.addEventListener('message', function(_pxEv){
     window._pxCreds = _pxD;   // [Carnet] gardé pour le Carnet intégré (page « Carnet »)
     signInWithEmailAndPassword(auth, _pxD.email, _pxD.password).catch(function(){});
     try { var _cf = document.getElementById('carnet-frame'); if (_cf && _cf.contentWindow) _cf.contentWindow.postMessage(_pxD, (location.origin && location.origin !== 'null' ? location.origin : '*')); } catch(e) {}
+    try { var _ff = document.getElementById('financement-frame'); if (_ff && _ff.contentWindow) _ff.contentWindow.postMessage(_pxD, (location.origin && location.origin !== 'null' ? location.origin : '*')); } catch(e) {}
   }
   // [Carnet] le Carnet intégré demande la connexion automatique : on lui redonne les identifiants validés par le Shell
+  var _ff2 = document.getElementById('financement-frame');
+  if(_pxD && _pxD.readyForLogin && _ff2 && _pxEv.source === _ff2.contentWindow && window._pxCreds){
+    try { _ff2.contentWindow.postMessage(window._pxCreds, (location.origin && location.origin !== 'null' ? location.origin : '*')); } catch(e) {}
+  }
   var _cf2 = document.getElementById('carnet-frame');
   if(_pxD && _pxD.readyForLogin && _cf2 && _pxEv.source === _cf2.contentWindow && window._pxCreds){
     try { _cf2.contentWindow.postMessage(window._pxCreds, (location.origin && location.origin !== 'null' ? location.origin : '*')); } catch(e) {}
@@ -2586,6 +2608,7 @@ function showPage(page){
   if(page==='chantiers'){renderChantierGrid();}
   if(page==='chiffrage'){renderChiffrage();}
   if(page==='carnet'){renderCarnetPage();}
+  if(page==='financement'){renderFinancementPage();}
   if(page==='export'){renderExportSelects();}
   if(page==='metrages' && metrageState && metrageState.canvas){ setTimeout(resizeMetrageCanvas, 50); }
 }
@@ -4209,6 +4232,33 @@ async function carnetLancerIA(consigne){
   await neufLancerIA({ carnet:carnetTexteIA(d.c, d.e), consigne, destIdx:idx>=0?idx:state.currentChantier, statusId:'carnet-ia-status' });
 }
 window.ouvrirCarnet=ouvrirCarnet; window.carnetSelect=carnetSelect; window.renderCarnetPage=renderCarnetPage;
+//  [Financement] Le dossier de financement (phenix_financement.html) s'ouvre dans un cadre, sur le projet Dossier lié.
+//  Le projet lui est transmis comme depuis Mon espace (localStorage phenix-open-in-financement + ?projet=).
+function finSelect(v){
+  state.currentChantier = v===''?null:parseInt(v,10); state.currentLot=null;
+  const s=document.getElementById('chantier-select'); if(s) s.value=v;
+  renderFinancementPage();
+}
+async function finEnvoyer(){
+  const c=_carnetProjet(); if(!c){ showToast('Choisissez un projet'); return; }
+  await exportToFinancement();
+}
+function renderFinancementPage(){
+  const sel=document.getElementById('fin-chantier-select');
+  if(sel){ sel.innerHTML='<option value="">— Sélectionner un projet —</option>'; state.chantiers.forEach((c,i)=>sel.add(new Option(c.nom,i))); sel.value = (state.currentChantier===null||state.currentChantier===undefined)?'':String(state.currentChantier); }
+  const wrap=document.getElementById('fin-wrap'); if(!wrap) return;
+  const c=_carnetProjet();
+  const msg=(h)=>{ const fr=document.getElementById('financement-frame'); if(fr) fr.remove(); wrap.innerHTML='<div style="padding:40px 24px;text-align:center;color:#c9d6e8;font-size:14px;line-height:1.6">'+h+'</div>'; };
+  if(!c){ msg('Choisissez un projet pour ouvrir son dossier de financement.'); return; }
+  if(!c.projetId){ msg('Ce projet n\'est pas relié à un projet Phénix Dossier : le dossier de financement s\'appuie sur ce lien.<br><button class="btn btn-outline" style="margin-top:12px;border-color:#e6b95c;color:#e6b95c" onclick="ouvrirModalRaccorderDossier()"><i class="ti ti-link" aria-hidden="true"></i>Raccorder à Phénix Dossier</button>'); return; }
+  const pid=String(c.projetId);
+  let fr=document.getElementById('financement-frame');
+  if(fr && fr.dataset.pid===pid) return;   // déjà ouvert sur ce projet
+  try{ localStorage.setItem('phenix-open-in-financement', JSON.stringify({ projetId:pid, nom:c.nom||'', client:c.client||'', adresse:c.adresse||'', surface:c.surface||'', budget:'', type:c.type||'', phase:c.phase||'', ref:c.ref||'', _source:'phenix_chiffrage', _ts:Date.now() })); }catch(e){}
+  wrap.innerHTML='<iframe id="financement-frame" src="phenix_financement.html?projet='+encodeURIComponent(pid)+'" style="width:100%;height:100%;min-height:520px;border:0;display:block" title="Dossier de financement"></iframe>';
+  document.getElementById('financement-frame').dataset.pid=pid;
+}
+window.finSelect=finSelect; window.finEnvoyer=finEnvoyer; window.renderFinancementPage=renderFinancementPage;
 window.carnetChiffrerModal=carnetChiffrerModal; window.carnetPlans=carnetPlans; window.carnetLancerIA=carnetLancerIA; window.carnetTexteIA=carnetTexteIA;
 
 // ── Passerelle vers Phénix Appels d'offres (pousser un DPGF pour chiffrage artisans) ──
