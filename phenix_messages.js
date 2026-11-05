@@ -36,22 +36,19 @@
   var MODELES = {
     decennale: {
       libelle: 'Demande d’attestation de décennale',
-      sujet: 'Chantier {chantier} — votre attestation de décennale, merci d’avance !',
+      sujet: 'Chantier {chantier} — attestation de décennale',
       mail:
         '{salutation},\n\n' +
-        'J’espère que vous allez bien et que vos chantiers avancent comme vous le souhaitez !\n\n' +
-        'Merci encore pour votre devis sur le chantier {chantier}{siLot} : c’est un vrai plaisir de construire ce projet avec vous. ' +
-        'Pour avancer sereinement, j’aurais besoin de votre attestation d’assurance décennale en cours de validité, ' +
-        'avec les activités couvertes{siMetier}. Elle protège tout le monde, vous comme le client, et nous permet de valider votre engagement.\n\n' +
+        'Phénix-Architecture va encadrer les travaux pour le chantier {chantier}\n\n' +
         '{siValidite}' +
-        'Vous pouvez me l’envoyer par retour de mail à ' + EXPEDITEUR.mail + ' (un PDF, c’est l’idéal).\n\n' +
-        'Et si vous avez la moindre difficulté à l’obtenir auprès de votre assureur, dites-le-moi : je vous donne volontiers un coup de main, ' +
-        'un simple appel au ' + EXPEDITEUR.tel + ' suffit.\n\n' +
-        'Merci beaucoup d’avance, et à très vite sur le chantier !',
+        'Pourriez-vous nous envoyer votre attestation de décennale en cours de validité par mail à ' + EXPEDITEUR.mail + ' ? ' +
+        'Il nous faut ce document pour contractualiser le chantier.\n\n' +
+        'Merci beaucoup\n\n' +
+        'Phénix-Architecture \uD83D\uDC26\u200D\uD83D\uDD25',
       sms:
         '{salutation},\n\n' +
-        'C’est Maxime Suchet (Phénix-Architecture).\n\n' +
-        'Pour le chantier {chantier}, pourriez-vous m’envoyer votre attestation de décennale en cours de validité par mail à ' + EXPEDITEUR.mail + ' ? ' +
+        'Phénix-Architecture va encadrer les travaux pour le chantier {chantier}\n\n' +
+        'Pourriez-vous nous envoyer votre attestation de décennale en cours de validité par mail à ' + EXPEDITEUR.mail + ' ? ' +
         'Il nous faut ce document pour contractualiser le chantier.\n\n' +
         'Merci beaucoup\n\n' +
         'Phénix-Architecture \uD83D\uDC26\u200D\uD83D\uDD25'
@@ -84,6 +81,21 @@
     while ((m = re.exec(t))) { var e = normMail(m[0]); if (e && mails.indexOf(e) < 0) mails.push(e); }
     tels.sort(function (a, b) { return (estMobile(b) ? 1 : 0) - (estMobile(a) ? 1 : 0); });   // mobile d'abord
     return { tels: tels, mails: mails };
+  }
+
+  /* Libellé lisible d'un chantier : « Raymond / Julien à Seuillet » (noms de famille des clients + commune).
+     Repli : nom du chantier. */
+  function _titre(t) { return String(t || '').toLowerCase().replace(/(^|[\s\-'’\/])([a-zà-ÿ])/g, function (_, a, b) { return a + b.toUpperCase(); }); }
+  function libelleChantier(c) {
+    c = c || {};
+    var noms = String(c.client || '').split(/\s*\/\s*|\s+et\s+/i).map(function (p) {
+      var m = p.trim().split(/\s+/).filter(function (w) { return !/^(m|mr|mme|mlle|monsieur|madame)\.?$/i.test(w); });
+      return m.length ? _titre(m[m.length - 1]) : '';
+    }).filter(Boolean);
+    var base = noms.length ? noms.join(' / ') : _titre(c.nom || '');
+    var cm = /\b\d{5}\s+([^,\n]+)/.exec(String(c.adresse || ''));
+    var commune = cm ? _titre(cm[1].trim()) : '';
+    return base + (commune ? ' à ' + commune : '');
   }
 
   /* ── Fabrication du message ────────────────────────────────────── */
@@ -171,7 +183,7 @@
     expediteur: EXPEDITEUR,
     modeles: MODELES,
     normTel: normTel, normMail: normMail, estMobile: estMobile, extraireContacts: extraireContacts,
-    preparer: preparer, lienMail: lienMail, lienSms: lienSms,
+    preparer: preparer, libelleChantier: libelleChantier, lienMail: lienMail, lienSms: lienSms,
     ouvrirMail: ouvrirMail, ouvrirSms: ouvrirSms, copier: copier, dateFr: dateFr
   };
 })(window);

@@ -781,7 +781,7 @@ async function decEnregistrerContact(i) {
 async function decAction(i, type) {
   const g = _decGroupes[i]; if (!g) return;
   const art = decArtisanOuCreer(g);
-  const chantierNom = (window._chantierLive && window._chantierLive.nom) || (currentProjet && currentProjet.nom) || '';
+  const chantierNom = PhenixMsg.libelleChantier(window._chantierLive || {}) || (currentProjet && currentProjet.nom) || '';
   const contact = (art.nom && _nnDec(art.nom) !== _nnDec(g.nom)) ? art.nom : '';
   const msg = PhenixMsg.preparer('decennale', {
     contact, entreprise: g.nom, metier: art.metier && art.metier !== 'À préciser' ? art.metier : '',
