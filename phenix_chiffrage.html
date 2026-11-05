@@ -3976,7 +3976,7 @@ async function exportToFinancement(){
   if(idx===null||!state.chantiers[idx]){ showToast('Sélectionnez un projet d\'abord'); return; }
   const c=state.chantiers[idx];
   if(!c.projetId){ showToast('⚠️ Ce projet n\'est pas lié à un projet Phénix Dossier — importez le projet depuis la fiche projet avant l\'export'); return; }
-  const lots=sortLotsInPlace(c.lots||[]);
+  const lots=sortLotsInPlace(c.lots||[]).filter(l=>!l.exclu);   // comme le total affiché : les lots exclus ne partent pas
   if(!lots.length){ showToast('Aucun lot à exporter'); return; }
 
   let totalHt=0, totalTtc=0;
