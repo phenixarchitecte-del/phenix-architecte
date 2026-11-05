@@ -498,6 +498,9 @@ if (window.parent !== window) {
 }
 </script>
 <script src="phenix_messages.js"></script>
+<script src="phenix_decennale.js"></script>
+<script src="phenix_pdf.js"></script>
+<script src="phenix_contrat_ent.js"></script>
 </head>
 <body>
 
@@ -667,7 +670,12 @@ if (window.parent !== window) {
           <div style="font-size:13px;font-weight:700;color:var(--nav)">🤝 Contrats d'engagement</div>
           <div id="contrat-card-sub" style="font-size:12px;color:var(--text3);margin-top:2px"></div>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <label style="font-size:12px;color:var(--text2);display:flex;gap:6px;align-items:center">Phénix intervient en
+            <select id="cent-mode" onchange="centMode(this.value)" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12.5px">
+              <option value="">À choisir…</option><option value="cg">Contractant général (sous-traitance)</option><option value="moe">Maître d'œuvre (contrat direct client)</option>
+            </select></label>
+          <button class="btn btn-sm btn-primary" onclick="centOuvrirListe()">📄 Contrats par entreprise</button>
           <button class="btn btn-sm btn-outline" onclick="contratVersPlanning('tous')" style="border-color:#1E5FAA;color:#1E5FAA">📅 Tout envoyer vers le Gantt de Chantier</button>
           <button class="btn btn-sm btn-outline" onclick="contratExportPDF('tous')"><i class="ti ti-file-export" aria-hidden="true"></i>Tous les contrats (PDF)</button>
         </div>
@@ -1986,6 +1994,32 @@ if (window.parent !== window) {
       <button class="btn btn-outline" onclick="contratExporterDepuisModal()"><i class="ti ti-file-export" aria-hidden="true"></i>Enregistrer et exporter en PDF</button>
       <button class="btn btn-outline" onclick="contratEnvoyerDepuisModal()" style="border-color:#1E5FAA;color:#1E5FAA">📅 Enregistrer et envoyer vers le Gantt</button>
       <button class="btn btn-primary" onclick="contratEnregistrerFermer()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<style>#cent-ed-corps table input{padding:5px 7px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12.5px}#cent-ed-corps table th{font-weight:600;padding:2px 6px 4px 0}#cent-ed-corps table td{padding:3px 6px 3px 0}</style>
+<!-- MODAL CONTRATS PAR ENTREPRISE (liste) -->
+<div class="modal-overlay" id="modal-cent">
+  <div class="modal" style="max-width:860px;width:96%;max-height:92vh;overflow-y:auto">
+    <div class="modal-title">Contrats d'engagement par entreprise</div>
+    <div style="font-size:12.5px;color:var(--text2);margin-bottom:8px">Un seul contrat par entreprise, même si elle prend en charge plusieurs lots. La liste reprend les entreprises déjà saisies dans les lots du chantier.</div>
+    <div id="cent-liste"></div>
+    <div class="modal-actions" style="flex-wrap:wrap">
+      <button class="btn btn-outline" onclick="closeModal('modal-cent')">Fermer</button>
+      <button class="btn btn-primary" onclick="centToutExporter()"><i class="ti ti-file-export" aria-hidden="true"></i>Tous les contrats (PDF)</button>
+    </div>
+  </div>
+</div>
+<!-- MODAL CONTRAT D'UNE ENTREPRISE (édition) -->
+<div class="modal-overlay" id="modal-cent-ed">
+  <div class="modal" style="max-width:860px;width:96%;max-height:92vh;overflow-y:auto">
+    <div class="modal-title" id="cent-ed-titre">Contrat d'engagement</div>
+    <div id="cent-ed-corps"></div>
+    <div class="modal-actions" style="flex-wrap:wrap">
+      <button class="btn btn-outline" onclick="closeModal('modal-cent-ed')">Fermer</button>
+      <button class="btn btn-outline" onclick="centEnregistrer()">Enregistrer</button>
+      <button class="btn btn-primary" onclick="centEnregistrer(true)"><i class="ti ti-file-export" aria-hidden="true"></i>Enregistrer et exporter en PDF</button>
     </div>
   </div>
 </div>
@@ -3376,6 +3410,7 @@ function _contratRenderChantier(){
   const signes = avec.filter(l => l.contrat.statut === 'signe').length, sans = valides.filter(l => !l.contrat).length;
   const montant = avec.reduce((s,l) => s + (l.contrat.prix || 0), 0);
   sub.textContent = valides.length + ' lot(s) validé(s) · ' + avec.length + ' contrat(s) préparé(s), ' + signes + ' signé(s)' + (avec.length ? ' · ' + fmt(montant) + ' € HT engagés' : '') + (sans ? ' · ' + sans + ' à préparer' : '') + (avec.filter(l => l.contrat.planningEnvoye).length ? ' · ' + avec.filter(l => l.contrat.planningEnvoye).length + ' dans Planning' : '');
+  try { centRefreshCard(); } catch(e){}
 }
 
 // ── Export PDF : portée = index de lot | 'tous' ──
@@ -8356,6 +8391,193 @@ document.querySelectorAll('.sidebar .nav-item').forEach(function(n){ if(!n.title
 </script>
 
 <script>document.addEventListener('click',function(e){var m=document.getElementById('file-menu');if(m&&!m.contains(e.target))m.classList.remove('open');});</script>
+<script>
+/* ===== Contrats d'engagement PAR ENTREPRISE (un contrat = une entreprise, plusieurs lots) ===== */
+let _centKey = null;
+const _centEsc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function _centC(){ const i = state.currentChantier; return i === null ? null : state.chantiers[i]; }
+function centGroupes(c){
+  const g = {}, ordre = [];
+  (c.lots || []).forEach((l, li) => {
+    if (l.exclu) return;
+    const nom = lotEntrepriseNom(l), k = _annN(nom); if (!nom || !k) return;
+    if (!g[k]){ g[k] = { key:k, nom:nom, lots:[] }; ordre.push(k); }
+    g[k].lots.push({ li:li, lot:l });
+  });
+  return ordre.map(k => g[k]);
+}
+function centPrixLot(l){ return (l.contrat && parseFloat(l.contrat.prix) > 0) ? parseFloat(l.contrat.prix) : Math.round(ctTotalAchat(l) * 100) / 100; }
+function centRang(c, key){
+  c.contratsEnt = c.contratsEnt || {};
+  const ce = c.contratsEnt[key] = c.contratsEnt[key] || {};
+  if (!ce.rang){ ce.rang = Object.keys(c.contratsEnt).map(k => c.contratsEnt[k].rang || 0).reduce((a, b) => Math.max(a, b), 0) + 1; }
+  return ce;
+}
+function centDonnees(c, g){
+  const ce = (c.contratsEnt || {})[g.key] || {};
+  const a = (typeof annTrouve === 'function' && annTrouve(g.nom, ce.siret)) || {};
+  const reprAnn = a.nom && a.nom !== a.entreprise && a.nom !== g.nom ? a.nom : '';
+  const att = a.decennaleStatut === 'recue' && a.decennaleAtt ? a.decennaleAtt : null;
+  let bloq = '';
+  if (att && window.PhenixDecennale){
+    try { bloq = PhenixDecennale.controler(att, { artisan:{ entreprise:g.nom, siret:ce.siret || a.siret || '' }, lots:g.lots.map(x => x.lot) }).filter(i => i.niveau === 'bloquant').map(i => i.texte).join(' ; '); } catch(e){}
+  }
+  return {
+    mode: c.modeIntervention || '', dateEdition: new Date().toISOString().slice(0,10), rang: ce.rang || 1,
+    entreprise:{ nom: ce.nom || g.nom, forme: ce.forme || '', adresse: ce.adresse !== undefined ? ce.adresse : [a.adresse, a.ville].filter(Boolean).join(', '),
+      siret: ce.siret !== undefined ? ce.siret : (a.siret || ''), representant: ce.representant !== undefined ? ce.representant : reprAnn, qualite: ce.qualite || '',
+      tel: ce.tel !== undefined ? ce.tel : (a.tel || ''), email: ce.email !== undefined ? ce.email : (a.email || '') },
+    chantier:{ nom:c.nom, client:c.client, adresse:c.adresse, type:c.type, clientAdresse:c.clientAdresse || '' },
+    conditions:{ acomptePct: ce.acomptePct !== undefined ? ce.acomptePct : 30, delaiPaiement: ce.delaiPaiement || 30, retenuePct: ce.retenuePct || 0, penaliteJour: ce.penaliteJour || 0,
+      garantiePaiement: ce.garantiePaiement || '', horsEtablissement: !!ce.horsEtablissement, variantes: ce.variantes || '', obs: ce.obs || '', groupement: ce.groupement || '' },
+    assurance:{ recue: !!att, assureur: att && att.assureur || '', police: att && att.police || '', validite: att && att.dateFin ? PhenixMsg.dateFr(att.dateFin) : '', bloquants: bloq },
+    pieces: ce.pieces || {}, annexePostes: ce.annexePostes !== false,
+    lots: g.lots.map(x => { const l = x.lot, ct = l.contrat || {};
+      return { num:l.num, nom:l.nom, prixHt:centPrixLot(l), tva:numOr(l.tva, 20), semaine:ct.semaine, annee:ct.annee, duree:ct.duree || 1,
+        postes:(l.postes || []).map(p => ({ n:p.n, q:parseFloat(p.q) || 0, u:p.u, pu:parseFloat(p.puArtisan) || parseFloat(p.pu) || 0 })) }; })
+  };
+}
+function centMode(v){
+  const c = _centC(); if (!c) return;
+  c.modeIntervention = v || ''; saveState(); centRefreshCard();
+  if (document.getElementById('modal-cent').classList.contains('open')) centRenderListe();
+}
+function centRefreshCard(){
+  const c = _centC(), sel = document.getElementById('cent-mode'); if (!c || !sel) return;
+  sel.value = c.modeIntervention || '';
+  const sub = document.getElementById('contrat-card-sub'); if (!sub) return;
+  const gs = centGroupes(c), ok = gs.filter(g => (c.contratsEnt || {})[g.key] && c.contratsEnt[g.key].statut === 'signe').length;
+  if (gs.length) sub.textContent += ' · ' + gs.length + ' entreprise(s), ' + ok + ' contrat(s) d\'entreprise signé(s)';
+}
+function centOuvrirListe(){
+  const c = _centC(); if (!c) return;
+  if (typeof annLoad === 'function') annLoad().then(centRenderListe).catch(()=>{});
+  centRenderListe(); document.getElementById('modal-cent').classList.add('open');
+}
+function centRenderListe(){
+  const c = _centC(), el = document.getElementById('cent-liste'); if (!c || !el) return;
+  const gs = centGroupes(c);
+  const modeTxt = c.modeIntervention === 'cg' ? 'Contractant général : contrat de sous-traitance' : c.modeIntervention === 'moe' ? 'Maître d\'œuvre : contrat direct entre le client et l\'entreprise' : '';
+  let h = '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;font-size:13px"><b>Mode :</b> ' +
+    (modeTxt ? _centEsc(modeTxt) : '<span style="font-weight:700">⚠ À choisir avant de rédiger</span>') +
+    ' <select onchange="centMode(this.value)" style="padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)"><option value="">À choisir…</option><option value="cg"' + (c.modeIntervention === 'cg' ? ' selected' : '') + '>Contractant général</option><option value="moe"' + (c.modeIntervention === 'moe' ? ' selected' : '') + '>Maître d\'œuvre</option></select></div>';
+  if (!gs.length){ el.innerHTML = h + '<div style="padding:14px;color:var(--text3)">Aucun lot n\'a encore d\'entreprise. Renseignez l\'entreprise sur les lots (ou importez un devis), elles apparaîtront ici.</div>'; return; }
+  h += '<div style="display:flex;flex-direction:column;gap:8px">';
+  gs.forEach(g => {
+    const d = centDonnees(c, g), ctrl = PhenixContratEnt.controler(d), bl = ctrl.filter(x => x.niveau === 'bloquant').length, at = ctrl.length - bl;
+    const tot = PhenixContratEnt.totaux(d.lots.map(l => Object.assign({}, l)));
+    const ce = (c.contratsEnt || {})[g.key] || {};
+    const etat = ce.statut === 'signe' ? '✅ Signé' + (ce.dateSignature ? ' le ' + PhenixMsg.dateFr(ce.dateSignature) : '') : (bl ? '⛔ ' + bl + ' point(s) bloquant(s)' : at ? '⚠ ' + at + ' point(s) à vérifier' : '📝 Prêt à faire signer');
+    h += '<div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:var(--surface)"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">' +
+      '<div><div style="font-weight:700;color:var(--nav)">' + _centEsc(g.nom) + '</div>' +
+      '<div style="font-size:12px;color:var(--text2)">' + g.lots.length + ' lot' + (g.lots.length > 1 ? 's' : '') + ' : ' + _centEsc(g.lots.map(x => (x.lot.num ? x.lot.num + ' ' : '') + (x.lot.nom || '')).join(' · ')) + '</div>' +
+      '<div style="font-size:12px;color:var(--text3)">' + PhenixContratEnt.eur(tot.ht) + ' HT · ' + PhenixContratEnt.eur(tot.ttc) + ' TTC · ' + etat + '</div></div>' +
+      '<div style="display:flex;gap:6px"><button class="btn btn-sm btn-outline" onclick="centEditer(\'' + g.key + '\')">✏️ Rédiger / modifier</button><button class="btn btn-sm btn-outline" onclick="centExporter(\'' + g.key + '\')"><i class="ti ti-file-export" aria-hidden="true"></i>PDF</button></div></div></div>';
+  });
+  el.innerHTML = h + '</div>';
+}
+function centEditer(key){
+  const c = _centC(); if (!c) return;
+  const g = centGroupes(c).find(x => x.key === key); if (!g) return;
+  _centKey = key; centRang(c, key);
+  const d = centDonnees(c, g), ce = c.contratsEnt[key];
+  const inp = (id, lab, v, t, extra) => '<div class="form-group"><label>' + lab + '</label><input type="' + (t || 'text') + '" id="cent-' + id + '" value="' + _centEsc(v) + '" ' + (extra || '') + '></div>';
+  const formes = ['', 'SARL', 'EURL', 'SAS', 'SASU', 'SA', 'EI', 'Micro-entreprise', 'Autre'];
+  let h = '<div id="cent-ctrl" style="margin-bottom:10px"></div>';
+  h += '<div style="font-size:12px;font-weight:700;color:var(--nav);margin:6px 0 4px">① L\'entreprise</div><div class="form-row">' + inp('nom', 'Dénomination *', d.entreprise.nom) +
+    '<div class="form-group"><label>Forme juridique</label><select id="cent-forme">' + formes.map(f => '<option' + (f === d.entreprise.forme ? ' selected' : '') + ' value="' + f + '">' + (f || 'À préciser') + '</option>').join('') + '</select></div>' + inp('siret', 'SIRET *', d.entreprise.siret) + '</div>' +
+    '<div class="form-row">' + inp('adresse', 'Adresse du siège *', d.entreprise.adresse) + '</div>' +
+    '<div class="form-row">' + inp('representant', 'Représentant (nom) *', d.entreprise.representant) + inp('qualite', 'Qualité (gérant, président…) *', d.entreprise.qualite) + '</div>' +
+    '<div class="form-row">' + inp('tel', 'Téléphone', d.entreprise.tel) + inp('email', 'E-mail', d.entreprise.email) + '</div>';
+  h += '<div style="font-size:12px;font-weight:700;color:var(--nav);margin:10px 0 4px">② Lots confiés, prix et périodes (un seul contrat)</div><div style="overflow-x:auto"><table style="width:100%;font-size:12.5px;border-collapse:collapse"><tr style="text-align:left;color:var(--text3)"><th>Lot</th><th>Prix engagé HT (€)</th><th>TVA</th><th>Semaine</th><th>Année</th><th>Durée (sem.)</th></tr>';
+  g.lots.forEach((x, k) => { const L = d.lots[k];
+    h += '<tr data-li="' + x.li + '"><td style="padding:3px 6px 3px 0">' + _centEsc((x.lot.num ? x.lot.num + ' ' : '') + (x.lot.nom || '')) + '</td>' +
+      '<td><input type="number" step="0.01" min="0" class="cent-prix" value="' + L.prixHt + '" style="width:110px"></td><td>' + L.tva + ' %</td>' +
+      '<td><input type="number" min="1" max="53" class="cent-sem" value="' + _centEsc(L.semaine || '') + '" style="width:70px"></td>' +
+      '<td><input type="number" min="2000" class="cent-an" value="' + _centEsc(L.annee || new Date().getFullYear()) + '" style="width:80px"></td>' +
+      '<td><input type="number" min="0.5" step="0.5" class="cent-dur" value="' + _centEsc(L.duree || 1) + '" style="width:70px"></td></tr>'; });
+  h += '</table></div><div style="font-size:11.5px;color:var(--text3);margin-top:4px">Le prix par défaut est le total des postes au prix artisan. La TVA est facturée par lot (taux du lot dans Chiffrage).</div>';
+  h += '<div style="font-size:12px;font-weight:700;color:var(--nav);margin:10px 0 4px">③ Conditions</div><div class="form-row">' + inp('acompte', 'Acompte (% du HT, 0 = aucun)', d.conditions.acomptePct, 'number', 'min="0" max="100" step="1"') +
+    inp('delai', 'Délai de paiement (jours, 60 max)', d.conditions.delaiPaiement, 'number', 'min="1" max="60"') + inp('retenue', 'Retenue de garantie (% , 5 max)', d.conditions.retenuePct, 'number', 'min="0" max="5" step="0.5"') +
+    inp('penalite', 'Pénalité de retard (€/jour, 0 = aucune)', d.conditions.penaliteJour, 'number', 'min="0" step="1"') + '</div>';
+  if (c.modeIntervention === 'cg') h += '<div class="form-group"><label>Garantie de paiement du sous-traitant</label><select id="cent-garantie"><option value="">À préciser</option><option value="delegation"' + (d.conditions.garantiePaiement === 'delegation' ? ' selected' : '') + '>Délégation de paiement par le maître d\'ouvrage</option><option value="caution"' + (d.conditions.garantiePaiement === 'caution' ? ' selected' : '') + '>Caution</option></select></div>';
+  else h += '<label style="display:flex;gap:6px;align-items:center;font-size:12.5px;margin:4px 0"><input type="checkbox" id="cent-hors"' + (d.conditions.horsEtablissement ? ' checked' : '') + '> Contrat signé hors établissement (au domicile du client) : ajoute le droit de rétractation de 14 jours</label>';
+  h += '<div class="form-group"><label>Variantes ou prestations supplémentaires (facultatif)</label><input type="text" id="cent-variantes" value="' + _centEsc(d.conditions.variantes) + '"></div>' +
+    '<div class="form-group"><label>Conditions particulières (facultatif)</label><textarea id="cent-obs" rows="3" style="width:100%;box-sizing:border-box;padding:8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:13px;background:var(--surface);color:var(--text)">' + _centEsc(d.conditions.obs) + '</textarea></div>' +
+    '<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;margin:4px 0 8px"><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="cent-annexe"' + (d.annexePostes ? ' checked' : '') + '> Joindre le détail des postes</label>' +
+    ['urssaf:Attestation de vigilance URSSAF reçue', 'kbis:Kbis reçu', 'rib:RIB reçu'].map(x => { const [k, t] = x.split(':'); return '<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="cent-p-' + k + '"' + (d.pieces[k] ? ' checked' : '') + '> ' + t + '</label>'; }).join('') + '</div>' +
+    '<div class="form-row"><div class="form-group"><label>Statut du contrat</label><select id="cent-statut"><option value="a_signer"' + (ce.statut !== 'signe' ? ' selected' : '') + '>À faire signer</option><option value="signe"' + (ce.statut === 'signe' ? ' selected' : '') + '>Signé</option></select></div>' + inp('datesign', 'Date de signature', ce.dateSignature || '', 'date') + '</div>' +
+    '<div style="font-size:11.5px;color:var(--text3)">Référence du contrat : ' + _centEsc(PhenixContratEnt.numero(d)) + '. Décennale : ' + (d.assurance.recue ? 'attestation reçue' + (d.assurance.bloquants ? ' ⛔ ' + _centEsc(d.assurance.bloquants) : ' ✔') : 'non reçue (voir Financement)') + '.</div>';
+  document.getElementById('cent-ed-titre').textContent = 'Contrat d\'engagement — ' + g.nom;
+  document.getElementById('cent-ed-corps').innerHTML = h;
+  centRenderControles();
+  document.getElementById('cent-ed-corps').oninput = centRenderControles;
+  document.getElementById('modal-cent-ed').classList.add('open');
+}
+function centLireFormulaire(){
+  const c = _centC(), g = c && centGroupes(c).find(x => x.key === _centKey); if (!g) return null;
+  const v = id => { const e = document.getElementById('cent-' + id); return e ? e.value.trim() : ''; };
+  const ce = c.contratsEnt[_centKey];
+  const maj = {
+    nom:v('nom'), forme:v('forme'), siret:v('siret'), adresse:v('adresse'), representant:v('representant'), qualite:v('qualite'), tel:v('tel'), email:v('email'),
+    acomptePct:parseFloat(v('acompte')) || 0, delaiPaiement:parseInt(v('delai'), 10) || 30, retenuePct:parseFloat(v('retenue')) || 0, penaliteJour:parseFloat(v('penalite')) || 0,
+    garantiePaiement:v('garantie'), horsEtablissement:!!(document.getElementById('cent-hors') || {}).checked, variantes:v('variantes'), obs:v('obs'),
+    annexePostes:document.getElementById('cent-annexe').checked, pieces:{ urssaf:document.getElementById('cent-p-urssaf').checked, kbis:document.getElementById('cent-p-kbis').checked, rib:document.getElementById('cent-p-rib').checked },
+    statut:v('statut'), dateSignature:v('datesign')
+  };
+  const lots = [];
+  document.querySelectorAll('#cent-ed-corps tr[data-li]').forEach(tr => { lots.push({ li:parseInt(tr.dataset.li, 10),
+    prix:parseFloat(tr.querySelector('.cent-prix').value) || 0, semaine:parseInt(tr.querySelector('.cent-sem').value, 10) || '', annee:parseInt(tr.querySelector('.cent-an').value, 10) || '', duree:parseFloat(tr.querySelector('.cent-dur').value) || 1 }); });
+  return { c:c, g:g, ce:ce, maj:maj, lots:lots };
+}
+function centAppliquer(f){
+  Object.assign(f.ce, f.maj);
+  f.lots.forEach(x => { const l = f.c.lots[x.li]; l.contrat = Object.assign({ statut:'a_signer', entreprise:f.maj.nom }, l.contrat || {}, { prix:x.prix, semaine:x.semaine, annee:x.annee, duree:x.duree });
+    if (!l.contrat.entreprise) l.contrat.entreprise = f.maj.nom; });
+}
+function centRenderControles(){
+  const f = centLireFormulaire(); if (!f) return;
+  const c = f.c; // contrôle temporaire : l'état est restauré juste après, rien n'est enregistré
+  const backup = { ce:Object.assign({}, f.ce), lots:f.lots.map(x => ({ li:x.li, ct:c.lots[x.li].contrat })) };
+  centAppliquer(f);
+  let ctrl = []; try { ctrl = PhenixContratEnt.controler(centDonnees(c, centGroupes(c).find(x => x.key === _centKey))); } catch(e){}
+  Object.keys(f.ce).forEach(k => delete f.ce[k]); Object.assign(f.ce, backup.ce); backup.lots.forEach(b => { c.lots[b.li].contrat = b.ct; });
+  if (!c.modeIntervention) ctrl.unshift({ niveau:'bloquant', texte:'Choisissez d\'abord le mode d\'intervention du chantier (contractant général ou maître d\'œuvre).' });
+  const el = document.getElementById('cent-ctrl'); if (!el) return;
+  el.innerHTML = ctrl.length ? '<div style="border:1px solid var(--border);border-radius:8px;padding:8px 12px;background:var(--surface2);font-size:12.5px"><b>À compléter avant signature</b>' + ctrl.map(x => '<div>' + (x.niveau === 'bloquant' ? '⛔ <b>Bloquant</b> : ' : '⚠ À vérifier : ') + _centEsc(x.texte) + '</div>').join('') + '</div>' :
+    '<div style="border:1px solid var(--border);border-radius:8px;padding:8px 12px;background:var(--surface2);font-size:12.5px">✔ <b>Contrat complet</b> : rien ne manque.</div>';
+}
+async function centEnregistrer(exporter){
+  const f = centLireFormulaire(); if (!f) return;
+  centAppliquer(f); saveState(); renderLotsTableOrCards(); _contratRenderChantier(); centRefreshCard(); centRenderListe();
+  showToast('✓ Contrat de ' + f.maj.nom + ' enregistré');
+  if (exporter) await centExporter(_centKey);
+}
+function _centChargerPdf(){
+  return new Promise((ok, ko) => {
+    if (window.jspdf && window.jspdf.jsPDF) return ok();
+    const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    s.onload = () => ok(); s.onerror = () => ko(new Error('jsPDF indisponible')); document.head.appendChild(s);
+  });
+}
+async function centExporter(key, silencieux){
+  const c = _centC(); if (!c) return false;
+  const g = centGroupes(c).find(x => x.key === key); if (!g) return false;
+  if (!c.modeIntervention){ showToast('⚠️ Choisissez d\'abord le mode : contractant général ou maître d\'œuvre'); return false; }
+  centRang(c, key); saveState();
+  try { await _centChargerPdf(); } catch(e){ showToast('⚠️ Bibliothèque PDF non chargée (connexion ?)'); return false; }
+  const d = centDonnees(c, g), ctrl = PhenixContratEnt.controler(d), bloq = ctrl.filter(x => x.niveau === 'bloquant');
+  const px = PhenixContratEnt.generer(d, { brouillon:bloq.length > 0 });
+  px.enregistrer(PhenixContratEnt.nomFichier(d));
+  if (!silencieux) showToast(bloq.length ? '📄 PDF « projet » généré : ' + bloq.length + ' point(s) bloquant(s) à compléter' : '📄 Contrat généré');
+  return true;
+}
+async function centToutExporter(){
+  const c = _centC(); if (!c) return;
+  for (const g of centGroupes(c)){ await centExporter(g.key, true); await new Promise(r => setTimeout(r, 700)); }
+  showToast('📄 Contrats générés');
+}
+</script>
 <datalist id="ann-names"></datalist>
 <script>
 /* [Artisan unique] suggestions d'entreprises depuis l'Annuaire des artisans (phenix_artisans) */

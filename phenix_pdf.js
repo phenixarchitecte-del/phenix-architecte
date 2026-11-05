@@ -52,6 +52,9 @@
     this.doc = new jsPDF({ unit: 'mm', format: 'a4' });
     this.titre = opts.titre || '';
     this.sousTitre = opts.sousTitre || '';
+    this.reference = opts.reference || '';      // affichée dans le pied de page de chaque page
+    this.paraphes = !!opts.paraphes;            // cases « Paraphes » en pied de page (documents contractuels)
+    this.brouillon = opts.brouillon || '';      // ex. 'PROJET — À COMPLÉTER' : filigrane + mention sur chaque page
     this.serif = false;
     try {
       this.doc.addFileToVFS('DMSerifDisplay-Regular.ttf', POLICE_TITRE_B64);
@@ -240,6 +243,170 @@
     this.y += 3;
   };
 
+
+  /* ═══ Documents contractuels : articles, texte riche, cadres, signatures ═══ */
+
+  /* Découpe un texte contenant des **passages en gras** en lignes de largeur w (mm). */
+  P._lignesRiches = function (texte, w, taille) {
+    var d = this.doc, mots = [], gras = false;
+    String(texte).split(/(\*\*)/).forEach(function (seg) {
+      if (seg === '**') { gras = !gras; return; }
+      seg.split(/(\s+)/).forEach(function (m) { if (m !== '' && !/^\s+$/.test(m)) mots.push({ t: m, b: gras }); else if (/^\s+$/.test(m)) mots.push({ t: ' ', b: gras, esp: true }); });
+    });
+    var lignes = [], cur = [], largeur = 0, self = this;
+    function mesure(mot) { self._sans(mot.b, taille); return d.getTextWidth(mot.t); }
+    mots.forEach(function (mot) {
+      if (mot.esp) { if (cur.length) { var we = mesure(mot); cur.push(mot); largeur += we; } return; }
+      var wm = mesure(mot);
+      if (largeur + wm > w && cur.length) {
+        while (cur.length && cur[cur.length - 1].esp) cur.pop();
+        lignes.push(cur); cur = []; largeur = 0;
+      }
+      cur.push(mot); largeur += wm;
+    });
+    while (cur.length && cur[cur.length - 1].esp) cur.pop();
+    if (cur.length) lignes.push(cur);
+    return lignes;
+  };
+  P._ligneRiche = function (ligne, x, y, taille) {
+    var d = this.doc, cx = x;
+    for (var i = 0; i < ligne.length; i++) {
+      this._sans(ligne[i].b, taille); d.text(ligne[i].t, cx, y); cx += d.getTextWidth(ligne[i].t);
+    }
+  };
+
+  /* Titre d'article : jamais seul en bas de page (réserve de quoi écrire au moins 3 lignes derrière). */
+  P.article = function (titre, reserve) {
+    this.ensure(reserve || 26);
+    var d = this.doc;
+    this.y += 2;
+    this._serif(11.5); d.setTextColor.apply(d, COULEURS.titre);
+    d.text(titre, PAGE.marge, this.y);
+    this.y += 1.8;
+    d.setDrawColor.apply(d, COULEURS.filet); d.setLineWidth(0.25); d.line(PAGE.marge, this.y, PAGE.w - PAGE.marge, this.y);
+    this.y += 5;
+    d.setTextColor.apply(d, COULEURS.encre); this._sans(false, 9.5);
+  };
+
+  /* Paragraphe avec gras **...**, sans ligne veuve ni orpheline. */
+  P.texte = function (texte, opts) {
+    opts = opts || {};
+    var x = opts.x || PAGE.marge, w = opts.w || (PAGE.w - PAGE.marge - x), taille = opts.taille || 9.5, pas = opts.pas || 4.7;
+    var d = this.doc; d.setTextColor.apply(d, COULEURS.encre);
+    var lignes = this._lignesRiches(texte, w, taille), n = lignes.length;
+    for (var i = 0; i < n; i++) {
+      if (i === 0) this.ensure(Math.min(n, 2) * pas + (opts.suite || 0)); else if (i === n - 2 && n > 3) this.ensure(2 * pas); else this.ensure(pas);
+      d.setTextColor.apply(d, COULEURS.encre);
+      this._ligneRiche(lignes[i], x, this.y, taille); this.y += pas;
+    }
+    this.y += opts.apres == null ? 1.8 : opts.apres;
+  };
+
+  /* Liste à puces (texte riche), chaque puce insécable. */
+  P.puces = function (items, opts) {
+    opts = opts || {};
+    var taille = opts.taille || 9.5, pas = opts.pas || 4.7, d = this.doc, x0 = PAGE.marge + 3, w = PAGE.w - PAGE.marge - x0 - 4;
+    for (var k = 0; k < items.length; k++) {
+      var lignes = this._lignesRiches(items[k], w, taille);
+      this.ensure(Math.min(lignes.length, 3) * pas);
+      d.setFillColor.apply(d, COULEURS.accent); d.circle(x0 + 0.6, this.y - 1.2, 0.55, 'F');
+      for (var i = 0; i < lignes.length; i++) {
+        if (i > 0 && i === lignes.length - 1 && lignes.length > 2) this.ensure(pas);
+        else if (i > 0) this.ensure(pas);
+        d.setTextColor.apply(d, COULEURS.encre); this._ligneRiche(lignes[i], x0 + 4, this.y, taille); this.y += pas;
+      }
+      this.y += 0.6;
+    }
+    this.y += 1.5;
+  };
+
+  /* Cases à cocher : [{texte, coche}] — une case cochée porte une croix ET le mot dans le texte n'est pas nécessaire (forme lisible sans couleur). */
+  P.cases = function (items, opts) {
+    opts = opts || {};
+    var d = this.doc, pas = opts.pas || 5.6, taille = opts.taille || 9.5;
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i], w = PAGE.w - PAGE.marge - 30;
+      var lignes = this._lignesRiches(it.texte, w, taille);
+      this.ensure(lignes.length * 4.7 + 2);
+      var y0 = this.y;
+      d.setDrawColor.apply(d, COULEURS.marine); d.setLineWidth(0.35); d.rect(PAGE.marge + 3, y0 - 3.3, 3.8, 3.8);
+      if (it.coche) { d.setLineWidth(0.7); d.line(PAGE.marge + 3.5, y0 - 2.8, PAGE.marge + 6.3, y0 - 0.1); d.line(PAGE.marge + 6.3, y0 - 2.8, PAGE.marge + 3.5, y0 - 0.1); }
+      for (var k = 0; k < lignes.length; k++) { d.setTextColor.apply(d, COULEURS.encre); this._ligneRiche(lignes[k], PAGE.marge + 10, this.y, taille); this.y += 4.7; }
+      this.y += pas - 4.7;
+    }
+    this.y += 1.5;
+  };
+
+  /* Cadre(s) d'identification : une ou deux colonnes ; chaque cadre = {titre, lignes:[…]} (gras **…** accepté). */
+  P.cadres = function (liste) {
+    var d = this.doc, n = liste.length, gap = 4, larg = (PAGE.w - 2 * PAGE.marge - gap * (n - 1)) / n, taille = 9, pas = 4.4, self = this;
+    var mises = liste.map(function (c) { return c.lignes.map(function (l) { return self._lignesRiches(l, larg - 7, taille); }); });
+    var hauteur = Math.max.apply(null, mises.map(function (m) { return 9 + m.reduce(function (s, l) { return s + l.length; }, 0) * pas + 3; }));
+    this.ensure(hauteur + 3);
+    var y0 = this.y - 4;
+    liste.forEach(function (c, k) {
+      var x = PAGE.marge + k * (larg + gap);
+      d.setFillColor.apply(d, COULEURS.zebre); d.setDrawColor.apply(d, COULEURS.filet); d.setLineWidth(0.3); d.roundedRect(x, y0, larg, hauteur, 1.5, 1.5, 'FD');
+      self._sans(true, 7.5); d.setTextColor.apply(d, COULEURS.discret); d.text(String(c.titre).toUpperCase(), x + 3.5, y0 + 5);
+      var y = y0 + 10;
+      mises[k].forEach(function (lg) { lg.forEach(function (l) { d.setTextColor.apply(d, COULEURS.encre); self._ligneRiche(l, x + 3.5, y, taille); y += pas; }); });
+    });
+    this.y = y0 + hauteur + 5;
+    d.setTextColor.apply(d, COULEURS.encre);
+  };
+
+  /* Chiffres clés : [{etiquette, valeur, detail}] sur une ligne. */
+  P.cles = function (items) {
+    var d = this.doc, n = items.length, gap = 4, larg = (PAGE.w - 2 * PAGE.marge - gap * (n - 1)) / n, h = 19;
+    this.ensure(h + 4);
+    var y0 = this.y - 4;
+    for (var i = 0; i < n; i++) {
+      var x = PAGE.marge + i * (larg + gap);
+      d.setFillColor.apply(d, COULEURS.zebre); d.setDrawColor.apply(d, COULEURS.filet); d.roundedRect(x, y0, larg, h, 1.5, 1.5, 'FD');
+      this._sans(true, 7); d.setTextColor.apply(d, COULEURS.discret); d.text(String(items[i].etiquette).toUpperCase(), x + 3.5, y0 + 5);
+      this._sans(true, 11.5); d.setTextColor.apply(d, COULEURS.titre); d.text(String(items[i].valeur), x + 3.5, y0 + 11.5);
+      if (items[i].detail) { this._sans(false, 7.5); d.setTextColor.apply(d, COULEURS.discret); d.text(String(items[i].detail), x + 3.5, y0 + 16); }
+    }
+    this.y = y0 + h + 6; d.setTextColor.apply(d, COULEURS.encre);
+  };
+
+  /* Bloc de signatures (insécable) : [{titre, qualite, mention}] ; zones Nom/Lieu et date/Signature à remplir à la main. */
+  P.signatures = function (blocs) {
+    var d = this.doc, n = blocs.length, gap = 4, larg = (PAGE.w - 2 * PAGE.marge - gap * (n - 1)) / n, h = 46;
+    this.ensure(h + 8);
+    var y0 = this.y - 2;
+    for (var i = 0; i < n; i++) {
+      var x = PAGE.marge + i * (larg + gap), b = blocs[i];
+      d.setDrawColor.apply(d, COULEURS.marine); d.setLineWidth(0.4); d.roundedRect(x, y0, larg, h, 1.5, 1.5, 'S');
+      this._sans(true, 8.5); d.setTextColor.apply(d, COULEURS.titre);
+      var tl = d.splitTextToSize(b.titre, larg - 7); d.text(tl, x + 3.5, y0 + 5.5);
+      var yy = y0 + 5.5 + tl.length * 3.8;
+      if (b.qualite) { this._sans(false, 7.8); d.setTextColor.apply(d, COULEURS.discret); var ql = d.splitTextToSize(b.qualite, larg - 7); d.text(ql, x + 3.5, yy); yy += ql.length * 3.4; }
+      this._sans(false, 7.2); d.setTextColor.apply(d, COULEURS.discret);
+      d.text('Nom, prénom, qualité :', x + 3.5, y0 + h - 25);
+      d.text('Lieu et date :', x + 3.5, y0 + h - 17.5);
+      d.text(larg < 70 ? 'Signature (« Lu et approuvé ») :' : 'Signature précédée de « Lu et approuvé, bon pour accord » :', x + 3.5, y0 + h - 10);
+      d.setDrawColor.apply(d, COULEURS.filet); d.setLineWidth(0.2);
+      d.line(x + 3.5, y0 + h - 23.3, x + larg - 3.5, y0 + h - 23.3); d.line(x + 3.5, y0 + h - 15.8, x + larg - 3.5, y0 + h - 15.8);
+    }
+    this.y = y0 + h + 6; d.setTextColor.apply(d, COULEURS.encre);
+  };
+
+  P.saut = function () { this.nouvellePage(); };
+
+  /* Filigrane + mention « brouillon » (appelés depuis _pieds) */
+  P._filigrane = function (texte) {
+    var d = this.doc;
+    try {
+      d.saveGraphicsState && d.saveGraphicsState();
+      d.setGState(new d.GState({ opacity: 0.09 }));
+      this._serif(46); d.setTextColor(10, 22, 40);
+      d.text(texte, PAGE.w / 2, 160, { align: 'center', angle: 35 });
+      d.restoreGraphicsState && d.restoreGraphicsState();
+    } catch (e) {}
+    d.setGState && d.setGState(new d.GState({ opacity: 1 }));
+  };
+
   P._pieds = function () {
     var d = this.doc, n = d.internal.getNumberOfPages();
     for (var i = 1; i <= n; i++) {
@@ -249,6 +416,18 @@
       d.text(SOCIETE.nom + ' · ' + SOCIETE.metiersCourt + ' · SIRET ' + SOCIETE.siret, PAGE.w / 2, 284, { align: 'center' });
       d.text(SOCIETE.adresse + ' · ' + SOCIETE.tel + ' · ' + SOCIETE.mail, PAGE.w / 2, 288, { align: 'center' });
       this._sans(true, 7.5); d.text('Page ' + i + ' / ' + n, PAGE.w - PAGE.marge, 288, { align: 'right' });
+      if (this.reference) { this._sans(false, 7); d.setTextColor.apply(d, COULEURS.discret); d.text('Réf. ' + this.reference, PAGE.w - PAGE.marge, 293, { align: 'right' }); }
+      if (this.paraphes) {
+        this._sans(false, 6.8); d.setTextColor.apply(d, COULEURS.discret);
+        d.text('Paraphes :', PAGE.marge, 293);
+        d.setDrawColor.apply(d, COULEURS.filet); d.setLineWidth(0.25);
+        d.rect(PAGE.marge + 14, 289.6, 14, 4.6); d.rect(PAGE.marge + 30, 289.6, 14, 4.6);
+      }
+      if (this.brouillon) {
+        this._sans(true, 8); d.setTextColor.apply(d, COULEURS.titre);
+        d.text(this.brouillon, PAGE.w / 2, 275.5, { align: 'center' });
+        this._filigrane(this.brouillon.split(' — ')[0]);
+      }
     }
   };
 
