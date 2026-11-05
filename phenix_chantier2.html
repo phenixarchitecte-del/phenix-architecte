@@ -8,6 +8,7 @@
 ══════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_chantier2.html
 ──────────────────────────────────────────────────────────────────
+ 05/11/2026 — Bouton « Dossier de présentation » dans l'en-tête : lien Dropbox (https) gardé sur le chantier (champ dossierUrl), modifiable par l'équipe, en lecture pour Kevin.
  30/10/2026 (2) — Accès : l'adresse administrateur est reconnue même sans rôle dans phenix_users (comme l'ancien Chantier).
  30/10/2026 — [Chantier 2] NOUVEAU MODULE CHANTIER, construit À CÔTÉ de phenix_chantier.html (l'ancien reste intact).
    Principe : la maquette 3D est l'écran d'accueil ; deux façons de travailler :
@@ -323,10 +324,17 @@ function renderTop(){
   h += '</div>';
   if (c && c.etape) h += '<span class="chip blue">Étape ' + c.etape + ' sur 26 · ' + esc(PHASES[phaseIdx(c.etape)] ? PHASES[phaseIdx(c.etape)][0] : '') + '</span>';
   h += '<span class="sp"></span>';
+  if (c && c.dossierUrl) h += '<a class="chip blue" id="dossier-open" href="' + esc(c.dossierUrl) + '" target="_blank" rel="noopener noreferrer" style="text-decoration:none">Dossier de présentation ↗</a>' + (S.role !== 'chantier' ? '<button type="button" class="chip" id="dossier-set" aria-label="Modifier le lien du dossier de présentation">Modifier le lien</button>' : '');
+  else if (c && S.role !== 'chantier') h += '<button type="button" class="chip" id="dossier-set">+ Lien du dossier de présentation</button>';
   if (VIS) h += '<span class="chip blue">● Visite en cours · ' + visAge() + '</span>';
   h += '<span class="chip">' + (!S.online ? '⚠ Hors ligne : tout est gardé sur la tablette' : S.pending ? '⟳ Envoi en cours…' : '✓ Synchronisé') + '</span>';
   if (S.role !== 'chantier') h += '<span class="seg"><button type="button" data-mode="terrain" aria-pressed="' + (S.mode === 'terrain') + '">Terrain</button><button type="button" data-mode="bureau" aria-pressed="' + (S.mode === 'bureau') + '">Bureau</button></span>';
   $('top').innerHTML = h;
+  var ds = $('dossier-set'); if (ds) ds.onclick = function(){
+    var v = prompt('Lien du dossier de présentation (lien de partage Dropbox du dossier 05.PRESENTATION). Laisser vide pour retirer.', c.dossierUrl || '');
+    if (v === null) return; v = v.trim();
+    if (v && !/^https:\/\//i.test(v)) { toast('Le lien doit commencer par https://'); return; }
+    c.dossierUrl = v; save('chantiers', c); renderTop(); };
   var sc = $('sel-ch'); if (sc) sc.onchange = function(){ S.cid = sc.value; if (D.chantiers.filter(function(x){ return String(x.id) === sc.value; })[0]) S.cid = D.chantiers.filter(function(x){ return String(x.id) === sc.value; })[0].id; lk('px2.cid', String(S.cid)); S.lotId = null; M3.cid = null; boot2(); };
   [].forEach.call($('top').querySelectorAll('[data-mode]'), function(b){ b.onclick = function(){ setMode(b.getAttribute('data-mode')); }; });
   $('tabs').hidden = S.mode !== 'bureau';
