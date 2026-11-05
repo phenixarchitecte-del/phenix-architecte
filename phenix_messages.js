@@ -125,7 +125,10 @@
       '&body=' + encodeURIComponent(msg.corps.replace(/\n/g, '\r\n'));
   }
   function lienSms(tel, msg) {
-    return 'sms:' + normTel(tel).replace(/\s/g, '') + '?&body=' + encodeURIComponent(msg.sms);
+    // Numéro au format international (+33…) : l'appli « Lien avec Windows » retrouve ainsi la conversation existante ou en crée une nouvelle.
+    var n = normTel(tel).replace(/\s/g, '').replace(/^0/, '+33');
+    var iphone = global.navigator && /iPhone|iPad/i.test(navigator.userAgent);
+    return 'sms:' + n + (iphone ? '?&body=' : '?body=') + encodeURIComponent(msg.sms);
   }
   function _ouvrir(url) {
     var a = document.createElement('a');

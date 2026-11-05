@@ -791,12 +791,10 @@ async function decAction(i, type) {
   if (type === 'copie') { const ok = await PhenixMsg.copier(msg.sms); toast(ok ? '✓ SMS copié — colle-le dans ta messagerie' : '⚠️ Copie impossible'); return; }
   const surTel = /Android|iPhone|iPad/i.test(navigator.userAgent);
   let ok;
-  if (type === 'sms' && !surTel) {   // sur ordinateur le lien sms: n'ouvre rien : on copie le texte, avec le numéro à utiliser
-    ok = PhenixMsg.normTel(art.tel) ? await PhenixMsg.copier(msg.sms) : false;
-    if (ok) toast('✓ SMS copié pour ' + PhenixMsg.normTel(art.tel) + ' — colle-le dans ta messagerie');
-  } else {
-    ok = type === 'mail' ? PhenixMsg.ouvrirMail(art.email, msg) : PhenixMsg.ouvrirSms(art.tel, msg);
-  }
+  // SMS : ouvre l'appli « Lien avec Windows » (ou Messages sur téléphone) sur la bonne conversation, texte déjà écrit.
+  // Mail : ouvre le logiciel de messagerie par défaut (Outlook) en nouveau mail, destinataire et texte remplis.
+  ok = type === 'mail' ? PhenixMsg.ouvrirMail(art.email, msg) : PhenixMsg.ouvrirSms(art.tel, msg);
+  if (ok && type === 'sms' && !surTel) PhenixMsg.copier(msg.sms);   // filet de sécurité : le texte est aussi dans le presse-papiers
   if (!ok) { toast('⚠️ ' + (type === 'mail' ? 'Mail' : 'Téléphone') + ' manquant ou invalide'); return false; }
   // Mémorise la demande dans la fiche (une relance si elle était déjà demandée)
   const dejaDemandee = art.decennaleStatut === 'demandee' && (art.decennaleDemandeLe || '') < todayISO();   // même jour (mail puis SMS) = même demande
@@ -805,7 +803,7 @@ async function decAction(i, type) {
   art.decennaleCanal = type;
   art.decennaleRelances = dejaDemandee ? (art.decennaleRelances || 0) + 1 : (art.decennaleStatut === 'demandee' ? (art.decennaleRelances || 0) : 0);
   try { await decSauver(art); } catch (e) { toast('⚠️ Brouillon ouvert, mais suivi non enregistré (droits ou connexion)'); }
-  if (type === 'mail') toast('✓ Brouillon de mail ouvert — relis et envoie'); else if (surTel) toast('✓ Brouillon de SMS ouvert — relis et envoie');
+  if (type === 'mail') toast('✓ Brouillon de mail ouvert — relis et envoie'); else toast('✓ SMS préparé — il ne reste qu’à envoyer (texte aussi copié au cas où)');
   renderDecennales();
   return true;
 }
@@ -845,7 +843,7 @@ function decAfficherFile(nbArtisans, fixeSeul, sansContact) {
     '<div class="dec-contact">' + _decFile.length + ' message' + (_decFile.length > 1 ? 's' : '') + ' à envoyer : ' + nbMail + ' mail' + (nbMail > 1 ? 's' : '') + ' et ' + nbSms + ' SMS (aux numéros de mobile uniquement).</div>' +
     (fixeSeul.length ? '<div class="dec-contact">Numéro fixe, pas de SMS possible : ' + escH(fixeSeul.join(', ')) + '.</div>' : '') +
     (sansContact.length ? '<div class="dec-contact">⚠ Aucun contact : ' + escH(sansContact.join(', ')) + ' (à compléter ci-dessous).</div>' : '') +
-    (nbSms && !surTel ? '<div class="dec-contact">Sur ordinateur, chaque SMS est copié avec son numéro : colle-le dans ta messagerie ou l’appli du téléphone.</div>' : '') +
+    (nbSms && !surTel ? '<div class="dec-contact">Chaque SMS s’ouvre dans « Lien avec Windows », texte prêt : il ne reste qu’à envoyer.</div>' : '') +
     '<div class="dec-actions"><button class="btn btn-primary" id="decSuivant" onclick="decSuivant()"' + (_decFile.length ? '' : ' disabled') + '>' + decLibelleSuivant() + '</button>' +
     '<button class="btn btn-sm" onclick="document.getElementById(\'decBatch\').style.display=\'none\'">Fermer</button></div>' +
     '<div class="dec-contact" id="decProgres" role="status"></div></div>';
