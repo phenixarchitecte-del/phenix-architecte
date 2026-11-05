@@ -497,6 +497,7 @@ if (window.parent !== window) {
     '#phenix-login,#login-overlay{display:none!important}';
 }
 </script>
+<script src="phenix_messages.js"></script>
 </head>
 <body>
 
@@ -2108,6 +2109,13 @@ if (window.parent !== window) {
         <label for="import-entreprise" style="font-size:12px;color:var(--text2);font-weight:600">Entreprise du devis</label>
         <input type="text" id="import-entreprise" list="ann-names" onfocus="annLoad()" autocomplete="off" placeholder="Raison sociale de l'artisan" style="min-width:240px;padding:5px 8px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:13px;font-family:var(--font-sans);background:var(--bg);color:var(--text)">
         <span style="font-size:12px;color:var(--text2)">→ retire la mention rouge « Aucune entreprise » du lot</span>
+      </div>
+      <div style="margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap" id="import-contacts">
+        <label for="import-tel" style="font-size:12px;color:var(--text2);font-weight:600">Téléphone</label>
+        <input type="tel" id="import-tel" autocomplete="off" placeholder="06 12 34 56 78" style="width:150px;padding:5px 8px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:13px;font-family:var(--font-sans);background:var(--bg);color:var(--text)">
+        <label for="import-email" style="font-size:12px;color:var(--text2);font-weight:600">Mail</label>
+        <input type="email" id="import-email" autocomplete="off" placeholder="contact@entreprise.fr" style="min-width:220px;padding:5px 8px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:13px;font-family:var(--font-sans);background:var(--bg);color:var(--text)">
+        <span id="import-contacts-etat" style="font-size:12px;color:var(--text2)"></span>
       </div>
     </div>
 
@@ -4880,6 +4888,7 @@ function openImportArtisanModalGlobal(){
   document.getElementById('btn-confirm-import').style.display='none';
   document.getElementById('import-txt-area').value='';
   { const _ie=document.getElementById('import-entreprise'); if(_ie) _ie.value=''; }
+  { ['import-tel','import-email'].forEach(id=>{const e=document.getElementById(id); if(e) e.value='';}); const _c=document.getElementById('import-contacts-etat'); if(_c) _c.textContent=''; }
   document.getElementById('file-artisan').value='';
   document.getElementById('pdf-artisan-status').style.display='none';
   document.getElementById('pdf-artisan-drop').innerHTML=`<i class="ti ti-file-type-pdf" style="font-size:28px;display:block;margin-bottom:8px;color:#e74c3c" aria-hidden="true"></i>Glissez le PDF du devis artisan ici<br><span style="font-size:11px;margin-top:4px;display:block">ou cliquez pour parcourir — l'IA détecte aussi le lot de chaque ligne</span>`;
@@ -4908,6 +4917,7 @@ function openImportArtisanModal(){
   document.getElementById('btn-confirm-import').style.display='none';
   document.getElementById('import-txt-area').value='';
   { const _ie=document.getElementById('import-entreprise'); if(_ie) _ie.value=''; }
+  { ['import-tel','import-email'].forEach(id=>{const e=document.getElementById(id); if(e) e.value='';}); const _c=document.getElementById('import-contacts-etat'); if(_c) _c.textContent=''; }
   document.getElementById('file-artisan').value='';
   document.getElementById('pdf-artisan-status').style.display='none';
   // Reset PDF drop zone
@@ -4980,7 +4990,7 @@ Retourne UNIQUEMENT un JSON valide, sans markdown, sans texte avant ou après :
 {"totalHtDevis":13595.82,"artisan":{"entreprise":"Raison sociale","contact":"Prénom NOM du signataire/gérant","metier":"électricien","tel":"0600000000","email":"x@y.fr","siret":"14 chiffres","adresse":"rue","cp":"63000","ville":"Ville","assurance":"n° police décennale","assuranceDate":"AAAA-MM-JJ"},"postes":[{"n":"Désignation complète de la prestation","q":1.0,"u":"m²","pu":150.00${lotFieldSchema}},...]}
 
 RÈGLES STRICTES :
-- "artisan" : coordonnées de l'ENTREPRISE QUI ÉMET le devis (l'en-tête / pied de page : pas le client). Chaque champ non trouvé = chaîne vide. "metier" : corps de métier en un mot ou deux (électricien, plombier, maçon, couvreur…).
+- "artisan" : coordonnées de l'ENTREPRISE QUI ÉMET le devis (l'en-tête / pied de page : pas le client). Cherche les coordonnées PARTOUT dans le document (en-tête, pied de page, signature, mentions légales, dernière page) : "tel" = numéro du gérant ou de l\'entreprise, PRIVILÉGIE le mobile (06/07) s\'il y en a un, au format français à 10 chiffres ; "email" = adresse mail de l\'entreprise (jamais celle du client ni d\'un logiciel de devis). Ne devine jamais un numéro ou un mail absent du document. Chaque champ non trouvé = chaîne vide. "metier" : corps de métier en un mot ou deux (électricien, plombier, maçon, couvreur…).
 - "totalHtDevis" : le TOTAL HT tel qu'imprimé sur le devis (dans le récapitulatif en fin de document). Recopie-le exactement, ne le recalcule pas. Si absent, mettre 0.
 - "n" : désignation complète (libellé de la ligne), SANS puce ni tiret de liste en début de texte (retire tout "-", "•", "*" placé au début, même si le devis source les affiche ainsi)
 - "q" : quantité numérique (ex: 80, 12.5) — si non trouvée mettre 1
@@ -5035,6 +5045,14 @@ RÈGLES STRICTES :
       lotSuggestion:p.lot||''
     }));
     window._impArt = parsed.artisan || null;
+    try{   // [Messages] coordonnées de l'artisan : contrôle du format, puis saisie modifiable avant enregistrement dans l'Annuaire
+      const _a=window._impArt||(window._impArt={});
+      const _tel=PhenixMsg.normTel(_a.tel), _mail=PhenixMsg.normMail(_a.email);
+      const _it=document.getElementById('import-tel'), _im=document.getElementById('import-email'), _ic=document.getElementById('import-contacts-etat');
+      if(_it) _it.value=_tel; if(_im) _im.value=_mail;
+      if(_ic) _ic.textContent = (_tel&&_mail) ? '✓ Téléphone et mail détectés — ils serviront à demander la décennale.'
+        : '⚠ ' + (!_tel&&!_mail ? 'Aucun téléphone ni mail détecté' : !_tel ? 'Téléphone non détecté' : 'Mail non détecté') + ' — à compléter pour pouvoir demander la décennale.';
+    }catch(e){}
     try{ const _a=window._impArt, _ie=document.getElementById('import-entreprise'); if(_a && _a.entreprise && _ie && !_ie.value.trim()){ _ie.value=_a.entreprise; annAlerteMaj(); } }catch(e){}
     showImportPreview(postesExtraits);
 
@@ -5295,6 +5313,11 @@ function confirmImportArtisan(){
   const chantier=state.chantiers[state.currentChantier];
   const entImport=((document.getElementById('import-entreprise')||{}).value||'').trim();
   const marquerDevis=l=>{ l.devisArtisan=true; if(entImport) l.entreprise=entImport; };
+  try{   // [Messages] coordonnées saisies/corrigées dans la fenêtre d'import
+    const _a=window._impArt||(window._impArt={});
+    const _t=PhenixMsg.normTel((document.getElementById('import-tel')||{}).value), _m=PhenixMsg.normMail((document.getElementById('import-email')||{}).value);
+    if(_t) _a.tel=_t; if(_m) _a.email=_m;
+  }catch(e){}
   annEnsure(entImport, window._impArt); window._impArt=null;
 
   if(!importGlobalMode){
