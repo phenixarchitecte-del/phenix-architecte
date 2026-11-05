@@ -5,6 +5,8 @@
 ══════════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_dossier.html
 ──────────────────────────────────────────────────────────────────────
+ 05/11/2026 (2) — CLÔTURE AUTOMATIQUE : dernière case de la checklist cochée (groupes non applicables exclus) => p.statut = 'cloture' (p.clotureAuto,
+   p.statutAvantCloture) ; une case décochée rouvre un dossier clos automatiquement. Repérer : _majClotureAuto.
  05/11/2026 — SYNTHÈSE 3D, MISSIONS : chaque case cochée (par Maxime ou par l'alternante) mémorise sa date dans p.checklistDerniere (AAAA-MM-JJ), copiée aussi
    dans phenix_projets_assistante. La Synthèse crée une mission « faire avancer le dossier » après 15 jours sans coche. Depuis la Synthèse, la
    première tâche non cochée de la fiche ouverte est surlignée.
@@ -5667,6 +5669,7 @@ async function appliquerCochesEquipe() {
         if (!p.checklist) p.checklist = {};
         parProjet[pid].forEach(o => { if (o.v) { p.checklist[o.itemId] = true; const j = String(o.at || '').slice(0,10) || _jourLocalISO(); if (!p.checklistDerniere || j > p.checklistDerniere) p.checklistDerniere = j; } else delete p.checklist[o.itemId]; });
         p.avancementAuto = true; p.avancement = avancementProjet(p);
+        _majClotureAuto(p);
         await saveProjet(p);
         try { await syncAssistanteProjet(p, true); } catch(e) {}   // la copie du portail est à jour AVANT de supprimer les lignes (pas de clignotement)
       }
@@ -6587,6 +6590,18 @@ function toggleChecklistGroup(headerEl, groupId) {
   if (isOpen) openSet.delete(groupId); else openSet.add(groupId);
 }
 
+// Checklist entièrement cochée (groupes « non applicables » exclus) => le dossier passe en « Clôturé » ; une case décochée le rouvre.
+// Seule une clôture faite automatiquement est annulée automatiquement (p.clotureAuto) : un dossier clôturé à la main reste clôturé.
+function _majClotureAuto(p) {
+  const c = _checklistCounts(p), complet = c.total > 0 && c.faits >= c.total;
+  if (complet && p.statut !== 'cloture') { p.statutAvantCloture = p.statut || 'actif'; p.statut = 'cloture'; p.clotureAuto = true; return 'clos'; }
+  if (!complet && p.statut === 'cloture' && p.clotureAuto) { p.statut = p.statutAvantCloture || 'actif'; delete p.clotureAuto; delete p.statutAvantCloture; return 'rouvert'; }
+  return '';
+}
+function _annonceCloture(p, r) {
+  try { if (r === 'clos') toast_d('Checklist complète : « ' + (p.nom || p.client || 'dossier') + ' » est clôturé ✓'); else if (r === 'rouvert') toast_d('Case décochée : « ' + (p.nom || p.client || 'dossier') + ' » est rouvert'); } catch(e) {}
+}
+
 // Date du jour (heure locale) au format AAAA-MM-JJ
 function _jourLocalISO(d) { d = d || new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
 
@@ -6596,7 +6611,9 @@ async function toggleChecklistItem(projetId, itemId, valeur) {
   if (!p.checklist) p.checklist = {};
   if (valeur) { p.checklist[itemId] = true; p.checklistDerniere = _jourLocalISO(); } else delete p.checklist[itemId];   // [Synthèse 3D] date de la dernière case cochée : sans coche depuis 15 j, la Synthèse crée une mission
   p.avancementAuto = true; p.avancement = avancementProjet(p);   // valeur mémorisée pour les autres modules
+  const _clo = _majClotureAuto(p);
   await saveProjet(p);
+  _annonceCloture(p, _clo);
   if (typeof renderChecklistOverview === 'function') renderChecklistOverview();
   // L'état ouvert/fermé des groupes est conservé dans checklistOpenGroups,
   // donc renderChecklist le restitue fidèlement sans hack de positions DOM.
@@ -6613,9 +6630,11 @@ async function toggleChecklistGroupNA(projetId, groupId, valeur) {
   if (!p.checklistNA) p.checklistNA = {};
   if (valeur) p.checklistNA[groupId] = true; else delete p.checklistNA[groupId];
   p.avancementAuto = true; p.avancement = avancementProjet(p);
+  const _clo = _majClotureAuto(p);
   const openSet = checklistOpenGroups[projetId];
   if (openSet) openSet.delete(groupId);
   await saveProjet(p);
+  _annonceCloture(p, _clo);
   if (typeof renderChecklistOverview === 'function') renderChecklistOverview();
   renderChecklist(projetId);
 }
