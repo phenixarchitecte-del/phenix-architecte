@@ -48,6 +48,7 @@
  25/10/2026 — SYNTHÈSE 3D (phenix_synthese.html) : entrée de menu « Synthèse 3D » (administrateur seulement) ; un clic sur une
    parcelle ouvre le dossier dans Dossier (message phenix-synthese / ouvrir-dossier). Repérer : [Synthèse 3D].
    v42 : « ouvrir-module » (débloquer un dossier depuis sa fiche) → Dossier, Chantier, Chiffrage, Contrats ou Relances ; accusé « ack-module ».
+   05/11/2026 — « aller-devis » (Synthèse, tuile Devis en attente) : ouvre Devis à relancer, ou le formulaire « Nouveau devis » (import PDF par IA) si mode = import.
    27/10/2026 — Chantier signale « prêt » (phenix-chantier) : l'ordre « open-projet » de la Synthèse lui est transmis (page Lots / Planning).
 -->
 <meta charset="UTF-8">
@@ -1005,6 +1006,18 @@ window.addEventListener('message', (ev) => {
     if (msg.devis) { shellOpenModule('relances', document.querySelector('.shell-nav-item[data-module="relances"]')); return; }
     const pid = /^\d+$/.test(String(msg.projetId)) ? Number(msg.projetId) : msg.projetId;
     if (window.shellOpenProjet) window.shellOpenProjet(pid);
+    return;
+  }
+  // [Synthèse 3D] tuile « Devis en attente » : « Voir les devis » (module Devis à relancer) et « Import devis (IA) »
+  // (même module, formulaire « Nouveau devis » où se trouve l'import du PDF par IA).
+  if (msg.source === 'phenix-synthese' && msg.action === 'aller-devis') {
+    try { ev.source && ev.source.postMessage({ source:'phenix-shell', action:'ack-module' }, '*'); } catch(e) {}
+    if (window._phenixRestreint && window._phenixModules.indexOf('relances') < 0) return;
+    const navEl = document.querySelector('.shell-nav-item[data-module="relances"]');
+    const ord = msg.mode === 'import' ? { source:'phenix-shell', action:'nouveau-devis' } : undefined;
+    const deja = ord && shellCurrentModule === 'relances' && shellCurrentFrame;
+    shellOpenModule('relances', navEl, ord);
+    if (deja) { try { shellCurrentFrame.contentWindow.postMessage(ord, '*'); } catch(e) {} shellPendingOrder = null; }
     return;
   }
   // [Synthèse 3D · v42] « débloquer » : la fiche d'un dossier bloqué demande d'ouvrir le module qui lève le blocage.

@@ -5,6 +5,10 @@
 ══════════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_dossier.html
 ──────────────────────────────────────────────────────────────────────
+ 05/11/2026 (4) — Retrait de « Importer devis signé → nouveau dossier » (page Honoraires) et de la bannière « Vous avez déjà le devis ? » (Nouveau projet) :
+   l'import de devis par IA se fait depuis la Synthèse 3D (tuile Devis en attente → Devis à relancer › Nouveau devis). Fonctions conservées.
+ 05/11/2026 (3) — CHECKLIST : F7 = chiffrage IA seul ; l'appel d'offres passe dans le groupe DCE « selection-entreprises » (après F8) ; les 4 tâches
+   de transfert gardent leurs cases cochées (CK_DEPLACEES / _checklistNormalise). Repérer : CK_DEPLACEES.
  05/11/2026 (2) — CLÔTURE AUTOMATIQUE : dernière case de la checklist cochée (groupes non applicables exclus) => p.statut = 'cloture' (p.clotureAuto,
    p.statutAvantCloture) ; une case décochée rouvre un dossier clos automatiquement. Repérer : _majClotureAuto.
  05/11/2026 — SYNTHÈSE 3D, MISSIONS : chaque case cochée (par Maxime ou par l'alternante) mémorise sa date dans p.checklistDerniere (AAAA-MM-JJ), copiée aussi
@@ -2525,7 +2529,6 @@ if (window.parent !== window) {
             <button class="btn" onclick="openCalcModal()"><i class="ti ti-calculator"></i> Calculateur</button>
             <button class="btn" onclick="exportDevisHonorairesPDF()" style="border-color:#1E3A5F;color:#1E3A5F"><i class="ti ti-file-type-pdf"></i> Exporter PDF</button>
             <button class="btn btn-primary" onclick="ouvrirNouveauDevisRelance()"><i class="ti ti-file-plus"></i> Nouveau devis à relancer</button>
-            <button class="btn" onclick="openImportDevisSigneModal()" style="border-color:#27AE60;color:#27AE60"><i class="ti ti-file-import"></i> Importer devis signé → nouveau dossier</button>
             <button class="btn btn-primary" onclick="toggleAI_d();askAI('Génère un modèle de devis d\'honoraires d\'architecte pour une mission de maîtrise d\'œuvre complète, avec décomposition par phase.')">↗ Générer un devis IA</button>
           </div>
         </div>
@@ -3531,13 +3534,6 @@ if (window.parent !== window) {
       <div class="page" id="page-new">
         <div class="page-header"><div><div class="page-title">Nouveau projet</div><div class="page-subtitle">Saisissez les informations pour créer la fiche projet</div></div></div>
         <div class="card" style="max-width:720px">
-          <div class="dr-banner">
-            <div><strong>Vous avez déjà le devis ?</strong><div style="font-size:12px;color:var(--text2);margin-top:2px">Déposez-le (PDF, photo ou scan) : l'IA remplit la fiche en suivant vos règles (ce qu'elle relève dans le devis, et dans quel champ elle le range).</div></div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap">
-              <button class="btn btn-primary" onclick="openImportDevisSigneModal()"><i class="ti ti-file-import"></i> Importer le devis (PDF ou photo)</button>
-              <button class="btn" onclick="openDevisReglesModal()"><i class="ti ti-settings"></i> Règles d'extraction</button>
-            </div>
-          </div>
           <div id="devis-ia-recap" class="dr-recap" style="display:none"></div>
           <div class="form-section">Informations générales</div>
           <div class="form-grid">
@@ -5609,7 +5605,7 @@ function projetPourAssistante(p) {
     id: p.id, ref: p.ref || '', nom: p.nom || '', client: p.client || '', tel: p.tel || '', email: p.email || '', adresse: p.adresse || '',
     type: p.type || '', mission: p.mission || '', phase: p.phase || '', statut: p.statut || '', avancement: avancementProjet(p),
     date: p.date || '', surface: p.surface || '', artisans, echeances,
-    checklist: Object.assign({}, p.checklist || {}), checklistNA: Object.assign({}, p.checklistNA || {}), checklistDerniere: p.checklistDerniere || '',   // [Checklist équipe] cases cochées / groupes non applicables (aucune donnée financière)
+    checklist: _checklistNormalise(p.checklist), checklistNA: Object.assign({}, p.checklistNA || {}), checklistDerniere: p.checklistDerniere || '',   // [Checklist équipe] cases cochées / groupes non applicables (aucune donnée financière)
     infos: { etat: inf.etat || '', prochaine: inf.prochaine || '', adire: inf.adire || '', aeviter: inf.aeviter || '', faq: inf.faq || '' },
   };
 }
@@ -5666,7 +5662,7 @@ async function appliquerCochesEquipe() {
     for (const pid of Object.keys(parProjet)) {
       const p = stateDossier.projets.find(x => String(x.id) === pid);
       if (p) {
-        if (!p.checklist) p.checklist = {};
+        p.checklist = _checklistNormalise(p.checklist);
         parProjet[pid].forEach(o => { if (o.v) { p.checklist[o.itemId] = true; const j = String(o.at || '').slice(0,10) || _jourLocalISO(); if (!p.checklistDerniere || j > p.checklistDerniere) p.checklistDerniere = j; } else delete p.checklist[o.itemId]; });
         p.avancementAuto = true; p.avancement = avancementProjet(p);
         _majClotureAuto(p);
@@ -6259,7 +6255,7 @@ const CHECKLIST_TEMPLATE = [
       'Vérification accessibilité PMR si applicable',
     ]},
   ]},
-  { id:'f7', titre:'F7 — Le chiffrage', icone:'ti-calculator', sousGroupes:[
+  { id:'f7', titre:'F7 — Le chiffrage (IA)', icone:'ti-calculator', sousGroupes:[
     { id:'deroule', titre:'Déroulé', taches:[
       "Dans Phénix Suite, se rendre dans l'onglet Chiffrage et sélectionner le type de projet.",
       "En rénovation, importer directement le PDF du plan dans le logiciel.",
@@ -6267,22 +6263,8 @@ const CHECKLIST_TEMPLATE = [
       "Laisser le logiciel créer le chantier avec les lots et lignes correspondants.",
       "Inspecter une à une les lignes proposées par l'IA pour les corriger si besoin.",
       "Générer le devis client PDF une fois le chiffrage réalisé et contrôlé.",
-      "Transférer le chiffrage vers la plateforme d'appel d'offres.",
       "Faire valider le chiffrage — lots et marge — par un supérieur compétent.",
       "Prendre rendez-vous avec le client pour valider le chiffrage et les plans.",
-    ]},
-    { id:'appel-offres', titre:"Transfert vers appel d'offres", taches:[
-      "Phénix Chiffrage → cliquer sur le chiffrage concerné → « Envoyer vers appel d'offres ».",
-      "Appel d'offres, espace pro → importer le DPGF depuis Chiffrage.",
-      "Renseigner les informations du chantier (sans adresse précise, sans photo localisable).",
-    ]},
-  ]},
-  { id:'selection-entreprises', titre:'Sélection des entreprises', icone:'ti-clipboard-list', sousGroupes:[
-    { id:'analyse', titre:'Analyse et validation des offres', taches:[
-      'Réception et analyse des devis artisans (import IA — Chiffrage)',
-      'Négociation et mise au point des offres',
-      "Rapport d'analyse des offres",
-      'Validation du choix des entreprises par le client',
     ]},
   ]},
   { id:'f8', titre:'F8 — Rendez-vous chiffrage', icone:'ti-users', sousGroupes:[
@@ -6292,6 +6274,22 @@ const CHECKLIST_TEMPLATE = [
       "Rester à l'écoute et dans l'empathie tout au long de l'échange.",
       "À l'issue du rendez-vous, expliquer au client le déclenchement de la mission de déclaration administrative.",
       "Prendre le temps de détailler en quoi consiste cette mission.",
+    ]},
+  ]},
+  // DCE : une fois le chiffrage validé par le client (F8), il est poussé dans l'appel d'offres, puis les offres sont analysées.
+  // (identifiant conservé : « selection-entreprises ». Les 4 tâches de transfert viennent de F7 : voir CK_DEPLACEES.)
+  { id:'selection-entreprises', titre:"DCE — Appel d'offres et sélection des entreprises", icone:'ti-clipboard-list', sousGroupes:[
+    { id:'appel-offres', titre:"Appel d'offres (chiffrage validé par le client)", taches:[
+      "Transférer le chiffrage vers la plateforme d'appel d'offres.",
+      "Phénix Chiffrage → cliquer sur le chiffrage concerné → « Envoyer vers appel d'offres ».",
+      "Appel d'offres, espace pro → importer le DPGF depuis Chiffrage.",
+      "Renseigner les informations du chantier (sans adresse précise, sans photo localisable).",
+    ]},
+    { id:'analyse', titre:'Analyse et validation des offres', taches:[
+      'Réception et analyse des devis artisans (import IA — Chiffrage)',
+      'Négociation et mise au point des offres',
+      "Rapport d'analyse des offres",
+      'Validation du choix des entreprises par le client',
     ]},
   ]},
   { id:'f9', titre:'F9 — Déclaration administrative (principes)', icone:'ti-file-certificate', sousGroupes:[
@@ -6403,6 +6401,24 @@ const CHECKLIST_TEMPLATE = [
 // Identifiant stable basé sur le texte de la tâche (pas sur sa position) : si une
 // tâche est insérée ou déplacée plus tard dans le modèle, les coches déjà faites
 // restent attachées à la bonne tâche au lieu de glisser sur la suivante.
+// Tâches déplacées de F7 vers « DCE — Appel d'offres » (05/11/2026) : leurs anciennes cases cochées restent valables.
+const CK_DEPLACEES = [
+  { texte: "Transférer le chiffrage vers la plateforme d'appel d'offres.", de: ['f7','deroule'] },
+  { texte: "Phénix Chiffrage → cliquer sur le chiffrage concerné → « Envoyer vers appel d'offres ».", de: ['f7','appel-offres'] },
+  { texte: "Appel d'offres, espace pro → importer le DPGF depuis Chiffrage.", de: ['f7','appel-offres'] },
+  { texte: "Renseigner les informations du chantier (sans adresse précise, sans photo localisable).", de: ['f7','appel-offres'] },
+];
+// Renvoie une copie de la checklist où les anciens identifiants sont remplacés par les nouveaux (idempotent, sans rien écrire).
+function _checklistNormalise(ck) {
+  const out = Object.assign({}, ck || {});
+  CK_DEPLACEES.forEach(d => {
+    const ancien = _checklistItemId(d.de[0], d.de[1], d.texte), nouveau = _checklistItemId('selection-entreprises', 'appel-offres', d.texte);
+    if (out[ancien]) { out[nouveau] = true; }
+    delete out[ancien];
+  });
+  return out;
+}
+
 function _checklistItemId(groupId, sgId, texteOuIdx, taches) {
   let texte = texteOuIdx;
   if (typeof texteOuIdx === 'number' && Array.isArray(taches)) texte = taches[texteOuIdx];
@@ -6421,7 +6437,7 @@ function avancementProjet(p) {
   return p.avancementAuto ? 0 : (parseFloat(p.avancement) || 0);
 }
 function _checklistCounts(p) {
-  const done = p.checklist || {};
+  const done = _checklistNormalise(p.checklist);
   const na = p.checklistNA || {};
   let total = 0, faits = 0;
   const parGroupe = {};
@@ -6566,7 +6582,7 @@ function renderChecklist(id) {
               <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">${esc(sg.titre)}</div>
               ${sg.taches.map((t, idx) => {
                 const itemId = _checklistItemId(g.id, sg.id, t);
-                const checked = !!(p.checklist && p.checklist[itemId]);
+                const checked = !!_checklistNormalise(p.checklist)[itemId];
                 return `<label class="checklist-item" style="display:flex;align-items:flex-start;gap:8px;padding:5px 0;cursor:pointer;font-size:13px;${checked?'color:var(--text3);text-decoration:line-through':''}">
                   <input type="checkbox" ${checked?'checked':''} onchange="toggleChecklistItem('${p.id}','${itemId}',this.checked)" style="margin-top:3px;flex-shrink:0">
                   <span>${esc(t)}</span>
@@ -6608,7 +6624,7 @@ function _jourLocalISO(d) { d = d || new Date(); return d.getFullYear() + '-' + 
 async function toggleChecklistItem(projetId, itemId, valeur) {
   const p = stateDossier.projets.find(x => x.id == projetId);
   if (!p) return;
-  if (!p.checklist) p.checklist = {};
+  p.checklist = _checklistNormalise(p.checklist);   // première coche depuis le déplacement des tâches d'appel d'offres : on enregistre les nouveaux identifiants
   if (valeur) { p.checklist[itemId] = true; p.checklistDerniere = _jourLocalISO(); } else delete p.checklist[itemId];   // [Synthèse 3D] date de la dernière case cochée : sans coche depuis 15 j, la Synthèse crée une mission
   p.avancementAuto = true; p.avancement = avancementProjet(p);   // valeur mémorisée pour les autres modules
   const _clo = _majClotureAuto(p);
