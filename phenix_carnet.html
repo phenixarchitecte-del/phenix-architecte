@@ -3,6 +3,7 @@
 <title>Phénix-Architecture · Carnet de projet</title>
 <!--
  HISTORIQUE DES MODIFICATIONS — phenix_carnet.html (version 3D)
+ 05/11/2026 — ATELIER : import d'un carnet préparé. Déposer ensemble un .glb déjà converti et son .json (fiche + réglages : calques, pastilles, vues, étapes) charge tout d'un coup et propose de remplir la fiche projet.
  30/10/2026 — MOTEUR 3D PARTAGÉ : le moteur de la maquette (PXModel) est sorti de ce fichier vers phenix_maquette3d.js, chargé ici
    et par le nouveau Chantier (un seul code, écrit une fois). Aucun changement de fonctionnement. Repérer : [Moteur partagé].
  29/10/2026 (2) — COUPE RÉGLABLE : en vue intérieure de la maquette, ▼ ▲ montent ou descendent la coupe de 10 cm (niveau par
@@ -4419,7 +4420,7 @@ window.dispatchEvent(new Event('fb-ready'));
     await libs(); setMsg('Lecture du fichier OBJ…'); await tick();
     var P = parseObj(objTxt), M = parseMtl(mtlTxt);
     var tot = 0; P.groups.forEach(function(g){ g.auto = autoCat(g.layer, g.mat); g.tris = g.idx.length/3; tot += g.tris; var mm = M[g.mat]; g.kd = mm ? mm.kd : [.8,.8,.8]; g.d = mm ? mm.d : 1; });
-    A.cfg = baseCfg(true); A.legacy = false; A.src = { P:P, name:name, tris:tot }; A.glb = null; A.name = name.replace(/\.obj$/i,'') + '.glb';
+    A.prepared = null; A.cfg = baseCfg(true); A.legacy = false; A.src = { P:P, name:name, tris:tot }; A.glb = null; A.name = name.replace(/\.obj$/i,'') + '.glb';
     A.xf = makeXf(P, function(g){ return g.auto !== 'hide' && g.auto !== 'mobilier'; }, A.up);
     setMsg('Construction de la maquette…'); await tick();
     A.groups = P.groups.filter(function(g){ return g.tris > 0; }).map(function(g){
@@ -4803,7 +4804,8 @@ window.dispatchEvent(new Event('fb-ready'));
           buf = await exportGlb();
           Object.keys(out.layers).forEach(function(k){ var g = A.byKey[k]; if(!g || !included(g) || isHidden(g)) delete out.layers[k]; });
           out.baked = true; out.origin = A.xf; out.src = A.src.name; out.keepMob = A.keepMob;
-        } else { buf = A.glbOnly; out.baked = false; delete out.origin; out.src = A.name; }
+        } else if(A.prepared){ buf = A.glbOnly; out.baked = true; out.origin = A.prepared.origin || null; out.src = A.prepared.src || A.name; out.keepMob = !!A.prepared.keepMob; Object.keys(out.layers || {}).forEach(function(k){ if(!A.byKey[k]) delete out.layers[k]; }); }
+        else { buf = A.glbOnly; out.baked = false; delete out.origin; out.src = A.name; }
         A.glb = buf; out.name = A.name; out.size = buf.byteLength; out.v = Date.now();
         if(!S.db || !window._fb || !window._fb.saveModelChunk){
           out.url = URL.createObjectURL(new Blob([buf], { type:'model/gltf-binary' })); delete out.n; delete out.k;
@@ -4859,7 +4861,7 @@ window.dispatchEvent(new Event('fb-ready'));
   }
   function paneFile(){
     var h = '<section><h3>1. Déposer l’export ArchiCAD</h3><p class="cap">Le fichier <b>.obj</b> et son <b>.mtl</b> (les deux ensemble), ou un <b>.glb</b>. La conversion se fait ici, dans le navigateur : mètres, recentrage, axe vertical, triangulation, allègement.</p>' +
-      '<label class="atl-drop" for="atl-file"><input id="atl-file" type="file" multiple accept=".obj,.mtl,.glb" data-atl-file="1"><b>Choisir ou glisser les fichiers</b><span>.obj + .mtl, ou .glb</span></label>' +
+      '<label class="atl-drop" for="atl-file"><input id="atl-file" type="file" multiple accept=".obj,.mtl,.glb,.json" data-atl-file="1"><b>Choisir ou glisser les fichiers</b><span>.obj + .mtl, ou .glb, ou un carnet préparé (.glb + .json)</span></label>' +
       '<label class="chk"><input type="checkbox" data-atl-opt="mob"' + (A.keepMob ? ' checked' : '') + '><span>Garder le mobilier et les sanitaires dans le fichier (plus lourd)</span></label>' +
       '<label>Axe vertical <select data-atl-opt="up"><option value="auto"' + (A.up === 'auto' ? ' selected' : '') + '>Automatique</option><option value="z"' + (A.up === 'z' ? ' selected' : '') + '>Z (ArchiCAD)</option><option value="y"' + (A.up === 'y' ? ' selected' : '') + '>Y</option></select></label></section>';
     if(A.groups.length){
@@ -4929,16 +4931,31 @@ window.dispatchEvent(new Event('fb-ready'));
       '<div class="atl-ask"><textarea id="atl-q" rows="2" placeholder="Ex. cache le terrain, mets la pastille Salle de bain sur le WC de l’étage" aria-label="Consigne"' + (A.busy ? ' disabled' : '') + '></textarea><button type="button" class="pri" data-atl="ask"' + (A.busy || !A.groups.length ? ' disabled' : '') + '>Envoyer</button></div>';
   }
 
+  /* Carnet préparé : un .glb déjà converti (baked) + un .json {fiche:{…, maquette:{layers, spots, views, stages, origin…}}} */
+  async function importPrepared(glb, jsn){
+    var j; try{ j = JSON.parse(await jsn.text()); }catch(x){ setMsg('Le fichier .json n’est pas lisible.'); return; }
+    var f = j && j.fiche, mq = f && f.maquette;
+    if(!mq || !mq.baked){ setMsg('Ce .json ne contient pas de réglages de maquette (fiche.maquette).'); return; }
+    await libs(); var buf = await glb.arrayBuffer(), keepM = S.fiche.maquette;
+    S.fiche.maquette = Object.assign({}, mq, { url:URL.createObjectURL(glb), on:true }); delete S.fiche.maquette.n; delete S.fiche.maquette.k;
+    try{ await fromCurrent(); } finally { S.fiche.maquette = keepM; }
+    A.name = mq.name || glb.name; A.src = null; A.glbOnly = buf; A.prepared = mq; A.dirty = true; estimate();
+    var fields = ['nom','dossier','clients','email','tel','terrain','specifs','regl','surface','phase','tva'], n = 0;
+    if(window.confirm('Remplir aussi la fiche projet (nom, client, terrain, surface, particularités…) avec ce fichier ? Les champs actuels seront remplacés.')){
+      fields.forEach(function(k){ if(f[k] != null && f[k] !== ''){ S.fiche[k] = f[k]; n++; } }); S.dirty = true; }
+    setMsg('Carnet préparé chargé : calques, pastilles, vues et étapes repris' + (n ? ', fiche projet remplie (' + n + ' champs)' : '') + '. Vérifiez, puis enregistrez.');
+  }
   async function handleFiles(files){
-    var obj = null, mtl = null, glb = null;
-    [].forEach.call(files, function(f){ if(/\.obj$/i.test(f.name)) obj = f; else if(/\.mtl$/i.test(f.name)) mtl = f; else if(/\.glb$/i.test(f.name)) glb = f; });
+    var obj = null, mtl = null, glb = null, jsn = null;
+    [].forEach.call(files, function(f){ if(/\.obj$/i.test(f.name)) obj = f; else if(/\.mtl$/i.test(f.name)) mtl = f; else if(/\.glb$/i.test(f.name)) glb = f; else if(/\.json$/i.test(f.name)) jsn = f; });
     if(A.dirty && !window.confirm('Remplacer la maquette en cours ? Les réglages non enregistrés seront perdus.')) return;
     try{
+      if(glb && jsn){ await importPrepared(glb, jsn); render(); return; }
       if(obj){ if(!mtl) setMsg('Pas de .mtl : les matières ne seront pas nommées, le classement se fera par calque.'); var mt = mtl ? await mtl.text() : ''; await fromObj(await obj.text(), mt, obj.name); }
       else if(glb){ await libs(); var buf = await glb.arrayBuffer(), keepM = S.fiche.maquette;
         S.fiche.maquette = { url:URL.createObjectURL(glb), on:true };
         try{ await fromCurrent(); } finally { S.fiche.maquette = keepM; }
-        A.name = glb.name; A.src = null; A.glbOnly = buf; A.xf = null; A.legacy = true; A.dirty = true; estimate();
+        A.name = glb.name; A.src = null; A.prepared = null; A.glbOnly = buf; A.xf = null; A.legacy = true; A.dirty = true; estimate();
         setMsg('Fichier .glb chargé tel quel, sans conversion ni allègement. Réglez calques, pastilles et vues, puis enregistrez. Pour les coordonnées ArchiCAD et l’allègement automatique, déposez plutôt l’OBJ.'); }
       else setMsg('Déposez un fichier .obj (avec son .mtl) ou un .glb.');
     }catch(x){ setMsg('Lecture impossible : ' + (x && x.message || x)); }
