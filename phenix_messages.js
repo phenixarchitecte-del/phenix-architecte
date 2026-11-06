@@ -55,6 +55,55 @@
     }
   };
 
+  /* Correction d'une attestation reçue : un modèle, et une phrase par point à régler (clé = code de PhenixDecennale.controler).
+     Variables des phrases : {dateFin} {dateDebut} {nomAtt} {lot}. Les codes sans phrase (info, territoire…) ne génèrent rien. */
+  MODELES['decennale-correction'] = {
+    libelle: 'Attestation de décennale à corriger ou mettre à jour',
+    sujet: 'Chantier {chantier} — attestation de décennale',
+    mail:
+      '{salutation},\n\n' +
+      'Merci pour l\u2019attestation de d\u00e9cennale que vous nous avez envoy\u00e9e pour le chantier {chantier}. ' +
+      'Apr\u00e8s lecture, {siPoints}\n\n{points}\n\n' +
+      'Pourriez-vous nous envoyer le document \u00e0 jour par mail \u00e0 ' + EXPEDITEUR.mail + ' ? ' +
+      'Il nous le faut pour contractualiser le chantier.\n\n' +
+      'Merci beaucoup\n\n' +
+      'Phénix-Architecture \uD83D\uDC26\u200D\uD83D\uDD25'
+  };
+  MODELES['decennale-correction'].sms = MODELES['decennale-correction'].mail;
+  var PHRASES_CORRECTION = {
+    'pas-decennale': 'le document ne mentionne pas la garantie d\u00e9cennale (il semble s\u2019agir d\u2019une attestation de responsabilit\u00e9 civile) : auriez-vous l\u2019attestation de garantie d\u00e9cennale ?',
+    'expiree': 'l\u2019attestation est arriv\u00e9e \u00e0 \u00e9ch\u00e9ance le {dateFin} : auriez-vous la version \u00e0 jour ?',
+    'expire-avant-fin': 'l\u2019attestation est valable jusqu\u2019au {dateFin}, soit avant la fin pr\u00e9vue du chantier : auriez-vous la version renouvel\u00e9e ?',
+    'pas-encore-valide': 'l\u2019attestation ne commence que le {dateDebut} : auriez-vous une attestation qui couvre la p\u00e9riode du chantier ?',
+    'nom': 'le nom sur l\u2019attestation (\u00ab {nomAtt} \u00bb) ne correspond pas \u00e0 celui de votre devis : pouvez-vous nous confirmer la d\u00e9nomination exacte de votre entreprise ?',
+    'siret': 'le SIRET de l\u2019attestation ne correspond pas \u00e0 celui de votre devis : pouvez-vous nous confirmer le bon num\u00e9ro ?',
+    'police': 'le num\u00e9ro de police diff\u00e8re de celui de votre devis : pouvez-vous nous confirmer lequel est le bon ?',
+    'activite': 'l\u2019activit\u00e9 des travaux pr\u00e9vus ({lot}) ne semble pas figurer parmi les activit\u00e9s garanties : pouvez-vous nous confirmer qu\u2019elle est bien couverte ?',
+    'lecture': 'certaines informations sont difficiles \u00e0 lire (dates, activit\u00e9s ou signature) : pourriez-vous nous renvoyer une version compl\u00e8te et lisible ?'
+  };
+  var CODE_LECTURE = { 'dates-illisibles': 1, 'activites-absentes': 1, 'signature': 1 };
+  /* Points à régler d'une liste d'incohérences : [{code, phrase}] (niveaux « bloquant » et « À vérifier » seulement). */
+  function pointsCorrection(incs, vars) {
+    vars = vars || {}; var vus = {}, out = [];
+    (incs || []).forEach(function (x) {
+      if (x.niveau === 'info' && x.code !== 'signature') return;
+      var k = CODE_LECTURE[x.code] ? 'lecture' : x.code;
+      if (!PHRASES_CORRECTION[k] || vus[k]) return; vus[k] = 1;
+      out.push({ code: k, phrase: remplir(PHRASES_CORRECTION[k], {
+        dateFin: dateFr(vars.dateFin), dateDebut: dateFr(vars.dateDebut), nomAtt: vars.nomAtt || '', lot: vars.lot || 'lot du chantier' }) });
+    });
+    return out;
+  }
+  function preparerCorrection(incs, vars) {
+    vars = vars || {};
+    var pts = pointsCorrection(incs, vars);
+    if (!pts.length) return null;
+    var liste = pts.map(function (p) { return '\u2013 ' + p.phrase.charAt(0).toUpperCase() + p.phrase.slice(1); }).join('\n');
+    var intro = pts.length > 1 ? 'quelques points \u00e0 r\u00e9gler :' : 'un point \u00e0 r\u00e9gler :';
+    var msg = preparer('decennale-correction', { contact: vars.contact, chantier: vars.chantier, siPoints: intro, points: liste });
+    msg.points = pts; return msg;
+  }
+
   /* ── Outils de contact ─────────────────────────────────────────── */
 
   /* Téléphone français → « 06 12 34 56 78 » ; renvoie '' si le numéro n'est pas plausible. */
@@ -127,6 +176,8 @@
       siValidite: vars.dateValidite
         ? 'Celle que j\u2019ai est valable jusqu\u2019au ' + dateFr(vars.dateValidite) + ' : auriez-vous la version à jour ?\n\n'
         : '',
+      siPoints: vars.siPoints || '',
+      points: vars.points || '',
       signature: ''
     };
     return {
@@ -183,7 +234,7 @@
     expediteur: EXPEDITEUR,
     modeles: MODELES,
     normTel: normTel, normMail: normMail, estMobile: estMobile, extraireContacts: extraireContacts,
-    preparer: preparer, libelleChantier: libelleChantier, lienMail: lienMail, lienSms: lienSms,
+    preparer: preparer, preparerCorrection: preparerCorrection, pointsCorrection: pointsCorrection, libelleChantier: libelleChantier, lienMail: lienMail, lienSms: lienSms,
     ouvrirMail: ouvrirMail, ouvrirSms: ouvrirSms, copier: copier, dateFr: dateFr
   };
 })(window);

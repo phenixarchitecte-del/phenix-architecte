@@ -700,8 +700,9 @@ function decStatutTexte(g, avecSymbole) {
   if (!art || !art.decennaleStatut) return sym('○') + 'Non demandée';
   if (art.decennaleStatut === 'demandee') return sym('➤') + 'Demandée le ' + fr(art.decennaleDemandeLe) + (art.decennaleRelances ? ' (relancée ' + art.decennaleRelances + ' fois)' : '');
   const r = PhenixDecennale.resume(decControles(g));
-  if (r.bloquants) return sym('✖') + 'Reçue — incohérence bloquante';
-  if (r.attention) return sym('⚠') + 'Reçue — ' + r.attention + ' point' + (r.attention > 1 ? 's' : '') + ' à vérifier';
+  const corr = art.decennaleCorrectionLe ? ' · correction demandée le ' + fr(art.decennaleCorrectionLe) : '';
+  if (r.bloquants) return sym('✖') + 'Reçue — incohérence bloquante' + corr;
+  if (r.attention) return sym('⚠') + 'Reçue — ' + r.attention + ' point' + (r.attention > 1 ? 's' : '') + ' à vérifier' + corr;
   return sym('✔') + 'Reçue — conforme' + (art.decennaleAtt && art.decennaleAtt.dateFin ? ' (valable jusqu’au ' + fr(art.decennaleAtt.dateFin) + ')' : '');
 }
 
@@ -716,7 +717,7 @@ async function renderDecennales() {
   }
   body.innerHTML = groupes.map((g, i) => {
     const a = g.artisan || {}, tel = PhenixMsg.normTel(a.tel), mail = PhenixMsg.normMail(a.email);
-    const incs = decControles(g);
+    const incs = decControles(g), pts = PhenixMsg.pointsCorrection(incs, { dateFin: (g.artisan && g.artisan.decennaleAtt || {}).dateFin });
     const contact = (tel || mail)
       ? '📞 ' + (tel ? escH(tel) : '<i>téléphone manquant</i>') + ' · ✉ ' + (mail ? escH(mail) : '<i>mail manquant</i>')
       : 'Coordonnées manquantes :';
@@ -738,6 +739,7 @@ async function renderDecennales() {
         '<button class="btn btn-sm" onclick="decAction(' + i + ',\'mail\')"' + (mail ? '' : ' disabled title="Mail manquant"') + '><i class="ti ti-mail"></i> Demander par mail</button>' +
         '<button class="btn btn-sm" onclick="decAction(' + i + ',\'sms\')"' + (tel ? '' : ' disabled title="Téléphone manquant"') + '><i class="ti ti-message"></i> Demander par SMS</button>' +
         '<button class="btn btn-sm" onclick="decAction(' + i + ',\'copie\')"><i class="ti ti-copy"></i> Copier le SMS</button>' +
+        (pts.length ? '<button class="btn btn-sm" onclick="decCorriger(' + i + ',\'mail\')"' + (mail ? '' : ' disabled title="Mail manquant"') + '><i class="ti ti-mail-forward"></i> Écrire pour corriger (' + pts.length + ' point' + (pts.length > 1 ? 's' : '') + ')</button>' + (tel && PhenixMsg.estMobile(tel) ? '<button class="btn btn-sm" onclick="decCorriger(' + i + ',\'sms\')"><i class="ti ti-message"></i> Corriger par SMS</button>' : '') : '') +
         '<button class="btn btn-sm btn-primary" onclick="decDeposer(' + i + ')"><i class="ti ti-upload"></i> Déposer l’attestation reçue</button>' +
       '</div></div>';
   }).join('') + (groupes.sansEntreprise ? '<div style="font-size:12px;color:var(--text2)">' + groupes.sansEntreprise + ' lot(s) du chiffrage n’ont pas d’entreprise : ils ne sont pas listés ici.</div>' : '');
@@ -806,6 +808,23 @@ async function decAction(i, type) {
   if (type === 'mail') toast('✓ Brouillon de mail ouvert — relis et envoie'); else toast('✓ SMS préparé — il ne reste qu’à envoyer (texte aussi copié au cas où)');
   renderDecennales();
   return true;
+}
+
+async function decCorriger(i, type) {
+  const g = _decGroupes[i]; if (!g || !g.artisan) return;
+  const art = g.artisan, att = art.decennaleAtt || {};
+  const chantierNom = PhenixMsg.libelleChantier(window._chantierLive || {}) || (currentProjet && currentProjet.nom) || '';
+  const contact = (art.nom && _nnDec(art.nom) !== _nnDec(g.nom)) ? art.nom : '';
+  const msg = PhenixMsg.preparerCorrection(decControles(g), { contact, chantier: chantierNom, lot: g.lots.map(l => l.nom).filter(Boolean).join(' ; '), dateFin: att.dateFin, dateDebut: att.dateDebut, nomAtt: att.entreprise });
+  if (!msg) { toast('Aucun point à corriger'); return; }
+  const ok = type === 'mail' ? PhenixMsg.ouvrirMail(art.email, msg) : PhenixMsg.ouvrirSms(art.tel, msg);
+  if (ok && type === 'sms' && !/Android|iPhone|iPad/i.test(navigator.userAgent)) PhenixMsg.copier(msg.sms);
+  if (!ok) { toast('⚠️ ' + (type === 'mail' ? 'Mail' : 'Téléphone') + ' manquant ou invalide'); return; }
+  // On garde le statut « Reçue » (les contrôles restent visibles) et on note seulement la demande de correction.
+  art.decennaleCorrectionLe = todayISO(); art.decennaleCorrections = (art.decennaleCorrections || 0) + 1;
+  try { await decSauver(art); } catch (e) { toast('⚠️ Brouillon ouvert, mais suivi non enregistré (droits ou connexion)'); }
+  toast(type === 'mail' ? '✓ Brouillon de mail ouvert — relis et envoie' : '✓ SMS préparé — il ne reste qu’à envoyer');
+  renderDecennales();
 }
 
 // ── Demande groupée : une file de messages, un clic par message (le navigateur n'autorise pas d'ouvrir 20 messageries d'un coup) ──
