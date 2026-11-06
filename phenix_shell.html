@@ -48,6 +48,7 @@
  25/10/2026 — SYNTHÈSE 3D (phenix_synthese.html) : entrée de menu « Synthèse 3D » (administrateur seulement) ; un clic sur une
    parcelle ouvre le dossier dans Dossier (message phenix-synthese / ouvrir-dossier). Repérer : [Synthèse 3D].
    v42 : « ouvrir-module » (débloquer un dossier depuis sa fiche) → Dossier, Chantier, Chiffrage, Contrats ou Relances ; accusé « ack-module ».
+   06/11/2026 — Cloche : reçoit les réceptions automatiques de la boîte mail (collection phenix_entrants, admin) ; clic → Annuaire, « lu » = statut 'lu'.
    05/11/2026 — « aller-devis » (Synthèse, tuile Devis en attente) : ouvre Devis à relancer, ou le formulaire « Nouveau devis » (import PDF par IA) si mode = import.
    27/10/2026 — Chantier signale « prêt » (phenix-chantier) : l'ordre « open-projet » de la Synthèse lui est transmis (page Lots / Planning).
 -->
@@ -463,7 +464,7 @@ window.doLogout = function() {
 };
 
 // ═══ [Centre de notifications] une seule cloche : devis, tâches, messages artisans, messages client ═══
-const NC = { devis: [], taches: [], art: [], cli: [] };
+const NC = { devis: [], taches: [], art: [], cli: [], ent: [] };
 function _ncEsc(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 window._NC = NC;
 function renderNC() {
@@ -473,6 +474,7 @@ function renderNC() {
   NC.art.forEach(x => items.push({ ico: '🧱', t: x.date, h: 'Message d\'artisan', txt: x.texte || '', go: 'msg', conv: x.chantierId + '|' + x.intervenantId, col: 'phenix_ch_messages', id: x._id, patch: { luPhenix: true } }));
   NC.devis.forEach(x => items.push({ ico: x.projet ? '📝' : '📄', t: x.date || x.at, h: (x.projet ? 'Devis signé · ' : 'Devis · ') + (x.client || ''), txt: x.projet ? (x.vers === 'accepte' ? 'signé (dossier déjà créé)' : (x.vers || '')) + ' — cliquer pour ouvrir le contrat' : 'statut → ' + (x.vers || ''), go: x.projet ? 'contrat' : 'espace', order: x.projet ? { source: 'phenix-shell', action: 'ouvrir-contrat', projet: x.projet } : null, col: 'phenix_notifs', id: x._id, patch: { lu: true } }));
   NC.taches.forEach(x => items.push({ ico: '✅', t: x.quand || x.date, h: 'Tâche', txt: (String(x.par || '').split('@')[0] || 'L\'assistante') + ' · « ' + (x.titre || '') + ' »', go: 'dossier', col: 'phenix_notifs_taches', id: x._id, patch: { lu: true } }));
+  NC.ent.forEach(x => items.push({ ico: x.resultat === 'bloquant' ? '⚠️' : x.resultat === 'conforme' ? '📄' : '📬', t: x.recuLe || x.creeLe, h: 'Reçu par mail · ' + (x.artisanNom || x.de || 'artisan'), txt: (x.titre || 'Nouveau message') + (x.objet ? ' — « ' + x.objet + ' »' : ''), go: 'annuaire', col: 'phenix_entrants', id: x._id, patch: { statut: 'lu' } }));
   items.sort((a, b) => String(b.t || '').localeCompare(String(a.t || '')));
   const n = items.length;
   bell.style.display = ''; cnt.textContent = n > 9 ? '9+' : String(n); cnt.style.display = n ? 'flex' : 'none';
@@ -531,6 +533,7 @@ function startNotifsCentre(estAdmin) {
   if (!estAdmin) return;   // messages artisans / client : compte administrateur
   try {
     unsubNC.push(onSnapshot(query(collection(db, 'phenix_ch_messages'), where('de', '==', 'artisan'), where('luPhenix', '==', false)), snap => { NC.art = snap.docs.map(d => ({ _id: d.id, ...(d.data() || {}) })); renderNC(); }, err => console.warn('Messages artisans :', err && err.message)));
+    unsubNC.push(onSnapshot(query(collection(db, 'phenix_entrants'), where('statut', '==', 'nouveau')), snap => { NC.ent = snap.docs.map(d => ({ _id: d.id, ...(d.data() || {}) })); renderNC(); }, err => console.warn('Réceptions mail :', err && err.message)));
     unsubNC.push(onSnapshot(query(collection(db, 'phenix_notifs_client'), where('lu', '==', false)), snap => { NC.cli = snap.docs.map(d => ({ _id: d.id, ...(d.data() || {}) })); renderNC(); }, err => console.warn('Messages client :', err && err.message)));
   } catch (e) { console.warn('Centre de notifications :', e); }
 }
