@@ -571,7 +571,7 @@ function renderEchanges(refaireFiltres) {
   if (refaireFiltres || !fz.innerHTML) fz.innerHTML =
     '<select onchange="echFiltre(\'etat\',this.value)" aria-label="État"><option value="traiter">À traiter</option><option value="repondre">À répondre</option><option value="traite">Traités</option><option value="tous">Tous</option></select>' +
     '<select onchange="echFiltre(\'canal\',this.value)" aria-label="Canal"><option value="">SMS et mails</option><option value="sms">SMS</option><option value="mail">Mails</option></select>' +
-    '<select onchange="echFiltre(\'qui\',this.value)" aria-label="Expéditeur"><option value="">Artisans et clients</option><option value="artisan">Artisans</option><option value="client">Clients</option></select>' +
+    '<select onchange="echFiltre(\'qui\',this.value)" aria-label="Expéditeur"><option value="">Artisans et clients</option><option value="artisan">Artisans</option><option value="client">Clients</option><option value="inconnu">Numéros inconnus</option></select>' +
     '<input type="search" placeholder="Rechercher (nom, dossier, mot…)" oninput="echFiltre(\'q\',this.value)" style="flex:1;min-width:160px" aria-label="Rechercher">';
   fz.querySelectorAll('select').forEach((sel, k) => { sel.value = [f.etat, f.canal, f.qui][k]; });
   const q = String(f.q || '').toLowerCase().trim();
@@ -581,7 +581,7 @@ function renderEchanges(refaireFiltres) {
   l.sort((a, b) => ((_estATraiter(b) ? 1 : 0) - (_estATraiter(a) ? 1 : 0)) || ((b.urgence === 'haute' ? 1 : 0) - (a.urgence === 'haute' ? 1 : 0)) || String(b.recuLe || b.creeLe).localeCompare(String(a.recuLe || a.creeLe)));
   document.getElementById('echListe').innerHTML = l.length ? l.slice(0, 150).map(x =>
     '<div class="ec" tabindex="0" role="button" onclick="ouvrirValidation(\'' + _ncEsc(x._id) + '\')" onkeydown="if(event.key===\'Enter\')ouvrirValidation(\'' + _ncEsc(x._id) + '\')">' +
-    '<div class="et"><span>' + (x.source === 'sms' ? '💬' : '✉️') + ' ' + _ncEsc(x.artisanNom || x.deNom || x.de || '') + '</span><span class="es">' + (x.expediteurType === 'client' ? 'client' : 'artisan') + (x.projetNom ? ' · dossier ' + _ncEsc(x.projetNom) : '') + ' · ' + _ncEsc(_dateCourte(x.recuLe || x.creeLe)) + '</span></div>' +
+    '<div class="et"><span>' + (x.source === 'sms' ? '💬' : '✉️') + ' ' + _ncEsc(x.artisanNom || x.deNom || x.de || '') + '</span><span class="es">' + (x.expediteurType === 'client' ? 'client' : x.expediteurType === 'inconnu' ? '? numéro inconnu' : 'artisan') + (x.projetNom ? ' · dossier ' + _ncEsc(x.projetNom) : '') + ' · ' + _ncEsc(_dateCourte(x.recuLe || x.creeLe)) + '</span></div>' +
     '<div>' + (CLASSE_LIB[x.classe] ? '<b>' + _ncEsc(CLASSE_LIB[x.classe]) + '</b> — ' : '') + _ncEsc(x.resume || x.titre || x.objet || '') + '</div>' +
     '<div style="margin-top:4px">' + _echEtatTexte(x) + ((x.actions || []).length ? ' <span class="es">' + (x.actions || []).length + ' action' + (x.actions.length > 1 ? 's' : '') + ' proposée' + (x.actions.length > 1 ? 's' : '') + (x.faites && x.faites.length ? ' · ' + x.faites.length + ' faite' + (x.faites.length > 1 ? 's' : '') : '') + '</span>' : '') + '</div></div>').join('')
     : '<div class="nc-e">Rien à afficher avec ces filtres.</div>';
@@ -634,16 +634,39 @@ window.ouvrirValidation = async function(id) {
   const precedents = (ECH.all || []).filter(e => e._id !== x._id && e.de && e.de === x.de).sort((a, b) => String(b.recuLe).localeCompare(String(a.recuLe))).slice(0, 4)
     .map(e => '<div style="font-size:12.5px;margin:2px 0"><span style="color:#6b7a99">' + _ncEsc(_dateCourte(e.recuLe || e.creeLe)) + ' · ' + (e.source === 'sms' ? 'SMS' : 'mail') + '</span> — ' + _ncEsc(e.resume || e.titre || e.objet || '') + '</div>').join('');
   document.getElementById('valBox').innerHTML =
-    '<div class="vh"><div><b>' + (x.source === 'sms' ? '💬 SMS' : '✉️ Mail') + ' · ' + _ncEsc(x.artisanNom || x.de) + (x.expediteurType === 'client' ? ' (client)' : ' (artisan)') + '</b><br><span style="font-size:12px;color:#6b7a99">' +
+    '<div class="vh"><div><b>' + (x.source === 'sms' ? '💬 SMS' : '✉️ Mail') + ' · ' + _ncEsc(x.artisanNom || x.de) + (x.expediteurType === 'client' ? ' (client)' : x.expediteurType === 'inconnu' ? ' (numéro inconnu)' : ' (artisan)') + '</b><br><span style="font-size:12px;color:#6b7a99">' +
       _ncEsc(new Date(x.recuLe || x.creeLe).toLocaleString('fr-FR')) + (x.projetNom ? ' · dossier « ' + _ncEsc(x.projetNom) + ' »' : ' · dossier non identifié') + ' · ' + _ncEsc(CLASSE_LIB[x.classe] || 'Autre') + '</span><div style="margin-top:4px">' + _echEtatTexte(x) + '</div></div><button class="vbtn" onclick="fermerValidation()" aria-label="Fermer">✕</button></div>' +
     '<div class="vb"><div style="font-weight:700">Résumé</div><div>' + _ncEsc(x.resume || x.titre || '—') + (x.confiance != null && x.confiance < 0.5 ? ' <i>(lecture peu sûre : à vérifier)</i>' : '') + '</div>' +
     '<div style="font-weight:700;margin-top:10px">Message reçu</div><div class="vq">' + _ncEsc((x.objet && x.objet !== x.extrait ? x.objet + '\n' : '') + (x.extrait || '')) + '</div>' +
     (acts ? '<div style="font-weight:700;margin-bottom:6px">Actions proposées <span style="font-weight:400;color:#6b7a99">(rien n’est fait sans votre clic)</span></div>' + acts : '<div style="color:#6b7a99;margin-bottom:10px">Aucune action proposée pour ce message.</div>') +
+    (x.expediteurType === 'inconnu' ? await _blocInconnu(x) : '') +
     '<div class="vact"><b>Ajouter une tâche libre</b><label>Titre</label><input id="vlt" placeholder="Ex. : Rappeler cet artisan"><div class="vrow"><div><label>Assigner à</label><select id="vla">' + opts + '</select></div><div><label>Pour le</label><input type="date" id="vlj"></div></div><div style="margin-top:8px"><button class="vbtn" onclick="validerAction(-1)">Créer la tâche</button></div></div>' +
     (precedents ? '<div style="font-weight:700;margin:6px 0 2px">Échanges précédents avec cette personne</div>' + precedents : '') +
     '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">' + (x.projetId ? '<button class="vbtn" onclick="validerOuvrirDossier()">Ouvrir le dossier</button>' : '') +
     (_estATraiter(x) ? '<button class="vbtn p" onclick="validerTermine()">Traité — retirer des à-traiter</button>' : '<button class="vbtn" onclick="validerRouvrir()">Remettre à traiter</button>') + '</div></div>';
   document.getElementById('valBack').classList.add('open');
+};
+
+// SMS d'un numéro inconnu : rattacher le numéro à un artisan (Annuaire) ou à un dossier client, pour qu'il soit reconnu ensuite
+let _valPro = null;
+async function _blocInconnu(x) {
+  if (!_valArt) { _valArt = []; try { const sn = await getDocs(collection(db, 'phenix_artisans')); sn.forEach(d => { const a = d.data() || {}; _valArt.push({ id: d.id, nom: a.entreprise || a.nom || d.id }); }); _valArt.sort((p, q) => p.nom.localeCompare(q.nom, 'fr')); } catch (e) {} }
+  if (!_valPro) { _valPro = []; try { const sn = await getDocs(collection(db, 'phenix_projets')); sn.forEach(d => { const p = d.data() || {}; _valPro.push({ id: d.id, nom: [p.client || p.nom || d.id, p.nom && p.client ? p.nom : ''].filter(Boolean).join(' — ') }); }); _valPro.sort((p, q) => p.nom.localeCompare(q.nom, 'fr')); } catch (e) {} }
+  const o = l => l.map(a => '<option value="' + _ncEsc(a.id) + '">' + _ncEsc(a.nom) + '</option>').join('');
+  return '<div class="vact"><b>Numéro inconnu : ' + _ncEsc(x.de || '') + '</b><div style="font-size:12.5px;color:#6b7a99">Rattachez-le pour que ses prochains SMS soient reconnus. Sinon, cliquez « Traité » : rien d’autre n’est modifié.</div>' +
+    '<label>Artisan de l’Annuaire</label><select id="viArt"><option value="">— choisir —</option>' + o(_valArt) + '</select>' +
+    '<label>ou client d’un dossier</label><select id="viPro"><option value="">— choisir —</option>' + o(_valPro) + '</select>' +
+    '<div style="margin-top:8px"><button class="vbtn p" onclick="rattacherNumero()">Rattacher ce numéro</button></div></div>';
+}
+window.rattacherNumero = async function() {
+  const x = _echTrouve(_valId); if (!x || !x.de) return; const a = document.getElementById('viArt').value, p = document.getElementById('viPro').value;
+  if (!a && !p) { toast('Choisissez un artisan ou un dossier'); return; }
+  try {
+    if (a) await updateDoc(doc(db, 'phenix_artisans', a), { telsConnus: arrayUnion(x.de) }); else await updateDoc(doc(db, 'phenix_projets', p), { telsConnus: arrayUnion(x.de) });
+    const nom = a ? (_valArt.find(v => v.id === a) || {}).nom : (_valPro.find(v => v.id === p) || {}).nom;
+    await updateDoc(doc(db, 'phenix_entrants', x._id), { expediteurType: a ? 'artisan' : 'client', artisanNom: nom || x.artisanNom, deNom: nom || x.deNom, artisanId: a || '', projetId: p || x.projetId || '' });
+    toast('✓ Numéro rattaché à ' + (nom || 'la fiche') + ' : ses prochains SMS seront reconnus'); setTimeout(() => ouvrirValidation(x._id), 300);
+  } catch (e) { toast('⚠️ Rattachement impossible : ' + (e && (e.code || e.message) || e)); }
 };
 // Attestation de décennale reçue par mail : rangée toute seule dans la fiche de l'artisan reconnu ; sinon « à rattacher » ici, en un clic
 let _valArt = null;
