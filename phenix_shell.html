@@ -48,6 +48,7 @@
  25/10/2026 — SYNTHÈSE 3D (phenix_synthese.html) : entrée de menu « Synthèse 3D » (administrateur seulement) ; un clic sur une
    parcelle ouvre le dossier dans Dossier (message phenix-synthese / ouvrir-dossier). Repérer : [Synthèse 3D].
    v42 : « ouvrir-module » (débloquer un dossier depuis sa fiche) → Dossier, Chantier, Chiffrage, Contrats ou Relances ; accusé « ack-module ».
+   06/11/2026 (2) — « Échanges » : page de suivi des SMS et mails reçus (phenix_entrants), actions proposées par l'IA (tâche, rappel, mission, note, rendez-vous .ics/Outlook, réponse en brouillon, devis → Chiffrage), validées d'un clic.
    06/11/2026 — Cloche : reçoit les réceptions automatiques de la boîte mail (collection phenix_entrants, admin) ; clic → Annuaire, « lu » = statut 'lu'.
    05/11/2026 — « aller-devis » (Synthèse, tuile Devis en attente) : ouvre Devis à relancer, ou le formulaire « Nouveau devis » (import PDF par IA) si mode = import.
    27/10/2026 — Chantier signale « prêt » (phenix-chantier) : l'ordre « open-projet » de la Synthèse lui est transmis (page Lots / Planning).
@@ -130,6 +131,34 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 .nc-count{position:absolute;top:-6px;right:-6px;min-width:16px;height:16px;border-radius:99px;background:#e5484d;color:#fff;font-size:10px;font-weight:700;display:none;align-items:center;justify-content:center;padding:0 4px;font-family:inherit}
 #ncPanel{position:fixed;top:48px;right:12px;width:min(380px,calc(100vw - 24px));max-height:70vh;overflow:auto;background:#fff;color:#1b2d5b;border-radius:12px;box-shadow:0 12px 40px rgba(10,20,50,.35);z-index:9999;display:none}
 #ncPanel.open{display:block}
+
+#echBack{position:fixed;inset:0;background:#f5f7fb;display:none;flex-direction:column;z-index:1500;color:#1b2d5b}
+#echBack.open{display:flex}
+#echBack .eh{display:flex;align-items:center;gap:10px;padding:12px 16px;background:#1b2d5b;color:#fff}
+#echBack .eh b{font-size:15px;flex:1}
+#echBack .ef{display:flex;flex-wrap:wrap;gap:8px;padding:10px 16px;background:#fff;border-bottom:1px solid #e6eaf2}
+#echBack .ef select,#echBack .ef input{border:1.5px solid #cfd6e4;border-radius:8px;padding:7px 9px;font:inherit;font-size:13px;color:#1b2d5b;background:#fff}
+#echBack .el{flex:1;overflow:auto;padding:10px 16px 40px}
+#echBack .ec{background:#fff;border:1.5px solid #dfe5f0;border-radius:10px;padding:10px 12px;margin:0 0 8px;cursor:pointer;font-size:13.5px;line-height:1.4}
+#echBack .ec:hover{border-color:#1b2d5b}
+#echBack .ec .et{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;font-weight:700}
+#echBack .ec .es{font-size:12px;color:#6b7a99;font-weight:600}
+#echBack .chip{display:inline-block;border:1.5px solid #8a96b4;border-radius:99px;padding:1px 8px;font-size:11.5px;font-weight:700;color:#44506a;background:#fff}
+#echBack .chip.u{border-color:#c0262b;color:#8f1d20}#echBack .chip.r{border-color:#b26a00;color:#7a4a00}#echBack .chip.ok{border-color:#2e7d32;color:#1b5e20}
+#valBack{position:fixed;inset:0;background:rgba(15,25,55,.55);display:none;align-items:flex-start;justify-content:center;z-index:2000;overflow:auto;padding:24px 12px}
+#valBack.open{display:flex}
+#valBox{background:#fff;color:#1b2d5b;border-radius:14px;width:min(560px,100%);box-shadow:0 20px 60px rgba(0,0,0,.35);font-size:13.5px;line-height:1.45}
+#valBox .vh{padding:14px 16px;border-bottom:1px solid #e6eaf2;display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+#valBox .vb{padding:14px 16px}
+#valBox .vq{background:#f2f4f8;border-left:3px solid #8a96b4;padding:8px 10px;border-radius:6px;margin:6px 0 12px;white-space:pre-wrap;word-break:break-word;font-size:13px}
+#valBox .vact{border:1.5px solid #cfd6e4;border-radius:10px;padding:10px 12px;margin:0 0 10px}
+#valBox .vact.faite{background:#eef7ee;border-color:#2e7d32}
+#valBox label{display:block;font-size:11.5px;font-weight:700;color:#44506a;margin:6px 0 2px}
+#valBox input,#valBox select,#valBox textarea{width:100%;box-sizing:border-box;border:1.5px solid #cfd6e4;border-radius:8px;padding:7px 9px;font:inherit;color:#1b2d5b;background:#fff}
+#valBox .vrow{display:flex;gap:8px}#valBox .vrow>div{flex:1}
+#valBox .vbtn{border:1.5px solid #1b2d5b;background:#fff;color:#1b2d5b;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer;font-size:13px}
+#valBox .vbtn.p{background:#1b2d5b;color:#fff}
+
 .nc-h{padding:12px 14px;font-weight:700;font-size:13px;border-bottom:1px solid #e6eaf2;display:flex;justify-content:space-between}
 .nc-i{display:flex;gap:10px;padding:10px 14px;border-bottom:1px solid #f0f2f7;cursor:pointer;font-size:13px;align-items:flex-start}
 .nc-i:hover{background:#f5f7fb}
@@ -259,6 +288,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
     <div class="shell-nav-item" data-view="module" data-module="chantier" data-tip="Chantier" onclick="shellOpenModule('chantier',this)"><i class="ti ti-building"></i><span class="lbl">Chantier</span></div>
     <div class="shell-nav-item" data-view="module" data-module="espace" data-tip="Mon espace — devis à relancer, tâches, projets" onclick="shellOpenModule('espace',this)"><i class="ti ti-headset"></i><span class="lbl">Espace</span><span class="nav-badge" id="navBadgeDevis">0</span></div>
     <div class="shell-nav-item" data-view="module" data-module="annuaire" data-tip="Annuaire artisans" onclick="shellOpenModule('annuaire',this)"><i class="ti ti-address-book"></i><span class="lbl">Annuaire</span></div>
+    <div class="shell-nav-item" data-view="echanges" data-tip="Échanges reçus — SMS et mails à traiter" onclick="ouvrirEchanges()" style="display:none"><i class="ti ti-inbox"></i><span class="lbl">Échanges</span><span class="nav-badge" id="navBadgeEch">0</span></div>
     <div class="shell-nav-item" data-view="module" data-module="journal" data-tip="Journal d'activité" onclick="shellOpenModule('journal',this)"><i class="ti ti-history"></i><span class="lbl">Journal</span></div>
   </div>
 
@@ -303,11 +333,13 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 </div><!-- /shell -->
 </div><!-- /shell-root -->
 
+<div id="echBack" role="dialog" aria-modal="true" aria-label="Échanges reçus"><div class="eh"><b>📥 Échanges reçus — SMS et mails à traiter</b><button style="background:#fff;color:#1b2d5b;border:0;border-radius:8px;padding:6px 12px;font-weight:700;cursor:pointer" onclick="fermerEchanges()">Fermer ✕</button></div><div class="ef" id="echFiltres"></div><div class="el" id="echListe"></div></div>
+<div id="valBack" role="dialog" aria-modal="true" aria-label="Valider un message reçu"><div id="valBox"></div></div>
 <div class="toast" id="toast"></div>
 
 <script type="module">
 import { initializeApp }   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-import { getFirestore, collection, onSnapshot, doc, updateDoc, setDoc, getDoc, query, where }
+import { getFirestore, collection, onSnapshot, doc, updateDoc, setDoc, getDoc, getDocs, arrayUnion, query, where, orderBy, limit }
                            from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged }
                            from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
@@ -412,6 +444,7 @@ onAuthStateChanged(auth, async user => {
       return;
     }
     const _restreint = window.appliquerRestrictionsShell ? window.appliquerRestrictionsShell(me, _estAdmin ? { role: 'admin' } : _fiche) : false;
+    { const ne = document.querySelector('.shell-nav-item[data-view="echanges"]'); if (ne) ne.style.display = (me === SHELL_ADMIN_EMAIL.toLowerCase()) ? '' : 'none'; }   // [Échanges]
     { const nj = document.querySelector('.shell-nav-item[data-module="journal"]'); if (nj) nj.style.display = (me === SHELL_ADMIN_EMAIL.toLowerCase()) ? '' : 'none'; }   // [Journal]
     { const ns = document.querySelector('.shell-nav-item[data-module="synthese"]'); if (ns) ns.style.display = (me === SHELL_ADMIN_EMAIL.toLowerCase()) ? '' : 'none'; }   // [Synthèse 3D]
     try { if (!sessionStorage.getItem('phenix_jrn_conn')) { sessionStorage.setItem('phenix_jrn_conn', '1'); window.phenixJournal('shell', 'connexion', 'application', 'Connexion à Phénix'); } } catch (e) {}
@@ -465,6 +498,7 @@ window.doLogout = function() {
 
 // ═══ [Centre de notifications] une seule cloche : devis, tâches, messages artisans, messages client ═══
 const NC = { devis: [], taches: [], art: [], cli: [], ent: [] };
+const CLASSE_LIB = { decennale: 'Décennale', rdv: 'Rendez-vous', retard_probleme: 'Retard / problème', question: 'Question', devis_facture: 'Devis / facture', validation: 'Accord / refus', information: 'Information' };
 function _ncEsc(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 window._NC = NC;
 function renderNC() {
@@ -474,7 +508,9 @@ function renderNC() {
   NC.art.forEach(x => items.push({ ico: '🧱', t: x.date, h: 'Message d\'artisan', txt: x.texte || '', go: 'msg', conv: x.chantierId + '|' + x.intervenantId, col: 'phenix_ch_messages', id: x._id, patch: { luPhenix: true } }));
   NC.devis.forEach(x => items.push({ ico: x.projet ? '📝' : '📄', t: x.date || x.at, h: (x.projet ? 'Devis signé · ' : 'Devis · ') + (x.client || ''), txt: x.projet ? (x.vers === 'accepte' ? 'signé (dossier déjà créé)' : (x.vers || '')) + ' — cliquer pour ouvrir le contrat' : 'statut → ' + (x.vers || ''), go: x.projet ? 'contrat' : 'espace', order: x.projet ? { source: 'phenix-shell', action: 'ouvrir-contrat', projet: x.projet } : null, col: 'phenix_notifs', id: x._id, patch: { lu: true } }));
   NC.taches.forEach(x => items.push({ ico: '✅', t: x.quand || x.date, h: 'Tâche', txt: (String(x.par || '').split('@')[0] || 'L\'assistante') + ' · « ' + (x.titre || '') + ' »', go: 'dossier', col: 'phenix_notifs_taches', id: x._id, patch: { lu: true } }));
-  NC.ent.forEach(x => items.push({ ico: x.resultat === 'bloquant' ? '⚠️' : x.resultat === 'conforme' ? '📄' : '📬', t: x.recuLe || x.creeLe, h: 'Reçu par mail · ' + (x.artisanNom || x.de || 'artisan'), txt: (x.titre || 'Nouveau message') + (x.objet ? ' — « ' + x.objet + ' »' : ''), go: 'annuaire', col: 'phenix_entrants', id: x._id, patch: { statut: 'lu' } }));
+  NC.ent.forEach(x => x.type === 'echange'
+    ? items.push({ ico: x.source === 'sms' ? '💬' : '✉️', t: x.recuLe || x.creeLe, h: (x.source === 'sms' ? 'SMS · ' : 'Mail · ') + (x.artisanNom || x.de || '') + (x.expediteurType === 'client' ? ' (client)' : '') + (x.urgence === 'haute' ? ' · urgent' : ''), txt: (CLASSE_LIB[x.classe] ? CLASSE_LIB[x.classe] + ' — ' : '') + (x.resume || x.objet || ''), go: 'valider', valId: x._id, col: 'phenix_entrants', id: x._id, patch: { statut: 'lu' } })
+    : items.push({ ico: x.source === 'sms' ? '💬' : x.resultat === 'bloquant' ? '⚠️' : x.resultat === 'conforme' ? '📄' : '📬', t: x.recuLe || x.creeLe, h: (x.source === 'sms' ? 'Reçu par SMS · ' : 'Reçu par mail · ') + (x.artisanNom || x.de || 'artisan'), txt: (x.titre || 'Nouveau message') + (x.objet ? ' — « ' + x.objet + ' »' : ''), go: x.resultat === 'a_rattacher' ? 'valider' : 'annuaire', valId: x._id, col: 'phenix_entrants', id: x._id, patch: { statut: 'lu' } }));
   items.sort((a, b) => String(b.t || '').localeCompare(String(a.t || '')));
   const n = items.length;
   bell.style.display = ''; cnt.textContent = n > 9 ? '9+' : String(n); cnt.style.display = n ? 'flex' : 'none';
@@ -497,11 +533,217 @@ window.ncLu = function(ev, i) { if (ev) { ev.stopPropagation(); ev.preventDefaul
 window.ncToutLu = function(ev) { if (ev) { ev.stopPropagation(); ev.preventDefault(); } (NC._items || []).forEach(_ncMarquer); };
 window.ncOpen = function(i) {
   const x = (NC._items || [])[i]; if (!x) return; document.getElementById('ncPanel').classList.remove('open');
+  if (x.go === 'valider') { ouvrirValidation(x.valId); return; }
   const mod = x.go === 'msg' ? 'chantier' : x.go;
   const _deja = x.order && shellCurrentModule === mod && shellCurrentFrame;
   shellOpenModule(mod, document.querySelector('.shell-nav-item[data-module="' + mod + '"]'), x.order || undefined);
   if (_deja) { try { shellCurrentFrame.contentWindow.postMessage(x.order, '*'); } catch (e) {} shellPendingOrder = null; }
   if (x.go === 'msg') [500, 1600, 3600].forEach(t => setTimeout(() => { try { shellCurrentFrame.contentWindow.postMessage({ source: 'phenix-shell', action: 'goto-page', page: 'messages', conv: x.conv || null }, '*'); } catch (e) {} }, t));
+};
+
+// ═══ [Échanges] SMS et mails reçus d'artisans et de clients : lecture IA faite côté serveur (phenix_entrants) ═══
+// Page « Échanges » : tout ce qui est à traiter / à répondre. Un clic ouvre « À valider » : l'IA propose, Maxime valide d'un clic.
+// Rien n'est créé, envoyé ni écrit dans un agenda sans son clic. États : « À traiter » (statut nouveau) · « Traité » (statut lu).
+const ECH = { all: [], f: { etat: 'traiter', canal: '', qui: '', q: '' } };
+const _jour = (d = new Date()) => { const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000); return z.toISOString().slice(0, 10); };
+const _plusJours = n => { const d = new Date(); d.setDate(d.getDate() + n); return _jour(d); };
+const _dateCourte = iso => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); };
+const _echTrouve = id => (ECH.all || []).find(e => e._id === id) || (NC.ent || []).find(e => e._id === id);
+const _estATraiter = x => (x.statut || 'nouveau') === 'nouveau';
+function _echMajBadge() {
+  const n = (ECH.all || []).filter(_estATraiter).length, b = document.getElementById('navBadgeEch');
+  if (b) { b.textContent = n > 9 ? '9+' : String(n); b.style.display = n ? 'block' : 'none'; }
+}
+function _echEtatTexte(x) {
+  const t = [];
+  if (!_estATraiter(x)) t.push('<span class="chip ok">✔ Traité</span>'); else t.push('<span class="chip">À traiter</span>');
+  if (_estATraiter(x) && x.reponseAttendue && !x.reponduLe) t.push('<span class="chip r">↩ À répondre</span>');
+  if (x.reponduLe) t.push('<span class="chip ok">Répondu le ' + _ncEsc(new Date(x.reponduLe).toLocaleDateString('fr-FR')) + '</span>');
+  if (x.urgence === 'haute') t.push('<span class="chip u">URGENT</span>');
+  return t.join(' ');
+}
+window.ouvrirEchanges = function() { document.getElementById('echBack').classList.add('open'); renderEchanges(true); };
+window.fermerEchanges = function() { document.getElementById('echBack').classList.remove('open'); };
+window.echFiltre = function(k, v) { ECH.f[k] = v; renderEchanges(false); };
+function renderEchanges(refaireFiltres) {
+  const back = document.getElementById('echBack'); if (!back || !back.classList.contains('open')) return;
+  const f = ECH.f, fz = document.getElementById('echFiltres');
+  if (refaireFiltres || !fz.innerHTML) fz.innerHTML =
+    '<select onchange="echFiltre(\'etat\',this.value)" aria-label="État"><option value="traiter">À traiter</option><option value="repondre">À répondre</option><option value="traite">Traités</option><option value="tous">Tous</option></select>' +
+    '<select onchange="echFiltre(\'canal\',this.value)" aria-label="Canal"><option value="">SMS et mails</option><option value="sms">SMS</option><option value="mail">Mails</option></select>' +
+    '<select onchange="echFiltre(\'qui\',this.value)" aria-label="Expéditeur"><option value="">Artisans et clients</option><option value="artisan">Artisans</option><option value="client">Clients</option></select>' +
+    '<input type="search" placeholder="Rechercher (nom, dossier, mot…)" oninput="echFiltre(\'q\',this.value)" style="flex:1;min-width:160px" aria-label="Rechercher">';
+  fz.querySelectorAll('select').forEach((sel, k) => { sel.value = [f.etat, f.canal, f.qui][k]; });
+  const q = String(f.q || '').toLowerCase().trim();
+  let l = (ECH.all || []).filter(x => (f.etat === 'tous') || (f.etat === 'traite' ? !_estATraiter(x) : _estATraiter(x)) && (f.etat !== 'repondre' || (x.reponseAttendue && !x.reponduLe)));
+  l = l.filter(x => (!f.canal || x.source === f.canal) && (!f.qui || (x.expediteurType || 'artisan') === f.qui) &&
+    (!q || [x.artisanNom, x.deNom, x.projetNom, x.resume, x.extrait, x.objet, x.titre].join(' ').toLowerCase().includes(q)));
+  l.sort((a, b) => ((_estATraiter(b) ? 1 : 0) - (_estATraiter(a) ? 1 : 0)) || ((b.urgence === 'haute' ? 1 : 0) - (a.urgence === 'haute' ? 1 : 0)) || String(b.recuLe || b.creeLe).localeCompare(String(a.recuLe || a.creeLe)));
+  document.getElementById('echListe').innerHTML = l.length ? l.slice(0, 150).map(x =>
+    '<div class="ec" tabindex="0" role="button" onclick="ouvrirValidation(\'' + _ncEsc(x._id) + '\')" onkeydown="if(event.key===\'Enter\')ouvrirValidation(\'' + _ncEsc(x._id) + '\')">' +
+    '<div class="et"><span>' + (x.source === 'sms' ? '💬' : '✉️') + ' ' + _ncEsc(x.artisanNom || x.deNom || x.de || '') + '</span><span class="es">' + (x.expediteurType === 'client' ? 'client' : 'artisan') + (x.projetNom ? ' · dossier ' + _ncEsc(x.projetNom) : '') + ' · ' + _ncEsc(_dateCourte(x.recuLe || x.creeLe)) + '</span></div>' +
+    '<div>' + (CLASSE_LIB[x.classe] ? '<b>' + _ncEsc(CLASSE_LIB[x.classe]) + '</b> — ' : '') + _ncEsc(x.resume || x.titre || x.objet || '') + '</div>' +
+    '<div style="margin-top:4px">' + _echEtatTexte(x) + ((x.actions || []).length ? ' <span class="es">' + (x.actions || []).length + ' action' + (x.actions.length > 1 ? 's' : '') + ' proposée' + (x.actions.length > 1 ? 's' : '') + (x.faites && x.faites.length ? ' · ' + x.faites.length + ' faite' + (x.faites.length > 1 ? 's' : '') : '') + '</span>' : '') + '</div></div>').join('')
+    : '<div class="nc-e">Rien à afficher avec ces filtres.</div>';
+}
+
+// ─── Fenêtre « À valider » ───
+let _valId = null, _valUsers = null;
+async function _chargerUsers() {
+  if (_valUsers) return _valUsers; _valUsers = [];
+  try { const s = await getDocs(collection(db, 'phenix_users'));
+    s.forEach(d => { const u = d.data() || {}; const e = String(u.email || d.id).toLowerCase(); if (u.actif !== false && ['admin', 'assistante', 'equipe', 'chantier'].includes(u.role)) _valUsers.push({ email: e, nom: u.nom || u.name || e.split('@')[0] }); });
+  } catch (e) { console.warn('Utilisateurs :', e && e.message); }
+  const moi = String((auth.currentUser && auth.currentUser.email) || SHELL_ADMIN_EMAIL).toLowerCase();
+  if (!_valUsers.some(u => u.email === moi)) _valUsers.unshift({ email: moi, nom: 'Moi' });
+  return _valUsers;
+}
+const _moi = () => String((auth.currentUser && auth.currentUser.email) || SHELL_ADMIN_EMAIL).toLowerCase();
+window.ouvrirValidation = async function(id) {
+  const x = _echTrouve(id); if (!x) return; _valId = id;
+  if (x.type === 'decennale') return ouvrirRattacher(x);
+  const users = await _chargerUsers(), moi = _moi(), faites = x.faites || [];
+  const opts = users.map(u => '<option value="' + _ncEsc(u.email) + '"' + (u.email === moi ? ' selected' : '') + '>' + _ncEsc(u.nom) + '</option>').join('');
+  const TYPES = { tache: 'Tâche', rappel: 'Rappel', mission: 'Mission (point bloquant du dossier)', note: 'Note de dossier', rdv: 'Rendez-vous à noter dans l’agenda', chiffrage: 'Devis à passer dans l’IA de chiffrage', reponse: 'Réponse proposée' };
+  const acts = (x.actions || []).map((a, i) => {
+    const faite = faites.includes(i); let corps = '', bouton = '';
+    const champ = (lib, idc, val) => '<label>' + lib + '</label><input id="' + idc + i + '" value="' + _ncEsc(val || '') + '">';
+    if (a.type === 'mission') {
+      corps = champ('Titre', 'vt', a.titre) + champ('Détail', 'vd', a.detail) + '<label>Qui doit agir ?</label><select id="vw' + i + '">' + [['client','Le client'],['artisan','Un artisan'],['fournisseur','Fournisseur / livraison'],['mairie','La mairie'],['be','Bureau d’étude'],['financement','Financement / banque'],['meteo','Météo'],['interne','Nous (à faire chez nous)'],['autre','Autre']].map(([v, l]) => '<option value="' + v + '"' + (a.attend === v ? ' selected' : '') + '>' + l + '</option>').join('') + '</select>';
+      bouton = '<button class="vbtn p" onclick="validerAction(' + i + ')">Créer la mission</button>';
+    } else if (a.type === 'note') {
+      corps = champ('Titre', 'vt', a.titre) + champ('Détail', 'vd', a.detail); bouton = '<button class="vbtn p" onclick="validerAction(' + i + ')">Ajouter la note</button>';
+    } else if (a.type === 'rdv') {
+      corps = champ('Titre', 'vt', a.titre) + '<div class="vrow"><div><label>Début</label><input type="datetime-local" id="rj' + i + '" value="' + _ncEsc(a.debut || '') + '"></div><div><label>Durée (min)</label><input type="number" min="15" step="15" id="rd' + i + '" value="' + (a.dureeMin || 60) + '"></div></div>' + champ('Lieu', 'rl', a.lieu) + champ('Détail', 'vd', a.detail) +
+        (a.debut ? '' : '<div style="font-size:12px;color:#7a4a00;margin-top:4px">⚠ Aucune date et heure précises dans le message : choisissez le créneau.</div>');
+      bouton = '<button class="vbtn p" onclick="noterRdv(' + i + ',\'ics\')">Noter dans Outlook (fichier)</button> <button class="vbtn" onclick="noterRdv(' + i + ',\'web\')">Ouvrir Outlook en ligne</button>';
+    } else if (a.type === 'reponse') {
+      const canal = x.source === 'sms' ? 'par SMS' : 'par mail';
+      corps = '<label>Texte de la réponse (modifiable) — ' + canal + '</label><textarea id="vr' + i + '" rows="5">' + _ncEsc(a.texte || '') + '</textarea><div style="font-size:12px;color:#6b7a99;margin-top:4px">Votre messagerie s’ouvre avec ce texte : vous relisez puis vous envoyez vous-même.</div>';
+      bouton = '<button class="vbtn p" onclick="repondre(' + i + ')">Répondre ' + canal + '</button>';
+    } else if (a.type === 'chiffrage') {
+      const pcs = (x.pieces || []).map(pc => '<a href="' + _ncEsc(pc.url) + '" target="_blank" rel="noopener">' + _ncEsc(pc.nom) + '</a>').join(' · ') || '<i>aucune pièce jointe conservée : voir le mail d’origine</i>';
+      corps = '<div>' + _ncEsc(a.detail || a.titre) + '</div><div style="margin-top:4px">Pièce(s) : ' + pcs + '</div><div style="font-size:12px;color:#6b7a99;margin-top:4px">Ouvrez la pièce, enregistrez-la, puis glissez-la dans « Importer un devis artisan (IA) » de Chiffrage.</div>';
+      bouton = '<button class="vbtn p" onclick="ouvrirChiffrage(' + i + ')">Ouvrir Chiffrage</button>';
+    } else {
+      corps = champ('Titre', 'vt', a.titre) + champ('Détail', 'vd', a.detail) + '<div class="vrow"><div><label>Assigner à</label><select id="va_' + i + '">' + opts + '</select></div><div><label>Pour le</label><input type="date" id="vj' + i + '" value="' + (a.type === 'rappel' ? _plusJours(a.delaiJours || 7) : '') + '"></div></div>';
+      bouton = '<button class="vbtn p" onclick="validerAction(' + i + ')">' + (a.type === 'rappel' ? 'Créer le rappel' : 'Créer la tâche') + '</button>';
+    }
+    return '<div class="vact' + (faite ? ' faite' : '') + '"><b>' + (faite ? '✔ Fait — ' : '') + _ncEsc(TYPES[a.type] || a.type) + '</b>' + corps + '<div style="margin-top:8px">' + bouton + (faite ? '' : ' <button class="vbtn" onclick="validerFait(' + i + ')">Marquer comme fait</button>') + '</div></div>';
+  }).join('');
+  const precedents = (ECH.all || []).filter(e => e._id !== x._id && e.de && e.de === x.de).sort((a, b) => String(b.recuLe).localeCompare(String(a.recuLe))).slice(0, 4)
+    .map(e => '<div style="font-size:12.5px;margin:2px 0"><span style="color:#6b7a99">' + _ncEsc(_dateCourte(e.recuLe || e.creeLe)) + ' · ' + (e.source === 'sms' ? 'SMS' : 'mail') + '</span> — ' + _ncEsc(e.resume || e.titre || e.objet || '') + '</div>').join('');
+  document.getElementById('valBox').innerHTML =
+    '<div class="vh"><div><b>' + (x.source === 'sms' ? '💬 SMS' : '✉️ Mail') + ' · ' + _ncEsc(x.artisanNom || x.de) + (x.expediteurType === 'client' ? ' (client)' : ' (artisan)') + '</b><br><span style="font-size:12px;color:#6b7a99">' +
+      _ncEsc(new Date(x.recuLe || x.creeLe).toLocaleString('fr-FR')) + (x.projetNom ? ' · dossier « ' + _ncEsc(x.projetNom) + ' »' : ' · dossier non identifié') + ' · ' + _ncEsc(CLASSE_LIB[x.classe] || 'Autre') + '</span><div style="margin-top:4px">' + _echEtatTexte(x) + '</div></div><button class="vbtn" onclick="fermerValidation()" aria-label="Fermer">✕</button></div>' +
+    '<div class="vb"><div style="font-weight:700">Résumé</div><div>' + _ncEsc(x.resume || x.titre || '—') + (x.confiance != null && x.confiance < 0.5 ? ' <i>(lecture peu sûre : à vérifier)</i>' : '') + '</div>' +
+    '<div style="font-weight:700;margin-top:10px">Message reçu</div><div class="vq">' + _ncEsc((x.objet && x.objet !== x.extrait ? x.objet + '\n' : '') + (x.extrait || '')) + '</div>' +
+    (acts ? '<div style="font-weight:700;margin-bottom:6px">Actions proposées <span style="font-weight:400;color:#6b7a99">(rien n’est fait sans votre clic)</span></div>' + acts : '<div style="color:#6b7a99;margin-bottom:10px">Aucune action proposée pour ce message.</div>') +
+    '<div class="vact"><b>Ajouter une tâche libre</b><label>Titre</label><input id="vlt" placeholder="Ex. : Rappeler cet artisan"><div class="vrow"><div><label>Assigner à</label><select id="vla">' + opts + '</select></div><div><label>Pour le</label><input type="date" id="vlj"></div></div><div style="margin-top:8px"><button class="vbtn" onclick="validerAction(-1)">Créer la tâche</button></div></div>' +
+    (precedents ? '<div style="font-weight:700;margin:6px 0 2px">Échanges précédents avec cette personne</div>' + precedents : '') +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">' + (x.projetId ? '<button class="vbtn" onclick="validerOuvrirDossier()">Ouvrir le dossier</button>' : '') +
+    (_estATraiter(x) ? '<button class="vbtn p" onclick="validerTermine()">Traité — retirer des à-traiter</button>' : '<button class="vbtn" onclick="validerRouvrir()">Remettre à traiter</button>') + '</div></div>';
+  document.getElementById('valBack').classList.add('open');
+};
+// Attestation de décennale reçue par mail : rangée toute seule dans la fiche de l'artisan reconnu ; sinon « à rattacher » ici, en un clic
+let _valArt = null;
+async function ouvrirRattacher(x) {
+  if (!_valArt) { _valArt = []; try { const sn = await getDocs(collection(db, 'phenix_artisans')); sn.forEach(d => { const a = d.data() || {}; _valArt.push({ id: d.id, nom: a.entreprise || a.nom || d.id }); }); _valArt.sort((p, q) => p.nom.localeCompare(q.nom, 'fr')); } catch (e) { console.warn('Annuaire :', e && e.message); } }
+  const att = x.att || {}, fr = iso => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || '')); return m ? m[3] + '/' + m[2] + '/' + m[1] : ''; };
+  const aRattacher = x.resultat === 'a_rattacher';
+  const ctrl = aRattacher ? '' : '<div style="margin-top:6px">' + _echEtatTexte(x) + '</div>';
+  document.getElementById('valBox').innerHTML =
+    '<div class="vh"><div><b>✉️ Attestation reçue · ' + _ncEsc(x.artisanNom || x.de) + '</b><br><span style="font-size:12px;color:#6b7a99">' + _ncEsc(new Date(x.recuLe || x.creeLe).toLocaleString('fr-FR')) + ' · ' + _ncEsc(x.de || '') + '</span></div><button class="vbtn" onclick="fermerValidation()" aria-label="Fermer">✕</button></div>' +
+    '<div class="vb"><div>' + _ncEsc(x.titre || '') + '</div>' + ctrl +
+    (att.entreprise || att.police || att.dateFin ? '<div class="vq">' + _ncEsc('Entreprise lue : ' + (att.entreprise || '—') + ' · Assureur : ' + (att.assureur || '—') + ' · Police : ' + (att.police || '—') + ' · Valide du ' + (fr(att.dateDebut) || '—') + ' au ' + (fr(att.dateFin) || '—') + (att.siret ? ' · SIRET ' + att.siret : '')) + '</div>' : '') +
+    (x.fichierUrl ? '<div style="margin:6px 0"><a href="' + _ncEsc(x.fichierUrl) + '" target="_blank" rel="noopener">Ouvrir l’attestation (PDF)</a></div>' : '') +
+    (aRattacher ? '<div class="vact"><b>Ranger dans la fiche d’un artisan</b><label>Artisan de l’Annuaire</label><select id="vrArt"><option value="">— choisir —</option>' + _valArt.map(a => '<option value="' + _ncEsc(a.id) + '">' + _ncEsc(a.nom) + '</option>').join('') + '</select>' +
+      '<label style="display:flex;gap:6px;align-items:center;font-weight:600"><input type="checkbox" id="vrAdr" checked style="width:auto"> Reconnaître cette adresse (' + _ncEsc(x.de || '') + ') la prochaine fois</label>' +
+      '<div style="margin-top:8px"><button class="vbtn p" onclick="rattacherDecennale()">Ranger dans la fiche</button></div></div>' : '') +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="vbtn" onclick="fermerValidation();fermerEchanges();shellOpenModule(\'annuaire\',document.querySelector(\'.shell-nav-item[data-module=annuaire]\'))">Ouvrir l’Annuaire</button>' +
+    (_estATraiter(x) ? '<button class="vbtn p" onclick="validerTermine()">Traité — retirer des à-traiter</button>' : '<button class="vbtn" onclick="validerRouvrir()">Remettre à traiter</button>') + '</div></div>';
+  document.getElementById('valBack').classList.add('open');
+}
+window.rattacherDecennale = async function() {
+  const x = _echTrouve(_valId); if (!x) return; const id = document.getElementById('vrArt').value; if (!id) { toast('Choisissez l’artisan'); return; }
+  const att = x.att || {}, nom = (_valArt.find(a => a.id === id) || {}).nom || '';
+  const maj = { decennaleStatut: 'recue', decennaleRecueLe: _jour(), decennaleAtt: att, decennaleUrl: x.fichierUrl || '', decennalePath: x.fichierPath || '', decennaleCanal: 'mail-manuel' };
+  if (att.police) maj.assurance = att.police; if (att.dateFin) maj.assuranceDate = att.dateFin;
+  if (document.getElementById('vrAdr').checked && x.de) maj.emailsConnus = arrayUnion(x.de);
+  try { await updateDoc(doc(db, 'phenix_artisans', id), maj); await updateDoc(doc(db, 'phenix_entrants', x._id), { resultat: 'rattachee', statut: 'lu', artisanId: id, artisanNom: nom });
+    toast('✓ Attestation rangée dans la fiche de ' + nom); fermerValidation(); } catch (e) { toast('⚠️ Rattachement impossible : ' + (e && (e.code || e.message) || e)); }
+};
+window.fermerValidation = function() { document.getElementById('valBack').classList.remove('open'); _valId = null; };
+async function _echMaj(id, patch) { try { await updateDoc(doc(db, 'phenix_entrants', id), patch); return true; } catch (e) { toast('⚠️ Enregistrement impossible : ' + (e && e.code || e)); return false; } }
+window.validerTermine = async function() { const id = _valId; if (id && await _echMaj(id, { statut: 'lu' })) fermerValidation(); };
+window.validerRouvrir = async function() { const id = _valId; if (id && await _echMaj(id, { statut: 'nouveau' })) fermerValidation(); };
+window.validerFait = async function(i) { const id = _valId; if (id && await _echMaj(id, { faites: arrayUnion(i) })) setTimeout(() => ouvrirValidation(id), 250); };
+window.validerOuvrirDossier = function() { const x = _echTrouve(_valId); if (!x || !x.projetId) return; fermerValidation(); fermerEchanges(); shellOpenModule('dossier', document.querySelector('.shell-nav-item[data-module="dossier"]'), { source: 'phenix-shell', action: 'open-projet', id: x.projetId }); };
+window.ouvrirChiffrage = async function(i) { const id = _valId; if (id) await _echMaj(id, { faites: arrayUnion(i) }); fermerValidation(); fermerEchanges(); shellOpenModule('chiffrage', document.querySelector('.shell-nav-item[data-module="chiffrage"]')); };
+
+// Rendez-vous : fichier .ics (s'ouvre dans Outlook et propose d'ajouter l'événement) ou Outlook en ligne (formulaire prérempli)
+const _icsEsc = t => String(t || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+const _icsDate = d => d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0') + 'T' + String(d.getHours()).padStart(2, '0') + String(d.getMinutes()).padStart(2, '0') + '00';
+window.noterRdv = async function(i, mode) {
+  const x = _echTrouve(_valId); if (!x) return;
+  const titre = String(document.getElementById('vt' + i).value || '').trim() || 'Rendez-vous', debut = document.getElementById('rj' + i).value, duree = parseInt(document.getElementById('rd' + i).value, 10) || 60;
+  const lieu = String(document.getElementById('rl' + i).value || '').trim(), detail = String(document.getElementById('vd' + i).value || '').trim();
+  if (!debut) { toast('Choisissez la date et l’heure du rendez-vous'); return; }
+  const d0 = new Date(debut), d1 = new Date(d0.getTime() + duree * 60000);
+  const note = (detail ? detail + '\n' : '') + 'Avec ' + (x.artisanNom || x.de) + (x.projetNom ? ' — dossier ' + x.projetNom : '');
+  if (mode === 'web') {
+    const iso = d => { const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000); return z.toISOString().slice(0, 19); };
+    window.open('https://outlook.office.com/calendar/0/deeplink/compose?path=%2Fcalendar%2Faction%2Fcompose&rru=addevent&subject=' + encodeURIComponent(titre) + '&startdt=' + iso(d0) + '&enddt=' + iso(d1) + '&location=' + encodeURIComponent(lieu) + '&body=' + encodeURIComponent(note), '_blank', 'noopener');
+  } else {
+    const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Phenix-Architecture//Echanges//FR', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'BEGIN:VEVENT', 'UID:phenix-' + Date.now() + '@phenixarchitecte.fr', 'DTSTAMP:' + new Date().toISOString().replace(/[-:]|\.\d{3}/g, ''),
+      'DTSTART:' + _icsDate(d0), 'DTEND:' + _icsDate(d1), 'SUMMARY:' + _icsEsc(titre), 'LOCATION:' + _icsEsc(lieu), 'DESCRIPTION:' + _icsEsc(note), 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([ics], { type: 'text/calendar;charset=utf-8' })); a.download = 'rendez-vous.ics'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+  }
+  toast('✓ Rendez-vous préparé — à confirmer dans Outlook'); validerFait(i);
+};
+// Réponse : ouvre la messagerie (mail) ou l'appli SMS avec le texte ; rien ne part sans l'envoi de Maxime
+window.repondre = async function(i) {
+  const x = _echTrouve(_valId); if (!x) return; const texte = String(document.getElementById('vr' + i).value || '').trim(); if (!texte) { toast('Le texte est vide'); return; }
+  let url = '';
+  if (x.source === 'sms') { const n = String(x.de || '').replace(/\D/g, '').replace(/^0/, '33'); if (!n) { toast('⚠️ Numéro introuvable'); return; } url = 'sms:+' + n + (/iPhone|iPad/i.test(navigator.userAgent) ? '?&body=' : '?body=') + encodeURIComponent(texte.replace(/\n/g, '\r\n')); }
+  else { if (!x.de || !String(x.de).includes('@')) { toast('⚠️ Adresse mail introuvable'); return; } url = 'mailto:' + x.de + '?subject=' + encodeURIComponent('Re: ' + String(x.objet || '').replace(/^re:\s*/i, '')) + '&body=' + encodeURIComponent(texte.replace(/\n/g, '\r\n')); }
+  const a = document.createElement('a'); a.href = url; a.style.display = 'none'; document.body.appendChild(a); a.click(); setTimeout(() => a.remove(), 500);
+  if (x.source === 'sms') { try { navigator.clipboard && navigator.clipboard.writeText(texte); } catch (e) {} }
+  await _echMaj(x._id, { reponduLe: new Date().toISOString(), faites: arrayUnion(i) }); toast('✓ Brouillon ouvert — relisez et envoyez'); setTimeout(() => ouvrirValidation(x._id), 250);
+};
+// Tâche, rappel, mission, note de dossier
+window.validerAction = async function(i) {
+  const x = _echTrouve(_valId); if (!x) return;
+  const moi = _moi(), maintenant = new Date().toISOString();
+  const lib = i >= 0 ? (x.actions || [])[i] : { type: 'tache' };
+  const titre = String((document.getElementById(i >= 0 ? 'vt' + i : 'vlt') || {}).value || '').trim();
+  if (!titre) { toast('Donnez un titre'); return; }
+  try {
+    if (lib.type === 'mission') {
+      if (!x.projetId) { toast('⚠️ Dossier non identifié : impossible de créer la mission'); return; }
+      const ref = doc(db, 'phenix_suivi', String(x.projetId)), ex = await getDoc(ref);
+      if (ex.exists() && (ex.data().blocage || {}).texte && !confirm('Ce dossier a déjà un point bloquant (« ' + ex.data().blocage.texte + ' »). Le remplacer ?')) return;
+      const detail = String((document.getElementById('vd' + i) || {}).value || '').trim();
+      await setDoc(ref, { blocage: { texte: titre + (detail ? ' — ' + detail : ''), attend: document.getElementById('vw' + i).value, depuis: _jour() }, maj: maintenant, majPar: moi.split('@')[0] }, { merge: true });
+      toast('✓ Mission créée : visible dans la Synthèse 3D');
+    } else if (lib.type === 'note') {
+      if (!x.projetId) { toast('⚠️ Dossier non identifié : impossible d’ajouter la note'); return; }
+      const detail = String((document.getElementById('vd' + i) || {}).value || '').trim();
+      await setDoc(doc(db, 'phenix_suivi', String(x.projetId)), { notes: arrayUnion({ id: 'n' + Date.now().toString(36), date: maintenant, par: moi.split('@')[0], motif: x.expediteurType === 'client' ? 'client' : 'artisan', cause: '', texte: titre + (detail ? ' — ' + detail : '') }), maj: maintenant, majPar: moi.split('@')[0] }, { merge: true });
+      toast('✓ Note ajoutée au dossier');
+    } else {
+      const assigne = String((document.getElementById(i >= 0 ? 'va_' + i : 'vla') || {}).value || moi).toLowerCase(), date = String((document.getElementById(i >= 0 ? 'vj' + i : 'vlj') || {}).value || '');
+      const detail = i >= 0 ? String((document.getElementById('vd' + i) || {}).value || '').trim() : '';
+      const id = 't-' + Date.now() + Math.random().toString(36).slice(2, 5);
+      await setDoc(doc(db, 'phenix_taches', id), { id, titre, desc: (detail ? detail + '\n' : '') + 'Origine : ' + (x.source === 'sms' ? 'SMS' : 'mail') + ' de ' + (x.artisanNom || x.de) + ' — « ' + String(x.extrait || '').slice(0, 200) + ' »',
+        date, heure: '', duree: 60, statut: 'todo', priorite: x.urgence === 'haute' ? 'haute' : 'normale', type: x.projetId ? 'dossier' : 'gestion', categorie: x.projetId ? '' : 'Administratif / compta',
+        recurrence: null, recurrenceGeneree: false, projetId: x.projetId || '', phase: '', assigneA: assigne, dateLivraison: date, createdAt: maintenant, updatedAt: maintenant, source: 'entrant', entrantId: x._id });
+      if (assigne !== moi) { try { await setDoc(doc(db, 'phenix_notifs_taches', 'n-' + id), { pour: assigne, par: moi, titre, quand: maintenant, verbe: 'assignee', lu: false }); } catch (e) {} }
+      toast('✓ Tâche créée' + (date ? ' pour le ' + date.split('-').reverse().join('/') : ''));
+    }
+    if (i >= 0) await updateDoc(doc(db, 'phenix_entrants', x._id), { faites: arrayUnion(i) });
+    setTimeout(() => ouvrirValidation(x._id), 250);
+  } catch (e) { toast('⚠️ Création impossible : ' + (e && (e.code || e.message) || e) + (e && e.code === 'permission-denied' ? ' — règles Firestore' : '')); }
 };
 window.renderNC = renderNC;
 // ─── Moteur de conversion « devis signé → dossier + contrat » ───
@@ -533,6 +775,7 @@ function startNotifsCentre(estAdmin) {
   if (!estAdmin) return;   // messages artisans / client : compte administrateur
   try {
     unsubNC.push(onSnapshot(query(collection(db, 'phenix_ch_messages'), where('de', '==', 'artisan'), where('luPhenix', '==', false)), snap => { NC.art = snap.docs.map(d => ({ _id: d.id, ...(d.data() || {}) })); renderNC(); }, err => console.warn('Messages artisans :', err && err.message)));
+    unsubNC.push(onSnapshot(query(collection(db, 'phenix_entrants'), orderBy('recuLe', 'desc'), limit(300)), snap => { ECH.all = snap.docs.map(d => ({ _id: d.id, ...(d.data() || {}) })); _echMajBadge(); renderEchanges(false); }, err => console.warn('Échanges :', err && err.message)));
     unsubNC.push(onSnapshot(query(collection(db, 'phenix_entrants'), where('statut', '==', 'nouveau')), snap => { NC.ent = snap.docs.map(d => ({ _id: d.id, ...(d.data() || {}) })); renderNC(); }, err => console.warn('Réceptions mail :', err && err.message)));
     unsubNC.push(onSnapshot(query(collection(db, 'phenix_notifs_client'), where('lu', '==', false)), snap => { NC.cli = snap.docs.map(d => ({ _id: d.id, ...(d.data() || {}) })); renderNC(); }, err => console.warn('Messages client :', err && err.message)));
   } catch (e) { console.warn('Centre de notifications :', e); }
