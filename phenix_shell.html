@@ -639,7 +639,7 @@ window.ouvrirValidation = async function(id) {
     '<div class="vb"><div style="font-weight:700">Résumé</div><div>' + _ncEsc(x.resume || x.titre || '—') + (x.confiance != null && x.confiance < 0.5 ? ' <i>(lecture peu sûre : à vérifier)</i>' : '') + '</div>' +
     '<div style="font-weight:700;margin-top:10px">Message reçu</div><div class="vq">' + _ncEsc((x.objet && x.objet !== x.extrait ? x.objet + '\n' : '') + (x.extrait || '')) + '</div>' +
     (acts ? '<div style="font-weight:700;margin-bottom:6px">Actions proposées <span style="font-weight:400;color:#6b7a99">(rien n’est fait sans votre clic)</span></div>' + acts : '<div style="color:#6b7a99;margin-bottom:10px">Aucune action proposée pour ce message.</div>') +
-    (x.expediteurType === 'inconnu' ? await _blocInconnu(x) : '') +
+    (x.expediteurType === 'inconnu' || x.probable ? await _blocInconnu(x) : '') +
     '<div class="vact"><b>Ajouter une tâche libre</b><label>Titre</label><input id="vlt" placeholder="Ex. : Rappeler cet artisan"><div class="vrow"><div><label>Assigner à</label><select id="vla">' + opts + '</select></div><div><label>Pour le</label><input type="date" id="vlj"></div></div><div style="margin-top:8px"><button class="vbtn" onclick="validerAction(-1)">Créer la tâche</button></div></div>' +
     (precedents ? '<div style="font-weight:700;margin:6px 0 2px">Échanges précédents avec cette personne</div>' + precedents : '') +
     '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">' + (x.projetId ? '<button class="vbtn" onclick="validerOuvrirDossier()">Ouvrir le dossier</button>' : '') +
@@ -652,10 +652,10 @@ let _valPro = null;
 async function _blocInconnu(x) {
   if (!_valArt) { _valArt = []; try { const sn = await getDocs(collection(db, 'phenix_artisans')); sn.forEach(d => { const a = d.data() || {}; _valArt.push({ id: d.id, nom: a.entreprise || a.nom || d.id }); }); _valArt.sort((p, q) => p.nom.localeCompare(q.nom, 'fr')); } catch (e) {} }
   if (!_valPro) { _valPro = []; try { const sn = await getDocs(collection(db, 'phenix_projets')); sn.forEach(d => { const p = d.data() || {}; _valPro.push({ id: d.id, nom: [p.client || p.nom || d.id, p.nom && p.client ? p.nom : ''].filter(Boolean).join(' — ') }); }); _valPro.sort((p, q) => p.nom.localeCompare(q.nom, 'fr')); } catch (e) {} }
-  const o = l => l.map(a => '<option value="' + _ncEsc(a.id) + '">' + _ncEsc(a.nom) + '</option>').join('');
-  return '<div class="vact"><b>' + (x.source === 'sms' ? 'Numéro' : 'Adresse') + ' inconnu(e) : ' + _ncEsc(x.de || '') + '</b>' + (x.sansIA === 'inconnu' ? '<div style="font-size:12.5px;color:#6b7a99">Message non analysé par l’IA (expéditeur inconnu, aucun dossier cité). Rattachez-le pour que les prochains soient lus et classés.</div>' : '') + '<div style="font-size:12.5px;color:#6b7a99">Rattachez-le pour que ses prochains messages soient reconnus. Sinon, cliquez « Traité » : rien d’autre n’est modifié.</div>' +
-    '<label>Artisan de l’Annuaire</label><select id="viArt"><option value="">— choisir —</option>' + o(_valArt) + '</select>' +
-    '<label>ou client d’un dossier</label><select id="viPro"><option value="">— choisir —</option>' + o(_valPro) + '</select>' +
+  const o = (l, sel) => l.map(a => '<option value="' + _ncEsc(a.id) + '"' + (sel && String(sel) === String(a.id) ? ' selected' : '') + '>' + _ncEsc(a.nom) + '</option>').join('');
+  return '<div class="vact"><b>' + (x.probable ? 'Adresse reconnue d’après le nom (à confirmer) : ' : (x.source === 'sms' ? 'Numéro' : 'Adresse') + ' inconnu(e) : ') + _ncEsc(x.de || '') + '</b>' + (x.sansIA === 'inconnu' ? '<div style="font-size:12.5px;color:#6b7a99">Message non analysé par l’IA (expéditeur inconnu, aucun dossier cité). Rattachez-le pour que les prochains soient lus et classés.</div>' : x.sansIA === 'leger' ? '<div style="font-size:12.5px;color:#6b7a99">Résumé court uniquement, sans actions proposées (expéditeur inconnu, aucun dossier cité). Rattachez-le pour que les prochains soient analysés en entier.</div>' : '') + '<div style="font-size:12.5px;color:#6b7a99">Rattachez-le pour que ses prochains messages soient reconnus. Sinon, cliquez « Traité » : rien d’autre n’est modifié.</div>' +
+    '<label>Artisan de l’Annuaire</label><select id="viArt"><option value="">— choisir —</option>' + o(_valArt, x.artisanId) + '</select>' +
+    '<label>ou client d’un dossier</label><select id="viPro"><option value="">— choisir —</option>' + o(_valPro, x.projetId) + '</select>' +
     '<div style="margin-top:8px"><button class="vbtn p" onclick="rattacherNumero()">Rattacher ce numéro</button></div></div>';
 }
 window.rattacherNumero = async function() {
@@ -665,7 +665,7 @@ window.rattacherNumero = async function() {
   try {
     if (a) await updateDoc(doc(db, 'phenix_artisans', a), { [champ]: arrayUnion(x.de) }); else await updateDoc(doc(db, 'phenix_projets', p), { [champ]: arrayUnion(x.de) });
     const nom = a ? (_valArt.find(v => v.id === a) || {}).nom : (_valPro.find(v => v.id === p) || {}).nom;
-    await updateDoc(doc(db, 'phenix_entrants', x._id), { expediteurType: a ? 'artisan' : 'client', artisanNom: nom || x.artisanNom, deNom: nom || x.deNom, artisanId: a || '', projetId: p || x.projetId || '' });
+    await updateDoc(doc(db, 'phenix_entrants', x._id), { expediteurType: a ? 'artisan' : 'client', artisanNom: nom || x.artisanNom, deNom: nom || x.deNom, artisanId: a || '', projetId: p || x.projetId || '', probable: false });
     toast('✓ Numéro rattaché à ' + (nom || 'la fiche') + ' : ses prochains messages seront reconnus'); setTimeout(() => ouvrirValidation(x._id), 300);
   } catch (e) { toast('⚠️ Rattachement impossible : ' + (e && (e.code || e.message) || e)); }
 };
