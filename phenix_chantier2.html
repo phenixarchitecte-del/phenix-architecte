@@ -17,11 +17,13 @@
    • BUREAU (ordinateur) : Lots (liste), Planning (Gantt), Réserves, À traiter (validation du compte rendu).
    Moteur 3D : phenix_maquette3d.js, le même que le Carnet (écrit une seule fois). [Moteur partagé]
    Mêmes collections Firestore que l'ancien Chantier (phenix_ch_*) : aucune nouvelle collection, aucune règle à changer.
-   Pas encore repris : honoraires et commissions, Plans et pastilles, Messages artisans, Équipe & accès (→ Paramètres du shell).
+   Pas encore repris : honoraires et commissions, Messages artisans, Équipe & accès (→ Paramètres du shell).
 ══════════════════════════════════════════════════════════════════
    09/11/2026 — Onglet FINANCES (Bureau) : budget des lots, facturé, payé, reste à facturer, suivi par lot (alerte facturé en avance sur l'avancement),
      situations et factures (saisie, modification, suppression, filtre par statut). Mêmes données que l'ancien Chantier (phenix_ch_factures) ;
      une situation « payée » crée la charge « sous-traitance » dans Phénix Dossier (même identifiant que l'ancien module).
+   09/11/2026 (2) — Onglet « RÉSERVES ET PLANS » : bibliothèque de plans (PDF ou image), versions, pastilles (à photographier / information / question,
+     forme + mot), photos, « vérifié », visibilité par entreprise et par client (publication vers l'espace client). Mêmes données que l'ancien Chantier (phenix_ch_plans).
 -->
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
@@ -117,6 +119,9 @@ h1,h2,h3{margin:0;font-weight:400;font-family:var(--fd)}
 .gb.done{background:var(--green)}.gb.doing{border:2px solid var(--accent);background:rgba(79,168,240,.12);overflow:hidden}.gb.todo{border:2px dashed #9fb2c6}
 .gb .hd{position:absolute;top:0;bottom:0;width:10px;cursor:ew-resize}.gb .hd.l{left:0}.gb .hd.r{right:0}
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:12px 20px;border-radius:12px;font-weight:600;z-index:99}
+@media(max-width:900px){.plgrid{grid-template-columns:1fr!important}}
+.pldot{position:absolute;transform:translate(-50%,-50%);min-width:30px;height:30px;padding:0 4px;border:2px solid #fff;color:#fff;font:700 13px var(--fs);display:flex;align-items:center;justify-content:center;cursor:pointer}
+.pldot.photo{border-radius:50%}.pldot.info{border-radius:7px}.pldot.question{clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);border:0;width:36px;height:36px}
 @media(max-width:900px){#terrain{flex-direction:column}#side{width:auto;flex-direction:row;flex-wrap:wrap}#stage{min-height:46vh;flex:none}}
 </style>
 </head>
@@ -164,7 +169,7 @@ if (!DEMO) {
   let db;
   try { db = S.initializeFirestore(app, { localCache: S.persistentLocalCache({ tabManager: S.persistentMultipleTabManager() }) }); } catch (e) { db = S.getFirestore(app); }
   const auth = U.getAuth(app);
-  const COLS = { chantiers:'phenix_ch_chantiers', lots:'phenix_ch_lots', intervenants:'phenix_ch_intervenants', reserves:'phenix_ch_reserves', crs:'phenix_ch_crs', factures:'phenix_ch_factures' };
+  const COLS = { chantiers:'phenix_ch_chantiers', lots:'phenix_ch_lots', intervenants:'phenix_ch_intervenants', reserves:'phenix_ch_reserves', crs:'phenix_ch_crs', factures:'phenix_ch_factures', plans:'phenix_ch_plans' };
   const MEDIA = 'phenix_media', CH = 700000;
   Object.assign(window.FB, {
     ready: true,
@@ -187,6 +192,7 @@ if (!DEMO) {
     async getMedia(id) { const m = await S.getDoc(S.doc(db, MEDIA, id)); if (!m.exists()) return null; let du = ''; for (let i = 0; i < (m.data().parts || 0); i++) { const c = await S.getDoc(S.doc(db, MEDIA, id + '__' + i)); if (c.exists()) du += c.data().d || ''; } return du; },
     saveCharge(c) { return S.setDoc(S.doc(db, 'phenix_charges', String(c.id)), c); },
     delCharge(id) { return S.deleteDoc(S.doc(db, 'phenix_charges', String(id))); },
+    clientPlan(pid, id, d) { var ref = S.doc(db, 'phenix_chantier_client', String(pid), 'plans', String(id)); return d ? S.setDoc(ref, d) : S.deleteDoc(ref); },
     publishClient(pid, payload) { return S.setDoc(S.doc(db, 'phenix_chantier_client', String(pid)), payload); }
   });
   // connexion automatique quand le module est ouvert dans le Shell (identique à l'ancien Chantier)
@@ -235,7 +241,7 @@ function zoneOf(lot){ for (var i = 0; i < ZONE_RE.length; i++) if (ZONE_RE[i][1]
 function phaseIdx(n){ for (var i = 0; i < PHASES.length; i++) if (n >= PHASES[i][1] && n <= PHASES[i][2]) return i; return -1; }
 
 /* ═══════════ Données ═══════════ */
-var D = { chantiers:[], lots:[], intervenants:[], reserves:[], crs:[], factures:[] };
+var D = { chantiers:[], lots:[], intervenants:[], reserves:[], crs:[], factures:[], plans:[] };
 var S = { mode:'terrain', tab:'lots', view:'liste', zoom:'mois', cid:null, lotId:null, role:'', pending:false, online:navigator.onLine, real:false, in3d:'out', maq:null, user:'' };
 function chantier(){ return D.chantiers.filter(function(c){ return c.id == S.cid; })[0] || null; }
 function lotsOf(){ return D.lots.filter(function(l){ return l.chantierId == S.cid; }).sort(function(a, b){ return String(a.nom).localeCompare(String(b.nom), 'fr', {numeric:true}); }); }
@@ -522,8 +528,8 @@ function sendCR(){
 /* ═══════════ Mode Bureau ═══════════ */
 function renderTabs(){
   var pend = D.crs.filter(function(c){ return c.aValider && c.chantierId == S.cid; }).length;
-  var T = [['lots', 'Lots et planning'], ['finances', 'Finances'], ['reserves', 'Réserves'], ['atraiter', 'À traiter']];
-  $('tabs').innerHTML = T.map(function(t){ return '<button type="button" data-tab="' + t[0] + '"' + (S.tab === t[0] ? ' aria-current="page"' : '') + '>' + t[1] + (t[0] === 'atraiter' && pend ? '<span class="badge">' + pend + '</span>' : '') + '</button>'; }).join('') + '<span style="flex:1"></span><button type="button" id="old-ch" title="Finances, plans et pastilles, messages : pas encore repris dans cette version">Plans, messages (ancien module) ↗</button>';
+  var T = [['lots', 'Lots et planning'], ['finances', 'Finances'], ['reserves', 'Réserves et plans'], ['atraiter', 'À traiter']];
+  $('tabs').innerHTML = T.map(function(t){ return '<button type="button" data-tab="' + t[0] + '"' + (S.tab === t[0] ? ' aria-current="page"' : '') + '>' + t[1] + (t[0] === 'atraiter' && pend ? '<span class="badge">' + pend + '</span>' : '') + '</button>'; }).join('') + '<span style="flex:1"></span><button type="button" id="old-ch" title="Finances, plans et pastilles, messages : pas encore repris dans cette version">Messages (ancien module) ↗</button>';
   [].forEach.call($('tabs').querySelectorAll('[data-tab]'), function(b){ b.onclick = function(){ S.tab = b.getAttribute('data-tab'); renderBureau(); renderTabs(); }; });
   $('old-ch').onclick = function(){ window.open('phenix_chantier.html', '_blank'); };
 }
@@ -531,9 +537,10 @@ function renderBureau(){
   var b = $('bureau'); if (S.mode !== 'bureau') return;
   if (S.tab === 'lots') b.innerHTML = S.view === 'liste' ? viewListe() : viewPlanning();
   else if (S.tab === 'finances') b.innerHTML = viewFinances();
-  else if (S.tab === 'reserves') b.innerHTML = viewReserves();
+  else if (S.tab === 'reserves') b.innerHTML = rpHead() + (S.rp === 'plans' ? viewPlans() : viewReserves());
   else b.innerHTML = viewATraiter();
   bindBureau();
+  if (S.tab === 'reserves' && S.rp === 'plans') plBind();
 }
 function lotsHead(){
   return '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:12px"><h2 style="font-size:24px">' + (S.view === 'liste' ? 'Lots' : 'Planning') + '</h2><span class="seg light"><button type="button" data-view="liste" aria-pressed="' + (S.view === 'liste') + '">Liste</button><button type="button" data-view="planning" aria-pressed="' + (S.view === 'planning') + '">Planning</button></span>' +
@@ -596,6 +603,7 @@ function viewATraiter(){
 }
 function bindBureau(){
   var b = $('bureau'), q = function(s, f){ [].forEach.call(b.querySelectorAll(s), f); };
+  q('[data-rp]', function(x){ x.onclick = function(){ S.rp = x.getAttribute('data-rp'); renderBureau(); }; });
   q('[data-fnew]', function(x){ x.onclick = function(){ sheetFacture(null); }; });
   q('[data-fedit]', function(x){ x.onclick = function(){ sheetFacture(+x.getAttribute('data-fedit')); }; });
   q('[data-fstat]', function(x){ x.onclick = function(){ S.fstat = x.getAttribute('data-fstat'); renderBureau(); }; });
@@ -703,6 +711,163 @@ function syncCharge(f){
   FB.saveCharge({ id:cid, libelle:'Sous-traitance — ' + (l ? l.nom : c.nom || 'Chantier') + (f.num ? ' (' + f.num + ')' : ''), categorie:'sous_traitance', projetId:String(c.projetId), type:'variable', montantHt:f.ht, tvaTaux:20, tvaDed:1,
     date:f.date || today(), frequence:'ponctuel', notes:'Créée automatiquement depuis Chantier — facture ' + (f.num || f.id), updatedAt:new Date().toISOString() }).catch(function(e){ console.warn('Charge Dossier', e && e.message); });
 }
+/* ═══════════ Plans et pastilles ═══════════
+   Mêmes données que l'ancien Chantier (phenix_ch_plans, fichiers dans phenix_media). Un plan = une fiche ; une nouvelle version = une nouvelle fiche du même groupe.
+   Visibilité par entreprise et par client (client : non par défaut). Le type d'une pastille se lit à sa forme ET à son mot : jamais la couleur seule. */
+var PL_TYPES = ['Aménagement','Implantation','Alimentation électrique','Plomberie','Calepinage','Façades / coupes','Charpente','Autre'];
+var PS_TYPES = { photo:['À photographier','#A33A1F','●'], info:['Information','#1F62B8','■'], question:['Question','#C77A12','◆'] };
+var PL = { cur:null, add:false, past:null, next:'photo' }, MEDC = {};
+function rpHead(){
+  var rs = D.reserves.filter(function(x){ return x.chantierId == S.cid; }).length, pl = plLatest().length;
+  return '<div style="margin-bottom:12px"><span class="seg light"><button type="button" data-rp="res" aria-pressed="' + (S.rp !== 'plans') + '">Réserves (' + rs + ')</button><button type="button" data-rp="plans" aria-pressed="' + (S.rp === 'plans') + '">Plans (' + pl + ')</button></span></div>';
+}
+function plGet(id){ return D.plans.filter(function(x){ return x.id == id; })[0]; }
+function plLatest(){
+  var g = {}; D.plans.filter(function(x){ return x.chantierId == S.cid; }).forEach(function(x){ var k = x.groupe || x.id; if (!g[k] || (x.version || 1) > (g[k].version || 1)) g[k] = x; });
+  return Object.keys(g).map(function(k){ return g[k]; }).sort(function(a, b){ return String(a.type).localeCompare(String(b.type), 'fr') || String(a.nom).localeCompare(String(b.nom), 'fr'); });
+}
+function plSave(x){
+  var o = JSON.parse(JSON.stringify(x, function(k, v){ return k === 'dataUrl' ? undefined : v; })); o.updatedAt = new Date().toISOString(); o.updatedBy = S.user || '';
+  save('plans', o); plClientSync();
+}
+function plMediaPut(du, kind){
+  var id = 'm_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 9); MEDC[id] = du;
+  return (FB.demo ? Promise.resolve() : FB.putMedia(id, du, kind)).then(function(){ return id; });
+}
+function plMediaGet(id){ if (!id) return Promise.resolve(''); if (MEDC[id]) return Promise.resolve(MEDC[id]); if (FB.demo) return Promise.resolve(''); return FB.getMedia(id).then(function(du){ if (du) MEDC[id] = du; return du || ''; }).catch(function(){ return ''; }); }
+/* Le client ne voit que les plans cochés « visible du client » (dernière version) : jamais les pastilles ni les photos internes. */
+function plClientSync(){
+  var c = chantier(); if (FB.demo || !c || !c.projetId || !FB.clientPlan) return;
+  var keep = {}; plLatest().filter(function(x){ return x.visibleClient && x.plans && x.plans[0] && x.plans[0].mediaId; }).forEach(function(x){ keep[x.id] = 1;
+    FB.clientPlan(c.projetId, x.id, { id:String(x.id), groupe:String(x.groupe || x.id), version:x.version || 1, nom:x.nom || '', type:x.type || '', mediaId:x.plans[0].mediaId, publieLe:x.publieLe || '' }).catch(function(){}); });
+  D.plans.filter(function(x){ return x.chantierId == S.cid && !keep[x.id]; }).forEach(function(x){ FB.clientPlan(c.projetId, x.id, null).catch(function(){}); });
+}
+function viewPlans(){
+  var list = plLatest(), h = '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:12px"><h2 style="font-size:24px">Plans et pastilles</h2><span class="muted">Les artisans cochés voient le plan, ses pastilles et leurs photos.</span><span style="flex:1"></span><button class="btn pri" type="button" data-plnew="1">+ Plan</button></div>';
+  if (!list.length) return h + '<div class="card muted">Aucun plan pour ce chantier. « + Plan » : un PDF ou une image, puis posez des pastilles dessus.</div>';
+  h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">' + list.map(function(x){
+    var ivs = (x.visibleIntervs || []).map(function(i){ var v = D.intervenants.filter(function(y){ return y.id == i; })[0]; return v ? '<span class="chip">' + esc(v.nom) + '</span>' : ''; }).join('');
+    return '<button type="button" class="card" data-plopen="' + x.id + '" style="text-align:left;display:flex;flex-direction:column;gap:6px;min-height:110px;' + (PL.cur == x.id ? 'border:2px solid var(--accent)' : '') + '"><b style="font-size:16px">' + esc(x.nom) + '</b><span class="muted" style="font-size:13px">' + esc(x.type || '') + ' · v' + (x.version || 1) + ' · ' + (x.pastilles || []).length + ' pastille' + ((x.pastilles || []).length > 1 ? 's' : '') + ' · ' + (x.photos || []).length + ' photo' + ((x.photos || []).length > 1 ? 's' : '') + '</span>' +
+      '<span style="display:flex;gap:6px;flex-wrap:wrap">' + (ivs || '<span class="muted" style="font-size:12px">Aucune entreprise</span>') + (x.visibleClient ? '<span class="chip amber">Client : oui</span>' : '<span class="chip">Client : non</span>') + '</span></button>';
+  }).join('') + '</div>';
+  var x = plGet(PL.cur);
+  if (x && x.chantierId == S.cid) {
+    var old = D.plans.filter(function(y){ return (y.groupe || y.id) === (x.groupe || x.id) && y.id !== x.id; }).sort(function(a, b){ return (b.version || 1) - (a.version || 1); });
+    h += '<div class="card" style="margin-top:14px;display:flex;flex-direction:column;gap:10px"><div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px"><div><h3 style="font-size:20px">' + esc(x.nom) + ' · v' + (x.version || 1) + '</h3>' + (old.length ? '<div class="muted" style="font-size:13px">Versions précédentes : ' + old.map(function(a){ return '<a href="#" data-plopen="' + a.id + '" style="color:var(--accent)">v' + (a.version || 1) + '</a>'; }).join(' · ') + '</div>' : '') + '</div><span style="flex:1"></span>' +
+      '<select id="pl-ntype" aria-label="Type de la pastille" style="min-height:44px">' + Object.keys(PS_TYPES).map(function(k){ return '<option value="' + k + '"' + (PL.next === k ? ' selected' : '') + '>' + PS_TYPES[k][2] + ' ' + PS_TYPES[k][0] + '</option>'; }).join('') + '</select>' +
+      '<button class="btn' + (PL.add ? ' pri' : '') + '" type="button" id="pl-add">' + (PL.add ? 'Touchez le plan…' : '📍 Placer une pastille') + '</button><button class="btn" type="button" data-plver="' + x.id + '">Nouvelle version</button><button class="btn" type="button" data-plvis="' + x.id + '">Visibilité</button><button class="btn ghost" type="button" data-pldel="' + x.id + '">Supprimer</button><button class="btn ghost" type="button" data-plclose="1">Fermer</button></div>' +
+      '<div class="plgrid" style="display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:14px"><div id="pl-pages" style="background:#525659;padding:10px;border-radius:12px;max-height:75vh;overflow:auto;display:flex;flex-direction:column;gap:10px"><div style="color:#ddd;text-align:center;padding:30px">Chargement du plan…</div></div><div id="pl-panel"></div></div></div>';
+  }
+  return h;
+}
+function plBind(){
+  var b = $('bureau'), q = function(s, f){ [].forEach.call(b.querySelectorAll(s), f); };
+  q('[data-plnew]', function(x){ x.onclick = function(){ sheetPlan(null, false); }; });
+  q('[data-plopen]', function(x){ x.onclick = function(e){ e.preventDefault(); PL.cur = +x.getAttribute('data-plopen'); PL.add = false; PL.past = null; renderBureau(); }; });
+  q('[data-plclose]', function(x){ x.onclick = function(){ PL.cur = null; PL.add = false; PL.past = null; renderBureau(); }; });
+  q('[data-plver]', function(x){ x.onclick = function(){ sheetPlan(plGet(+x.getAttribute('data-plver')), false); }; });
+  q('[data-plvis]', function(x){ x.onclick = function(){ sheetPlan(plGet(+x.getAttribute('data-plvis')), true); }; });
+  q('[data-pldel]', function(x){ x.onclick = function(){ var p = plGet(+x.getAttribute('data-pldel')); if (!p || !confirm('Supprimer cette version du plan, ses pastilles et ses photos ? Elle ne pourra pas être récupérée.')) return;
+    D.plans = D.plans.filter(function(y){ return y.id !== p.id; }); if (!FB.demo) FB.del('plans', p.id).catch(function(e){ toast('⚠ Suppression impossible : ' + (e && e.message || e)); }); plClientSync(); PL.cur = null; renderBureau(); }; });
+  if ($('pl-ntype')) $('pl-ntype').onchange = function(){ PL.next = this.value; };
+  if ($('pl-add')) $('pl-add').onclick = function(){ PL.add = !PL.add; this.textContent = PL.add ? 'Touchez le plan…' : '📍 Placer une pastille'; this.className = 'btn' + (PL.add ? ' pri' : ''); plDots(); };
+  if (PL.cur) plPages();
+}
+function pdfLib(){
+  if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  return new Promise(function(ok, ko){ var sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    sc.onload = function(){ window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; ok(window.pdfjsLib); }; sc.onerror = ko; document.head.appendChild(sc); });
+}
+function plPages(){
+  var x = plGet(PL.cur), box = $('pl-pages'); if (!x || !box) return;
+  var id = x.id, f = x.plans && x.plans[0];
+  (f && f.dataUrl ? Promise.resolve(f.dataUrl) : plMediaGet(f && f.mediaId)).then(function(du){
+    if (PL.cur !== id || !$('pl-pages')) return;
+    if (!du) { box.innerHTML = '<div style="color:#f6cdc8;text-align:center;padding:30px">Plan introuvable.</div>'; return; }
+    box.innerHTML = '';
+    var add = function(el, i){ var w = document.createElement('div'); w.className = 'pl-pg'; w.setAttribute('data-page', i); w.style.cssText = 'position:relative;width:100%;background:#fff'; el.style.cssText = 'width:100%;display:block'; w.appendChild(el); w.onclick = function(e){ plClick(e, w, i); }; box.appendChild(w); };
+    if (du.indexOf('data:application/pdf') === 0) {
+      return pdfLib().then(function(lib){ return lib.getDocument({ data:atob(du.split(',')[1]) }).promise; }).then(function(pdf){
+        var chain = Promise.resolve(); for (var n = 1; n <= pdf.numPages; n++) (function(n){ chain = chain.then(function(){ return pdf.getPage(n).then(function(pg){ var vp = pg.getViewport({ scale:1.4 }), cv = document.createElement('canvas'); cv.width = vp.width; cv.height = vp.height; return pg.render({ canvasContext:cv.getContext('2d'), viewport:vp }).promise.then(function(){ if (PL.cur === id && $('pl-pages')) add(cv, n - 1); }); }); }); })(n);
+        return chain; }).then(function(){ plDots(); plPanel(); }).catch(function(e){ box.innerHTML = '<div style="color:#f6cdc8;padding:20px">PDF illisible (connexion ?) : ' + esc(e && e.message || e) + '</div>'; });
+    }
+    var im = document.createElement('img'); im.alt = x.nom; im.onload = function(){ plDots(); }; im.src = du; add(im, 0); plPanel();
+  });
+}
+function plDots(){
+  var x = plGet(PL.cur); if (!x) return;
+  [].forEach.call(document.querySelectorAll('#pl-pages .pl-pg'), function(w){
+    [].forEach.call(w.querySelectorAll('.pldot'), function(d){ d.remove(); });
+    (x.pastilles || []).forEach(function(a, i){
+      if ((a.page || 0) !== +w.getAttribute('data-page')) return;
+      var d = document.createElement('button'); d.type = 'button'; var t = PS_TYPES[a.type] || PS_TYPES.info; d.className = 'pldot ' + (PS_TYPES[a.type] ? a.type : 'info'); d.setAttribute('aria-label', 'Pastille ' + (i + 1) + ' : ' + t[0] + (a.statut === 'verifiee' ? ', vérifiée' : ''));
+      d.style.left = a.x + '%'; d.style.top = a.y + '%'; d.style.background = a.statut === 'verifiee' ? '#1E7A4C' : t[1]; if (PL.past === a.id) d.style.boxShadow = '0 0 0 4px rgba(79,168,240,.8)';
+      d.textContent = (i + 1) + (a.statut === 'verifiee' ? '✓' : ''); d.onclick = function(e){ e.stopPropagation(); PL.past = a.id; plDots(); plPanel(); }; w.appendChild(d);
+    });
+    w.style.cursor = PL.add ? 'crosshair' : 'default';
+  });
+}
+function plClick(e, w, i){
+  if (!PL.add) return; var x = plGet(PL.cur); if (!x) return; var r = w.getBoundingClientRect();
+  var a = { id:'a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), x:+((e.clientX - r.left) / r.width * 100).toFixed(1), y:+((e.clientY - r.top) / r.height * 100).toFixed(1), page:i, type:PL.next, label:'', note:'', statut:'ouverte', par:S.user || '', date:new Date().toISOString() };
+  (x.pastilles = x.pastilles || []).push(a); PL.add = false; PL.past = a.id; plSave(x); renderBureau();
+}
+function plSetP(k, v){ var x = plGet(PL.cur), a = x && (x.pastilles || []).filter(function(y){ return y.id === PL.past; })[0]; if (!a) return; a[k] = v; plSave(x); plDots(); plPanel(); }
+function plPanel(){
+  var x = plGet(PL.cur), box = $('pl-panel'); if (!x || !box) return;
+  var list = x.pastilles || [], a = list.filter(function(y){ return y.id === PL.past; })[0];
+  var h = '<div class="eyebrow" style="margin-bottom:6px">Pastilles (' + list.length + ')</div><div style="max-height:170px;overflow:auto;margin-bottom:10px;display:flex;flex-direction:column;gap:2px">' + (list.map(function(y, i){ var t = PS_TYPES[y.type] || PS_TYPES.info;
+    return '<button type="button" data-pp="' + y.id + '" style="display:flex;gap:8px;align-items:center;min-height:44px;padding:0 8px;border-radius:10px;border:' + (y.id === PL.past ? '2px solid var(--accent)' : '1px solid transparent') + ';background:transparent;text-align:left;font-size:14px"><b>' + (i + 1) + '</b><span>' + t[2] + ' ' + t[0] + '</span><span class="muted" style="font-size:13px;flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">' + esc(y.label || '') + '</span>' + (y.statut === 'verifiee' ? '<span class="st" style="color:var(--green)">✓ vérifiée</span>' : '') + '</button>'; }).join('') || '<div class="muted">Aucune pastille. « Placer une pastille », puis touchez le plan.</div>') + '</div>';
+  if (a) {
+    var ph = (x.photos || []).map(function(p, i){ return { p:p, i:i }; }).filter(function(o){ return o.p.pastilleId === a.id; });
+    h += '<div style="border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:8px"><select data-f="type" style="min-height:44px">' + Object.keys(PS_TYPES).map(function(k){ return '<option value="' + k + '"' + (a.type === k ? ' selected' : '') + '>' + PS_TYPES[k][2] + ' ' + PS_TYPES[k][0] + '</option>'; }).join('') + '</select>' +
+      '<input data-f="label" placeholder="Titre de la pastille" value="' + esc(a.label || '') + '" style="min-height:44px"><textarea data-f="note" rows="3" placeholder="Consigne, remarque…">' + esc(a.note || '') + '</textarea>' +
+      (a.type === 'photo' ? '<label class="muted" style="font-size:13px">Fermeture de la cloison prévue le<input data-f="fermeture" type="date" value="' + esc(a.fermeture || '') + '" style="width:100%;min-height:44px;margin-top:4px"></label>' : '') +
+      '<div class="eyebrow">Photos (' + ph.length + ')</div><div style="display:flex;gap:6px;flex-wrap:wrap">' + ph.map(function(o){ return '<span style="position:relative"><img data-mid="' + esc(o.p.mediaId || '') + '" alt="Photo de la pastille" style="width:64px;height:64px;object-fit:cover;border-radius:8px;background:var(--pan2)"><button type="button" data-phdel="' + o.i + '" aria-label="Supprimer la photo" style="position:absolute;right:-6px;top:-6px;width:28px;height:28px;border-radius:50%;border:1px solid var(--line);background:var(--bg)">×</button></span>'; }).join('') + '</div>' +
+      '<button class="btn" type="button" id="pl-ph">📷 Ajouter une photo</button><div class="muted" style="font-size:13px">' + esc((a.par || '').split('@')[0]) + (a.date ? ' · ' + frDate(a.date) : '') + '</div>' +
+      '<div style="display:flex;gap:8px"><button class="btn' + (a.statut === 'verifiee' ? '' : ' pri') + '" type="button" id="pl-ver" style="flex:1">' + (a.statut === 'verifiee' ? 'Rouvrir' : '✓ Marquer vérifié') + '</button><button class="btn ghost" type="button" id="pl-pdel">Supprimer</button></div></div>';
+  }
+  box.innerHTML = h;
+  [].forEach.call(box.querySelectorAll('[data-pp]'), function(b){ b.onclick = function(){ PL.past = b.getAttribute('data-pp'); plDots(); plPanel(); }; });
+  [].forEach.call(box.querySelectorAll('[data-f]'), function(f){ f.onchange = function(){ plSetP(f.getAttribute('data-f'), f.value); }; });
+  [].forEach.call(box.querySelectorAll('img[data-mid]'), function(im){ var id = im.getAttribute('data-mid'); plMediaGet(id).then(function(du){ if (du) im.src = du; }); });
+  [].forEach.call(box.querySelectorAll('[data-phdel]'), function(b){ b.onclick = function(){ if (!confirm('Supprimer cette photo ?')) return; x.photos.splice(+b.getAttribute('data-phdel'), 1); plSave(x); plPanel(); renderBureauKeep(); }; });
+  if ($('pl-ph')) $('pl-ph').onclick = function(){ pickPhoto(function(du){ plMediaPut(du, 'photo').then(function(mid){ (x.photos = x.photos || []).push({ name:'photo.jpg', mediaId:mid, pastilleId:a.id, par:S.user || '', date:new Date().toISOString() }); plSave(x); plPanel(); toast('Photo ajoutée à la pastille'); }); }); };
+  if ($('pl-ver')) $('pl-ver').onclick = function(){ plSetP('statut', a.statut === 'verifiee' ? 'ouverte' : 'verifiee'); };
+  if ($('pl-pdel')) $('pl-pdel').onclick = function(){ if (!confirm('Supprimer cette pastille et ses photos ?')) return; x.pastilles = x.pastilles.filter(function(y){ return y.id !== a.id; }); x.photos = (x.photos || []).filter(function(p){ return p.pastilleId !== a.id; }); PL.past = null; plSave(x); renderBureau(); };
+}
+function renderBureauKeep(){ /* compteurs de la liste des plans */ var c = document.querySelector('[data-rp=plans]'); if (c) c.textContent = 'Plans (' + plLatest().length + ')'; }
+function shrinkImg(file, max){
+  return new Promise(function(ok, ko){ var fr = new FileReader(); fr.onerror = ko; fr.onload = function(){ var im = new Image(); im.onerror = ko; im.onload = function(){ var k = Math.min(1, max / Math.max(im.width, im.height)), c = document.createElement('canvas'); c.width = Math.round(im.width * k); c.height = Math.round(im.height * k); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); ok(c.toDataURL('image/jpeg', .85)); }; im.src = fr.result; }; fr.readAsDataURL(file); });
+}
+function sheetPlan(prev, visOnly){
+  var bg = document.createElement('div'); bg.className = 'sheetbg';
+  var ivs = D.intervenants.filter(function(i){ return i.chantierId == S.cid || !i.chantierId; });
+  var checks = ivs.map(function(i){ return '<label style="display:flex;gap:10px;align-items:center;min-height:44px"><input type="checkbox" data-iv="' + i.id + '"' + (prev && (prev.visibleIntervs || []).indexOf(i.id) >= 0 ? ' checked' : '') + ' style="width:22px;height:22px"> ' + esc(i.nom) + (i.metier ? ' <span class="muted">· ' + esc(i.metier) + '</span>' : '') + '</label>'; }).join('') || '<div class="muted">Aucune entreprise sur ce chantier.</div>';
+  bg.innerHTML = '<div class="sheet"><div class="eyebrow">' + (visOnly ? 'Visibilité · ' + esc(prev.nom) : prev ? 'Nouvelle version de « ' + esc(prev.nom) + ' »' : 'Ajouter un plan') + '</div>' +
+    (visOnly ? '' : '<label style="display:flex;flex-direction:column;gap:4px"><span class="eyebrow">Nom du plan</span><input id="p-nom" value="' + esc(prev ? prev.nom : '') + '"' + (prev ? ' disabled' : '') + ' style="min-height:48px"></label>' +
+      '<label style="display:flex;flex-direction:column;gap:4px"><span class="eyebrow">Type</span><select id="p-type" style="min-height:48px">' + PL_TYPES.map(function(t){ return '<option' + (prev && prev.type === t ? ' selected' : '') + '>' + esc(t) + '</option>'; }).join('') + '</select></label>' +
+      '<label style="display:flex;flex-direction:column;gap:4px"><span class="eyebrow">Fichier (PDF ou image)</span><input id="p-file" type="file" accept="application/pdf,image/*" style="min-height:48px"></label>') +
+    '<div class="eyebrow">Entreprises qui voient ce plan</div>' + checks +
+    '<label style="display:flex;gap:10px;align-items:center;min-height:44px"><input id="p-cli" type="checkbox"' + (prev && prev.visibleClient ? ' checked' : '') + ' style="width:22px;height:22px"> Visible du client <span class="muted">(non par défaut)</span></label>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn big pri" type="button" id="p-ok">' + (visOnly ? 'Enregistrer' : 'Publier') + '</button><button class="btn big ghost" type="button" data-x="1">Annuler</button></div></div>';
+  document.body.appendChild(bg);
+  bg.onclick = function(e){ if (e.target === bg || e.target.getAttribute('data-x')) bg.remove(); };
+  var vis = function(){ return [].filter.call(bg.querySelectorAll('[data-iv]'), function(c){ return c.checked; }).map(function(c){ return +c.getAttribute('data-iv'); }); };
+  bg.querySelector('#p-ok').onclick = function(){
+    if (visOnly) { prev.visibleIntervs = vis(); prev.visibleClient = bg.querySelector('#p-cli').checked; plSave(prev); bg.remove(); toast('Visibilité enregistrée'); renderBureau(); return; }
+    var nom = bg.querySelector('#p-nom').value.trim(), file = bg.querySelector('#p-file').files[0];
+    if (!nom) { toast('Donnez un nom au plan.'); return; } if (!file) { toast('Choisissez le fichier (PDF ou image).'); return; }
+    var btn = bg.querySelector('#p-ok'); btn.disabled = true; btn.textContent = 'Envoi…';
+    var getDu = /^image\//.test(file.type) ? shrinkImg(file, 2400) : new Promise(function(ok, ko){ var fr = new FileReader(); fr.onload = function(){ ok(fr.result); }; fr.onerror = ko; fr.readAsDataURL(file); });
+    getDu.then(function(du){ return plMediaPut(du, 'plan').then(function(mid){ return [du, mid]; }); }).then(function(res){
+      var id = uid(), x = { id:id, chantierId:S.cid, groupe:prev ? (prev.groupe || prev.id) : id, version:prev ? (prev.version || 1) + 1 : 1, nom:nom, type:bg.querySelector('#p-type').value,
+        plans:[{ name:file.name, mediaId:res[1], dataUrl:res[0] }], pastilles:prev ? JSON.parse(JSON.stringify(prev.pastilles || [])) : [], photos:prev ? JSON.parse(JSON.stringify(prev.photos || [])) : [],
+        visibleIntervs:vis(), visibleClient:bg.querySelector('#p-cli').checked, publieLe:new Date().toISOString(), publiePar:S.user || '' };
+      D.plans.push(x); plSave(x); PL.cur = x.id; PL.past = null; bg.remove(); toast('Plan v' + x.version + ' publié'); renderBureau(); renderTabs();
+    }).catch(function(e){ btn.disabled = false; btn.textContent = 'Publier'; toast('⚠ Fichier non envoyé : ' + (e && e.message || e)); });
+  };
+}
 /* Glisser une barre du Planning : décaler / changer les dates (jour entier) */
 function barDrag(el){
   var lot = D.lots.filter(function(y){ return y.id == el.getAttribute('data-bar'); })[0]; if (!lot) return;
@@ -730,7 +895,7 @@ function ensureChantier(){
 }
 function startData(){
   var n = 0, any = function(){ ensureChantier(); if (S.mode === 'terrain') { renderSide(); renderTiles(); renderDock(); applyStage(); renderTop(); } else { renderBureau(); renderTabs(); } };
-  ['chantiers', 'lots', 'intervenants', 'reserves', 'crs', 'factures'].forEach(function(k){ FB.listen(k, function(a, pend){ D[k] = a; S.pending = !!pend; any(); }); });
+  ['chantiers', 'lots', 'intervenants', 'reserves', 'crs', 'factures', 'plans'].forEach(function(k){ FB.listen(k, function(a, pend){ D[k] = a; S.pending = !!pend; any(); }); });
 }
 var ADMIN_EMAILS = ['contact@phenixarchitecte.fr'];   /* même repli que l'ancien Chantier */
 function authed(email){
