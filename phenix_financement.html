@@ -339,11 +339,8 @@ if (window.parent !== window) {
     <div class="card" id="decennaleCard">
       <div class="card-title"><i class="ti ti-shield-check"></i> Attestations décennales des artisans</div>
       <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">
-        Un artisan par entreprise chiffrée. Le bouton « Mail » ou « SMS » ouvre un message déjà rédigé : tu le relis et tu l'envoies toi-même.
-        L'attestation reçue se dépose ici : elle est lue automatiquement et comparée au devis, à la fiche de l'artisan et au chantier.
+        Récapitulatif en lecture seule. Les demandes (mail, SMS), le dépôt et la lecture des attestations se font dans <b>Chiffrage</b>, bouton « Décennales des artisans » : l'état se met à jour ici automatiquement.
       </div>
-      <div style="margin-bottom:.75rem"><button class="btn btn-primary" id="decToutDemander" onclick="decPreparerFile()"><i class="ti ti-send"></i> Demander toutes les décennales manquantes</button></div>
-      <div id="decBatch" style="display:none"></div>
       <div id="decennaleBody"><div style="font-size:12.5px;color:var(--text3)">Chargement…</div></div>
     </div>
 
@@ -721,8 +718,6 @@ async function renderDecennales() {
     const contact = (tel || mail)
       ? '📞 ' + (tel ? escH(tel) : '<i>téléphone manquant</i>') + ' · ✉ ' + (mail ? escH(mail) : '<i>mail manquant</i>')
       : 'Coordonnées manquantes :';
-    const saisie = (!tel || !mail)
-      ? '<div class="dec-contact"><input id="dec-tel-' + i + '" placeholder="Téléphone" value="' + escH(tel) + '" aria-label="Téléphone de ' + escH(g.nom) + '"><input id="dec-mail-' + i + '" placeholder="Mail" value="' + escH(mail) + '" aria-label="Mail de ' + escH(g.nom) + '"><button class="btn btn-sm" onclick="decEnregistrerContact(' + i + ')">Enregistrer</button></div>' : '';
     const lis = incs.map(x => '<li class="' + x.niveau + '"><b>' + PhenixDecennale.symbole[x.niveau] + ' ' + PhenixDecennale.libelle[x.niveau] + '</b> ' + escH(x.texte) + '</li>').join('');
     const att = a.decennaleAtt;
     const detail = (a.decennaleStatut === 'recue' && att)
@@ -732,16 +727,10 @@ async function renderDecennales() {
         (a.decennaleUrl ? ' · <a href="' + escH(a.decennaleUrl) + '" target="_blank" rel="noopener" style="color:var(--accent)">Ouvrir le PDF</a>' : '') + '</div>' : '';
     return '<div class="dec-row"><div class="dec-top"><div><div class="dec-nom">' + escH(g.nom) + '</div>' +
       '<div class="dec-lots">' + g.lots.map(l => escH((l.num || '') + ' ' + (l.nom || ''))).join(' · ') + '</div>' +
-      '<div class="dec-contact">' + contact + '</div>' + saisie + '</div>' +
+      '<div class="dec-contact">' + contact + '</div></div>' +
       '<div class="dec-statut" role="status">' + escH(decStatutTexte(g, true)) + '</div></div>' + detail +
       (lis ? '<ul class="dec-inc">' + lis + '</ul>' : '') +
-      '<div class="dec-actions">' +
-        '<button class="btn btn-sm" onclick="decAction(' + i + ',\'mail\')"' + (mail ? '' : ' disabled title="Mail manquant"') + '><i class="ti ti-mail"></i> Demander par mail</button>' +
-        '<button class="btn btn-sm" onclick="decAction(' + i + ',\'sms\')"' + (tel ? '' : ' disabled title="Téléphone manquant"') + '><i class="ti ti-message"></i> Demander par SMS</button>' +
-        '<button class="btn btn-sm" onclick="decAction(' + i + ',\'copie\')"><i class="ti ti-copy"></i> Copier le SMS</button>' +
-        (pts.length ? '<button class="btn btn-sm" onclick="decCorriger(' + i + ',\'mail\')"' + (mail ? '' : ' disabled title="Mail manquant"') + '><i class="ti ti-mail-forward"></i> Écrire pour corriger (' + pts.length + ' point' + (pts.length > 1 ? 's' : '') + ')</button>' + (tel && PhenixMsg.estMobile(tel) ? '<button class="btn btn-sm" onclick="decCorriger(' + i + ',\'sms\')"><i class="ti ti-message"></i> Corriger par SMS</button>' : '') : '') +
-        '<button class="btn btn-sm btn-primary" onclick="decDeposer(' + i + ')"><i class="ti ti-upload"></i> Déposer l’attestation reçue</button>' +
-      '</div></div>';
+      '</div>';
   }).join('') + (groupes.sansEntreprise ? '<div style="font-size:12px;color:var(--text2)">' + groupes.sansEntreprise + ' lot(s) du chiffrage n’ont pas d’entreprise : ils ne sont pas listés ici.</div>' : '');
   syncChecklistDecennale(groupes);
 }
@@ -755,172 +744,6 @@ function syncChecklistDecennale(groupes) {
   let nouveau = it.status || 'manquant';
   if (tousOk) nouveau = 'obtenu'; else if (uneDemande && nouveau === 'manquant') nouveau = 'attente';
   if (nouveau !== (it.status || 'manquant')) { it.status = nouveau; renderChecklist(); scheduleAutosave(); }
-}
-
-async function decSauver(art) {
-  art.updatedAt = new Date().toISOString();
-  await window._fbFin.saveArtisan(art);
-}
-function decArtisanOuCreer(g) {
-  if (g.artisan) return g.artisan;
-  const rec = { id: 'art-' + Date.now(), entreprise: g.nom, nom: g.nom, metier: 'À préciser', favori: 0, note: 0, dispo: 'contactez',
-    source: 'financement', alerte: '', notes: 'Créé depuis Financement (décennale)', tel: '', email: '', siret: '' };
-  (_artisans || (_artisans = [])).push(rec); g.artisan = rec; return rec;
-}
-
-async function decEnregistrerContact(i) {
-  const g = _decGroupes[i]; if (!g) return;
-  const tel = PhenixMsg.normTel(document.getElementById('dec-tel-' + i).value), mail = PhenixMsg.normMail(document.getElementById('dec-mail-' + i).value);
-  const brutT = document.getElementById('dec-tel-' + i).value.trim(), brutM = document.getElementById('dec-mail-' + i).value.trim();
-  if ((brutT && !tel) || (brutM && !mail)) { toast('⚠️ ' + (brutT && !tel ? 'Numéro de téléphone invalide' : 'Adresse mail invalide')); return; }
-  if (!tel && !mail) { toast('Saisissez un téléphone ou un mail'); return; }
-  const art = decArtisanOuCreer(g);
-  if (tel) art.tel = tel; if (mail) art.email = mail;
-  try { await decSauver(art); toast('✓ Coordonnées enregistrées dans l’Annuaire'); } catch (e) { toast('⚠️ Enregistrement impossible (droits ou connexion)'); }
-  renderDecennales();
-}
-
-async function decAction(i, type) {
-  const g = _decGroupes[i]; if (!g) return;
-  const art = decArtisanOuCreer(g);
-  const chantierNom = PhenixMsg.libelleChantier(window._chantierLive || {}) || (currentProjet && currentProjet.nom) || '';
-  const contact = (art.nom && _nnDec(art.nom) !== _nnDec(g.nom)) ? art.nom : '';
-  const msg = PhenixMsg.preparer('decennale', {
-    contact, entreprise: g.nom, metier: art.metier && art.metier !== 'À préciser' ? art.metier : '',
-    chantier: chantierNom, lot: g.lots.map(l => l.nom).filter(Boolean).join(' ; '),
-    dateValidite: art.assuranceDate || ''
-  });
-  if (type === 'copie') { const ok = await PhenixMsg.copier(msg.sms); toast(ok ? '✓ SMS copié — colle-le dans ta messagerie' : '⚠️ Copie impossible'); return; }
-  const surTel = /Android|iPhone|iPad/i.test(navigator.userAgent);
-  let ok;
-  // SMS : ouvre l'appli « Lien avec Windows » (ou Messages sur téléphone) sur la bonne conversation, texte déjà écrit.
-  // Mail : ouvre le logiciel de messagerie par défaut (Outlook) en nouveau mail, destinataire et texte remplis.
-  ok = type === 'mail' ? PhenixMsg.ouvrirMail(art.email, msg) : PhenixMsg.ouvrirSms(art.tel, msg);
-  if (ok && type === 'sms' && !surTel) PhenixMsg.copier(msg.sms);   // filet de sécurité : le texte est aussi dans le presse-papiers
-  if (!ok) { toast('⚠️ ' + (type === 'mail' ? 'Mail' : 'Téléphone') + ' manquant ou invalide'); return false; }
-  // Mémorise la demande dans la fiche (une relance si elle était déjà demandée)
-  const dejaDemandee = art.decennaleStatut === 'demandee' && (art.decennaleDemandeLe || '') < todayISO();   // même jour (mail puis SMS) = même demande
-  art.decennaleStatut = 'demandee';
-  art.decennaleDemandeLe = todayISO();
-  art.decennaleCanal = type;
-  art.decennaleRelances = dejaDemandee ? (art.decennaleRelances || 0) + 1 : (art.decennaleStatut === 'demandee' ? (art.decennaleRelances || 0) : 0);
-  try { await decSauver(art); } catch (e) { toast('⚠️ Brouillon ouvert, mais suivi non enregistré (droits ou connexion)'); }
-  if (type === 'mail') toast('✓ Brouillon de mail ouvert — relis et envoie'); else toast('✓ SMS préparé — il ne reste qu’à envoyer (texte aussi copié au cas où)');
-  renderDecennales();
-  return true;
-}
-
-async function decCorriger(i, type) {
-  const g = _decGroupes[i]; if (!g || !g.artisan) return;
-  const art = g.artisan, att = art.decennaleAtt || {};
-  const chantierNom = PhenixMsg.libelleChantier(window._chantierLive || {}) || (currentProjet && currentProjet.nom) || '';
-  const contact = (art.nom && _nnDec(art.nom) !== _nnDec(g.nom)) ? art.nom : '';
-  const msg = PhenixMsg.preparerCorrection(decControles(g), { contact, chantier: chantierNom, lot: g.lots.map(l => l.nom).filter(Boolean).join(' ; '), dateFin: att.dateFin, dateDebut: att.dateDebut, nomAtt: att.entreprise });
-  if (!msg) { toast('Aucun point à corriger'); return; }
-  const ok = type === 'mail' ? PhenixMsg.ouvrirMail(art.email, msg) : PhenixMsg.ouvrirSms(art.tel, msg);
-  if (ok && type === 'sms' && !/Android|iPhone|iPad/i.test(navigator.userAgent)) PhenixMsg.copier(msg.sms);
-  if (!ok) { toast('⚠️ ' + (type === 'mail' ? 'Mail' : 'Téléphone') + ' manquant ou invalide'); return; }
-  // On garde le statut « Reçue » (les contrôles restent visibles) et on note seulement la demande de correction.
-  art.decennaleCorrectionLe = todayISO(); art.decennaleCorrections = (art.decennaleCorrections || 0) + 1;
-  try { await decSauver(art); } catch (e) { toast('⚠️ Brouillon ouvert, mais suivi non enregistré (droits ou connexion)'); }
-  toast(type === 'mail' ? '✓ Brouillon de mail ouvert — relis et envoie' : '✓ SMS préparé — il ne reste qu’à envoyer');
-  renderDecennales();
-}
-
-// ── Demande groupée : une file de messages, un clic par message (le navigateur n'autorise pas d'ouvrir 20 messageries d'un coup) ──
-let _decFile = [], _decPos = 0;
-function decAFaire() {
-  const aujourdhui = todayISO();
-  return _decGroupes.map((g, i) => ({ g, i })).filter(({ g }) => {
-    const a = g.artisan;
-    if (a && a.decennaleStatut === 'recue' && !PhenixDecennale.resume(decControles(g)).bloquants) return false;   // déjà reçue et exploitable
-    if (a && a.decennaleStatut === 'demandee' && a.decennaleDemandeLe === aujourdhui) return false;               // déjà demandée aujourd'hui
-    return true;
-  });
-}
-function decPreparerFile() {
-  const aFaire = decAFaire();
-  _decFile = []; _decPos = 0;
-  const sansContact = [], fixeSeul = [];
-  aFaire.forEach(({ g, i }) => {
-    const a = g.artisan || {}, mail = PhenixMsg.normMail(a.email), tel = PhenixMsg.normTel(a.tel);
-    if (mail) _decFile.push({ i, canal: 'mail' });
-    if (tel && PhenixMsg.estMobile(tel)) _decFile.push({ i, canal: 'sms' });
-    if (tel && !PhenixMsg.estMobile(tel)) fixeSeul.push(g.nom);
-    if (!mail && !tel) sansContact.push(g.nom);
-  });
-  decAfficherFile(aFaire.length, fixeSeul, sansContact);
-}
-function decAfficherFile(nbArtisans, fixeSeul, sansContact) {
-  const z = document.getElementById('decBatch');
-  const nbMail = _decFile.filter(x => x.canal === 'mail').length, nbSms = _decFile.length - nbMail;
-  if (!nbArtisans) { z.style.display = ''; z.innerHTML = '<div class="dec-row">Toutes les attestations sont déjà reçues ou demandées aujourd’hui.</div>'; return; }
-  const surTel = /Android|iPhone|iPad/i.test(navigator.userAgent);
-  z.style.display = '';
-  z.innerHTML = '<div class="dec-row" role="region" aria-label="Demande groupée">' +
-    '<div class="dec-nom">Demande groupée — ' + nbArtisans + ' artisan' + (nbArtisans > 1 ? 's' : '') + '</div>' +
-    '<div class="dec-contact">' + _decFile.length + ' message' + (_decFile.length > 1 ? 's' : '') + ' à envoyer : ' + nbMail + ' mail' + (nbMail > 1 ? 's' : '') + ' et ' + nbSms + ' SMS (aux numéros de mobile uniquement).</div>' +
-    (fixeSeul.length ? '<div class="dec-contact">Numéro fixe, pas de SMS possible : ' + escH(fixeSeul.join(', ')) + '.</div>' : '') +
-    (sansContact.length ? '<div class="dec-contact">⚠ Aucun contact : ' + escH(sansContact.join(', ')) + ' (à compléter ci-dessous).</div>' : '') +
-    (nbSms && !surTel ? '<div class="dec-contact">Chaque SMS s’ouvre dans « Lien avec Windows », texte prêt : il ne reste qu’à envoyer.</div>' : '') +
-    '<div class="dec-actions"><button class="btn btn-primary" id="decSuivant" onclick="decSuivant()"' + (_decFile.length ? '' : ' disabled') + '>' + decLibelleSuivant() + '</button>' +
-    '<button class="btn btn-sm" onclick="document.getElementById(\'decBatch\').style.display=\'none\'">Fermer</button></div>' +
-    '<div class="dec-contact" id="decProgres" role="status"></div></div>';
-}
-function decLibelleSuivant() {
-  if (_decPos >= _decFile.length) return 'Terminé';
-  const x = _decFile[_decPos], g = _decGroupes[x.i];
-  return 'Ouvrir le message suivant (' + (_decPos + 1) + ' / ' + _decFile.length + ') — ' + (x.canal === 'mail' ? 'mail' : 'SMS') + ' à ' + g.nom;
-}
-async function decSuivant() {
-  if (_decPos >= _decFile.length) return;
-  const btn = document.getElementById('decSuivant'); btn.disabled = true;
-  const x = _decFile[_decPos], g = _decGroupes[x.i];
-  const ok = await decAction(x.i, x.canal);
-  const prog = document.getElementById('decProgres');
-  _decPos++;
-  const reste = _decFile.length - _decPos;
-  if (prog) prog.textContent = (ok ? '✓ ' : '✖ Non ouvert : ') + (x.canal === 'mail' ? 'mail' : 'SMS') + ' pour ' + g.nom + (reste ? ' — ' + reste + ' message' + (reste > 1 ? 's' : '') + ' restant' + (reste > 1 ? 's' : '') + '.' : ' — c’était le dernier.');
-  const b2 = document.getElementById('decSuivant');
-  if (b2) { b2.textContent = decLibelleSuivant(); b2.disabled = _decPos >= _decFile.length; }
-}
-
-function decDeposer(i) {
-  const g = _decGroupes[i]; if (!g) return;
-  const input = document.createElement('input');
-  input.type = 'file'; input.accept = 'application/pdf,.pdf';
-  input.onchange = () => {
-    const file = input.files[0]; if (!file) return;
-    if (file.type !== 'application/pdf') { toast('⚠️ Déposez l’attestation au format PDF'); return; }
-    toast('Lecture de l’attestation…');
-    const reader = new FileReader();
-    reader.onload = async () => {
-      try {
-        const dataUrl = reader.result, base64 = dataUrl.split(',')[1];
-        const att = await PhenixDecennale.lire(base64);
-        const art = decArtisanOuCreer(g);
-        const projetId = currentProjet ? currentProjet.projetId : 'sans-projet';
-        const path = 'financement/' + projetId + '/decennale_' + art.id + '_' + Date.now() + '.pdf';
-        const url = await window._fbFin.uploadFile(path, dataUrl);
-        art.decennaleStatut = 'recue'; art.decennaleRecueLe = todayISO();
-        art.decennaleAtt = att;
-        if (url) { art.decennaleUrl = url; art.decennalePath = path; }
-        // la fiche de l'artisan se complète (champs vides seulement), la validité reprend l'attestation
-        if (!art.siret && att.siret) art.siret = att.siret;
-        if (att.police) art.assurance = att.police;
-        if (att.dateFin) art.assuranceDate = att.dateFin;
-        await decSauver(art);
-        const r = PhenixDecennale.resume(PhenixDecennale.controler(att, { artisan: art, lots: g.lots, finChantier: finChantierISO() }));
-        toast(r.bloquants ? '✖ Attestation lue : incohérence bloquante' : r.attention ? '⚠ Attestation lue : ' + r.attention + ' point(s) à vérifier' : '✔ Attestation lue : conforme');
-        renderDecennales();
-      } catch (e) {
-        console.error('Décennale :', e);
-        toast('⚠️ Lecture de l’attestation impossible : ' + (e.message || 'erreur'));
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-  input.click();
 }
 
 function genererPDF() {

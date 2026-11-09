@@ -679,6 +679,7 @@ if (window.parent !== window) {
               <option value="">À choisir…</option><option value="cg">Contractant général (sous-traitance)</option><option value="moe">Maître d'œuvre (contrat direct client)</option>
             </select></label>
           <button class="btn btn-sm btn-primary" onclick="centOuvrirListe()">📄 Contrats par entreprise</button>
+          <button class="btn btn-sm btn-primary" onclick="chdOuvrir()"><i class="ti ti-shield-check" aria-hidden="true"></i> Décennales des artisans</button>
           <button class="btn btn-sm btn-outline" onclick="contratVersPlanning('tous')" style="border-color:#1E5FAA;color:#1E5FAA">📅 Tout envoyer vers le Gantt de Chantier</button>
           <button class="btn btn-sm btn-outline" onclick="contratExportPDF('tous')"><i class="ti ti-file-export" aria-hidden="true"></i>Tous les contrats (PDF)</button>
         </div>
@@ -2002,6 +2003,18 @@ if (window.parent !== window) {
 </div>
 
 <style>#cent-ed-corps table input{padding:5px 7px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12.5px}#cent-ed-corps table th{font-weight:600;padding:2px 6px 4px 0}#cent-ed-corps table td{padding:3px 6px 3px 0}</style>
+<!-- MODAL DÉCENNALES DES ARTISANS -->
+<style>.dec-row{border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:10px;background:var(--surface)}.dec-top{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:flex-start;justify-content:space-between}.dec-nom{font-weight:600;font-size:14px;color:var(--nav)}.dec-lots{font-size:12px;color:var(--text2);margin-top:2px}.dec-contact{font-size:12.5px;color:var(--text2);margin-top:4px}.dec-contact input{padding:4px 7px;border:1.5px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font:inherit;font-size:12px;width:170px;margin-right:6px}.dec-statut{font-size:12.5px;font-weight:600;margin-top:6px}.dec-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.dec-actions .btn[disabled]{opacity:.45;cursor:not-allowed}.dec-inc{margin:8px 0 0;padding:0;list-style:none;font-size:12.5px}.dec-inc li{padding:5px 8px;border-left:3px solid var(--border);margin-bottom:4px;background:rgba(127,127,127,.08)}.dec-inc li b{margin-right:6px}.dec-inc li.bloquant{border-left-width:5px;border-left-style:double}.dec-inc li.info{border-left-style:dotted}</style>
+<div class="modal-overlay" id="modal-dec">
+  <div class="modal" style="max-width:900px;width:96%;max-height:92vh;overflow-y:auto">
+    <div class="modal-title"><i class="ti ti-shield-check" style="color:var(--accent);margin-right:8px" aria-hidden="true"></i>Attestations décennales des artisans</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">Un artisan par entreprise chiffrée. « Mail » ou « SMS » ouvre un message déjà rédigé (Outlook ou Lien avec Windows) : il ne reste qu'à envoyer. L'attestation reçue se dépose ici : elle est lue automatiquement et comparée au devis, à la fiche de l'artisan et au chantier.</div>
+    <div style="margin-bottom:.75rem"><button class="btn btn-primary" onclick="chdPreparerFile()"><i class="ti ti-send" aria-hidden="true"></i> Demander toutes les décennales manquantes</button></div>
+    <div id="chd-batch" style="display:none"></div>
+    <div id="chd-corps"></div>
+    <div class="modal-actions"><button class="btn btn-outline" onclick="closeModal('modal-dec')">Fermer</button></div>
+  </div>
+</div>
 <!-- MODAL CONTRATS PAR ENTREPRISE (liste) -->
 <div class="modal-overlay" id="modal-cent">
   <div class="modal" style="max-width:860px;width:96%;max-height:92vh;overflow-y:auto">
@@ -4327,6 +4340,7 @@ async function _phenixFbRefs(){
   };
   const app = getApps().length ? getApp() : initializeApp(cfg);
   return {
+    app: app,
     db: fs.getFirestore(app),
     auth: getAuth(app),
     doc: fs.doc, setDoc: fs.setDoc, collection: fs.collection,
@@ -8579,6 +8593,171 @@ async function centToutExporter(){
   const c = _centC(); if (!c) return;
   for (const g of centGroupes(c)){ await centExporter(g.key, true); await new Promise(r => setTimeout(r, 700)); }
   showToast('📄 Contrats générés');
+}
+</script>
+<script>
+/* ===== Décennales des artisans (demande mail/SMS, dépôt, lecture IA, contrôles) — déplacé de Financement ===== */
+let _chdG = [], _chdFile = [], _chdPos = 0;
+const _chdAuj = () => new Date().toISOString().slice(0,10);
+function chdGroupes(){
+  const c = _centC(); if (!c) return [];
+  return centGroupes(c).map(g => ({ key:g.key, nom:g.nom, lots:g.lots.map(x => x.lot), artisan:annTrouve(g.nom) || null }));
+}
+function chdFin(){
+  const c = _centC(); let m = '';
+  (c.lots || []).forEach(l => { if (l.exclu || !l.contrat) return; const p = PhenixContratEnt.periodeLot(l.contrat); if (p && p.isoFin > m) m = p.isoFin; });
+  return m;
+}
+function chdControles(g){
+  const a = g.artisan; if (!a || a.decennaleStatut !== 'recue' || !a.decennaleAtt) return [];
+  return PhenixDecennale.controler(a.decennaleAtt, { artisan:a, lots:g.lots, finChantier:chdFin() });
+}
+function chdStatutTexte(g){
+  const a = g.artisan, fr = PhenixMsg.dateFr;
+  if (!a || !a.decennaleStatut) return '○ Non demandée';
+  if (a.decennaleStatut === 'demandee') return '➤ Demandée le ' + fr(a.decennaleDemandeLe) + (a.decennaleRelances ? ' (relancée ' + a.decennaleRelances + ' fois)' : '');
+  const r = PhenixDecennale.resume(chdControles(g));
+  if (r.bloquants) return '✖ Reçue — incohérence bloquante';
+  if (r.attention) return '⚠ Reçue — ' + r.attention + ' point' + (r.attention > 1 ? 's' : '') + ' à vérifier';
+  return '✔ Reçue — conforme' + (a.decennaleAtt && a.decennaleAtt.dateFin ? ' (valable jusqu’au ' + fr(a.decennaleAtt.dateFin) + ')' : '');
+}
+async function chdOuvrir(){
+  if (!_centC()) return;
+  document.getElementById('modal-dec').classList.add('open');
+  document.getElementById('chd-corps').innerHTML = '<div style="font-size:12.5px;color:var(--text3)">Chargement…</div>';
+  try { _annLoaded = false; await annLoad(); } catch(e){}
+  chdRender();
+}
+function chdRender(){
+  const body = document.getElementById('chd-corps'); if (!body) return;
+  const c = _centC(); if (!c) return;
+  const groupes = _chdG = chdGroupes();
+  if (!groupes.length){ body.innerHTML = '<div style="font-size:12.5px;color:var(--text3)">Aucune entreprise renseignée sur les lots de ce chantier.</div>'; return; }
+  body.innerHTML = groupes.map((g, i) => {
+    const a = g.artisan || {}, tel = PhenixMsg.normTel(a.tel), mail = PhenixMsg.normMail(a.email), incs = chdControles(g);
+    const contact = (tel || mail) ? '📞 ' + (tel ? _centEsc(tel) : '<i>téléphone manquant</i>') + ' · ✉ ' + (mail ? _centEsc(mail) : '<i>mail manquant</i>') : 'Coordonnées manquantes :';
+    const saisie = (!tel || !mail) ? '<div class="dec-contact"><input id="chd-tel-' + i + '" placeholder="Téléphone" value="' + _centEsc(tel) + '" aria-label="Téléphone de ' + _centEsc(g.nom) + '"><input id="chd-mail-' + i + '" placeholder="Mail" value="' + _centEsc(mail) + '" aria-label="Mail de ' + _centEsc(g.nom) + '"><button class="btn btn-sm btn-outline" onclick="chdEnregistrerContact(' + i + ')">Enregistrer</button></div>' : '';
+    const lis = incs.map(x => '<li class="' + x.niveau + '"><b>' + PhenixDecennale.symbole[x.niveau] + ' ' + PhenixDecennale.libelle[x.niveau] + '</b> ' + _centEsc(x.texte) + '</li>').join('');
+    const att = a.decennaleAtt;
+    const detail = (a.decennaleStatut === 'recue' && att) ? '<div class="dec-contact">Attestation lue : ' + _centEsc(att.assureur || 'assureur non lu') + (att.police ? ' · police ' + _centEsc(att.police) : '') + (att.dateDebut || att.dateFin ? ' · du ' + PhenixMsg.dateFr(att.dateDebut) + ' au ' + PhenixMsg.dateFr(att.dateFin) : '') + (att.activites && att.activites.length ? '<br>Activités garanties : ' + _centEsc(att.activites.join(' ; ')) : '') + (a.decennaleUrl ? ' · <a href="' + _centEsc(a.decennaleUrl) + '" target="_blank" rel="noopener" style="color:var(--accent)">Ouvrir le PDF</a>' : '') + '</div>' : '';
+    return '<div class="dec-row"><div class="dec-top"><div><div class="dec-nom">' + _centEsc(g.nom) + '</div><div class="dec-lots">' + g.lots.map(l => _centEsc((l.num || '') + ' ' + (l.nom || ''))).join(' · ') + '</div><div class="dec-contact">' + contact + '</div>' + saisie + '</div>' +
+      '<div class="dec-statut" role="status">' + _centEsc(chdStatutTexte(g)) + '</div></div>' + detail + (lis ? '<ul class="dec-inc">' + lis + '</ul>' : '') +
+      '<div class="dec-actions"><button class="btn btn-sm btn-outline" onclick="chdAction(' + i + ',\'mail\')"' + (mail ? '' : ' disabled title="Mail manquant"') + '><i class="ti ti-mail" aria-hidden="true"></i> Demander par mail</button>' +
+      '<button class="btn btn-sm btn-outline" onclick="chdAction(' + i + ',\'sms\')"' + (tel ? '' : ' disabled title="Téléphone manquant"') + '><i class="ti ti-message" aria-hidden="true"></i> Demander par SMS</button>' +
+      '<button class="btn btn-sm btn-outline" onclick="chdAction(' + i + ',\'copie\')"><i class="ti ti-copy" aria-hidden="true"></i> Copier le SMS</button>' +
+      '<button class="btn btn-sm btn-primary" onclick="chdDeposer(' + i + ')"><i class="ti ti-upload" aria-hidden="true"></i> Déposer l’attestation reçue</button></div></div>';
+  }).join('');
+}
+async function chdSauver(art){
+  art.updatedAt = new Date().toISOString();
+  const r = await _phenixFbRefs();
+  await r.setDoc(r.doc(r.db, 'phenix_artisans', String(art.id)), art);
+}
+function chdArtisanOuCreer(g){
+  if (g.artisan) return g.artisan;
+  const rec = { id:'art-' + Date.now(), entreprise:g.nom, nom:g.nom, metier:'À préciser', favori:0, note:0, dispo:'contactez', source:'chiffrage', alerte:'', notes:'Créé depuis Chiffrage (décennale)', tel:'', email:'', siret:'' };
+  _annList.push(rec); g.artisan = rec; return rec;
+}
+async function chdEnregistrerContact(i){
+  const g = _chdG[i]; if (!g) return;
+  const tel = PhenixMsg.normTel((document.getElementById('chd-tel-' + i) || {}).value), mail = PhenixMsg.normMail((document.getElementById('chd-mail-' + i) || {}).value);
+  const rawT = ((document.getElementById('chd-tel-' + i) || {}).value || '').trim(), rawM = ((document.getElementById('chd-mail-' + i) || {}).value || '').trim();
+  if ((rawT && !tel) || (rawM && !mail)){ showToast('⚠️ ' + (rawT && !tel ? 'Numéro de téléphone invalide' : 'Adresse mail invalide')); return; }
+  if (!tel && !mail){ showToast('Saisissez un téléphone ou un mail'); return; }
+  const art = chdArtisanOuCreer(g); if (tel) art.tel = tel; if (mail) art.email = mail;
+  try { await chdSauver(art); showToast('✓ Coordonnées enregistrées dans l’Annuaire'); } catch(e){ showToast('⚠️ Enregistrement impossible (droits ou connexion)'); }
+  chdRender();
+}
+async function chdAction(i, type){
+  const g = _chdG[i]; if (!g) return false;
+  const art = chdArtisanOuCreer(g), c = _centC();
+  const contact = (art.nom && _annN(art.nom) !== _annN(g.nom)) ? art.nom : '';
+  const msg = PhenixMsg.preparer('decennale', { contact:contact, entreprise:g.nom, metier:art.metier && art.metier !== 'À préciser' ? art.metier : '', chantier:PhenixMsg.libelleChantier(c) || c.nom || '', lot:g.lots.map(l => l.nom).filter(Boolean).join(' ; '), dateValidite:art.assuranceDate || '' });
+  if (type === 'copie'){ const ok = await PhenixMsg.copier(msg.sms); showToast(ok ? '✓ SMS copié — colle-le dans ta messagerie' : '⚠️ Copie impossible'); return; }
+  const surTel = /Android|iPhone|iPad/i.test(navigator.userAgent);
+  const ok = type === 'mail' ? PhenixMsg.ouvrirMail(art.email, msg) : PhenixMsg.ouvrirSms(art.tel, msg);
+  if (ok && type === 'sms' && !surTel) PhenixMsg.copier(msg.sms);
+  if (!ok){ showToast('⚠️ ' + (type === 'mail' ? 'Mail' : 'Téléphone') + ' manquant ou invalide'); return false; }
+  const deja = art.decennaleStatut === 'demandee' && (art.decennaleDemandeLe || '') < _chdAuj();
+  art.decennaleStatut = 'demandee'; art.decennaleDemandeLe = _chdAuj(); art.decennaleCanal = type;
+  art.decennaleRelances = deja ? (art.decennaleRelances || 0) + 1 : (art.decennaleRelances || 0);
+  try { await chdSauver(art); } catch(e){ showToast('⚠️ Brouillon ouvert, mais suivi non enregistré (droits ou connexion)'); }
+  showToast(type === 'mail' ? '✓ Brouillon de mail ouvert — relis et envoie' : '✓ SMS préparé — il ne reste qu’à envoyer (texte aussi copié au cas où)');
+  chdRender(); return true;
+}
+function chdAFaire(){
+  return _chdG.map((g, i) => ({ g:g, i:i })).filter(x => {
+    const a = x.g.artisan;
+    if (a && a.decennaleStatut === 'recue' && !PhenixDecennale.resume(chdControles(x.g)).bloquants) return false;
+    if (a && a.decennaleStatut === 'demandee' && a.decennaleDemandeLe === _chdAuj()) return false;
+    return true;
+  });
+}
+function chdPreparerFile(){
+  _chdG = chdGroupes();
+  const aFaire = chdAFaire(); _chdFile = []; _chdPos = 0;
+  const sansContact = [], fixeSeul = [];
+  aFaire.forEach(x => { const a = x.g.artisan || {}, mail = PhenixMsg.normMail(a.email), tel = PhenixMsg.normTel(a.tel);
+    if (mail) _chdFile.push({ i:x.i, canal:'mail' }); if (tel && PhenixMsg.estMobile(tel)) _chdFile.push({ i:x.i, canal:'sms' });
+    if (tel && !PhenixMsg.estMobile(tel)) fixeSeul.push(x.g.nom); if (!mail && !tel) sansContact.push(x.g.nom); });
+  const z = document.getElementById('chd-batch'); z.style.display = '';
+  if (!aFaire.length){ z.innerHTML = '<div class="dec-row">Toutes les attestations sont déjà reçues ou demandées aujourd’hui.</div>'; return; }
+  const nbMail = _chdFile.filter(x => x.canal === 'mail').length, nbSms = _chdFile.length - nbMail;
+  z.innerHTML = '<div class="dec-row" role="region" aria-label="Demande groupée"><div class="dec-nom">Demande groupée — ' + aFaire.length + ' artisan' + (aFaire.length > 1 ? 's' : '') + '</div>' +
+    '<div class="dec-contact">' + _chdFile.length + ' message' + (_chdFile.length > 1 ? 's' : '') + ' à envoyer : ' + nbMail + ' mail' + (nbMail > 1 ? 's' : '') + ' et ' + nbSms + ' SMS (aux numéros de mobile uniquement).</div>' +
+    (fixeSeul.length ? '<div class="dec-contact">Numéro fixe, pas de SMS possible : ' + _centEsc(fixeSeul.join(', ')) + '.</div>' : '') +
+    (sansContact.length ? '<div class="dec-contact">⚠ Aucun contact : ' + _centEsc(sansContact.join(', ')) + ' (à compléter ci-dessous).</div>' : '') +
+    '<div class="dec-actions"><button class="btn btn-primary" id="chd-suivant" onclick="chdSuivant()"' + (_chdFile.length ? '' : ' disabled') + '>' + chdLibelleSuivant() + '</button><button class="btn btn-sm btn-outline" onclick="document.getElementById(\'chd-batch\').style.display=\'none\'">Fermer</button></div><div class="dec-contact" id="chd-progres" role="status"></div></div>';
+}
+function chdLibelleSuivant(){
+  if (_chdPos >= _chdFile.length) return 'Terminé';
+  const x = _chdFile[_chdPos], g = _chdG[x.i];
+  return 'Ouvrir le message suivant (' + (_chdPos + 1) + ' / ' + _chdFile.length + ') — ' + (x.canal === 'mail' ? 'mail' : 'SMS') + ' à ' + g.nom;
+}
+async function chdSuivant(){
+  if (_chdPos >= _chdFile.length) return;
+  const btn = document.getElementById('chd-suivant'); btn.disabled = true;
+  const x = _chdFile[_chdPos], g = _chdG[x.i], ok = await chdAction(x.i, x.canal), prog = document.getElementById('chd-progres');
+  _chdPos++; const reste = _chdFile.length - _chdPos;
+  if (prog) prog.textContent = (ok ? '✓ ' : '✖ Non ouvert : ') + (x.canal === 'mail' ? 'mail' : 'SMS') + ' pour ' + g.nom + (reste ? ' — ' + reste + ' message' + (reste > 1 ? 's' : '') + ' restant' + (reste > 1 ? 's' : '') + '.' : ' — c’était le dernier.');
+  const b2 = document.getElementById('chd-suivant'); if (b2){ b2.textContent = chdLibelleSuivant(); b2.disabled = _chdPos >= _chdFile.length; }
+}
+async function chdUpload(path, dataUrl){
+  try {
+    const r = await _phenixFbRefs();
+    const st = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js');
+    const fileRef = st.ref(st.getStorage(r.app), path), parts = dataUrl.split(',');
+    await st.uploadString(fileRef, parts[1], 'base64', { contentType:parts[0].match(/data:([^;]+)/)[1] });
+    return await st.getDownloadURL(fileRef);
+  } catch(e){ console.error('Storage upload error:', e); return null; }
+}
+function chdDeposer(i){
+  const g = _chdG[i]; if (!g) return;
+  const input = document.createElement('input'); input.type = 'file'; input.accept = 'application/pdf,.pdf';
+  input.onchange = () => {
+    const file = input.files[0]; if (!file) return;
+    if (file.type !== 'application/pdf'){ showToast('⚠️ Déposez l’attestation au format PDF'); return; }
+    showToast('Lecture de l’attestation…');
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const dataUrl = reader.result, att = await PhenixDecennale.lire(dataUrl.split(',')[1]), art = chdArtisanOuCreer(g), c = _centC();
+        const path = 'financement/' + (c.projetId || 'sans-projet') + '/decennale_' + art.id + '_' + Date.now() + '.pdf';
+        const url = await chdUpload(path, dataUrl);
+        art.decennaleStatut = 'recue'; art.decennaleRecueLe = _chdAuj(); art.decennaleAtt = att;
+        if (url){ art.decennaleUrl = url; art.decennalePath = path; }
+        if (!art.siret && att.siret) art.siret = att.siret;
+        if (att.police) art.assurance = att.police;
+        if (att.dateFin) art.assuranceDate = att.dateFin;
+        await chdSauver(art);
+        const r = PhenixDecennale.resume(PhenixDecennale.controler(att, { artisan:art, lots:g.lots, finChantier:chdFin() }));
+        showToast(r.bloquants ? '✖ Attestation lue : incohérence bloquante' : r.attention ? '⚠ Attestation lue : ' + r.attention + ' point(s) à vérifier' : '✔ Attestation lue : conforme');
+        chdRender();
+      } catch(e){ console.error('Décennale :', e); showToast('⚠️ Lecture de l’attestation impossible : ' + (e.message || 'erreur')); }
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
 }
 </script>
 <datalist id="ann-names"></datalist>
