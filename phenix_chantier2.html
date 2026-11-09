@@ -17,8 +17,11 @@
    • BUREAU (ordinateur) : Lots (liste), Planning (Gantt), Réserves, À traiter (validation du compte rendu).
    Moteur 3D : phenix_maquette3d.js, le même que le Carnet (écrit une seule fois). [Moteur partagé]
    Mêmes collections Firestore que l'ancien Chantier (phenix_ch_*) : aucune nouvelle collection, aucune règle à changer.
-   Pas encore repris : Finances (suivi, situations), Plans et pastilles, Messages artisans, Équipe & accès (→ Paramètres du shell).
+   Pas encore repris : honoraires et commissions, Plans et pastilles, Messages artisans, Équipe & accès (→ Paramètres du shell).
 ══════════════════════════════════════════════════════════════════
+   09/11/2026 — Onglet FINANCES (Bureau) : budget des lots, facturé, payé, reste à facturer, suivi par lot (alerte facturé en avance sur l'avancement),
+     situations et factures (saisie, modification, suppression, filtre par statut). Mêmes données que l'ancien Chantier (phenix_ch_factures) ;
+     une situation « payée » crée la charge « sous-traitance » dans Phénix Dossier (même identifiant que l'ancien module).
 -->
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
@@ -161,7 +164,7 @@ if (!DEMO) {
   let db;
   try { db = S.initializeFirestore(app, { localCache: S.persistentLocalCache({ tabManager: S.persistentMultipleTabManager() }) }); } catch (e) { db = S.getFirestore(app); }
   const auth = U.getAuth(app);
-  const COLS = { chantiers:'phenix_ch_chantiers', lots:'phenix_ch_lots', intervenants:'phenix_ch_intervenants', reserves:'phenix_ch_reserves', crs:'phenix_ch_crs' };
+  const COLS = { chantiers:'phenix_ch_chantiers', lots:'phenix_ch_lots', intervenants:'phenix_ch_intervenants', reserves:'phenix_ch_reserves', crs:'phenix_ch_crs', factures:'phenix_ch_factures' };
   const MEDIA = 'phenix_media', CH = 700000;
   Object.assign(window.FB, {
     ready: true,
@@ -182,6 +185,8 @@ if (!DEMO) {
       return Promise.all(w);
     },
     async getMedia(id) { const m = await S.getDoc(S.doc(db, MEDIA, id)); if (!m.exists()) return null; let du = ''; for (let i = 0; i < (m.data().parts || 0); i++) { const c = await S.getDoc(S.doc(db, MEDIA, id + '__' + i)); if (c.exists()) du += c.data().d || ''; } return du; },
+    saveCharge(c) { return S.setDoc(S.doc(db, 'phenix_charges', String(c.id)), c); },
+    delCharge(id) { return S.deleteDoc(S.doc(db, 'phenix_charges', String(id))); },
     publishClient(pid, payload) { return S.setDoc(S.doc(db, 'phenix_chantier_client', String(pid)), payload); }
   });
   // connexion automatique quand le module est ouvert dans le Shell (identique à l'ancien Chantier)
@@ -230,7 +235,7 @@ function zoneOf(lot){ for (var i = 0; i < ZONE_RE.length; i++) if (ZONE_RE[i][1]
 function phaseIdx(n){ for (var i = 0; i < PHASES.length; i++) if (n >= PHASES[i][1] && n <= PHASES[i][2]) return i; return -1; }
 
 /* ═══════════ Données ═══════════ */
-var D = { chantiers:[], lots:[], intervenants:[], reserves:[], crs:[] };
+var D = { chantiers:[], lots:[], intervenants:[], reserves:[], crs:[], factures:[] };
 var S = { mode:'terrain', tab:'lots', view:'liste', zoom:'mois', cid:null, lotId:null, role:'', pending:false, online:navigator.onLine, real:false, in3d:'out', maq:null, user:'' };
 function chantier(){ return D.chantiers.filter(function(c){ return c.id == S.cid; })[0] || null; }
 function lotsOf(){ return D.lots.filter(function(l){ return l.chantierId == S.cid; }).sort(function(a, b){ return String(a.nom).localeCompare(String(b.nom), 'fr', {numeric:true}); }); }
@@ -245,6 +250,8 @@ function demoSeed(){
   function L(id, nom, st, av, d, f, ent){ return {id:id, chantierId:1, nom:nom, statut:st, av:av, debut:d, fin:f, entrepriseNom:ent}; }
   D.lots = [L(11,'01 — Gros œuvre','termine',100,'2026-09-07','2026-10-15','[Entreprise maçonnerie]'), L(12,'02 — Charpente','termine',100,'2026-10-11','2026-10-22','[Entreprise charpente]'), L(14,'04 — Couverture','en_cours',60,'2026-10-19','2026-11-19','[Entreprise couverture]'), L(15,'05 — Menuiseries extérieures','attribue',0,'2026-11-15','2026-12-03','[Entreprise menuiseries]'), L(16,'06 — Électricité','attribue',0,'2026-11-29','2026-12-17','[Entreprise électricité]'), L(17,'07 — Plomberie','chiffrage',0,'2026-11-29','2026-12-17',''), L(18,'08 — Isolation, plâtrerie','attribue',0,'2026-12-13','2027-01-14','[Entreprise plâtrerie]')];
   D.reserves = []; D.crs = [];
+  D.factures = [{id:901, chantierId:1, lotId:11, num:'SIT-01', date:'2026-09-30', ht:18000, statut:'payee', notes:'Situation n° 1'}, {id:902, chantierId:1, lotId:11, num:'SIT-02', date:'2026-10-20', ht:14500, statut:'payee', notes:'Solde du lot'}, {id:903, chantierId:1, lotId:14, num:'SIT-01', date:'2026-11-02', ht:6200, statut:'validee', notes:''}, {id:904, chantierId:1, lotId:12, num:'FAC-02', date:'2026-09-15', ht:5200, statut:'retard', notes:''}];
+  D.lots.forEach(function(l){ l.ht = {11:32500, 12:9800, 14:15400, 15:12600, 16:8900, 17:7400, 18:21300}[l.id] || 0; l.tva = 10; });
   S.cid = 1;
 }
 
@@ -515,14 +522,15 @@ function sendCR(){
 /* ═══════════ Mode Bureau ═══════════ */
 function renderTabs(){
   var pend = D.crs.filter(function(c){ return c.aValider && c.chantierId == S.cid; }).length;
-  var T = [['lots', 'Lots et planning'], ['reserves', 'Réserves'], ['atraiter', 'À traiter']];
-  $('tabs').innerHTML = T.map(function(t){ return '<button type="button" data-tab="' + t[0] + '"' + (S.tab === t[0] ? ' aria-current="page"' : '') + '>' + t[1] + (t[0] === 'atraiter' && pend ? '<span class="badge">' + pend + '</span>' : '') + '</button>'; }).join('') + '<span style="flex:1"></span><button type="button" id="old-ch" title="Finances, plans et pastilles, messages : pas encore repris dans cette version">Finances, plans, messages (ancien module) ↗</button>';
+  var T = [['lots', 'Lots et planning'], ['finances', 'Finances'], ['reserves', 'Réserves'], ['atraiter', 'À traiter']];
+  $('tabs').innerHTML = T.map(function(t){ return '<button type="button" data-tab="' + t[0] + '"' + (S.tab === t[0] ? ' aria-current="page"' : '') + '>' + t[1] + (t[0] === 'atraiter' && pend ? '<span class="badge">' + pend + '</span>' : '') + '</button>'; }).join('') + '<span style="flex:1"></span><button type="button" id="old-ch" title="Finances, plans et pastilles, messages : pas encore repris dans cette version">Plans, messages (ancien module) ↗</button>';
   [].forEach.call($('tabs').querySelectorAll('[data-tab]'), function(b){ b.onclick = function(){ S.tab = b.getAttribute('data-tab'); renderBureau(); renderTabs(); }; });
   $('old-ch').onclick = function(){ window.open('phenix_chantier.html', '_blank'); };
 }
 function renderBureau(){
   var b = $('bureau'); if (S.mode !== 'bureau') return;
   if (S.tab === 'lots') b.innerHTML = S.view === 'liste' ? viewListe() : viewPlanning();
+  else if (S.tab === 'finances') b.innerHTML = viewFinances();
   else if (S.tab === 'reserves') b.innerHTML = viewReserves();
   else b.innerHTML = viewATraiter();
   bindBureau();
@@ -588,6 +596,9 @@ function viewATraiter(){
 }
 function bindBureau(){
   var b = $('bureau'), q = function(s, f){ [].forEach.call(b.querySelectorAll(s), f); };
+  q('[data-fnew]', function(x){ x.onclick = function(){ sheetFacture(null); }; });
+  q('[data-fedit]', function(x){ x.onclick = function(){ sheetFacture(+x.getAttribute('data-fedit')); }; });
+  q('[data-fstat]', function(x){ x.onclick = function(){ S.fstat = x.getAttribute('data-fstat'); renderBureau(); }; });
   q('[data-view]', function(x){ x.onclick = function(){ S.view = x.getAttribute('data-view'); renderBureau(); }; });
   q('[data-zoom]', function(x){ x.onclick = function(){ S.zoom = x.getAttribute('data-zoom'); renderBureau(); }; });
   if ($('g-today')) $('g-today').onclick = function(){ var g = $('g-scroll'), r = rangeDates(lotsOf()), ppd = S.zoom === 'mois' ? 5 : 14; g.scrollLeft = Math.max(0, (r.todayPct / 100) * r.tot * ppd - g.clientWidth / 2 + 230); };
@@ -607,6 +618,90 @@ function validerCR(id){
   (c.reservesNouvelles || []).forEach(function(r){ n++; var photos = r.photoMediaId ? [{ mediaId:r.photoMediaId, caption:'' }] : []; var rs = { id:uid(), chantierId:c.chantierId, ref:'R' + String(n).padStart(2, '0'), titre:r.titre, description:r.description || '', lieu:r.lieu || '', lotId:r.lotId || null, intervId:null, priorite:'normale', origine:'visite ' + c.num, echeance:'', statut:'ouverte', dateLevee:'', photos:photos }; D.reserves.push(rs); save('reserves', rs); });
   c.aValider = false; c.valideLe = new Date().toISOString(); save('crs', c);
   toast('Compte rendu validé : lots et réserves mis à jour.'); renderBureau(); renderTabs();
+}
+/* ═══════════ Finances : situations de travaux, suivi par lot ═══════════
+   Mêmes données que l'ancien Chantier (phenix_ch_factures). Une situation « payée » crée la charge « sous-traitance »
+   dans Phénix Dossier (marge réelle sans double saisie), comme avant. Honoraires et commissions : pas repris ici. */
+var FAC_ST = { a_valider:['À valider','var(--text2)'], validee:['Validée','var(--accent)'], payee:['Payée','var(--green)'], retard:['En retard','var(--amber)'], litige:['Litige','var(--red)'] };
+function facIco(k){
+  var c = FAC_ST[k][1], a = 'width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="' + c + '" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0"';
+  if (k === 'payee') return '<svg ' + a + '><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+  if (k === 'validee') return '<svg ' + a + '><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="' + c + '" stroke="none"/></svg>';
+  if (k === 'retard') return '<svg ' + a + '><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.2v.1"/></svg>';
+  if (k === 'litige') return '<svg ' + a + '><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 8l8 8M16 8l-8 8"/></svg>';
+  return '<svg ' + a + ' stroke-dasharray="3.5 3.5"><circle cx="12" cy="12" r="8"/></svg>';
+}
+function facSt(k){ var s = FAC_ST[k] || FAC_ST.a_valider; return '<span class="st" style="color:' + s[1] + '">' + facIco(FAC_ST[k] ? k : 'a_valider') + s[0] + '</span>'; }
+function fE(n){ return (Math.round((+n || 0) * 100) / 100).toLocaleString('fr-FR', {minimumFractionDigits:0, maximumFractionDigits:2}) + ' €'; }
+function lotTva(l){ return l && l.tva != null && l.tva !== '' ? +l.tva : 20; }
+function facsOf(){ return D.factures.filter(function(f){ return f.chantierId == S.cid; }); }
+function facSum(list, st){ return list.filter(function(f){ return !st || f.statut === st; }).reduce(function(t, f){ return t + (+f.ht || 0); }, 0); }
+function viewFinances(){
+  var ls = lotsOf(), all = facsOf(), budget = ls.reduce(function(t, l){ return t + (+l.ht || 0); }, 0), budgetTtc = ls.reduce(function(t, l){ return t + (+l.ht || 0) * (1 + lotTva(l) / 100); }, 0);
+  var fact = facSum(all), paye = facSum(all, 'payee'), valide = facSum(all, 'validee'), reste = budget - fact;
+  var pF = budget ? Math.min(100, Math.round(fact / budget * 100)) : 0, pP = budget ? Math.min(100, Math.round(paye / budget * 100)) : 0;
+  var kpi = function(label, val, sub, warn){ return '<div class="card" style="display:flex;flex-direction:column;gap:4px"><div class="eyebrow">' + label + '</div><div style="font:400 24px var(--fd)' + (warn ? ';color:#f3dfb0' : '') + '">' + (warn ? '⚠ ' : '') + val + '</div><div class="muted" style="font-size:13px">' + sub + '</div></div>'; };
+  var h = '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:12px"><h2 style="font-size:24px">Finances</h2><span class="muted">Situations de travaux et suivi par lot</span><span class="sp" style="flex:1"></span><button class="btn pri" type="button" data-fnew="1">+ Situation</button></div>';
+  h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:12px">' +
+    kpi('Budget des lots HT', fE(budget), 'TTC : ' + fE(budgetTtc)) + kpi('Facturé HT', fE(fact), all.length + ' situation' + (all.length > 1 ? 's' : '')) +
+    kpi('Payé HT', fE(paye), 'Validé, à payer : ' + fE(valide)) + kpi(reste < 0 ? 'Dépassement HT' : 'Reste à facturer HT', fE(Math.abs(reste)), reste < 0 ? 'Facturé au-delà du budget des lots' : 'Non encore facturé', reste < 0) + '</div>';
+  h += '<div class="card" style="margin-bottom:14px;display:flex;flex-direction:column;gap:8px"><div style="font-weight:700">' + pF + ' % facturé · ' + pP + ' % payé</div><div class="bar" aria-hidden="true" style="position:relative"><i style="width:' + pF + '%"></i><span style="position:absolute;left:0;top:0;bottom:0;width:' + pP + '%;background:var(--green);opacity:.9"></span></div><div class="muted" style="font-size:13px">Bande hachurée bleue : facturé · bande pleine verte : payé.</div></div>';
+  /* par lot */
+  h += '<h3 style="font-size:20px;margin:6px 0 8px">Par lot</h3><div class="tbl"><div style="min-width:720px"><div class="row h" style="grid-template-columns:44px minmax(160px,1fr) 120px 120px 120px 130px"><span></span><span>LOT</span><span>MARCHÉ HT</span><span>FACTURÉ HT</span><span>PAYÉ HT</span><span>FACTURÉ / FAIT</span></div>';
+  if (!ls.length) h += '<div class="row" style="grid-template-columns:1fr"><span class="muted" style="padding:0 14px">Aucun lot pour ce chantier.</span></div>';
+  ls.forEach(function(l, i){
+    var fl = all.filter(function(f){ return f.lotId == l.id; }), ft = facSum(fl), pt = facSum(fl, 'payee'), m = +l.ht || 0, pc = m ? Math.round(ft / m * 100) : null, av = l.av || 0;
+    var ahead = pc != null && pc > av + 10, over = m && ft > m;
+    h += '<div class="row" style="grid-template-columns:44px minmax(160px,1fr) 120px 120px 120px 130px"><span class="muted" style="font-weight:600">' + esc(lotNum(l, i)) + '</span><div><div style="font-weight:600">' + esc(lotLabel(l)) + '</div><div class="muted" style="font-size:13px">' + (entrepriseOf(l) ? esc(entrepriseOf(l)) : 'Aucune entreprise') + '</div></div>' +
+      '<span>' + (m ? fE(m) : '<span class="muted">non chiffré</span>') + '</span><span>' + fE(ft) + '</span><span>' + fE(pt) + '</span><span style="font-weight:600">' + (pc == null ? '—' : pc + ' % / ' + av + ' %') + (over ? '<br><span style="color:#f3dfb0;font-size:12px">⚠ au-delà du marché</span>' : ahead ? '<br><span style="color:#f3dfb0;font-size:12px">⚠ facturé en avance</span>' : '') + '</span></div>';
+  });
+  h += '</div></div>';
+  /* situations */
+  var f = S.fstat || '', list = all.filter(function(x){ return !f || x.statut === f; }).sort(function(a, b){ return String(b.date).localeCompare(String(a.date)); });
+  h += '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:18px 0 8px"><h3 style="font-size:20px">Situations et factures</h3><span class="seg light"><button type="button" data-fstat="" aria-pressed="' + (!f) + '">Toutes</button>' + Object.keys(FAC_ST).map(function(k){ return '<button type="button" data-fstat="' + k + '" aria-pressed="' + (f === k) + '">' + FAC_ST[k][0] + '</button>'; }).join('') + '</span></div>';
+  if (!list.length) return h + '<div class="card muted">' + (all.length ? 'Aucune situation avec ce statut.' : 'Aucune situation enregistrée. « + Situation » pour saisir la première.') + '</div>';
+  h += '<div class="tbl"><div style="min-width:800px"><div class="row h" style="grid-template-columns:124px 110px minmax(160px,1fr) 120px 120px 130px 100px"><span>DATE</span><span>N°</span><span>LOT</span><span>HT</span><span>TTC EST.</span><span>STATUT</span><span></span></div>';
+  list.forEach(function(x){
+    var l = D.lots.filter(function(y){ return y.id == x.lotId; })[0], age = Math.round((Date.now() - new Date(x.date)) / 864e5), late = x.statut !== 'payee' && (x.statut === 'retard' || age > 45);
+    h += '<div class="row" style="grid-template-columns:124px 110px minmax(160px,1fr) 120px 120px 130px 100px"><span>' + frDate(x.date) + '</span><span style="font-weight:600">' + esc(x.num || '—') + '</span><div><div>' + (l ? esc(lotLabel(l)) : 'Sans lot') + '</div>' + (x.notes ? '<div class="muted" style="font-size:13px">' + esc(x.notes) + '</div>' : '') + '</div><span style="font-weight:600">' + fE(x.ht) + '</span><span class="muted">' + fE((+x.ht || 0) * (1 + lotTva(l) / 100)) + '</span><div>' + facSt(x.statut) + (x.statut !== 'payee' && age >= 0 ? '<div class="muted" style="font-size:12px">' + (late ? '⚠ ' : '') + age + ' j</div>' : '') + '</div><button class="btn" type="button" data-fedit="' + x.id + '" style="min-height:44px;padding:0 12px">Modifier</button></div>';
+  });
+  return h + '</div></div><div class="muted" style="margin-top:10px">Une situation marquée « Payée » crée la charge « sous-traitance » dans Phénix Dossier. Le statut est écrit avec une icône et un mot : jamais par la couleur seule.</div>';
+}
+function sheetFacture(id){
+  var x = id ? D.factures.filter(function(y){ return y.id == id; })[0] : null; if (id && !x) return;
+  var bg = document.createElement('div'); bg.className = 'sheetbg';
+  var lots = lotsOf(), lotOpts = '<option value="">Sans lot</option>' + lots.map(function(l, i){ return '<option value="' + l.id + '"' + (x && x.lotId == l.id ? ' selected' : '') + '>' + esc(lotNum(l, i)) + ' · ' + esc(lotLabel(l)) + '</option>'; }).join('');
+  var stOpts = Object.keys(FAC_ST).map(function(k){ return '<option value="' + k + '"' + ((x ? x.statut : 'a_valider') === k ? ' selected' : '') + '>' + FAC_ST[k][0] + '</option>'; }).join('');
+  var F = function(label, inner){ return '<label style="display:flex;flex-direction:column;gap:4px"><span class="eyebrow">' + label + '</span>' + inner + '</label>'; };
+  bg.innerHTML = '<div class="sheet"><div class="eyebrow">' + (x ? 'Modifier la situation' : 'Nouvelle situation ou facture') + '</div>' +
+    F('Lot', '<select id="f-lot" style="min-height:48px">' + lotOpts + '</select>') + F('N° de situation / facture', '<input id="f-num" placeholder="SIT-01" value="' + esc(x ? x.num : '') + '" style="min-height:48px">') +
+    F('Date', '<input id="f-date" type="date" value="' + esc(x ? x.date : today()) + '" style="min-height:48px">') + F('Montant HT (€)', '<input id="f-ht" type="number" min="0" step="0.01" inputmode="decimal" value="' + (x ? x.ht : '') + '" style="min-height:48px">') +
+    F('Statut', '<select id="f-st" style="min-height:48px">' + stOpts + '</select>') + F('Commentaire', '<textarea id="f-notes" rows="2" placeholder="Objet, acompte n°, situation n°…">' + esc(x ? x.notes : '') + '</textarea>') +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn big pri" type="button" id="f-ok">Enregistrer</button><button class="btn big ghost" type="button" data-x="1">Annuler</button>' + (x ? '<span style="flex:1"></span><button class="btn big ghost" type="button" id="f-del">Supprimer</button>' : '') + '</div></div>';
+  document.body.appendChild(bg);
+  bg.onclick = function(e){ if (e.target === bg || e.target.getAttribute('data-x')) bg.remove(); };
+  bg.querySelector('#f-ok').onclick = function(){
+    var ht = parseFloat(bg.querySelector('#f-ht').value) || 0; if (!ht) { toast('Montant HT requis.'); return; }
+    var f = x || { id:uid(), chantierId:S.cid, createdAt:new Date().toISOString(), createdBy:S.user || '' };
+    f.lotId = bg.querySelector('#f-lot').value ? +bg.querySelector('#f-lot').value : null; f.num = bg.querySelector('#f-num').value.trim(); f.date = bg.querySelector('#f-date').value || today();
+    f.ht = ht; f.statut = bg.querySelector('#f-st').value; f.notes = bg.querySelector('#f-notes').value.trim(); f.updatedAt = new Date().toISOString(); f.updatedBy = S.user || '';
+    if (!x) D.factures.push(f); save('factures', f); syncCharge(f); bg.remove(); toast('Situation enregistrée'); renderBureau();
+  };
+  if (bg.querySelector('#f-del')) bg.querySelector('#f-del').onclick = function(){
+    if (!confirm('Supprimer cette situation ? Elle ne pourra pas être récupérée.')) return;
+    D.factures = D.factures.filter(function(y){ return y.id !== x.id; });
+    if (!FB.demo) { FB.del('factures', x.id).catch(function(e){ toast('⚠ Suppression impossible : ' + (e && e.message || e)); }); FB.delCharge('charge-auto-chantier-' + x.id).catch(function(){}); }
+    bg.remove(); toast('Situation supprimée'); renderBureau();
+  };
+}
+/* Situation payée = charge « sous-traitance » dans Phénix Dossier (même identifiant que l'ancien Chantier : pas de doublon) */
+function syncCharge(f){
+  if (FB.demo || !FB.saveCharge) return;
+  var cid = 'charge-auto-chantier-' + f.id, c = D.chantiers.filter(function(y){ return y.id == f.chantierId; })[0];
+  if (f.statut !== 'payee' || !c || !c.projetId) { FB.delCharge(cid).catch(function(){}); return; }
+  var l = f.lotId ? D.lots.filter(function(y){ return y.id == f.lotId; })[0] : null;
+  FB.saveCharge({ id:cid, libelle:'Sous-traitance — ' + (l ? l.nom : c.nom || 'Chantier') + (f.num ? ' (' + f.num + ')' : ''), categorie:'sous_traitance', projetId:String(c.projetId), type:'variable', montantHt:f.ht, tvaTaux:20, tvaDed:1,
+    date:f.date || today(), frequence:'ponctuel', notes:'Créée automatiquement depuis Chantier — facture ' + (f.num || f.id), updatedAt:new Date().toISOString() }).catch(function(e){ console.warn('Charge Dossier', e && e.message); });
 }
 /* Glisser une barre du Planning : décaler / changer les dates (jour entier) */
 function barDrag(el){
@@ -635,7 +730,7 @@ function ensureChantier(){
 }
 function startData(){
   var n = 0, any = function(){ ensureChantier(); if (S.mode === 'terrain') { renderSide(); renderTiles(); renderDock(); applyStage(); renderTop(); } else { renderBureau(); renderTabs(); } };
-  ['chantiers', 'lots', 'intervenants', 'reserves', 'crs'].forEach(function(k){ FB.listen(k, function(a, pend){ D[k] = a; S.pending = !!pend; any(); }); });
+  ['chantiers', 'lots', 'intervenants', 'reserves', 'crs', 'factures'].forEach(function(k){ FB.listen(k, function(a, pend){ D[k] = a; S.pending = !!pend; any(); }); });
 }
 var ADMIN_EMAILS = ['contact@phenixarchitecte.fr'];   /* même repli que l'ancien Chantier */
 function authed(email){
