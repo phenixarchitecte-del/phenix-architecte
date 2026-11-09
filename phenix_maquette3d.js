@@ -15,6 +15,9 @@
     GLTFLoader = (await import('three/addons/loaders/GLTFLoader.js')).GLTFLoader;
   }catch(e){ window.dispatchEvent(new Event('px3d-fail')); return; }
 
+  /* [Multi-instances] tout l'état est dans la fonction make() : PXModel (instance par défaut, inchangée pour le Carnet et le Terrain)
+     et PXModel.create() (autres instances, ex. miniatures de la page de garde du Chantier). Le moteur reste écrit UNE seule fois. */
+  function make(){
   var M = { ready:false, isModel:true, rooms:[], loader:null, cfg:null };
   var host, renderer, scene, camera, controls, root, spots = {}, zones = [], onPick = function(){}, flb = null, ldr = null;
   var mode = 'out', active = false, dirty = true, loopOn = false, anim = null, forceId = null, floorI = 0, states = {};
@@ -269,7 +272,7 @@
   M.init = function(el, zs, pick){
     if(M.ready) return; host = el; zones = zs; onPick = pick;
     try{ renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false, powerPreference:'high-performance' }); }
-    catch(e){ try{ renderer = new THREE.WebGLRenderer({ antialias:false, alpha:false }); } catch(e2){ window.dispatchEvent(new Event('px3d-fail')); return; } }
+    catch(e){ try{ renderer = new THREE.WebGLRenderer({ antialias:false, alpha:false }); } catch(e2){ if(!M.quiet) window.dispatchEvent(new Event('px3d-fail')); if(M.onfail) M.onfail(e2); return; } }
     var small = Math.min(window.innerWidth, window.innerHeight) < 700;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, small ? 1.5 : 2));
     renderer.localClippingEnabled = true; renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -285,7 +288,7 @@
     sun.position.set(14,18,10); scene.add(sun); scene.add(sun.target);
     controls = new OrbitControls(camera, cv); controls.enableDamping = true; controls.dampingFactor = .08; controls.maxPolarAngle = Math.PI/2 - .03; controls.screenSpacePanning = false;
     controls.addEventListener('change', function(){ dirty = true; kick(); });
-    controls.addEventListener('start', function(){ anim = null; forceId = null; dirty = true; kick(); if(!M._touched){ M._touched = true; window.dispatchEvent(new Event('px3d-touch')); } var t = document.getElementById('h3-hint'); if(t) t.style.display = 'none'; });
+    controls.addEventListener('start', function(){ anim = null; forceId = null; dirty = true; kick(); if(!M._touched){ M._touched = true; if(!M.quiet) window.dispatchEvent(new Event('px3d-touch')); } var t = document.getElementById('h3-hint'); if(t) t.style.display = 'none'; });
     resize(); if(window.ResizeObserver) new ResizeObserver(resize).observe(host); else window.addEventListener('resize', resize);
     var down = null;
     cv.addEventListener('pointerdown', function(ev){ down = { x:ev.clientX, y:ev.clientY, t:performance.now() }; });
@@ -298,8 +301,8 @@
     Promise.resolve(M.loader ? M.loader() : null).then(function(buf){
       if(!buf) throw new Error('modèle absent');
       return new Promise(function(ok, ko){ new GLTFLoader().parse(buf, '', ok, ko); });
-    }).then(function(g){ prepare(g); if(ldr){ ldr.remove(); ldr = null; } renderer.render(scene, camera); placeSpots(); window.dispatchEvent(new Event('px3d-model-ok')); })
-      .catch(function(e){ try{ console.error('PXMODEL '+(e&&e.message||e)); }catch(_){} window.dispatchEvent(new Event('px3d-fail')); });
+    }).then(function(g){ prepare(g); if(ldr){ ldr.remove(); ldr = null; } renderer.render(scene, camera); placeSpots(); if(!M.quiet) window.dispatchEvent(new Event('px3d-model-ok')); if(M.onload) M.onload(); })
+      .catch(function(e){ try{ console.error('PXMODEL '+(e&&e.message||e)); }catch(_){} if(!M.quiet) window.dispatchEvent(new Event('px3d-fail')); if(M.onfail) M.onfail(e); });
   };
   M.setLook = function(l){ M._look = l; applyLook(); };
   M.setStage = function(n){
@@ -324,6 +327,11 @@
   M.views = function(){ return (M.cfg && M.cfg.views) || []; };
   M.goView = function(id){ if(!(M.ready && root)) return; var v = M.views().filter(function(x){ return x.id === id; })[0]; if(v) fly(new THREE.Vector3(v.p[0],v.p[1],v.p[2]), new THREE.Vector3(v.tg[0],v.tg[1],v.tg[2]), 900); };
   M.zoomIn = function(f){ if(!M.ready) return; var d = camera.position.clone().sub(controls.target); d.multiplyScalar(f); camera.position.copy(controls.target).add(d); dirty = true; kick(); };
-  window.PXModel = M;
+  /* image de la maquette telle qu'affichée (JPEG), pour les miniatures ; libération du contexte WebGL */
+  M.snapshot = function(){ if(!(M.ready && root)) return ''; try{ renderer.render(scene, camera); return renderer.domElement.toDataURL('image/jpeg', .85); }catch(e){ return ''; } };
+  M.dispose = function(){ try{ active = false; var gl = renderer.getContext(), ext = gl && gl.getExtension('WEBGL_lose_context'); renderer.dispose(); if(ext) ext.loseContext(); if(host) host.innerHTML = ''; }catch(e){} };
+  return M;
+  }
+  var M0 = make(); M0.create = make; window.PXModel = M0;
   window.dispatchEvent(new Event('px3dm-ready'));
 })();

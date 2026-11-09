@@ -28,7 +28,7 @@
      les messages non lus apparaissent aussi dans « À traiter ». Mêmes données que l'ancien Chantier.
    09/11/2026 (4) — PAGE DE GARDE « Chantiers en cours » (à l'ouverture) : une parcelle par chantier, maison isométrique qui se construit avec l'étape réelle,
      état « À débloquer / À surveiller / Rien à signaler » (icône + mot), ce qui bloque (lots en retard, situations en retard, réserves, messages, comptes rendus,
-     visite trop ancienne), prochaine réunion ; un clic sur un point ouvre directement le bon onglet. Bouton « ← Tous les chantiers » pour y revenir.
+     visite trop ancienne), prochaine réunion ; chaque fiche montre la MAQUETTE 3D du Carnet (miniature à l'étape réelle, gardée sur l'appareil) ; un clic sur un point ouvre directement le bon onglet. Bouton « ← Tous les chantiers » pour y revenir.
 -->
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
@@ -326,11 +326,7 @@ function loadMaquette(){
       try{
         var P = window.PXModel;
         if (P.ready) { showTiles(true); return; }   /* une maquette est déjà chargée dans cette page : rechargement requis pour en changer */
-        P.loader = function(){
-          if (m.url) return fetch(m.url).then(function(r){ if (!r.ok) throw new Error('http ' + r.status); return r.arrayBuffer(); });
-          var jobs = []; for (var i = 0; i < m.n; i++) jobs.push(FB.chunk(c.projetId, m.k ? m.k + '_' + i : i));
-          return Promise.all(jobs).then(function(a){ var b = atob(a.join('')), u = new Uint8Array(b.length); for (var k = 0; k < b.length; k++) u[k] = b.charCodeAt(k); return u.buffer; });
-        };
+        P.loader = maqLoader(c, m);
         P.cfg = m;
         P.init($('h3-host'), HZ, function(id){ pickZone(id); });
         P.update(zoneStates()); P.setActive(S.mode === 'terrain');
@@ -340,6 +336,14 @@ function loadMaquette(){
     if (window.PXModel) go(); else { window.addEventListener('px3dm-ready', go, {once:true}); setTimeout(function(){ if (!window.PXModel) showTiles(true); }, 12000); }
   }).catch(function(){ showTiles(true); });
   window.addEventListener('px3d-fail', function(){ showTiles(true); }, {once:true});
+}
+/* chargeur du .glb d'un chantier (url, ou morceaux dans la fiche du portail) : partagé par le Terrain et les miniatures */
+function maqLoader(c, m){
+  return function(){
+    if (m.url) return fetch(m.url).then(function(r){ if (!r.ok) throw new Error('http ' + r.status); return r.arrayBuffer(); });
+    var jobs = []; for (var i = 0; i < m.n; i++) jobs.push(FB.chunk(c.projetId, m.k ? m.k + '_' + i : i));
+    return Promise.all(jobs).then(function(a){ var b = atob(a.join('')), u = new Uint8Array(b.length); for (var k = 0; k < b.length; k++) u[k] = b.charCodeAt(k); return u.buffer; });
+  };
 }
 function showTiles(on){ M3.failed = on; $('tiles').style.display = on ? 'grid' : 'none'; $('h3-host').style.display = on ? 'none' : 'block'; renderStageBar(); renderTiles(); }
 function applyStage(){
@@ -1017,7 +1021,7 @@ function renderHome(){
   if (!list.length) h += '<div class="card muted">' + (all.length ? 'Aucun chantier dans cette catégorie.' : 'Aucun chantier en cours.') + '</div>';
   h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px">' + list.map(function(x){
     var c = x.c, ph = PHASES[phaseIdx(c.etape)];
-    return '<div class="parc ' + x.st + '"><div style="display:flex;gap:10px;align-items:center">' + houseSvg(c.etape) + '<div style="display:flex;flex-direction:column;gap:6px;min-width:0"><h2 style="font-size:24px;line-height:1.15">' + esc(c.nom) + '</h2><span class="st" style="color:' + CH_ST[x.st][1] + '">' + chIco(x.st) + CH_ST[x.st][0] + '</span>' +
+    return '<div class="parc ' + x.st + '"><div style="display:flex;gap:10px;align-items:center"><div data-art="' + c.id + '" style="width:220px;height:160px;flex-shrink:0;border-radius:12px;overflow:hidden;background:#0d1d36;display:flex;align-items:center;justify-content:center">' + houseSvg(c.etape) + '</div><div style="display:flex;flex-direction:column;gap:6px;min-width:0"><h2 style="font-size:24px;line-height:1.15">' + esc(c.nom) + '</h2><span class="st" style="color:' + CH_ST[x.st][1] + '">' + chIco(x.st) + CH_ST[x.st][0] + '</span>' +
       '<span class="muted">' + (c.etape ? 'Étape ' + c.etape + ' sur 26 · ' + esc(ph ? ph[0] : '') : 'Étape non renseignée') + '</span><div class="bar" aria-hidden="true"><i style="width:' + Math.round((c.etape || 0) / 26 * 100) + '%"></i></div>' +
       '<span class="muted" style="font-size:13px">' + (x.lots ? x.done + ' lot' + (x.done > 1 ? 's' : '') + ' terminé' + (x.done > 1 ? 's' : '') + ' sur ' + x.lots + ' · ' + x.avg + ' % fait' : 'Aucun lot') + (c.fin ? ' · fin prévue ' + frDate(c.fin) : '') + '</span></div></div>' +
       (x.flags.length ? '<div style="display:flex;flex-direction:column;gap:6px">' + x.flags.slice(0, 4).map(function(f){ return '<button type="button" class="flag" data-go="' + c.id + '" data-gotab="' + (f.tab || '') + '"><b style="flex-shrink:0">' + (f.lvl === 2 ? '✕ Bloquant' : '⚠ À voir') + '</b><span>' + esc(f.txt) + '</span></button>'; }).join('') + (x.flags.length > 4 ? '<div class="muted" style="font-size:13px">+ ' + (x.flags.length - 4) + ' autre' + (x.flags.length > 5 ? 's' : '') + '</div>' : '') + '</div>' : '<div class="muted">Rien ne bloque ce chantier.</div>') +
@@ -1025,8 +1029,50 @@ function renderHome(){
       '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn pri" type="button" data-go="' + c.id + '" data-gomode="terrain">Ouvrir sur le terrain</button>' + (staff ? '<button class="btn" type="button" data-go="' + c.id + '" data-gomode="bureau">Bureau</button>' : '') + '</div></div>';
   }).join('') + '</div>';
   $('home').innerHTML = h;
+  thQueue(list.map(function(x){ return x.c; }));
   [].forEach.call($('home').querySelectorAll('[data-hf]'), function(b){ b.onclick = function(){ S.hf = b.getAttribute('data-hf'); renderHome(); }; });
   [].forEach.call($('home').querySelectorAll('[data-go]'), function(b){ b.onclick = function(){ var t = b.getAttribute('data-gotab'), m = b.getAttribute('data-gomode'); if (t) { S.tab = t; m = 'bureau'; } openChantier(b.getAttribute('data-go'), m || S.mode); }; });
+}
+/* Miniatures : la maquette 3D du Carnet (moteur partagé, une instance à la fois, hors écran) photographiée à l'étape réelle du chantier.
+   Gardée sur l'appareil (clé = chantier + étape + maquette) : elle ne se refait que si l'étape ou la maquette change. Sans maquette : la maison dessinée. */
+var TH = { q:[], busy:false, mem:{}, fiche:{} };
+function thFiche(c){
+  if (FB.demo) return Promise.resolve(window.__DEMO_GLB ? (window.__DEMO_CFG || {}) : null);
+  if (!c.projetId) return Promise.resolve(null);
+  var k = String(c.projetId); if (!TH.fiche[k]) TH.fiche[k] = FB.fiche(c.projetId).then(function(f){ var m = f && f.maquette; return m && m.on && (m.n || m.url) ? m : null; }).catch(function(){ return null; });
+  return TH.fiche[k];
+}
+function thKey(c, m){ return 'px2.th.' + c.id + '.' + (c.etape || 0) + '.' + String(m.k || '') + (m.n || '') + (m.url ? 'u' : ''); }
+function thRead(key){ return TH.mem[key] || lk(key) || ''; }
+function thStore(c, key, du){
+  TH.mem[key] = du;
+  try{ var pre = 'px2.th.' + c.id + '.'; for (var i = localStorage.length - 1; i >= 0; i--) { var k = localStorage.key(i); if (k && k.indexOf(pre) === 0 && k !== key) localStorage.removeItem(k); } localStorage.setItem(key, du); }catch(e){}
+}
+function thPaint(c, du){
+  [].forEach.call(document.querySelectorAll('[data-art="' + c.id + '"]'), function(el){ el.innerHTML = '<img src="' + du + '" alt="Maquette 3D de ' + esc(c.nom) + '" style="width:100%;height:100%;object-fit:cover;display:block">'; });
+}
+function thQueue(list){
+  list.forEach(function(c){ thFiche(c).then(function(m){ if (!m) return; var key = thKey(c, m), du = thRead(key); if (du) { thPaint(c, du); return; } if (TH.q.some(function(x){ return x.id === c.id; })) return; TH.q.push(c); thRun(); }); });
+}
+function thRun(){
+  if (TH.busy || !TH.q.length) return; TH.busy = true;
+  var c = TH.q.shift(), next = function(){ TH.busy = false; thRun(); };
+  thFiche(c).then(function(m){ return m ? thBuild(c, m) : null; }).then(next, next);
+}
+function thBuild(c, m){
+  return new Promise(function(ok){
+    var go = function(){
+      var host = document.createElement('div'); host.style.cssText = 'position:fixed;left:-9999px;top:0;width:440px;height:320px;pointer-events:none'; document.body.appendChild(host);
+      var X = window.PXModel.create(), done = false;
+      var fin = function(du){ if (done) return; done = true; try{ X.dispose(); }catch(e){} host.remove(); if (du && du.length > 2000) { thStore(c, thKey(c, m), du); thPaint(c, du); } ok(); };
+      X.quiet = true; X.cfg = m; X.loader = (FB.demo && window.__DEMO_GLB) ? function(){ return Promise.resolve(window.__DEMO_GLB); } : maqLoader(c, m);
+      X.onfail = function(){ fin(''); };
+      X.onload = function(){ try{ X.setActive(true); X.setStage(c.etape || null); X.setMode('out'); }catch(e){ fin(''); return; } setTimeout(function(){ fin(X.snapshot()); }, 2200); };
+      setTimeout(function(){ fin(''); }, 60000);
+      try{ X.init(host, HZ, function(){}); }catch(e){ fin(''); }
+    };
+    if (window.PXModel && window.PXModel.create) go(); else { window.addEventListener('px3dm-ready', function(){ go(); }, {once:true}); setTimeout(ok, 15000); }
+  });
 }
 function chIcoTxt(k){ return k === 'bloque' ? '✕' : k === 'surveiller' ? '⚠' : '✓'; }
 function openChantier(id, mode){
