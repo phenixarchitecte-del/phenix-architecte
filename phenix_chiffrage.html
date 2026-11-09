@@ -8616,9 +8616,9 @@ function chdStatutTexte(g){
   const a = g.artisan, fr = PhenixMsg.dateFr;
   if (!a || !a.decennaleStatut) return '○ Non demandée';
   if (a.decennaleStatut === 'demandee') return '➤ Demandée le ' + fr(a.decennaleDemandeLe) + (a.decennaleRelances ? ' (relancée ' + a.decennaleRelances + ' fois)' : '');
-  const r = PhenixDecennale.resume(chdControles(g));
-  if (r.bloquants) return '✖ Reçue — incohérence bloquante';
-  if (r.attention) return '⚠ Reçue — ' + r.attention + ' point' + (r.attention > 1 ? 's' : '') + ' à vérifier';
+  const r = PhenixDecennale.resume(chdControles(g)), corr = a.decennaleCorrectionLe ? ' · correction demandée le ' + fr(a.decennaleCorrectionLe) : '';
+  if (r.bloquants) return '✖ Reçue — incohérence bloquante' + corr;
+  if (r.attention) return '⚠ Reçue — ' + r.attention + ' point' + (r.attention > 1 ? 's' : '') + ' à vérifier' + corr;
   return '✔ Reçue — conforme' + (a.decennaleAtt && a.decennaleAtt.dateFin ? ' (valable jusqu’au ' + fr(a.decennaleAtt.dateFin) + ')' : '');
 }
 async function chdOuvrir(){
@@ -8634,7 +8634,7 @@ function chdRender(){
   const groupes = _chdG = chdGroupes();
   if (!groupes.length){ body.innerHTML = '<div style="font-size:12.5px;color:var(--text3)">Aucune entreprise renseignée sur les lots de ce chantier.</div>'; return; }
   body.innerHTML = groupes.map((g, i) => {
-    const a = g.artisan || {}, tel = PhenixMsg.normTel(a.tel), mail = PhenixMsg.normMail(a.email), incs = chdControles(g);
+    const a = g.artisan || {}, tel = PhenixMsg.normTel(a.tel), mail = PhenixMsg.normMail(a.email), incs = chdControles(g), pts = PhenixMsg.pointsCorrection(incs, { dateFin:(a.decennaleAtt || {}).dateFin });
     const contact = (tel || mail) ? '📞 ' + (tel ? _centEsc(tel) : '<i>téléphone manquant</i>') + ' · ✉ ' + (mail ? _centEsc(mail) : '<i>mail manquant</i>') : 'Coordonnées manquantes :';
     const saisie = (!tel || !mail) ? '<div class="dec-contact"><input id="chd-tel-' + i + '" placeholder="Téléphone" value="' + _centEsc(tel) + '" aria-label="Téléphone de ' + _centEsc(g.nom) + '"><input id="chd-mail-' + i + '" placeholder="Mail" value="' + _centEsc(mail) + '" aria-label="Mail de ' + _centEsc(g.nom) + '"><button class="btn btn-sm btn-outline" onclick="chdEnregistrerContact(' + i + ')">Enregistrer</button></div>' : '';
     const lis = incs.map(x => '<li class="' + x.niveau + '"><b>' + PhenixDecennale.symbole[x.niveau] + ' ' + PhenixDecennale.libelle[x.niveau] + '</b> ' + _centEsc(x.texte) + '</li>').join('');
@@ -8645,6 +8645,7 @@ function chdRender(){
       '<div class="dec-actions"><button class="btn btn-sm btn-outline" onclick="chdAction(' + i + ',\'mail\')"' + (mail ? '' : ' disabled title="Mail manquant"') + '><i class="ti ti-mail" aria-hidden="true"></i> Demander par mail</button>' +
       '<button class="btn btn-sm btn-outline" onclick="chdAction(' + i + ',\'sms\')"' + (tel ? '' : ' disabled title="Téléphone manquant"') + '><i class="ti ti-message" aria-hidden="true"></i> Demander par SMS</button>' +
       '<button class="btn btn-sm btn-outline" onclick="chdAction(' + i + ',\'copie\')"><i class="ti ti-copy" aria-hidden="true"></i> Copier le SMS</button>' +
+      (pts.length ? '<button class="btn btn-sm btn-outline" onclick="chdCorriger(' + i + ',\'mail\')"' + (mail ? '' : ' disabled title="Mail manquant"') + '><i class="ti ti-mail-forward" aria-hidden="true"></i> Écrire pour corriger (' + pts.length + ' point' + (pts.length > 1 ? 's' : '') + ')</button>' : '') +
       '<button class="btn btn-sm btn-primary" onclick="chdDeposer(' + i + ')"><i class="ti ti-upload" aria-hidden="true"></i> Déposer l’attestation reçue</button></div></div>';
   }).join('');
 }
@@ -8684,6 +8685,20 @@ async function chdAction(i, type){
   try { await chdSauver(art); } catch(e){ showToast('⚠️ Brouillon ouvert, mais suivi non enregistré (droits ou connexion)'); }
   showToast(type === 'mail' ? '✓ Brouillon de mail ouvert — relis et envoie' : '✓ SMS préparé — il ne reste qu’à envoyer (texte aussi copié au cas où)');
   chdRender(); return true;
+}
+async function chdCorriger(i, type){
+  const g = _chdG[i]; if (!g || !g.artisan) return;
+  const art = g.artisan, att = art.decennaleAtt || {}, c = _centC();
+  const contact = (art.nom && _annN(art.nom) !== _annN(g.nom)) ? art.nom : '';
+  const msg = PhenixMsg.preparerCorrection(chdControles(g), { contact:contact, chantier:PhenixMsg.libelleChantier(c) || c.nom || '', lot:g.lots.map(l => l.nom).filter(Boolean).join(' ; '), dateFin:att.dateFin, dateDebut:att.dateDebut, nomAtt:att.entreprise });
+  if (!msg){ showToast('Aucun point à corriger'); return; }
+  const ok = type === 'mail' ? PhenixMsg.ouvrirMail(art.email, msg) : PhenixMsg.ouvrirSms(art.tel, msg);
+  if (ok && type === 'sms' && !/Android|iPhone|iPad/i.test(navigator.userAgent)) PhenixMsg.copier(msg.sms);
+  if (!ok){ showToast('⚠️ ' + (type === 'mail' ? 'Mail' : 'Téléphone') + ' manquant ou invalide'); return; }
+  art.decennaleCorrectionLe = _chdAuj(); art.decennaleCorrections = (art.decennaleCorrections || 0) + 1;
+  try { await chdSauver(art); } catch(e){ showToast('⚠️ Brouillon ouvert, mais suivi non enregistré (droits ou connexion)'); }
+  showToast(type === 'mail' ? '✓ Brouillon de mail ouvert — relis et envoie' : '✓ SMS préparé — il ne reste qu’à envoyer');
+  chdRender();
 }
 function chdAFaire(){
   return _chdG.map((g, i) => ({ g:g, i:i })).filter(x => {
