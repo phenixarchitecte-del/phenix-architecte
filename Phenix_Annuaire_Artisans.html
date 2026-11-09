@@ -7,10 +7,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+<script src="phenix_decennale.js"></script>   <!-- lecture IA des attestations décennales (fichier partagé avec Chiffrage) -->
 <script type="module">
 import{initializeApp}from'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import{getFirestore,collection,doc,onSnapshot,setDoc,deleteDoc}from'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 import{getAuth,signInWithEmailAndPassword,signOut,onAuthStateChanged}from'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import{getStorage,ref as stRef,uploadString,getDownloadURL}from'https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js';
 const app=initializeApp({apiKey:"AIzaSyCjNKNvS6p3nqE6-_Gw9I397ZtXm2FG1ew",authDomain:"phenix-architecte-9151b.firebaseapp.com",projectId:"phenix-architecte-9151b",storageBucket:"phenix-architecte-9151b.firebasestorage.app",messagingSenderId:"811231684720",appId:"1:811231684720:web:413fa324ae43c07607acb5"});
 // ════════════════════════════════════════════════════════════
 //  FIREBASE APP CHECK — protection anti-bots (reCAPTCHA v3)
@@ -25,7 +27,9 @@ const db=getFirestore(app);
 window._fb={
   save:a=>setDoc(doc(db,'phenix_artisans',String(a.id)),a),
   del:id=>deleteDoc(doc(db,'phenix_artisans',String(id))),
-  listen:cb=>onSnapshot(collection(db,'phenix_artisans'),s=>{const l=[];s.forEach(d=>l.push(d.data()));cb(l);})
+  listen:cb=>onSnapshot(collection(db,'phenix_artisans'),s=>{const l=[];s.forEach(d=>l.push(d.data()));cb(l);}),
+  // Dépôt d'un fichier (attestation décennale) dans le stockage Firebase : même dossier que Chiffrage (financement/…)
+  upload:async(path,dataUrl)=>{const parts=dataUrl.split(','),r=stRef(getStorage(app),path);await uploadString(r,parts[1],'base64',{contentType:parts[0].match(/data:([^;]+)/)[1]});return await getDownloadURL(r);}
 };
 // ── Authentification ──
 const _authI = getAuth();
@@ -535,8 +539,38 @@ function decFicheHtml(a){
   if(a.decennaleRecueLe)h+='<br>Reçue le '+fr(a.decennaleRecueLe)+(a.decennaleCanal==='mail-auto'?' (détectée automatiquement dans la boîte mail)':'');
   if(a.decennaleCorrectionLe)h+='<br>Correction demandée le '+fr(a.decennaleCorrectionLe);
   if(a.decennaleUrl)h+='<br><a href="'+esc(a.decennaleUrl)+'" target="_blank" rel="noopener">Ouvrir le PDF de l’attestation</a>';
+  h+=a.id?'<div style="margin-top:8px"><button type="button" class="btn" onclick="decJoindre(\''+esc(a.id)+'\')" style="border:1.5px solid #1b2d5b;border-radius:8px;padding:6px 12px;background:#fff;color:#1b2d5b;font-weight:600;cursor:pointer">📎 '+(a.decennaleUrl?'Remplacer l’attestation (PDF)':'Joindre l’attestation (PDF)')+'</button> <span style="font-size:11.5px;color:#6b7a99">lue par l’IA : assureur, police, dates, activités</span></div>':'<div style="margin-top:6px;font-size:12px;color:#6b7a99">Enregistrez d’abord la fiche pour pouvoir joindre l’attestation.</div>';
   h+='<br><span style="font-size:11.5px;color:#6b7a99">Les contrôles détaillés (cohérence avec le devis, lot couvert, fin de chantier) s’affichent dans Financement.</span></div>';
   return h;
+}
+/* Joindre l'attestation décennale depuis la fiche : PDF lu par l'IA (PhenixDecennale), fichier rangé dans le stockage, fiche mise à jour. */
+function decJoindre(id){
+  const a=arts.find(x=>String(x.id)===String(id)); if(!a) return;
+  const input=document.createElement('input'); input.type='file'; input.accept='application/pdf,.pdf';
+  input.onchange=()=>{
+    const file=input.files[0]; if(!file) return;
+    if(file.type!=='application/pdf'&&!/\.pdf$/i.test(file.name)){toast('⚠️ Joignez l’attestation au format PDF');return;}
+    if(file.size>15*1024*1024){toast('⚠️ Fichier trop lourd (15 Mo maximum)');return;}
+    toast('Lecture de l’attestation…');
+    const reader=new FileReader();
+    reader.onload=async()=>{
+      const dataUrl=reader.result; let att=null, url=null;
+      const path='financement/annuaire/decennale_'+String(a.id).replace(/[^\w-]/g,'_')+'_'+Date.now()+'.pdf';
+      try{ url=await window._fb.upload(path,dataUrl); }catch(e){ console.error('Dépôt décennale :',e); toast('⚠️ Envoi du fichier impossible : '+(e.code||e.message||e)); return; }
+      try{ if(window.PhenixDecennale) att=await PhenixDecennale.lire(dataUrl.split(',')[1]); }catch(e){ console.warn('Lecture IA décennale :',e); }
+      a.decennaleStatut='recue'; a.decennaleRecueLe=new Date().toISOString().slice(0,10); a.decennaleCanal='annuaire-manuel';
+      a.decennaleUrl=url; a.decennalePath=path;
+      if(att){ a.decennaleAtt=att; if(att.police)a.assurance=att.police; if(att.dateFin)a.assuranceDate=att.dateFin; if(!a.siret&&att.siret)a.siret=att.siret; } else delete a.decennaleAtt;
+      // la fiche ouverte affiche les nouvelles valeurs (sinon « Enregistrer » remettrait les anciennes)
+      const fa=document.getElementById('f-ass'), fd=document.getElementById('f-assd'), fs=document.getElementById('f-sir');
+      if(_eid===a.id){ if(fa&&a.assurance)fa.value=a.assurance; if(fd&&a.assuranceDate)fd.value=a.assuranceDate; if(fs&&a.siret&&!fs.value)fs.value=a.siret; }
+      try{ sync(true); await window._fb.save(a); }catch(e){ toast('⚠️ Enregistrement impossible : '+(e.code||e.message||e)); return; }
+      const df=document.getElementById('f-decfiche'); if(df&&_eid===a.id) df.innerHTML=decFicheHtml(a);
+      toast(att ? (att.nature&&att.nature!=='decennale' ? '⚠ Fichier joint, mais ce n’est pas une décennale : à vérifier' : '✔ Attestation jointe et lue'+(att.dateFin?' (valable jusqu’au '+att.dateFin.split('-').reverse().join('/')+')':'')) : '✔ Attestation jointe. Lecture IA impossible : vérifiez les dates à la main');
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
 }
 function altH(a){return a&&a.alerte?'<div class="alt-b">⚠️ '+esc(a.alerte)+'</div>':'';}
 function cHtml(a){const col=mc(a.metier);return`<div class="ac" onclick="openEdit('${a.id}')">${a.favori==1?'<span class="fb">⭐</span>':''}<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px"><div class="av" style="background:linear-gradient(135deg,${col},${col}99)">${ini(a.nom)}</div><div style="flex:1;min-width:0"><div class="ac-nom">${esc(a.nom)||'—'}</div><div class="ac-ent">${esc(a.entreprise)||'Artisan indépendant'}</div><div class="mt"><span style="width:6px;height:6px;border-radius:50%;background:${col};display:inline-block"></span>${esc(a.metier)||'—'}</div></div></div>${altH(a)}${decB(a)}<div>${a.ville?`<div class="ac-row"><i class="ti ti-map-pin"></i>${esc(a.ville)}${a.rayon?' · '+a.rayon+' km':''}</div>`:''} ${a.tel?`<div class="ac-row"><i class="ti ti-phone"></i>${esc(a.tel)}</div>`:''}</div><div class="ac-ft"><div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">${stH(a.note)}${disH(a.dispo)}${tarH(a.tarif)}</div><div style="display:flex;gap:3px" onclick="event.stopPropagation()">${a.tel?`<a href="tel:${esc(a.tel)}" class="btn btn-sm btn-i"><i class="ti ti-phone"></i></a>`:''}<button class="btn btn-sm btn-i" onclick="togFav('${a.id}')"><i class="ti ti-star${a.favori==1?'-filled':''}"></i></button></div></div></div>`;}
