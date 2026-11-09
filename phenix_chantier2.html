@@ -17,13 +17,15 @@
    • BUREAU (ordinateur) : Lots (liste), Planning (Gantt), Réserves, À traiter (validation du compte rendu).
    Moteur 3D : phenix_maquette3d.js, le même que le Carnet (écrit une seule fois). [Moteur partagé]
    Mêmes collections Firestore que l'ancien Chantier (phenix_ch_*) : aucune nouvelle collection, aucune règle à changer.
-   Pas encore repris : honoraires et commissions, Messages artisans, Équipe & accès (→ Paramètres du shell).
+   Pas encore repris : honoraires et commissions, Équipe & accès (→ Paramètres du shell).
 ══════════════════════════════════════════════════════════════════
    09/11/2026 — Onglet FINANCES (Bureau) : budget des lots, facturé, payé, reste à facturer, suivi par lot (alerte facturé en avance sur l'avancement),
      situations et factures (saisie, modification, suppression, filtre par statut). Mêmes données que l'ancien Chantier (phenix_ch_factures) ;
      une situation « payée » crée la charge « sous-traitance » dans Phénix Dossier (même identifiant que l'ancien module).
    09/11/2026 (2) — Onglet « RÉSERVES ET PLANS » : bibliothèque de plans (PDF ou image), versions, pastilles (à photographier / information / question,
      forme + mot), photos, « vérifié », visibilité par entreprise et par client (publication vers l'espace client). Mêmes données que l'ancien Chantier (phenix_ch_plans).
+   09/11/2026 (3) — Onglet « MESSAGES » : boîte unique artisans (phenix_ch_messages) et client (journal du carnet, administrateur), non lus, réponse ;
+     les messages non lus apparaissent aussi dans « À traiter ». Mêmes données que l'ancien Chantier.
 -->
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
@@ -169,7 +171,7 @@ if (!DEMO) {
   let db;
   try { db = S.initializeFirestore(app, { localCache: S.persistentLocalCache({ tabManager: S.persistentMultipleTabManager() }) }); } catch (e) { db = S.getFirestore(app); }
   const auth = U.getAuth(app);
-  const COLS = { chantiers:'phenix_ch_chantiers', lots:'phenix_ch_lots', intervenants:'phenix_ch_intervenants', reserves:'phenix_ch_reserves', crs:'phenix_ch_crs', factures:'phenix_ch_factures', plans:'phenix_ch_plans' };
+  const COLS = { chantiers:'phenix_ch_chantiers', lots:'phenix_ch_lots', intervenants:'phenix_ch_intervenants', reserves:'phenix_ch_reserves', crs:'phenix_ch_crs', factures:'phenix_ch_factures', plans:'phenix_ch_plans', messages:'phenix_ch_messages' };
   const MEDIA = 'phenix_media', CH = 700000;
   Object.assign(window.FB, {
     ready: true,
@@ -192,6 +194,11 @@ if (!DEMO) {
     async getMedia(id) { const m = await S.getDoc(S.doc(db, MEDIA, id)); if (!m.exists()) return null; let du = ''; for (let i = 0; i < (m.data().parts || 0); i++) { const c = await S.getDoc(S.doc(db, MEDIA, id + '__' + i)); if (c.exists()) du += c.data().d || ''; } return du; },
     saveCharge(c) { return S.setDoc(S.doc(db, 'phenix_charges', String(c.id)), c); },
     delCharge(id) { return S.deleteDoc(S.doc(db, 'phenix_charges', String(id))); },
+    saveMsg(m) { return S.setDoc(S.doc(db, 'phenix_ch_messages', String(m.id)), m); },
+    listenId(name, cb) { return S.onSnapshot(S.collection(db, name), function(snap){ var a = []; snap.forEach(function(d){ a.push(Object.assign({ _id:d.id }, d.data())); }); cb(a); }, function(e){ console.warn(name, e && e.message); }); },
+    listenSub(path, cb) { return S.onSnapshot(S.collection.apply(null, [db].concat(path)), function(snap){ var a = []; snap.forEach(function(d){ a.push(Object.assign({ _id:d.id }, d.data())); }); cb(a); }, function(e){ console.warn('journal client', e && e.message); }); },
+    saveSub(path, id, d) { return S.setDoc(S.doc.apply(null, [db].concat(path, [String(id)])), d, { merge:true }); },
+    markNotif(id, d) { return S.setDoc(S.doc(db, 'phenix_notifs_client', String(id)), d); },
     clientPlan(pid, id, d) { var ref = S.doc(db, 'phenix_chantier_client', String(pid), 'plans', String(id)); return d ? S.setDoc(ref, d) : S.deleteDoc(ref); },
     publishClient(pid, payload) { return S.setDoc(S.doc(db, 'phenix_chantier_client', String(pid)), payload); }
   });
@@ -241,7 +248,8 @@ function zoneOf(lot){ for (var i = 0; i < ZONE_RE.length; i++) if (ZONE_RE[i][1]
 function phaseIdx(n){ for (var i = 0; i < PHASES.length; i++) if (n >= PHASES[i][1] && n <= PHASES[i][2]) return i; return -1; }
 
 /* ═══════════ Données ═══════════ */
-var D = { chantiers:[], lots:[], intervenants:[], reserves:[], crs:[], factures:[], plans:[] };
+var D = { chantiers:[], lots:[], intervenants:[], reserves:[], crs:[], factures:[], plans:[], messages:[] };
+var CLI = { notifs:[], j:{}, on:{} };
 var S = { mode:'terrain', tab:'lots', view:'liste', zoom:'mois', cid:null, lotId:null, role:'', pending:false, online:navigator.onLine, real:false, in3d:'out', maq:null, user:'' };
 function chantier(){ return D.chantiers.filter(function(c){ return c.id == S.cid; })[0] || null; }
 function lotsOf(){ return D.lots.filter(function(l){ return l.chantierId == S.cid; }).sort(function(a, b){ return String(a.nom).localeCompare(String(b.nom), 'fr', {numeric:true}); }); }
@@ -256,6 +264,8 @@ function demoSeed(){
   function L(id, nom, st, av, d, f, ent){ return {id:id, chantierId:1, nom:nom, statut:st, av:av, debut:d, fin:f, entrepriseNom:ent}; }
   D.lots = [L(11,'01 — Gros œuvre','termine',100,'2026-09-07','2026-10-15','[Entreprise maçonnerie]'), L(12,'02 — Charpente','termine',100,'2026-10-11','2026-10-22','[Entreprise charpente]'), L(14,'04 — Couverture','en_cours',60,'2026-10-19','2026-11-19','[Entreprise couverture]'), L(15,'05 — Menuiseries extérieures','attribue',0,'2026-11-15','2026-12-03','[Entreprise menuiseries]'), L(16,'06 — Électricité','attribue',0,'2026-11-29','2026-12-17','[Entreprise électricité]'), L(17,'07 — Plomberie','chiffrage',0,'2026-11-29','2026-12-17',''), L(18,'08 — Isolation, plâtrerie','attribue',0,'2026-12-13','2027-01-14','[Entreprise plâtrerie]')];
   D.reserves = []; D.crs = [];
+  D.intervenants = [{id:5, nom:'[Entreprise électricité]', chantierId:1, metier:'Électricité'}];
+  D.messages = [{id:'ms1', chantierId:1, intervenantId:5, de:'artisan', nom:'[Entreprise électricité]', texte:'Quel jour puis-je passer pour le passage des gaines ?', date:'2026-11-08T14:10:00', luPhenix:false}];
   D.factures = [{id:901, chantierId:1, lotId:11, num:'SIT-01', date:'2026-09-30', ht:18000, statut:'payee', notes:'Situation n° 1'}, {id:902, chantierId:1, lotId:11, num:'SIT-02', date:'2026-10-20', ht:14500, statut:'payee', notes:'Solde du lot'}, {id:903, chantierId:1, lotId:14, num:'SIT-01', date:'2026-11-02', ht:6200, statut:'validee', notes:''}, {id:904, chantierId:1, lotId:12, num:'FAC-02', date:'2026-09-15', ht:5200, statut:'retard', notes:''}];
   D.lots.forEach(function(l){ l.ht = {11:32500, 12:9800, 14:15400, 15:12600, 16:8900, 17:7400, 18:21300}[l.id] || 0; l.tva = 10; });
   S.cid = 1;
@@ -528,8 +538,8 @@ function sendCR(){
 /* ═══════════ Mode Bureau ═══════════ */
 function renderTabs(){
   var pend = D.crs.filter(function(c){ return c.aValider && c.chantierId == S.cid; }).length;
-  var T = [['lots', 'Lots et planning'], ['finances', 'Finances'], ['reserves', 'Réserves et plans'], ['atraiter', 'À traiter']];
-  $('tabs').innerHTML = T.map(function(t){ return '<button type="button" data-tab="' + t[0] + '"' + (S.tab === t[0] ? ' aria-current="page"' : '') + '>' + t[1] + (t[0] === 'atraiter' && pend ? '<span class="badge">' + pend + '</span>' : '') + '</button>'; }).join('') + '<span style="flex:1"></span><button type="button" id="old-ch" title="Finances, plans et pastilles, messages : pas encore repris dans cette version">Messages (ancien module) ↗</button>';
+  var T = [['lots', 'Lots et planning'], ['finances', 'Finances'], ['reserves', 'Réserves et plans'], ['messages', 'Messages'], ['atraiter', 'À traiter']];
+  $('tabs').innerHTML = T.map(function(t){ return '<button type="button" data-tab="' + t[0] + '"' + (S.tab === t[0] ? ' aria-current="page"' : '') + '>' + t[1] + (t[0] === 'atraiter' && pend ? '<span class="badge">' + pend + '</span>' : '') + (t[0] === 'messages' && msgUnread() ? '<span class="badge">' + msgUnread() + '</span>' : '') + '</button>'; }).join('') + '<span style="flex:1"></span><button type="button" id="old-ch" title="Finances, plans et pastilles, messages : pas encore repris dans cette version">Ancien module ↗</button>';
   [].forEach.call($('tabs').querySelectorAll('[data-tab]'), function(b){ b.onclick = function(){ S.tab = b.getAttribute('data-tab'); renderBureau(); renderTabs(); }; });
   $('old-ch').onclick = function(){ window.open('phenix_chantier.html', '_blank'); };
 }
@@ -537,10 +547,12 @@ function renderBureau(){
   var b = $('bureau'); if (S.mode !== 'bureau') return;
   if (S.tab === 'lots') b.innerHTML = S.view === 'liste' ? viewListe() : viewPlanning();
   else if (S.tab === 'finances') b.innerHTML = viewFinances();
+  else if (S.tab === 'messages') b.innerHTML = viewMessages();
   else if (S.tab === 'reserves') b.innerHTML = rpHead() + (S.rp === 'plans' ? viewPlans() : viewReserves());
   else b.innerHTML = viewATraiter();
   bindBureau();
   if (S.tab === 'reserves' && S.rp === 'plans') plBind();
+  if (S.tab === 'messages') msgBind();
 }
 function lotsHead(){
   return '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:12px"><h2 style="font-size:24px">' + (S.view === 'liste' ? 'Lots' : 'Planning') + '</h2><span class="seg light"><button type="button" data-view="liste" aria-pressed="' + (S.view === 'liste') + '">Liste</button><button type="button" data-view="planning" aria-pressed="' + (S.view === 'planning') + '">Planning</button></span>' +
@@ -588,7 +600,9 @@ function viewReserves(){
 function viewATraiter(){
   var items = D.crs.filter(function(c){ return c.aValider && c.chantierId == S.cid; });
   var h = '<h2 style="font-size:24px;margin-bottom:12px">À traiter</h2>';
-  if (!items.length) return h + '<div class="card muted">Rien à traiter. Les comptes rendus de visite arrivent ici pour validation.</div><div class="muted" style="margin-top:10px">Les messages des artisans et les situations de travaux ne sont pas encore repris dans cette version (ancien module).</div>';
+  var mu = msgConvs().filter(function(c){ return c.unread && c.chantierId == S.cid; });
+  if (mu.length) h += '<div class="card" style="max-width:720px;margin-bottom:14px;display:flex;flex-direction:column;gap:8px"><div class="eyebrow">Messages non lus</div>' + mu.map(function(c){ return '<button type="button" class="btn" data-gomsg="' + esc(c.k) + '" style="justify-content:flex-start;text-align:left;height:auto;padding:10px 14px;flex-direction:column;align-items:flex-start"><b>' + msgName(c) + ' (' + c.unread + ')</b><span class="muted">' + esc(c.last.texte.slice(0, 110)) + '</span></button>'; }).join('') + '</div>';
+  if (!items.length) return h + (mu.length ? '' : '<div class="card muted">Rien à traiter. Les comptes rendus de visite arrivent ici pour validation.</div>') + '<div class="muted" style="margin-top:10px">Les situations de travaux à contrôler se trouvent dans l\'onglet Finances.</div>';
   var lotName = function(id){ var l = D.lots.filter(function(x){ return x.id == id; })[0]; return l ? lotLabel(l) : 'Sans lot'; };
   return h + items.map(function(c){
     return '<div class="card" style="max-width:720px;margin-bottom:14px;display:flex;flex-direction:column;gap:10px"><div class="eyebrow">Compte rendu à valider · ' + esc(c.num) + ' · ' + frDate(c.date) + '</div><h2 style="font-size:24px">Visite du ' + frDate(c.date) + '</h2>' +
@@ -603,6 +617,7 @@ function viewATraiter(){
 }
 function bindBureau(){
   var b = $('bureau'), q = function(s, f){ [].forEach.call(b.querySelectorAll(s), f); };
+  q('[data-gomsg]', function(x){ x.onclick = function(){ MSG.cur = x.getAttribute('data-gomsg'); S.tab = 'messages'; renderBureau(); renderTabs(); }; });
   q('[data-rp]', function(x){ x.onclick = function(){ S.rp = x.getAttribute('data-rp'); renderBureau(); }; });
   q('[data-fnew]', function(x){ x.onclick = function(){ sheetFacture(null); }; });
   q('[data-fedit]', function(x){ x.onclick = function(){ sheetFacture(+x.getAttribute('data-fedit')); }; });
@@ -868,6 +883,63 @@ function sheetPlan(prev, visOnly){
     }).catch(function(e){ btn.disabled = false; btn.textContent = 'Publier'; toast('⚠ Fichier non envoyé : ' + (e && e.message || e)); });
   };
 }
+/* ═══════════ Messages : les artisans écrivent à Phénix, jamais au client ═══════════
+   Boîte unique, comme l'ancien Chantier : conversations par artisan (phenix_ch_messages) et par client (journal du carnet, réservé à l'administrateur).
+   Qui parle se lit au NOM et à la position de la bulle, jamais à la couleur seule. */
+var MSG = { cur:null };
+function msgConvs(){
+  var m = {}; D.messages.forEach(function(x){ var k = x.chantierId + '|' + x.intervenantId; (m[k] = m[k] || []).push(x); });
+  var out = Object.keys(m).map(function(k){ var a = m[k].sort(function(p, q){ return String(p.date).localeCompare(String(q.date)); }); return { k:k, chantierId:a[0].chantierId, intervenantId:a[0].intervenantId, msgs:a, last:a[a.length - 1], unread:a.filter(function(x){ return x.de === 'artisan' && !x.luPhenix; }).length }; });
+  D.chantiers.forEach(function(c){ if (!c.projetId) return;
+    var a = (CLI.j[String(c.projetId)] || []).filter(function(e){ return e.kind === 'msg'; }).map(function(e){ return { id:e._id, de:e.by === 'moe' ? 'phenix' : 'client', nom:e.who || (e.by === 'moe' ? 'Phénix' : 'Client'), texte:e.text || '', date:e.t || '' }; }).sort(function(p, q){ return String(p.date).localeCompare(String(q.date)); });
+    if (!a.length) return;
+    out.push({ k:'cli|' + c.projetId, client:true, pid:String(c.projetId), chantierId:c.id, msgs:a, last:a[a.length - 1], unread:CLI.notifs.filter(function(x){ return String(x.pid) === String(c.projetId); }).length }); });
+  return out.sort(function(a, b){ return String(b.last.date).localeCompare(String(a.last.date)); });
+}
+function msgUnread(){ return D.messages.filter(function(x){ return x.de === 'artisan' && !x.luPhenix; }).length + CLI.notifs.length; }
+function msgName(c){
+  var ch = D.chantiers.filter(function(y){ return y.id == c.chantierId; })[0], cn = ch ? ' <span class="muted" style="font-weight:500">· ' + esc(ch.nom) + '</span>' : '';
+  if (c.client) return '👤 Client' + cn;
+  var iv = D.intervenants.filter(function(y){ return String(y.id) === String(c.intervenantId); })[0]; return esc(iv ? iv.nom : 'Artisan') + cn;
+}
+function viewMessages(){
+  var cs = msgConvs().filter(function(c){ return c.chantierId == S.cid; });
+  var h = '<h2 style="font-size:24px;margin-bottom:4px">Messages</h2><div class="muted" style="margin-bottom:12px">Les artisans écrivent à Phénix, jamais au client. Vous répondez ou vous transmettez.</div>';
+  if (!cs.length) return h + '<div class="card muted">Aucun message pour ce chantier. Ceux des artisans (et du client) arrivent ici.</div>';
+  if (!MSG.cur || !cs.some(function(c){ return c.k === MSG.cur; })) MSG.cur = cs[0].k;
+  var cur = cs.filter(function(c){ return c.k === MSG.cur; })[0];
+  h += '<div class="plgrid" style="display:grid;grid-template-columns:280px minmax(0,1fr);gap:14px"><div style="display:flex;flex-direction:column;gap:8px">' + cs.map(function(c){
+    return '<button type="button" class="card" data-conv="' + esc(c.k) + '" style="text-align:left;display:flex;flex-direction:column;gap:4px;' + (c.k === MSG.cur ? 'border:2px solid var(--accent)' : '') + '"><b style="font-size:15px">' + msgName(c) + (c.unread ? ' <span class="badge">' + c.unread + ' non lu' + (c.unread > 1 ? 's' : '') + '</span>' : '') + '</b><span class="muted" style="font-size:13px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">' + esc(c.last.texte) + '</span><span class="muted" style="font-size:12px">' + frDate(c.last.date) + '</span></button>'; }).join('') + '</div>' +
+    '<div class="card" style="display:flex;flex-direction:column;gap:10px"><h3 style="font-size:20px">' + msgName(cur) + '</h3><div style="display:flex;flex-direction:column;gap:8px;max-height:50vh;overflow:auto" id="msg-thread">' +
+    cur.msgs.map(function(x){ var me = x.de === 'phenix'; return '<div style="max-width:80%;padding:8px 12px;border-radius:12px;white-space:pre-wrap;align-self:' + (me ? 'flex-end' : 'flex-start') + ';background:' + (me ? 'rgba(79,168,240,.22)' : 'var(--pan2)') + ';border:1px solid ' + (me ? 'rgba(79,168,240,.5)' : 'var(--line)') + '">' + esc(x.texte) + '<div class="muted" style="font-size:12px;margin-top:2px">' + esc(me ? (x.nom || 'Phénix') + ' (vous)' : (x.nom || (cur.client ? 'Client' : 'Artisan'))) + ' · ' + frDate(x.date) + ' ' + String(x.date).slice(11, 16) + '</div></div>'; }).join('') + '</div>' +
+    '<div style="display:flex;gap:8px;align-items:flex-end"><textarea id="msg-reply" rows="2" style="flex:1" placeholder="' + (cur.client ? 'Votre réponse au client (visible dans son carnet)' : 'Votre réponse à l\'artisan') + '"></textarea><button class="btn pri" type="button" id="msg-send">Répondre</button></div></div></div>';
+  return h;
+}
+function msgBind(){
+  var b = $('bureau');
+  [].forEach.call(b.querySelectorAll('[data-conv]'), function(x){ x.onclick = function(){ MSG.cur = x.getAttribute('data-conv'); msgRead(); renderBureau(); renderTabs(); }; });
+  var th = $('msg-thread'); if (th) th.scrollTop = th.scrollHeight;
+  if ($('msg-send')) $('msg-send').onclick = msgSend;
+  msgRead();
+}
+/* ouvrir une conversation = lire ses messages */
+function msgRead(){
+  var c = msgConvs().filter(function(x){ return x.k === MSG.cur; })[0]; if (!c || !c.unread) return;
+  if (c.client) { CLI.notifs.filter(function(x){ return String(x.pid) === c.pid; }).forEach(function(x){ if (!FB.demo) FB.markNotif(x._id, Object.assign({}, x, { lu:true })).catch(function(){}); }); CLI.notifs = CLI.notifs.filter(function(x){ return String(x.pid) !== c.pid; }); }
+  else c.msgs.filter(function(x){ return x.de === 'artisan' && !x.luPhenix; }).forEach(function(x){ x.luPhenix = true; save('messages', x); });
+  renderTabs();
+}
+function msgSend(){
+  var c = msgConvs().filter(function(x){ return x.k === MSG.cur; })[0], t = ($('msg-reply').value || '').trim(); if (!c || !t) return;
+  if (c.client) {
+    var e = { t:new Date().toISOString(), kind:'msg', by:'moe', who:'Phénix', text:t, cat:null, email:'' };
+    if (FB.demo) return; FB.saveSub(['phenix_portail', c.pid, 'journal'], 'ms' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), e).then(function(){ toast('Réponse envoyée au client'); }).catch(function(){ toast('⛔ Envoi impossible.'); });
+    $('msg-reply').value = ''; return;
+  }
+  var id = 'ms_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  var rec = { id:id, chantierId:c.chantierId, intervenantId:c.intervenantId, de:'phenix', nom:'Phénix', texte:t, date:new Date().toISOString(), luArtisan:false, luPhenix:true };
+  D.messages.push(rec); save('messages', rec); toast('Réponse envoyée'); renderBureau();
+}
 /* Glisser une barre du Planning : décaler / changer les dates (jour entier) */
 function barDrag(el){
   var lot = D.lots.filter(function(y){ return y.id == el.getAttribute('data-bar'); })[0]; if (!lot) return;
@@ -893,9 +965,14 @@ function ensureChantier(){
   var pick = D.chantiers.filter(function(c){ return String(c.id) === want; })[0] || act[0] || D.chantiers[0];
   if (pick) { S.cid = pick.id; boot2(); }
 }
+function cliStart(){
+  if (FB.demo || S.role !== 'admin' || !FB.listenId) return;
+  if (!CLI.on.__n) { CLI.on.__n = 1; FB.listenId('phenix_notifs_client', function(a){ CLI.notifs = (a || []).filter(function(x){ return x.lu === false; }); if (S.tab === 'messages' && S.mode === 'bureau') renderBureau(); renderTabs(); }); }
+  D.chantiers.forEach(function(c){ if (!c.projetId || CLI.on[c.projetId]) return; CLI.on[c.projetId] = 1; FB.listenSub(['phenix_portail', String(c.projetId), 'journal'], function(a){ CLI.j[String(c.projetId)] = a || []; if (S.tab === 'messages' && S.mode === 'bureau') renderBureau(); }); });
+}
 function startData(){
   var n = 0, any = function(){ ensureChantier(); if (S.mode === 'terrain') { renderSide(); renderTiles(); renderDock(); applyStage(); renderTop(); } else { renderBureau(); renderTabs(); } };
-  ['chantiers', 'lots', 'intervenants', 'reserves', 'crs', 'factures', 'plans'].forEach(function(k){ FB.listen(k, function(a, pend){ D[k] = a; S.pending = !!pend; any(); }); });
+  ['chantiers', 'lots', 'intervenants', 'reserves', 'crs', 'factures', 'plans', 'messages'].forEach(function(k){ FB.listen(k, function(a, pend){ D[k] = a; S.pending = !!pend; if (k === 'chantiers') cliStart(); any(); }); });
 }
 var ADMIN_EMAILS = ['contact@phenixarchitecte.fr'];   /* même repli que l'ancien Chantier */
 function authed(email){
