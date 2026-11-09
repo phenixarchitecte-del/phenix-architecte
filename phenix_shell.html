@@ -656,8 +656,13 @@ async function _blocInconnu(x) {
   return '<div class="vact"><b>' + (x.probable ? 'Adresse reconnue d’après le nom (à confirmer) : ' : (x.source === 'sms' ? 'Numéro' : 'Adresse') + ' inconnu(e) : ') + _ncEsc(x.de || '') + '</b>' + (x.sansIA === 'inconnu' ? '<div style="font-size:12.5px;color:#6b7a99">Message non analysé par l’IA (expéditeur inconnu, aucun dossier cité). Rattachez-le pour que les prochains soient lus et classés.</div>' : x.sansIA === 'leger' ? '<div style="font-size:12.5px;color:#6b7a99">Résumé court uniquement, sans actions proposées (expéditeur inconnu, aucun dossier cité). Rattachez-le pour que les prochains soient analysés en entier.</div>' : '') + '<div style="font-size:12.5px;color:#6b7a99">Rattachez-le pour que ses prochains messages soient reconnus. Sinon, cliquez « Traité » : rien d’autre n’est modifié.</div>' +
     '<label>Artisan de l’Annuaire</label><select id="viArt"><option value="">— choisir —</option>' + o(_valArt, x.artisanId) + '</select>' +
     '<label>ou client d’un dossier</label><select id="viPro"><option value="">— choisir —</option>' + o(_valPro, x.projetId) + '</select>' +
-    '<div style="margin-top:8px"><button class="vbtn p" onclick="rattacherNumero()">Rattacher ce numéro</button></div></div>';
+    '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="vbtn p" onclick="rattacherNumero()">Rattacher</button><button class="vbtn" onclick="ignorerExpediteur()">Ne plus afficher cet expéditeur</button></div></div>';
 }
+window.ignorerExpediteur = async function() {
+  const x = _echTrouve(_valId); if (!x || !x.de) return;
+  try { await setDoc(doc(db, 'phenix_meta', 'tri_ignores'), { adresses: arrayUnion(String(x.de).toLowerCase()) }, { merge: true }); await updateDoc(doc(db, 'phenix_entrants', x._id), { statut: 'lu', resultat: 'ignore_expediteur' });
+    toast('✓ ' + x.de + ' ne sera plus affiché'); fermerValidation(); } catch (e) { toast('⚠️ Impossible : ' + (e && (e.code || e.message) || e)); }
+};
 window.rattacherNumero = async function() {
   const x = _echTrouve(_valId); if (!x || !x.de) return; const a = document.getElementById('viArt').value, p = document.getElementById('viPro').value;
   if (!a && !p) { toast('Choisissez un artisan ou un dossier'); return; }
