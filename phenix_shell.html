@@ -1295,6 +1295,13 @@ window.addEventListener('message', (ev) => {
     if (deja) { try { shellCurrentFrame.contentWindow.postMessage(ord, '*'); } catch(e) {} shellPendingOrder = null; }
     return;
   }
+  // [Synthèse 3D · v65] la gare des messages : ouvre Chantier › Messages, sur la conversation demandée si elle est connue
+  if (msg.source === 'phenix-synthese' && msg.action === 'ouvrir-messages') {
+    try { ev.source && ev.source.postMessage({ source:'phenix-shell', action:'ack-module' }, '*'); } catch(e) {}
+    shellOpenModule('chantier', document.querySelector('.shell-nav-item[data-module="chantier"]'));
+    [500, 1600, 3600].forEach(t => setTimeout(() => { try { shellCurrentFrame.contentWindow.postMessage({ source: 'phenix-shell', action: 'goto-page', page: 'messages', conv: msg.conv || null }, '*'); } catch (e) {} }, t));
+    return;
+  }
   // [Synthèse 3D · v42] « débloquer » : la fiche d'un dossier bloqué demande d'ouvrir le module qui lève le blocage.
   // On accuse réception (sinon la Synthèse se replie sur « ouvrir-dossier »).
   if (msg.source === 'phenix-synthese' && msg.action === 'ouvrir-module' && msg.projetId != null) {
