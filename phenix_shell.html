@@ -48,6 +48,7 @@
  25/10/2026 — SYNTHÈSE 3D (phenix_synthese.html) : entrée de menu « Synthèse 3D » (administrateur seulement) ; un clic sur une
    parcelle ouvre le dossier dans Dossier (message phenix-synthese / ouvrir-dossier). Repérer : [Synthèse 3D].
    v42 : « ouvrir-module » (débloquer un dossier depuis sa fiche) → Dossier, Chantier, Chiffrage, Contrats ou Relances ; accusé « ack-module ».
+   11/11/2026 — Synthèse 3D : la gare ouvre l'onglet « Échanges » (message ouvrir-echanges), sur le message cliqué.
    06/11/2026 (2) — « Échanges » : page de suivi des SMS et mails reçus (phenix_entrants), actions proposées par l'IA (tâche, rappel, mission, note, rendez-vous .ics/Outlook, réponse en brouillon, devis → Chiffrage), validées d'un clic.
    06/11/2026 — Cloche : reçoit les réceptions automatiques de la boîte mail (collection phenix_entrants, admin) ; clic → Annuaire, « lu » = statut 'lu'.
    05/11/2026 — « aller-devis » (Synthèse, tuile Devis en attente) : ouvre Devis à relancer, ou le formulaire « Nouveau devis » (import PDF par IA) si mode = import.
@@ -1297,6 +1298,12 @@ window.addEventListener('message', (ev) => {
     const deja = ord && shellCurrentModule === 'relances' && shellCurrentFrame;
     shellOpenModule('relances', navEl, ord);
     if (deja) { try { shellCurrentFrame.contentWindow.postMessage(ord, '*'); } catch(e) {} shellPendingOrder = null; }
+    return;
+  }
+  // [Synthèse 3D · v65] la gare = l'onglet « Échanges » : ouvre Échanges, et le message cliqué dans « À valider »
+  if (msg.source === 'phenix-synthese' && msg.action === 'ouvrir-echanges') {
+    try { ev.source && ev.source.postMessage({ source:'phenix-shell', action:'ack-module' }, '*'); } catch(e) {}
+    try { window.ouvrirEchanges(); if (msg.id) setTimeout(() => window.ouvrirValidation(String(msg.id)), 150); } catch (e) { console.warn('Échanges', e); }
     return;
   }
   // [Synthèse 3D · v65] la gare des messages : ouvre Chantier › Messages, sur la conversation demandée si elle est connue
