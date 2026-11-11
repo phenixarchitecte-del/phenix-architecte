@@ -446,7 +446,7 @@ onAuthStateChanged(auth, async user => {
     const _restreint = window.appliquerRestrictionsShell ? window.appliquerRestrictionsShell(me, _estAdmin ? { role: 'admin' } : _fiche) : false;
     { const ne = document.querySelector('.shell-nav-item[data-view="echanges"]'); if (ne) ne.style.display = (me === SHELL_ADMIN_EMAIL.toLowerCase()) ? '' : 'none'; }   // [Échanges]
     { const nj = document.querySelector('.shell-nav-item[data-module="journal"]'); if (nj) nj.style.display = (me === SHELL_ADMIN_EMAIL.toLowerCase()) ? '' : 'none'; }   // [Journal]
-    { const ns = document.querySelector('.shell-nav-item[data-module="synthese"]'); if (ns) ns.style.display = (me === SHELL_ADMIN_EMAIL.toLowerCase()) ? '' : 'none'; }   // [Synthèse 3D]
+    { const ns = document.querySelector('.shell-nav-item[data-module="synthese"]'); if (ns) ns.style.display = (me === SHELL_ADMIN_EMAIL.toLowerCase() || (window._phenixModules || []).indexOf('synthese') >= 0) ? '' : 'none'; }   // [Synthèse 3D]
     try { if (!sessionStorage.getItem('phenix_jrn_conn')) { sessionStorage.setItem('phenix_jrn_conn', '1'); window.phenixJournal('shell', 'connexion', 'application', 'Connexion à Phénix'); } } catch (e) {}
     if (!_restreint) { startListeners(); startNotifs(); startNotifsTaches(); startNotifsCentre(me === SHELL_ADMIN_EMAIL.toLowerCase()); startMoteurConversion(me === SHELL_ADMIN_EMAIL.toLowerCase()); }
     // Dossier = page d'accueil du shell, ouverte automatiquement à la connexion (Relances pour un compte restreint)
@@ -1149,10 +1149,12 @@ window.appliquerRestrictionsShell = function(email, fiche) {
   if (role === 'admin') modules = null;
   else if (role === 'assistante') modules = COMPTES_MODULES_AUTORISES.slice();
   else if (role === 'equipe') { modules = ['espace']; tachesSeules = true; }
-  else if (role === 'chantier') modules = ['chantier'];
+  else if (role === 'chantier' || role === 'conducteur') modules = ['chantier', 'synthese'];   // [Synthèse 3D · v65] Kevin : district Chantier actif
+  else if (role === 'alternante' || role === 'etudes') modules = ['espace', 'synthese'];       // [Synthèse 3D · v65] Cassandra : Avant-projet et Déclarations actifs
   else if (_in(COMPTES_TACHES_SEULES)) { modules = ['espace']; tachesSeules = true; }
   else if (_in(COMPTES_CHANTIER_SEUL)) modules = ['chantier'];
   else if (_in(COMPTES_RELANCES_SEULES)) modules = COMPTES_MODULES_AUTORISES.slice();
+  if (modules && e === 'c.gironde@phenixarchitecte.fr' && modules.indexOf('synthese') < 0) modules.push('synthese');   // [Synthèse 3D · v65] Cassandra
   window._phenixRestreint = !!modules;
   window._phenixTachesSeules = tachesSeules;
   if (!modules) return false;
@@ -1213,7 +1215,7 @@ window.shellOpenModule = function(name, el, order) {
   if (!mod) return;
   if (window._phenixRestreint && window._phenixModules.indexOf(name) < 0) return;
   if (name === 'journal' && me !== SHELL_ADMIN_EMAIL.toLowerCase()) return;   // [Journal]
-  if (name === 'synthese' && me !== SHELL_ADMIN_EMAIL.toLowerCase()) return;   // [Synthèse 3D] marges et impayés : administrateur seulement
+  if (name === 'synthese' && me !== SHELL_ADMIN_EMAIL.toLowerCase() && (window._phenixModules || []).indexOf('synthese') < 0) return;   // [Synthèse 3D] marges et impayés : administrateur seulement
   if (name === 'dossier' && !window._phenixRestreint && window._accueilFait && window.marquerNotifsTachesLues) window.marquerNotifsTachesLues();   // [Espace assistante]
   shellShowView('module', el);
   const container = document.getElementById('module-frame-container');
