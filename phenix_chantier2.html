@@ -362,8 +362,8 @@ function pickZone(zoneId){   /* plusieurs lots sur une zone : celui qui demande 
 
 /* ═══════════ Écran Terrain ═══════════ */
 function renderTop(){
-  if (S.screen === 'garde') { var cg = chantier(); $('top').innerHTML = '<div><div class="eyebrow">Phénix-Architecture</div><div class="nm">' + esc(cg ? cg.nom || cg.id : '') + '</div></div><span class="sp"></span><button class="btn" type="button" id="gd-all">' + (embedded() ? '← Synthèse' : '← Tous les chantiers') + '</button>'; $('tabs').hidden = true; $('gd-all').onclick = goHome; return; }
-  if (S.screen === 'home') { $('top').innerHTML = '<div><div class="eyebrow">Phénix-Architecture</div><div class="nm">Chantiers en cours</div></div><span class="sp"></span><span class="chip">' + (!S.online ? '⚠ Hors ligne' : S.pending ? '⟳ Envoi en cours…' : '✓ Synchronisé') + '</span>'; $('tabs').hidden = true; return; }
+  if (S.screen === 'garde') { var cg = chantier(); $('top').innerHTML = '<div><div class="eyebrow">Phénix-Architecture</div><div class="nm">' + esc(cg ? cg.nom || cg.id : '') + '</div></div><span class="sp"></span><button class="btn" type="button" id="gd-all">← Tous les chantiers</button>'; $('tabs').hidden = true; $('gd-all').onclick = goHome; return; }
+  if (S.screen === 'home') { $('top').innerHTML = '<div><div class="eyebrow">Phénix-Architecture</div><div class="nm">Chantiers en cours</div></div><span class="sp"></span>' + (embedded() ? '<button class="btn" type="button" id="go-syn">← Synthèse 3D</button>' : '') + '<span class="chip">' + (!S.online ? '⚠ Hors ligne' : S.pending ? '⟳ Envoi en cours…' : '✓ Synchronisé') + '</span>'; $('tabs').hidden = true; if ($('go-syn')) $('go-syn').onclick = goSynthese; return; }
   var c = chantier(), h = '<div><div class="eyebrow">Phénix-Architecture</div>';
   if (D.chantiers.length > 1) h += '<select id="sel-ch" aria-label="Chantier" style="font:400 22px var(--fd);padding:4px 10px">' + D.chantiers.map(function(x){ return '<option value="' + esc(x.id) + '"' + (x.id == S.cid ? ' selected' : '') + '>' + esc(x.nom || x.id) + '</option>'; }).join('') + '</select>';
   else h += '<div class="nm">' + esc(c ? c.nom : 'Aucun chantier') + '</div>';
@@ -376,7 +376,7 @@ function renderTop(){
   h += '<span class="chip">' + (!S.online ? '⚠ Hors ligne : tout est gardé sur la tablette' : S.pending ? '⟳ Envoi en cours…' : '✓ Synchronisé') + '</span>';
   if (S.role !== 'chantier') h += '<span class="seg"><button type="button" data-mode="terrain" aria-pressed="' + (S.mode === 'terrain') + '">Terrain</button><button type="button" data-mode="bureau" aria-pressed="' + (S.mode === 'bureau') + '">Bureau</button></span>';
   $('top').innerHTML = h;
-  var hb = document.createElement('button'); hb.type = 'button'; hb.className = 'btn'; hb.id = 'go-home'; hb.textContent = embedded() ? '← Synthèse' : '← Tous les chantiers'; hb.onclick = goHome; $('top').insertBefore(hb, $('top').firstChild);
+  var hb = document.createElement('button'); hb.type = 'button'; hb.className = 'btn'; hb.id = 'go-home'; hb.textContent = '← Tous les chantiers'; hb.onclick = goHome; $('top').insertBefore(hb, $('top').firstChild);
   var ds = $('dossier-set'); if (ds) ds.onclick = function(){
     var v = prompt('Lien du dossier de présentation (lien de partage Dropbox du dossier 05.PRESENTATION). Laisser vide pour retirer.', c.dossierUrl || '');
     if (v === null) return; v = v.trim();
@@ -1276,12 +1276,11 @@ function gdMaquette(c){
     if (window.PXModel && window.PXModel.create) go(); else window.addEventListener('px3dm-ready', go, {once:true});
   });
 }
-/* Dans le Shell, le tableau de bord des chantiers EST la Synthèse 3D (district Chantier) : on y retourne. Seul, hors Shell, la page « Chantiers en cours » sert de secours. */
+/* Les fiches des chantiers (cartes avec maquette 3D et signaux) s'ouvrent depuis la Synthèse 3D : message ouvrir-module {module:'chantier', projetId:'fiches'}.
+   Dans le Shell, « ← Synthèse » ramène à la Synthèse ; hors Shell le bouton n'existe pas. */
 function embedded(){ try{ return window.parent !== window && !FB.demo; }catch(e){ return false; } }
-function goHome(){
-  if (embedded()) { try{ window.parent.postMessage({ source:'phenix-chantier', action:'ouvrir-synthese' }, '*'); }catch(e){} return; }
-  S.screen = 'home'; setMode(S.mode);
-}
+function goSynthese(){ try{ window.parent.postMessage({ source:'phenix-chantier', action:'ouvrir-synthese' }, '*'); }catch(e){} }
+function goHome(){ S.screen = 'home'; setMode(S.mode); }
 /* Glisser une barre du Planning : décaler / changer les dates (jour entier) */
 function barDrag(el){
   var lot = D.lots.filter(function(y){ return y.id == el.getAttribute('data-bar'); })[0]; if (!lot) return;
@@ -1302,7 +1301,6 @@ function boot2(){
   visGet(c.id).then(function(v){ VIS = v; renderAll(); loadMaquette(); });
 }
 function ensureChantier(){
-  if (S.screen === 'home' && embedded()) S.screen = 'chantier';
   if (S.cid != null && chantier()) return;
   var want = lk('px2.cid'), act = D.chantiers.filter(function(c){ return c.statut !== 'termine' && c.statut !== 'archive'; });
   var pick = D.chantiers.filter(function(c){ return String(c.id) === want; })[0] || act[0] || D.chantiers[0];
@@ -1330,7 +1328,7 @@ function init(){
   S.mode = lk('px2.mode') === 'bureau' ? 'bureau' : 'terrain';
   window.addEventListener('online', function(){ S.online = true; renderTop(); }); window.addEventListener('offline', function(){ S.online = false; renderTop(); });
   /* ordres du Shell : ouvrir le chantier d'un dossier */
-  window.addEventListener('message', function(ev){ var d = ev.data; if (!d || d.source !== 'phenix-shell' || d.action !== 'open-projet' || d.id == null) return; var c = D.chantiers.filter(function(x){ return String(x.projetId) === String(d.id); })[0]; if (c) { S.cid = c.id; S.screen = d.onglet ? 'chantier' : 'garde'; M3.cid = null; if (d.onglet === 'avancement' || d.onglet === 'planning') { S.mode = 'bureau'; S.tab = 'lots'; S.view = d.onglet === 'planning' ? 'planning' : 'liste'; } else if (d.onglet === 'reception') { S.mode = 'bureau'; S.tab = 'reserves'; } setMode(S.mode); boot2(); } });
+  window.addEventListener('message', function(ev){ var d = ev.data; if (!d || d.source !== 'phenix-shell' || d.action !== 'open-projet' || d.id == null) return; if (String(d.id) === 'fiches') { S.screen = 'home'; setMode(S.mode); return; } var c = D.chantiers.filter(function(x){ return String(x.projetId) === String(d.id); })[0]; if (c) { S.cid = c.id; S.screen = d.onglet ? 'chantier' : 'garde'; M3.cid = null; if (d.onglet === 'avancement' || d.onglet === 'planning') { S.mode = 'bureau'; S.tab = 'lots'; S.view = d.onglet === 'planning' ? 'planning' : 'liste'; } else if (d.onglet === 'reception') { S.mode = 'bureau'; S.tab = 'reserves'; } setMode(S.mode); boot2(); } });
   try { window.parent.postMessage({ source:'phenix-chantier', ready:true }, '*'); } catch (e) {}
   if (FB.demo) { demoSeed(); setMode(S.mode); boot2(); return; }
   $('lg-go').onclick = function(){ FB.login($('lg-e').value.trim(), $('lg-p').value).catch(function(){ $('lg-m').textContent = 'Connexion refusée.'; }); };
