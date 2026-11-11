@@ -1308,6 +1308,11 @@ window.addEventListener('message', (ev) => {
   }
   // [Synthèse 3D · v42] « débloquer » : la fiche d'un dossier bloqué demande d'ouvrir le module qui lève le blocage.
   // On accuse réception (sinon la Synthèse se replie sur « ouvrir-dossier »).
+  /* Chantier → Synthèse 3D : « ← Synthèse » dans le module Chantier ramène à la vue d'ensemble des chantiers */
+  if (msg.source === 'phenix-chantier' && msg.action === 'ouvrir-synthese') {
+    const ns = document.querySelector('.shell-nav-item[data-module="synthese"]'); if (ns && ns.style.display !== 'none') shellOpenModule('synthese', ns);
+    return;
+  }
   if (msg.source === 'phenix-synthese' && msg.action === 'ouvrir-module' && msg.projetId != null) {
     try { ev.source && ev.source.postMessage({ source:'phenix-shell', action:'ack-module' }, '*'); } catch(e) {}
     const pid = /^\d+$/.test(String(msg.projetId)) ? Number(msg.projetId) : msg.projetId;
