@@ -7,6 +7,12 @@
 ══════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_chiffrage.html
 ──────────────────────────────────────────────────────────────────
+ 11/11/2026 — [Vignettes] Une image par projet pour le reconnaître d'un coup d'œil : la page « Projets » devient une mosaïque de
+   grandes cartes (image du projet en pleine carte, nom, commune et montant par-dessus) ; bouton « Image » sur chaque carte
+   (choisir, changer, retirer). L'image apparaît aussi à gauche du titre de « Lots & Chiffrage ». Les montants restent sur fond uni.
+   Stockage : collection phenix_media (comme les photos du Chantier), fiche « vig_p{id du projet Dossier} » (ou « vig_c… » si le
+   projet n'est pas relié) = { kind:'vignette', mini (640 px), parts } + morceaux « __i ». Le projet ne garde que imageId.
+   Rien dans la fiche phenix_chiffrage (limite Firestore de 1 Mo). Repérer : [Vignettes].
  05/11/2026 — [Financement] Nouvelle page « Financement » (menu, avant Export) : le dossier de financement (phenix_financement.html) s'ouvre dans un cadre sur le projet Dossier lié, comme le Carnet ; bouton « Envoyer le chiffrage au dossier ».
  23/10/2026 — [Carnet] Le Carnet de projet passe AVANT le chiffrage :
    1. Nouvelle page « Carnet » (menu, entre Projets et Lots & Chiffrage) et bouton
@@ -213,6 +219,27 @@ tr:hover td{background:var(--accent-bg)}
 .chantier-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;padding:24px 28px}
 .chantier-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r-lg);padding:20px;cursor:pointer;transition:all .15s;box-shadow:var(--shadow)}
 .chantier-card{min-width:0;box-sizing:border-box}
+/* [Vignettes] mosaïque : image du projet en pleine carte, texte par-dessus sur un voile sombre */
+.chantier-grid{grid-template-columns:repeat(auto-fill,minmax(320px,1fr))}
+.chantier-card{padding:0;overflow:hidden;display:flex;flex-direction:column}
+.chantier-vig{position:relative;aspect-ratio:16/10;background:linear-gradient(135deg,#12233f,#0a1628);cursor:pointer;overflow:hidden}
+.chantier-vig img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;transition:transform .35s}
+.chantier-card:hover .chantier-vig img{transform:scale(1.04)}
+.chantier-vig::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(5,10,20,.55) 0%,rgba(5,10,20,0) 34%,rgba(5,10,20,.15) 52%,rgba(5,10,20,.9) 100%);pointer-events:none}
+.chantier-vig-ini{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--font-serif);font-size:54px;color:rgba(240,239,236,.16);letter-spacing:.06em}
+.chantier-vig-top{position:absolute;left:12px;right:12px;top:10px;z-index:2;display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.chantier-vig-top .chantier-type{background:rgba(5,10,20,.72);color:#fff;border:1px solid rgba(255,255,255,.28)}
+.chantier-vig-btn{border:1px solid rgba(255,255,255,.4);background:rgba(5,10,20,.72);color:#fff;border-radius:20px;padding:4px 10px;font:600 11px inherit;font-family:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+.chantier-vig-btn:hover{background:rgba(5,10,20,.92);border-color:#fff}
+.chantier-vig-txt{position:absolute;left:14px;right:14px;bottom:10px;z-index:2;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.75)}
+.chantier-vig-txt .chantier-name{color:#fff;font-size:21px;line-height:1.15}
+.chantier-vig-txt .chantier-info{color:rgba(255,255,255,.88);margin-top:2px}
+.chantier-vig-txt .chantier-ht{color:#fff;margin-top:6px;font-size:22px}
+.chantier-vig-txt .chantier-ht span{color:rgba(255,255,255,.8)!important}
+.chantier-body{padding:12px 16px 16px}
+.chiffrage-vig{float:left;width:210px;aspect-ratio:16/10;margin:0 18px 6px 0;border-radius:var(--r-lg);overflow:hidden;border:1.5px solid var(--border);background:#0a1628;display:none}
+.chiffrage-vig img{width:100%;height:100%;object-fit:cover;display:block}
+@media(max-width:768px){.chiffrage-vig{width:120px;margin-right:12px}.chantier-vig-txt .chantier-name{font-size:19px}}
 .chantier-actions .btn{flex:0 0 auto;max-width:100%}
 .chantier-actions .btn:nth-child(-n+2){flex:1 1 auto}
 .chantier-card:hover{border-color:var(--accent);box-shadow:0 2px 12px rgba(74,156,199,.2)}
@@ -428,7 +455,7 @@ textarea.import-txt:focus{outline:none;border-color:var(--accent)}
   .page-actions { margin-top: 10px; }
   .page-actions .btn { width: 100%; justify-content: center; padding: 12px; font-size: 14px; }
   .chantier-grid { grid-template-columns: 1fr !important; gap: 10px; padding: 10px; }
-  .chantier-card { padding: 14px; }
+  .chantier-card { padding: 0; }
   .chantier-name { font-size: 16px; }
   .chantier-ht { font-size: 20px; }
   .chantier-card .btn { padding: 10px 12px; font-size: 13px; min-height: 42px; }
@@ -620,6 +647,7 @@ if (window.parent !== window) {
   <!-- PAGE CHIFFRAGE -->
   <div class="page" id="page-chiffrage">
     <div class="page-header">
+      <div class="chiffrage-vig" id="chiffrage-vig" aria-hidden="true"></div><!-- [Vignettes] image du projet -->
       <div class="page-title">Lots & Chiffrage</div>
       <div class="page-sub" id="chiffrage-sub">Décomposition par corps d'état</div>
       <div class="page-actions" style="flex-wrap:wrap;gap:8px">
@@ -2440,6 +2468,36 @@ async function loadChantiers(){
 window.saveChantiers = saveChantiers;
 window.loadChantiers = loadChantiers;
 
+// ── [Vignettes] image d'un projet dans phenix_media (même découpage que les photos du Chantier) ──
+//   phenix_media/{id}       : { kind:'vignette', name, parts, mini (image 640 px), createdAt }
+//   phenix_media/{id}__{i}  : { d } morceaux de la grande image (1400 px)
+const VIG_MORCEAU = 700000;
+window.pxVignette = {
+  async put(id, grande, mini, name){
+    const parts = [];
+    for (let i = 0; i < grande.length; i += VIG_MORCEAU) parts.push(grande.slice(i, i + VIG_MORCEAU));
+    await setDoc(doc(db, 'phenix_media', id), { kind: 'vignette', name: name || '', parts: parts.length, mini: mini || '', createdAt: new Date().toISOString() });
+    for (let i = 0; i < parts.length; i++) await setDoc(doc(db, 'phenix_media', id + '__' + i), { d: parts[i] });
+  },
+  async mini(id){
+    const s = await getDoc(doc(db, 'phenix_media', id));
+    return s.exists() && s.data().kind === 'vignette' ? (s.data().mini || '') : '';
+  },
+  async grande(id){
+    const s = await getDoc(doc(db, 'phenix_media', id));
+    if (!s.exists()) return '';
+    let du = '';
+    for (let i = 0; i < (s.data().parts || 0); i++) { const c = await getDoc(doc(db, 'phenix_media', id + '__' + i)); if (c.exists()) du += c.data().d || ''; }
+    return du || s.data().mini || '';
+  },
+  async del(id){
+    const s = await getDoc(doc(db, 'phenix_media', id));
+    if (!s.exists()) return;
+    for (let i = 0; i < (s.data().parts || 0); i++) { try { await deleteDoc(doc(db, 'phenix_media', id + '__' + i)); } catch (e) {} }
+    await deleteDoc(doc(db, 'phenix_media', id));
+  },
+};
+
 </script>
 <script>
 const STORAGE_KEY='phenix-chantiers-v3';
@@ -3606,15 +3664,24 @@ function renderChantierGrid(){
     const margePct=htArtisan>0?Math.round((margeEur/htArtisan)*100):0;
     const el=document.createElement('div');
     el.className='chantier-card'+(state.currentChantier===i?' selected':'');
+    // [Vignettes] image du projet en pleine carte ; nom, lieu et montant par-dessus
+    const vid=vigId(c), ini=vigEsc(String(c.nom||'?').trim().split(/\s+/).slice(0,2).map(w=>w.charAt(0).toUpperCase()).join(''));
     el.innerHTML=`
-      <div class="chantier-card-header">
-        <div class="chantier-name">${c.nom||'Sans nom'}</div>
-        <span class="chantier-type">${c.type||''}</span>
+      <div class="chantier-vig" data-vig="${vigEsc(vid)}" data-vig-i="${i}" onclick="selectChantier(${i})" title="Ouvrir le chiffrage de ce projet">
+        <div class="chantier-vig-ini" aria-hidden="true">${ini}</div>
+        <div class="chantier-vig-top">
+          <span class="chantier-type">${vigEsc(c.type||'')}</span>
+          <button type="button" class="chantier-vig-btn" onclick="event.stopPropagation();vigMenu(${i})" title="Choisir, changer ou retirer l'image de ce projet"><i class="ti ti-photo" aria-hidden="true"></i>${c.imageId?'Image':'Ajouter une image'}</button>
+        </div>
+        <div class="chantier-vig-txt">
+          <div class="chantier-name">${vigEsc(c.nom||'Sans nom')}</div>
+          <div class="chantier-info">${vigEsc((c.client?c.client+' — ':'')+(c.adresse||'')+(c.surface?' · '+c.surface+' m²':''))}</div>
+          <div class="chantier-ht">${fmt(htClient)} € HT <span style="font-size:13px">client</span></div>
+        </div>
       </div>
-      <div class="chantier-info">${c.client?c.client+' — ':''} ${c.adresse||''}${c.surface?' · '+c.surface+' m²':''}</div>
-      <div class="chantier-info" style="margin-top:2px">${c.phase||''}</div>
-      <div class="chantier-ht">${fmt(htClient)} € HT <span style="font-size:13px;color:var(--text3)">client</span></div>
-      <div style="font-size:11px;color:var(--text3);margin-top:2px">${(c.lots||[]).length} lot(s) · Achat artisan : ${fmt(htArtisan)} € · Marge : <strong style="color:${margeEur>=0?'#2D7A4F':'#C0392B'}">${margePct}%</strong></div>
+      <div class="chantier-body">
+      <div class="chantier-info" style="margin-top:0">${vigEsc(c.phase||'')}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:2px">${(c.lots||[]).length} lot(s) · Achat artisan : ${fmt(htArtisan)} € · Marge : <strong style="color:${margeEur>=0?'#2D7A4F':'#C0392B'}">${margeEur>=0?'':'▼ '}${margePct}%</strong></div>
       ${(()=>{const n=(c.lots||[]).filter(l=>!l.exclu&&lotEntrepriseEtat(l)==='aucune').length; return n?'<div style="margin-top:5px"><span class="no-ent"><i class="ti ti-alert-triangle" aria-hidden="true"></i> '+n+' lot'+(n>1?'s':'')+' sans entreprise</span></div>':'';})()}
       <div class="chantier-progress"><div class="chantier-progress-inner" style="width:${getProgress(c)}%"></div></div>
       <div class="chantier-actions" style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
@@ -3622,10 +3689,100 @@ function renderChantierGrid(){
         <button class="btn btn-sm btn-primary" onclick="selectChantier(${i})"><i class="ti ti-calculator" aria-hidden="true"></i>Chiffrer</button>
         <button class="btn btn-sm btn-outline" onclick="editChantier(${i})"><i class="ti ti-edit" aria-hidden="true"></i></button>
         <button class="btn btn-sm btn-danger" onclick="deleteChantier(${i})"><i class="ti ti-trash" aria-hidden="true"></i></button>
+      </div>
       </div>`;
     wrap.appendChild(el);
   });
+  vigObserver(wrap);
 }
+
+// ── [Vignettes] image d'un projet : identifiant, chargement à l'affichage, choix du fichier ──
+const _vigMini={}, _vigGrande={};          // identifiant → image (mémoire) ; '' = pas d'image
+function vigEsc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+// Identifiant de l'image : celui du projet s'il en a une ; sinon celui du projet Dossier relié (image partagée entre modules)
+function vigId(c){return c&&c.imageId?String(c.imageId):(c&&c.projetId?'vig_p'+String(c.projetId):'');}
+function vigPose(box,du){
+  if(!box||!du)return;
+  let im=box.querySelector('img'); if(!im){im=document.createElement('img');im.alt='';im.loading='lazy';box.insertBefore(im,box.firstChild);}
+  im.src=du; const ini=box.querySelector('.chantier-vig-ini'); if(ini)ini.style.display='none';
+}
+async function vigCharge(box){
+  const id=box.getAttribute('data-vig'); if(!id)return;
+  if(_vigMini[id]===undefined){
+    _vigMini[id]='';
+    try{ if(window.pxVignette) _vigMini[id]=await window.pxVignette.mini(id)||''; }catch(e){ delete _vigMini[id]; return; }
+    // image trouvée sur le projet Dossier relié : on retient le lien pour les prochaines fois
+    const c=state.chantiers[+box.getAttribute('data-vig-i')];
+    if(_vigMini[id]&&c&&!c.imageId&&vigId(c)===id){c.imageId=id; const bt=box.querySelector('.chantier-vig-btn'); if(bt)bt.lastChild.textContent='Image';}
+  }
+  if(_vigMini[id]&&box.isConnected)vigPose(box,_vigMini[id]);
+}
+let _vigObs=null;
+function vigObserver(wrap){
+  const boxes=wrap.querySelectorAll('.chantier-vig[data-vig]');
+  if(!('IntersectionObserver' in window)){boxes.forEach(vigCharge);return;}
+  if(_vigObs)_vigObs.disconnect();
+  _vigObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){_vigObs.unobserve(e.target);vigCharge(e.target);}});},{rootMargin:'300px'});
+  boxes.forEach(b=>{const id=b.getAttribute('data-vig'); if(id&&_vigMini[id])vigPose(b,_vigMini[id]); else if(id)_vigObs.observe(b);});
+}
+function vigReduire(file,max,q){
+  return new Promise((ok,ko)=>{
+    const url=URL.createObjectURL(file), im=new Image();
+    im.onload=()=>{
+      const k=Math.min(1,max/Math.max(im.naturalWidth,im.naturalHeight)), w=Math.max(1,Math.round(im.naturalWidth*k)), h=Math.max(1,Math.round(im.naturalHeight*k));
+      const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+      const cx=cv.getContext('2d'); cx.fillStyle='#fff'; cx.fillRect(0,0,w,h); cx.drawImage(im,0,0,w,h);
+      URL.revokeObjectURL(url); ok(cv.toDataURL('image/jpeg',q));
+    };
+    im.onerror=()=>{URL.revokeObjectURL(url);ko(new Error('image illisible'));};
+    im.src=url;
+  });
+}
+function vigChoisir(i){
+  const c=state.chantiers[i]; if(!c)return;
+  const inp=document.createElement('input'); inp.type='file'; inp.accept='image/*';
+  inp.onchange=async()=>{
+    const f=inp.files&&inp.files[0]; if(!f)return;
+    if(!window.pxVignette){showToast('Connexion nécessaire pour enregistrer une image');return;}
+    showToast('Enregistrement de l’image…');
+    try{
+      const grande=await vigReduire(f,1400,.82), mini=await vigReduire(f,640,.74);
+      const id=c.imageId||(c.projetId?'vig_p'+String(c.projetId):'vig_c'+Date.now().toString(36)+Math.random().toString(36).slice(2,7));
+      await window.pxVignette.put(id,grande,mini,f.name);
+      _vigMini[id]=mini; _vigGrande[id]=grande; c.imageId=id;
+      saveState(); renderChantierGrid(); vigEntete();
+      showToast('Image du projet enregistrée');
+    }catch(e){console.error('Vignette',e);showToast('Image non enregistrée : '+(e&&(e.code||e.message)||'erreur'));}
+  };
+  inp.click();
+}
+function vigRetirer(i){
+  const c=state.chantiers[i]; if(!c||!c.imageId)return;
+  if(!confirm('Retirer l’image de « '+(c.nom||'ce projet')+' » ?'))return;
+  const id=c.imageId; delete c.imageId; _vigMini[id]=''; delete _vigGrande[id];
+  // l'image n'est supprimée du serveur que si aucun autre projet ne l'utilise
+  if(window.pxVignette&&!state.chantiers.some(x=>x.imageId===id))window.pxVignette.del(id).catch(()=>{});
+  saveState(); renderChantierGrid(); vigEntete();
+}
+function vigMenu(i){
+  const c=state.chantiers[i]; if(!c)return;
+  if(!c.imageId||!_vigMini[c.imageId]){vigChoisir(i);return;}
+  if(confirm('Changer l’image de « '+(c.nom||'ce projet')+' » ?\n\nOK : choisir une autre image\nAnnuler : autres choix'))vigChoisir(i);
+  else vigRetirer(i);
+}
+// Image du projet à gauche du titre de « Lots & Chiffrage » (les montants restent sur fond uni)
+async function vigEntete(){
+  const box=document.getElementById('chiffrage-vig'); if(!box)return;
+  const c=state.currentChantier!==null?state.chantiers[state.currentChantier]:null, id=vigId(c);
+  box.setAttribute('data-id',id||'');
+  if(!id){box.style.display='none';box.innerHTML='';return;}
+  const pose=du=>{ if(box.getAttribute('data-id')!==id)return; if(!du){box.style.display='none';box.innerHTML='';return;} box.innerHTML='<img alt="" src="'+du+'">';box.style.display='block'; };
+  if(_vigGrande[id]||_vigMini[id])pose(_vigGrande[id]||_vigMini[id]); else {box.style.display='none';box.innerHTML='';}
+  if(_vigGrande[id]===undefined&&window.pxVignette&&_vigMini[id]!==''){
+    try{ _vigGrande[id]=await window.pxVignette.grande(id)||''; if(_vigGrande[id])pose(_vigGrande[id]); }catch(e){ delete _vigGrande[id]; }
+  }
+}
+window.vigMenu=vigMenu; window.vigChoisir=vigChoisir; window.vigRetirer=vigRetirer;
 
 function getProgress(c){
   if(!(c.lots||[]).length)return 0;
@@ -3891,6 +4048,7 @@ function onChantierSelect(){
 
 function renderChiffrage(){
   const idx=state.currentChantier;
+  vigEntete();   // [Vignettes]
   const banner=document.getElementById('chiffrage-actif-banner');
   const archBtn=document.getElementById('btn-chiffrage-archive');
   if(idx===null||!state.chantiers[idx]){
