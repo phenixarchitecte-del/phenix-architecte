@@ -69,10 +69,11 @@ h1,h2,h3{margin:0;font-weight:400;font-family:var(--fd)}
 #terrain{flex:1;min-height:0;display:flex;gap:14px;padding:14px 18px 0}
 #stage{flex:1;min-width:0;position:relative;border-radius:18px;overflow:hidden;background:linear-gradient(180deg,#14294b,#0d1d36);border:1px solid var(--line)}
 #h3-host{position:absolute;inset:0}
-#tiles{position:absolute;inset:0;overflow:auto;padding:16px;display:none;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;align-content:start}
+#tiles{position:absolute;inset:0;overflow:auto;padding:16px 16px 150px;display:none;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;align-content:start}
 .tile{min-height:92px;text-align:left;padding:14px;border-radius:16px;border:1px solid var(--line);background:var(--pan2);display:flex;flex-direction:column;gap:6px}
 .tile[aria-pressed=true]{border:2px solid var(--accent);background:rgba(79,168,240,.12)}
 .tile b{font-size:16px}
+#lgd{position:absolute;left:12px;bottom:12px;z-index:7;display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:12px;background:rgba(10,22,40,.85);border:1px solid var(--line);font-size:13px;pointer-events:none}#lgd span{display:flex;align-items:center;gap:8px}
 #stagebar{position:absolute;left:12px;top:12px;display:flex;gap:8px;flex-wrap:wrap;z-index:7}
 #side{width:340px;flex-shrink:0;display:flex;flex-direction:column;gap:12px;overflow:auto}
 #dock{display:flex;align-items:center;gap:8px;padding:12px 18px 16px;overflow-x:auto}
@@ -144,6 +145,7 @@ h1,h2,h3{margin:0;font-weight:400;font-family:var(--fd)}
       <div id="h3-host"></div>
       <div id="tiles"></div>
       <div id="stagebar"></div>
+      <div id="lgd" aria-label="Légende"></div>
       <button id="mic" type="button"></button>
     </div>
     <div id="side"></div>
@@ -193,6 +195,7 @@ if (!DEMO) {
     save(key, obj) { return S.setDoc(S.doc(db, COLS[key], String(obj.id)), obj); },
     del(key, id) { return S.deleteDoc(S.doc(db, COLS[key], String(id))); },
     async delMedia(id) { const m = await S.getDoc(S.doc(db, MEDIA, id)); const n = m.exists() ? (m.data().parts || 0) : 0; for (let i = 0; i < n; i++) await S.deleteDoc(S.doc(db, MEDIA, id + '__' + i)); await S.deleteDoc(S.doc(db, MEDIA, id)); },
+    async chImport(pid) { const s = await S.getDoc(S.doc(db, 'phenix_chantier_import', String(pid))); return s.exists() ? s.data() : null; },
     async fiche(pid) { const s = await S.getDoc(S.doc(db, 'phenix_portail', String(pid), 'etat', 'fiche')); return s.exists() ? s.data() : null; },
     async chunk(pid, i) { const s = await S.getDoc(S.doc(db, 'phenix_portail', String(pid), 'maquette', 'c' + i)); return s.exists() ? (s.data().d || '') : ''; },
     putMedia(id, du, kind) {
@@ -394,11 +397,14 @@ function renderStageBar(){
   var h = '';
   if (!M3.failed) {
     h += '<span class="seg"><button type="button" data-real="0" aria-pressed="' + !S.real + '">Lots</button><button type="button" data-real="1" aria-pressed="' + S.real + '">Avancement réel</button></span>';
-    h += '<span class="seg"><button type="button" data-in="out" aria-pressed="' + (S.in3d === 'out') + '">Extérieur</button><button type="button" data-in="in" aria-pressed="' + (S.in3d === 'in') + '">Intérieur</button></span>';
+    h += '<span class="seg"><button type="button" data-in="out" aria-pressed="' + (S.in3d === 'out') + '">Extérieur</button><button type="button" data-in="in" aria-pressed="' + (S.in3d === 'in') + '">Intérieur</button><button type="button" data-in="room" aria-pressed="' + (S.in3d === 'room') + '">Pièce</button></span>';
+    h += '<button class="btn" type="button" id="b-over" style="min-height:48px">Vue d\'ensemble</button>';
   }
   $('stagebar').innerHTML = h;
+  $('lgd').innerHTML = [['done', 'Terminé'], ['doing', 'En cours'], ['todo', 'À venir']].map(function(a){ return '<span>' + ico(a[0]) + a[1] + '</span>'; }).join('') + '<span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e6b95c" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.2v.1"/></svg>Réserve</span>';
+  if ($('b-over')) $('b-over').onclick = function(){ try{ PXModel.overview(); }catch(e){} };
   [].forEach.call($('stagebar').querySelectorAll('[data-real]'), function(b){ b.onclick = function(){ S.real = b.getAttribute('data-real') === '1'; applyStage(); renderStageBar(); }; });
-  [].forEach.call($('stagebar').querySelectorAll('[data-in]'), function(b){ b.onclick = function(){ S.in3d = b.getAttribute('data-in'); try{ PXModel.setMode(S.in3d); }catch(e){} renderStageBar(); }; });
+  [].forEach.call($('stagebar').querySelectorAll('[data-in]'), function(b){ b.onclick = function(){ S.in3d = b.getAttribute('data-in'); try{ if (S.in3d === 'room') { PXModel.setMode('in'); var l = D.lots.filter(function(x){ return x.id == S.lotId; })[0], z = l && zoneOf(l); if (z) PXModel.focus(z); else toast('Touchez un lot pour voir sa pièce.'); } else PXModel.setMode(S.in3d); }catch(e){} renderStageBar(); }; });
 }
 function renderTiles(){
   var ls = lotsOf(); if (!M3.failed) return;
@@ -412,19 +418,68 @@ function renderSide(){
     h += '<div class="card" style="display:flex;flex-direction:column;gap:10px"><div class="eyebrow">Lot ' + esc(lotNum(l, lotsOf().indexOf(l))) + '</div><h2 style="font-size:26px;line-height:1.15">' + esc(lotLabel(l)) + '</h2>' + stHtml(k) +
       '<div class="muted">' + (ent ? esc(ent) : '<span style="color:#f3dfb0;font-weight:600">⚠ Aucune entreprise</span>') + '</div>' +
       '<div class="bar" aria-hidden="true"><i style="width:' + Math.min(100, l.av || 0) + '%"></i></div><div style="font-weight:700">' + (l.av || 0) + ' % fait</div>' +
-      '<button class="btn" type="button" id="b-photo">📷 Photographier ce lot</button><button class="btn" type="button" id="b-res">⚑ Poser une réserve</button></div>';
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' + [['b-photo', 'Photo', '<path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13.5" r="3.5"/>'], ['b-res', 'Pastille', '<path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/>'], ['b-plan', 'Plan 2D', '<path d="M4 4h16v16H4z"/><path d="M4 10h8M12 10v10M12 15h8"/>'], ['b-annot', 'Annoter', '<path d="M4 20l1-4L16.5 4.5a2.1 2.1 0 0 1 3 3L8 19z"/><path d="M14.5 6.5l3 3"/>']].map(function(a){ return '<button class="btn" type="button" id="' + a[0] + '" style="min-height:76px;flex-direction:column;gap:6px;border-radius:14px"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + a[2] + '</svg>' + a[1] + '</button>'; }).join('') + '</div></div>';
   } else h += '<div class="card muted">Touchez un lot sur la maquette pour le photographier ou poser une réserve.</div>';
   h += '<div class="card" style="display:flex;flex-direction:column;gap:6px"><div class="eyebrow">' + (VIS ? 'Cette visite · démarrée à ' + new Date(VIS.start).toTimeString().slice(0, 5) : 'Visite') + '</div>';
-  if (VIS) h += '<div style="font-weight:600">📷 ' + VIS.photos.length + ' photo' + (VIS.photos.length > 1 ? 's' : '') + '</div><div class="muted">rangées par lot dans le compte rendu</div><div style="font-weight:600;margin-top:6px">⚑ ' + VIS.reserves.length + ' réserve' + (VIS.reserves.length > 1 ? 's' : '') + '</div><div class="muted">posées pendant la visite</div><button class="btn ghost" type="button" id="b-abandon" style="margin-top:6px">Abandonner cette visite</button>';
+  if (VIS) h += '<div style="font-weight:600">📷 ' + VIS.photos.filter(function(x){ return !x.annot; }).length + ' photo(s)' + (VIS.photos.some(function(x){ return x.annot; }) ? ' · ✎ ' + VIS.photos.filter(function(x){ return x.annot; }).length + ' annotation(s)' : '') + '</div><div class="muted">rangées par lot dans le compte rendu</div><div style="font-weight:600;margin-top:6px">⚑ ' + VIS.reserves.length + ' réserve' + (VIS.reserves.length > 1 ? 's' : '') + '</div><div class="muted">posées pendant la visite</div><button class="btn ghost" type="button" id="b-abandon" style="margin-top:6px">Abandonner cette visite</button>';
   else h += '<div class="muted">Démarrez la visite : photos et réserves iront dans un seul compte rendu.</div><button class="btn pri" type="button" id="b-start">Démarrer la visite</button>';
   h += '</div>';
   $('side').innerHTML = h;
   var b;
   if ((b = $('b-photo'))) b.onclick = function(){ needVisit(function(){ pickPhoto(function(du){ VIS.photos.push({ id:uid(), dataUrl:du, lotId:l.id, t:new Date().toISOString() }); visPut(); toast('Photo rangée dans ' + lotLabel(l)); renderSide(); renderTop(); renderMic(); }); }); };
   if ((b = $('b-res'))) b.onclick = function(){ needVisit(function(){ sheetReserve(l); }); };
+  if ((b = $('b-plan'))) b.onclick = function(){ needVisit(function(){ sheetPlan2d(l); }); };
+  if ((b = $('b-annot'))) b.onclick = function(){ needVisit(function(){ pickPhoto(function(du){ annoter(du, l, 'Photo annotée'); }); }); };
   if ((b = $('b-start'))) b.onclick = function(){ visStart().then(function(){ renderAll(); }); };
   if ((b = $('b-abandon'))) b.onclick = function(){ if (confirm('Abandonner la visite ? Photos et réserves de cette visite seront perdues.')) { visDel(S.cid); VIS = null; renderAll(); } };
 }
+/* Annoter : on dessine au doigt sur une photo ou un plan ; le résultat va dans la visite (donc dans le compte rendu). Trois stylos, nommés : jamais la couleur seule. */
+var PENS = [['Rouge', '#ff5a4d', 5], ['Jaune', '#ffd24d', 8], ['Blanc', '#ffffff', 3]];
+function annoter(du, l, cap){
+  var bg = document.createElement('div'); bg.className = 'sheetbg'; bg.style.alignItems = 'center';
+  var img = new Image();
+  img.onload = function(){
+    var W = Math.min(1400, img.width), H = Math.round(img.height * W / img.width), pen = 0, strokes = [], cur = null;
+    bg.innerHTML = '<div class="sheet" style="width:min(980px,100%);border-radius:22px"><div class="eyebrow">Annoter · ' + esc(l ? lotLabel(l) : 'sans lot') + '</div><div style="display:flex;gap:8px;flex-wrap:wrap" id="an-pens">' + PENS.map(function(a, i){ return '<button class="btn" type="button" data-pen="' + i + '" aria-pressed="' + (i === 0) + '" style="min-height:44px"><svg width="26" height="10" aria-hidden="true"><line x1="2" y1="5" x2="24" y2="5" stroke="' + a[1] + '" stroke-width="' + a[2] + '" stroke-linecap="round"/></svg> ' + a[0] + '</button>'; }).join('') + '<span style="flex:1"></span><button class="btn ghost" type="button" id="an-undo">↶ Annuler le trait</button></div><canvas id="an-cv" width="' + W + '" height="' + H + '" style="width:100%;border-radius:12px;touch-action:none;background:#000;cursor:crosshair"></canvas><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn big pri" type="button" id="an-ok">Enregistrer dans la visite</button><button class="btn big ghost" type="button" data-x="1">Annuler</button></div></div>';
+    document.body.appendChild(bg);
+    var cv = bg.querySelector('#an-cv'), cx = cv.getContext('2d');
+    var draw = function(){ cx.drawImage(img, 0, 0, W, H); strokes.concat(cur ? [cur] : []).forEach(function(st){ cx.strokeStyle = PENS[st.p][1]; cx.lineWidth = PENS[st.p][2] * W / 900; cx.lineCap = cx.lineJoin = 'round'; cx.beginPath(); st.pts.forEach(function(q, i){ i ? cx.lineTo(q[0], q[1]) : cx.moveTo(q[0], q[1]); }); if (st.pts.length === 1) cx.lineTo(st.pts[0][0] + .1, st.pts[0][1]); cx.stroke(); }); };
+    var pos = function(e){ var b = cv.getBoundingClientRect(); return [(e.clientX - b.left) * W / b.width, (e.clientY - b.top) * H / b.height]; };
+    cv.onpointerdown = function(e){ cv.setPointerCapture(e.pointerId); cur = { p:pen, pts:[pos(e)] }; draw(); e.preventDefault(); };
+    cv.onpointermove = function(e){ if (!cur) return; cur.pts.push(pos(e)); draw(); };
+    cv.onpointerup = function(){ if (cur) { strokes.push(cur); cur = null; draw(); } };
+    [].forEach.call(bg.querySelectorAll('[data-pen]'), function(b){ b.onclick = function(){ pen = +b.getAttribute('data-pen'); [].forEach.call(bg.querySelectorAll('[data-pen]'), function(x){ x.setAttribute('aria-pressed', x === b); }); }; });
+    bg.querySelector('#an-undo').onclick = function(){ strokes.pop(); draw(); };
+    bg.querySelector('#an-ok').onclick = function(){ draw(); var out = cv.toDataURL('image/jpeg', .85); VIS.photos.push({ id:uid(), dataUrl:out, lotId:l ? l.id : null, t:new Date().toISOString(), annot:true, caption:cap }); visPut(); bg.remove(); toast(cap + ' rangée dans la visite'); renderSide(); renderTop(); renderMic(); };
+    draw();
+  };
+  img.onerror = function(){ toast('Image illisible.'); };
+  img.src = du;
+  bg.onclick = function(e){ if (e.target === bg || (e.target.getAttribute && e.target.getAttribute('data-x'))) bg.remove(); };
+  document.body.appendChild(bg);
+}
+function planImage(x){   /* image d'un plan (1re page si PDF) */
+  var f = x.plans && x.plans[0];
+  return (f && f.dataUrl ? Promise.resolve(f.dataUrl) : plMediaGet(f && f.mediaId)).then(function(du){
+    if (!du) return '';
+    if (du.indexOf('data:application/pdf') !== 0) return du;
+    return pdfLib().then(function(lib){ return lib.getDocument({ data:atob(du.split(',')[1]) }).promise; }).then(function(pdf){ return pdf.getPage(1); }).then(function(pg){ var vp = pg.getViewport({ scale:1.6 }), cv = document.createElement('canvas'); cv.width = vp.width; cv.height = vp.height; var c2 = cv.getContext('2d'); c2.fillStyle = '#fff'; c2.fillRect(0, 0, cv.width, cv.height); return pg.render({ canvasContext:c2, viewport:vp }).promise.then(function(){ return cv.toDataURL('image/jpeg', .85); }); });
+  });
+}
+function sheetPlan2d(l){
+  var ps = D.plans.filter(function(x){ return x.chantierId == S.cid; }), bg = document.createElement('div'); bg.className = 'sheetbg';
+  bg.innerHTML = '<div class="sheet"><div class="eyebrow">Plan 2D · à annoter</div>' + (ps.length ? ps.map(function(x){ return '<button class="btn big" type="button" data-pl="' + x.id + '" style="justify-content:flex-start">' + esc(x.nom || 'Plan') + (x.type ? ' <span class="muted">· ' + esc(x.type) + '</span>' : '') + '</button>'; }).join('') : '<div class="muted">Aucun plan sur ce chantier. Ajoutez-en au Bureau, onglet « Réserves et plans ».</div>') + '<button class="btn ghost" type="button" data-x="1">Fermer</button></div>';
+  document.body.appendChild(bg);
+  bg.onclick = function(e){ if (e.target === bg || e.target.getAttribute('data-x')) bg.remove(); };
+  [].forEach.call(bg.querySelectorAll('[data-pl]'), function(b){ b.onclick = function(){ var x = plGet(b.getAttribute('data-pl')); b.disabled = true; b.textContent = 'Ouverture…'; planImage(x).then(function(du){ bg.remove(); if (!du) { toast('Plan introuvable (connexion ?).'); return; } annoter(du, l, 'Plan annoté · ' + (x.nom || 'plan')); }).catch(function(){ bg.remove(); toast('Plan illisible.'); }); }; });
+}
+/* Tâches issues des décisions des comptes rendus (gardées sur le chantier) */
+function tachesHtml(c){
+  var t = c.taches || []; if (!t.length) return '<span class="muted">Aucune tâche. Elles naissent des décisions validées.</span>';
+  return t.map(function(x){ return '<label style="display:flex;gap:10px;align-items:center;min-height:44px"><input type="checkbox" data-tk="' + esc(x.id) + '"' + (x.fait ? ' checked' : '') + ' style="width:22px;height:22px"> <span' + (x.fait ? ' style="text-decoration:line-through;opacity:.7"' : '') + '>' + esc(x.txt) + '</span>' + (x.fait ? ' <span class="muted">· fait</span>' : '') + '</label>'; }).join('');
+}
+function tacheFait(c, id, v){ var x = (c.taches || []).filter(function(y){ return y.id === id; })[0]; if (!x) return; x.fait = v; save('chantiers', c); if ($('gd-tk')) $('gd-tk').innerHTML = tachesHtml(c), [].forEach.call($('garde').querySelectorAll('[data-tk]'), function(b){ b.onchange = function(){ tacheFait(c, b.getAttribute('data-tk'), b.checked); }; }); }
+function decList(txt){ return String(txt || '').split(/[.;\n]+/).map(function(x){ return x.trim(); }).filter(function(x){ return x.length > 2; }); }
 function needVisit(fn){ if (VIS) return fn(); visStart().then(function(){ renderAll(); fn(); }); }
 function renderDock(){
   var c = chantier(), n = c && c.etape || 0, h = '';
@@ -495,14 +550,38 @@ function openDictee(){
   o.innerHTML = '<div id="top2" style="padding:14px 18px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:center"><div><div class="eyebrow">Fin de visite · compte rendu unique</div><div class="nm" style="font:400 24px var(--fd)">' + esc(chantier() ? chantier().nom : '') + ' · ' + frDate(today()) + '</div></div><span style="flex:1"></span><button class="btn ghost" type="button" id="d-back">← Retour à la maquette</button></div>' +
     '<div style="display:flex;gap:14px;padding:14px 18px;flex-wrap:wrap;align-items:flex-start"><div class="card" style="flex:1 1 360px;max-width:460px;display:flex;flex-direction:column;gap:12px"><h2 style="font-size:26px">Dites tout, une fois.</h2><div class="muted">Avancement, réserves, décisions, présents, météo, prochaine réunion : parlez dans l\'ordre que vous voulez. Les photos et réserves de la visite sont déjà dans le document.</div>' +
     '<div style="display:flex;align-items:center;gap:10px;min-height:32px"><span id="d-led"></span><span id="d-state" style="font-weight:600"></span></div><textarea id="d-txt" rows="8" placeholder="' + (SR ? 'Appuyez sur « Dicter » puis parlez…' : 'La dictée n\'est pas disponible sur ce navigateur : utilisez le micro du clavier de la tablette.') + '"></textarea><div class="eyebrow">Rubriques entendues</div><div id="d-chips" style="display:flex;flex-wrap:wrap;gap:8px"></div>' +
-    '<div style="display:flex;gap:8px;flex-wrap:wrap">' + (SR ? '<button class="btn big pri" type="button" id="d-rec">🎙 Dicter</button>' : '') + '<button class="btn big" type="button" id="d-end">Terminer la dictée</button></div></div>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' + (SR ? '<button class="btn big pri" type="button" id="d-rec">🎙 Dicter</button>' : '') + '<button class="btn big" type="button" id="d-end">Terminer la dictée</button></div><button class="btn ghost" type="button" id="d-qpq">Plutôt répondre question par question</button></div>' +
     '<div class="card" id="d-doc" style="flex:2 1 460px;display:flex;flex-direction:column;gap:10px"></div></div>';
   var ta = $('d-txt'); ta.value = REC.text;
   ta.oninput = function(){ REC.text = ta.value; VIS.notes = ta.value; visPut(); renderDoc(); };
   $('d-back').onclick = function(){ stopRec(); o.className = ''; o.innerHTML = ''; renderAll(); };
   if ($('d-rec')) $('d-rec').onclick = function(){ REC.on ? stopRec() : startRec(SR); };
   $('d-end').onclick = function(){ stopRec(); renderDoc(true); };
+  $('d-qpq').onclick = function(){ stopRec(); questions(); };
   renderDoc(); stateRec();
+}
+var QS = [['Météo', 'Quel temps fait-il ?'], ['Présents', 'Qui était présent ?'], ['Avancement', 'Où en sont les travaux ? (ex. couverture à 70 %)'], ['Réserves', 'Y a-t-il des réserves à ajouter ?'], ['Décisions', 'Quelles décisions ont été prises ?'], ['Prochaine réunion', 'Quand est la prochaine réunion ?']];
+function questions(){
+  var bg = document.createElement('div'); bg.className = 'sheetbg', i = 0, ans = [];
+  var i = 0, ans = [];
+  document.body.appendChild(bg);
+  var show = function(){
+    if (i >= QS.length) { var add = ans.filter(function(a){ return a[1]; }).map(function(a){ return a[0] + ' : ' + a[1].replace(/[.\s]+$/, '') + '.'; }).join(' '); bg.remove(); if (add) { REC.text = (REC.text ? REC.text.replace(/\s+$/, '') + ' ' : '') + add; VIS.notes = REC.text; visPut(); var ta = $('d-txt'); if (ta) ta.value = REC.text; } CRD.touched = false; renderDoc(true); return; }
+    bg.innerHTML = '<div class="sheet"><div class="eyebrow">Question ' + (i + 1) + ' sur ' + QS.length + ' · ' + QS[i][0] + '</div><h2 style="font-size:24px">' + esc(QS[i][1]) + '</h2><textarea id="q-t" rows="3" placeholder="Écrivez ou utilisez le micro du clavier"></textarea><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn big pri" type="button" id="q-ok">' + (i + 1 < QS.length ? 'Suivant' : 'Terminer') + '</button><button class="btn big" type="button" id="q-skip">Passer</button><button class="btn big ghost" type="button" data-x="1">Arrêter</button></div></div>';
+    $('q-ok').onclick = function(){ ans.push([QS[i][0], $('q-t').value.trim()]); i++; show(); };
+    $('q-skip').onclick = function(){ ans.push([QS[i][0], '']); i++; show(); };
+    $('q-t').focus();
+  };
+  bg.onclick = function(e){ if (e.target === bg || (e.target.getAttribute && e.target.getAttribute('data-x'))) { i = QS.length; show(); } };
+  show();
+}
+function sheetDate(done){
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition, bg = document.createElement('div'); bg.className = 'sheetbg';
+  bg.innerHTML = '<div class="sheet"><div class="eyebrow">Prochaine réunion</div><label style="display:flex;flex-direction:column;gap:4px"><span class="eyebrow">Date</span><input id="pd-d" type="date" style="min-height:48px"></label><label style="display:flex;flex-direction:column;gap:4px"><span class="eyebrow">Ou dites-la</span><input id="pd-t" placeholder="ex. jeudi 12 novembre à 9 h" style="min-height:48px"></label><div style="display:flex;gap:8px;flex-wrap:wrap">' + (SR ? '<button class="btn big" type="button" id="pd-mic">🎙 Dicter la date</button>' : '') + '<button class="btn big pri" type="button" id="pd-ok">Enregistrer</button><button class="btn big ghost" type="button" data-x="1">Annuler</button></div></div>';
+  document.body.appendChild(bg);
+  bg.onclick = function(e){ if (e.target === bg || e.target.getAttribute('data-x')) bg.remove(); };
+  if ($('pd-mic')) $('pd-mic').onclick = function(){ var sr = new SR(); sr.lang = 'fr-FR'; sr.onresult = function(ev){ $('pd-t').value = ev.results[0][0].transcript; }; sr.onerror = function(){ toast('Micro indisponible : écrivez la date.'); }; try{ sr.start(); toast('Je vous écoute…'); }catch(e){} };
+  $('pd-ok').onclick = function(){ var v = $('pd-t').value.trim() || ($('pd-d').value ? frDate($('pd-d').value) : ''); if (!v) { toast('Indiquez une date.'); return; } bg.remove(); done(v); };
 }
 function stateRec(){ var l = $('d-led'), s = $('d-state'), b = $('d-rec'); if (!l) return; l.className = REC.on ? 'rec' : ''; s.textContent = REC.on ? 'Écoute en cours…' : 'Micro arrêté'; if (b) b.textContent = REC.on ? '■ Arrêter' : '🎙 Dicter'; }
 function startRec(SR){
@@ -530,12 +609,16 @@ function renderDoc(final){
   h += F('meteo', 'Météo', 1) + F('presents', 'Présents', 1) + F('avancement', 'Avancement', 3);
   if (CRD.props.length) h += '<div class="rub"><div class="eyebrow">Avancement proposé par lot · à confirmer au Bureau</div>' + CRD.props.map(function(q, i){ return '<label style="display:flex;gap:10px;align-items:center;min-height:44px"><input type="checkbox" data-p="' + i + '"' + (q.on ? ' checked' : '') + ' style="width:22px;height:22px"> <b>' + esc(lotName(q.lotId)) + '</b> : ' + q.from + ' % → ' + q.to + ' %</label>'; }).join('') + '</div>';
   h += '<div class="rub' + (VIS.reserves.length || CRD.reserves ? '' : ' miss') + '"><div class="eyebrow">Réserves</div>' + VIS.reserves.map(function(r){ return '<div>⚑ ' + esc(r.titre) + ' <span class="muted">· ' + esc(lotName(r.lotId)) + (r.lieu ? ', ' + esc(r.lieu) : '') + (r.photoId ? ' · 1 photo' : '') + '</span></div>'; }).join('') + (final ? '<textarea data-f="reserves" rows="2" placeholder="Autres réserves dites à voix haute">' + esc(CRD.reserves) + '</textarea>' : (CRD.reserves ? '<div>' + esc(CRD.reserves) + '</div>' : (VIS.reserves.length ? '' : '<span class="muted">Aucune réserve dite</span>'))) + '</div>';
-  h += F('decisions', 'Décisions', 3) + F('prochaine', 'Prochaine réunion', 1);
+  h += (final ? F('decisions', 'Décisions', 3) : '<div class="rub' + (CRD.decisions ? '' : ' miss') + '"><div class="eyebrow">Décisions</div>' + (decList(CRD.decisions).length ? decList(CRD.decisions).map(function(d){ return '<div style="display:flex;gap:8px;align-items:center"><span style="flex:1">☐ ' + esc(d) + '</span><span class="muted" style="font-weight:600;white-space:nowrap">→ tâche</span></div>'; }).join('') : '<span class="muted">Non dit</span>') + '</div>') + F('prochaine', 'Prochaine réunion', 1);
+  if (!CRD.prochaine) h += '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" type="button" id="d-date">Dicter la date</button><button class="btn ghost" type="button" id="d-skip">Passer</button></div>';
   h += '<div class="rub"><div class="eyebrow">Photos (' + VIS.photos.length + ')</div><div style="display:flex;gap:6px;flex-wrap:wrap">' + (VIS.photos.length ? VIS.photos.map(function(ph){ return '<figure style="margin:0"><img src="' + ph.dataUrl + '" alt="" style="width:92px;height:68px;object-fit:cover;border-radius:8px;display:block"><figcaption class="muted" style="font-size:11px;max-width:92px">' + esc(lotName(ph.lotId)) + '</figcaption></figure>'; }).join('') : '<span class="muted">Aucune photo pendant cette visite</span>') + '</div></div>';
   if (final) h += '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn big pri" type="button" id="d-send">Envoyer le compte rendu</button><button class="btn big ghost" type="button" id="d-edit">Reprendre la dictée</button></div><div class="muted">Le compte rendu arrive dans « À traiter » au Bureau : rien n\'est appliqué aux lots avant validation.</div>';
   doc.innerHTML = h;
   [].forEach.call(doc.querySelectorAll('[data-f]'), function(t){ t.oninput = function(){ CRD[t.getAttribute('data-f')] = t.value; }; });
   [].forEach.call(doc.querySelectorAll('[data-p]'), function(c){ c.onchange = function(){ CRD.props[+c.getAttribute('data-p')].on = c.checked; }; });
+  var setPro = function(v){ REC.text = (REC.text ? REC.text.replace(/\s+$/, '') + ' ' : '') + 'Prochaine réunion : ' + v + '.'; VIS.notes = REC.text; visPut(); var ta = $('d-txt'); if (ta) ta.value = REC.text; CRD.prochaine = v; renderDoc(final); };
+  if ($('d-date')) $('d-date').onclick = function(){ sheetDate(setPro); };
+  if ($('d-skip')) $('d-skip').onclick = function(){ setPro('non fixée'); };
   if ($('d-edit')) $('d-edit').onclick = function(){ CRD.touched = false; renderDoc(); };
   if ($('d-send')) $('d-send').onclick = sendCR;
 }
@@ -549,7 +632,7 @@ function sendCR(){
   var cr = { id:uid(), num:nextNum(), chantierId:c.id, date:today(), auteur:'Phénix-Architecture', presents:CRD.presents, meteo:CRD.meteo, avancement:CRD.avancement,
     reserves:(VIS.reserves.map(function(r){ return '• ' + r.titre + (r.lieu ? ' (' + r.lieu + ')' : ''); }).concat(CRD.reserves ? [CRD.reserves] : [])).join('\n'),
     decisions:CRD.decisions, prochaine:CRD.prochaine, photos:photos.map(function(p){ var o = {}; Object.keys(p).forEach(function(k){ if (p[k] !== undefined) o[k] = p[k]; }); return o; }), plans:[], source:'vocal', createdAt:new Date().toISOString(),
-    visite:{ debut:VIS.start, fin:new Date().toISOString() }, aValider:true,
+    visite:{ debut:VIS.start, fin:new Date().toISOString() }, aValider:true, taches:decList(CRD.decisions),
     propositions:CRD.props.filter(function(q){ return q.on; }).map(function(q){ return { lotId:q.lotId, de:q.from, a:q.to }; }),
     reservesNouvelles:VIS.reserves.map(function(r){ return { id:r.id, titre:r.titre, description:r.description, lieu:r.lieu, lotId:r.lotId, photoMediaId:r.photoId ? (VIS.photos.filter(function(p){ return p.id === r.photoId; })[0] || {}).mediaId || null : null }; }) };
   D.crs.push(cr); save('crs', cr);
@@ -578,9 +661,14 @@ function renderBureau(){
 }
 function lotsHead(){
   return '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:12px"><h2 style="font-size:24px">' + (S.view === 'liste' ? 'Lots' : 'Planning') + '</h2><span class="seg light"><button type="button" data-view="liste" aria-pressed="' + (S.view === 'liste') + '">Liste</button><button type="button" data-view="planning" aria-pressed="' + (S.view === 'planning') + '">Planning</button></span>' +
-    (S.view === 'planning' ? '<span class="seg light"><button type="button" data-zoom="mois" aria-pressed="' + (S.zoom === 'mois') + '">Mois</button><button type="button" data-zoom="sem" aria-pressed="' + (S.zoom === 'sem') + '">Semaines</button></span><button class="btn" type="button" id="g-today">Aller à aujourd\'hui</button><span class="muted">Glissez une barre pour décaler un lot, tirez ses bords pour changer les dates.</span>' : '<span class="muted">' + lotsOf().length + ' lots</span>') + '</div>';
+    (S.view === 'planning' ? '<span class="seg light"><button type="button" data-zoom="mois" aria-pressed="' + (S.zoom === 'mois') + '">Mois</button><button type="button" data-zoom="sem" aria-pressed="' + (S.zoom === 'sem') + '">Semaines</button></span><button class="btn" type="button" id="g-today">Aller à aujourd\'hui</button><span class="muted">Glissez une barre pour décaler un lot, tirez ses bords pour changer les dates.</span>' : '<span class="muted">' + lotsOf().length + ' lots</span>') + '<span style="flex:1"></span><button class="btn" type="button" id="g-client">Voir ce que voit le client</button>' + (S.view === 'liste' && S.role !== 'chantier' ? '<button class="btn" type="button" id="g-imp">Importer depuis Chiffrage</button><button class="btn pri" type="button" id="g-new">+ Lot</button>' : '') + '</div>';
 }
 function viewListe(){
+  var c = chantier(), open = lk('px2.maq') !== '0', sel = D.lots.filter(function(x){ return x.id == S.lotId; })[0];
+  var pan = open ? '<div class="card" style="flex:1 1 260px;max-width:300px;display:flex;flex-direction:column;gap:10px"><div style="display:flex;align-items:center;gap:8px"><span class="eyebrow" style="flex:1">MAQUETTE</span><button class="btn" type="button" id="g-maq" aria-label="Réduire la maquette" style="min-height:36px">‹ Réduire</button></div><div data-art="' + (c ? c.id : '') + '" style="width:100%;aspect-ratio:11/8;border-radius:12px;overflow:hidden;background:#0d1d36;display:flex;align-items:center;justify-content:center">' + houseSvg(c && c.etape) + '</div>' + (sel ? '<div style="font-weight:600">' + stHtml(stOf(sel)) + ' ' + esc(lotLabel(sel)) + ' · lot ' + esc(lotNum(sel, lotsOf().indexOf(sel))) + '</div>' : '') + '<span class="muted" style="font-size:13px">Un clic sur une ligne met le lot en évidence ici. Réduite, la maquette laisse toute la largeur à la liste.</span></div>' : '<button class="btn" type="button" id="g-maq" style="align-self:flex-start">› Maquette</button>';
+  return '<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start">' + pan + '<div style="flex:999 1 560px;min-width:0">' + viewListeTable() + '</div></div>';
+}
+function viewListeTable(){
   var ls = lotsOf(), r = rangeDates(ls), h = lotsHead() + '<div class="tbl"><div style="min-width:620px"><div class="row h"><span></span><span>LOT</span><span>STATUT</span><span>FAIT</span><span>PÉRIODE</span></div>';
   ls.forEach(function(l, i){
     var k = stOf(l), ent = entrepriseOf(l), a = r.pos(l.debut), z = r.pos(l.fin);
@@ -628,17 +716,23 @@ function viewATraiter(){
   var lotName = function(id){ var l = D.lots.filter(function(x){ return x.id == id; })[0]; return l ? lotLabel(l) : 'Sans lot'; };
   return h + items.map(function(c){
     return '<div class="card" style="max-width:720px;margin-bottom:14px;display:flex;flex-direction:column;gap:10px"><div class="eyebrow">Compte rendu à valider · ' + esc(c.num) + ' · ' + frDate(c.date) + '</div><h2 style="font-size:24px">Visite du ' + frDate(c.date) + '</h2>' +
-      [['Météo', c.meteo], ['Présents', c.presents], ['Avancement', c.avancement]].map(function(x){ return x[1] ? '<div class="rub"><div class="eyebrow">' + x[0] + '</div><div>' + esc(x[1]) + '</div></div>' : ''; }).join('') +
-      ((c.propositions || []).length ? '<div class="rub"><div class="eyebrow">Avancement proposé</div>' + c.propositions.map(function(q){ return '<div>' + esc(lotName(q.lotId)) + ' : ' + q.de + ' % → <b>' + q.a + ' %</b></div>'; }).join('') + '<div class="muted">Appliqué aux lots à la validation.</div></div>' : '') +
-      (c.reserves ? '<div class="rub"><div class="eyebrow">Réserves</div><div style="white-space:pre-line">' + esc(c.reserves) + '</div><div class="muted">' + (c.reservesNouvelles || []).length + ' ajoutée' + ((c.reservesNouvelles || []).length > 1 ? 's' : '') + ' aux Réserves à la validation.</div></div>' : '') +
-      (c.decisions ? '<div class="rub"><div class="eyebrow">Décisions</div><div>' + esc(c.decisions) + '</div></div>' : '') +
-      '<div class="rub' + (c.prochaine ? '' : ' miss') + '"><div class="eyebrow">Prochaine réunion</div>' + (c.prochaine ? '<div>' + esc(c.prochaine) + '</div>' : '<div class="muted">Non définie</div>') + '</div>' +
-      '<div class="muted">📷 ' + (c.photos || []).length + ' photo' + ((c.photos || []).length > 1 ? 's' : '') + ' · visible du client : <b>non</b> (interne)</div>' +
-      '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn big pri" type="button" data-valid="' + c.id + '">✓ Valider et classer au dossier</button><button class="btn big ghost" type="button" data-ignore="' + c.id + '">Ignorer</button></div></div>';
+      [['Météo', c.meteo, ''], ['Présents', c.presents, '']].map(function(x){ return x[1] ? '<div class="rub"><div class="eyebrow">' + x[0] + '</div><div>' + esc(x[1]) + '</div></div>' : ''; }).join('') +
+      '<div class="rub"><div class="eyebrow">Avancement</div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="flex:1 1 240px">' + (c.avancement ? esc(c.avancement) : '<span class="muted">Non dit</span>') + '</span>' + ((c.propositions || []).length ? '<span class="chip">✓ Appliquer au lot</span>' : '') + '</div>' + (c.propositions || []).map(function(q){ return '<div>' + esc(lotName(q.lotId)) + ' : ' + q.de + ' % → <b>' + q.a + ' %</b></div>'; }).join('') + ((c.propositions || []).length ? '<div class="muted">Appliqué aux lots à la validation.</div>' : '') + '</div>' +
+      '<div class="rub' + (c.reserves ? '' : ' miss') + '"><div class="eyebrow">Réserves</div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="flex:1 1 240px;white-space:pre-line">' + (c.reserves ? esc(c.reserves) : '<span class="muted">Aucune</span>') + '</span>' + ((c.reservesNouvelles || []).length ? '<span class="chip">⚠ Ajoutée' + ((c.reservesNouvelles || []).length > 1 ? 's' : '') + ' aux réserves</span>' : '') + '</div></div>' +
+      '<div class="rub"><div class="eyebrow">Décisions</div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="flex:1 1 240px">' + (c.decisions ? esc(c.decisions) : '<span class="muted">Aucune</span>') + '</span>' + ((c.taches || []).length ? '<span class="chip">✓ ' + c.taches.length + ' tâche' + (c.taches.length > 1 ? 's' : '') + ' créée' + (c.taches.length > 1 ? 's' : '') + '</span>' : '') + '</div></div>' +
+      '<div class="rub' + (c.prochaine ? '' : ' miss') + '"><div class="eyebrow">Prochaine réunion</div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="flex:1 1 240px">' + (c.prochaine ? esc(c.prochaine) : '<span class="muted">Non définie : à choisir avant de classer.</span>') + '</span>' + (c.prochaine ? '' : '<button class="btn" type="button" data-cdate="' + c.id + '">Choisir la date</button>') + '</div></div>' +
+      '<div class="muted">📷 ' + (c.photos || []).length + ' photo' + ((c.photos || []).length > 1 ? 's' : '') + ' ou plan(s) annoté(s)</div>' +
+      '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="eyebrow">Qui le voit</span><span class="seg light"><button type="button" data-cvis="' + c.id + '" data-v="0" aria-pressed="' + !c.visibleClient + '">Interne</button><button type="button" data-cvis="' + c.id + '" data-v="1" aria-pressed="' + !!c.visibleClient + '">Client</button></span><span class="muted">' + (c.visibleClient ? 'Marqué visible du client (pas encore publié au portail)' : 'Interne : le client ne le voit pas') + '</span></div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn big pri" type="button" data-valid="' + c.id + '">✓ Valider et classer au dossier</button><button class="btn big" type="button" data-cedit="' + c.id + '">Modifier</button><button class="btn big ghost" type="button" data-ignore="' + c.id + '">Ignorer</button></div></div>';
   }).join('');
 }
 function bindBureau(){
   var b = $('bureau'), q = function(s, f){ [].forEach.call(b.querySelectorAll(s), f); };
+  if ($('g-maq')) $('g-maq').onclick = function(){ lk('px2.maq', lk('px2.maq') === '0' ? '1' : '0'); renderBureau(); };
+  if ($('g-client')) $('g-client').onclick = sheetClient;
+  if ($('g-new')) $('g-new').onclick = function(){ sheetLot(); };
+  if ($('g-imp')) $('g-imp').onclick = importChiffrage;
+  if (b.querySelector('[data-art]') && chantier()) thQueue([chantier()]);
   q('[data-gomsg]', function(x){ x.onclick = function(){ MSG.cur = x.getAttribute('data-gomsg'); S.tab = 'messages'; renderBureau(); renderTabs(); }; });
   q('[data-rp]', function(x){ x.onclick = function(){ S.rp = x.getAttribute('data-rp'); renderBureau(); }; });
   q('[data-fnew]', function(x){ x.onclick = function(){ sheetFacture(null); }; });
@@ -651,16 +745,73 @@ function bindBureau(){
   q('[data-statut]', function(x){ x.onchange = function(){ var l = D.lots.filter(function(y){ return y.id == x.getAttribute('data-statut'); })[0]; if (!l) return; l.statut = x.value; if (l.statut === 'termine') l.av = 100; save('lots', l); renderBureau(); }; });
   q('[data-av]', function(x){ x.onchange = function(){ var l = D.lots.filter(function(y){ return y.id == x.getAttribute('data-av'); })[0]; if (!l) return; l.av = Math.max(0, Math.min(100, parseFloat(x.value) || 0)); if (l.av > 0 && l.av < 100 && l.statut === 'attribue') l.statut = 'en_cours'; if (l.av === 100) l.statut = 'termine'; save('lots', l); renderBureau(); }; });
   q('[data-rstat]', function(x){ x.onchange = function(){ var r = D.reserves.filter(function(y){ return y.id == x.getAttribute('data-rstat'); })[0]; if (!r) return; r.statut = x.value; r.dateLevee = (x.value === 'levee' || x.value === 'verifiee') ? (r.dateLevee || today()) : ''; save('reserves', r); renderBureau(); }; });
+  q('[data-cdate]', function(x){ x.onclick = function(){ var c = D.crs.filter(function(y){ return y.id == x.getAttribute('data-cdate'); })[0]; if (c) sheetDate(function(v){ c.prochaine = v; save('crs', c); renderBureau(); }); }; });
+  q('[data-cvis]', function(x){ x.onclick = function(){ var c = D.crs.filter(function(y){ return y.id == x.getAttribute('data-cvis'); })[0]; if (c) { c.visibleClient = x.getAttribute('data-v') === '1'; save('crs', c); renderBureau(); } }; });
+  q('[data-cedit]', function(x){ x.onclick = function(){ sheetCrEdit(x.getAttribute('data-cedit')); }; });
   q('[data-valid]', function(x){ x.onclick = function(){ validerCR(+x.getAttribute('data-valid')); }; });
   q('[data-ignore]', function(x){ x.onclick = function(){ var c = D.crs.filter(function(y){ return y.id == x.getAttribute('data-ignore'); })[0]; if (c && confirm('Ignorer : le compte rendu reste enregistré mais rien n\'est appliqué aux lots ni aux réserves.')) { c.aValider = false; c.ignore = true; save('crs', c); renderBureau(); renderTabs(); } }; });
   q('[data-bar]', function(x){ barDrag(x); });
   q('[data-d]', function(x){ x.onchange = function(){ var l = D.lots.filter(function(y){ return y.id == x.getAttribute('data-lot'); })[0]; if (!l) return; l[x.getAttribute('data-d')] = x.value; if (l.debut && !l.fin) { l.fin = l.debut; } if (l.fin && !l.debut) { l.debut = l.fin; } save('lots', l); renderBureau(); }; });
+}
+/* Ce que voit le client : l'étape publiée, les plans et comptes rendus marqués « client » */
+function sheetClient(){
+  var c = chantier(); if (!c) return; var bg = document.createElement('div'); bg.className = 'sheetbg';
+  var pl = D.plans.filter(function(x){ return x.chantierId == c.id && x.visibleClient; }), cr = D.crs.filter(function(x){ return x.chantierId == c.id && x.visibleClient && !x.aValider; });
+  bg.innerHTML = '<div class="sheet"><div class="eyebrow">Ce que voit le client · ' + esc(c.nom || '') + '</div><div class="card"><b>Avancement</b><div class="muted">' + (c.etape ? 'Étape ' + c.etape + ' sur 26 : ' + esc(ETAPES[c.etape - 1]) + (c.fin ? ' · fin prévue ' + frDate(c.fin) : '') : 'Étape non renseignée : rien d\'affiché.') + '</div></div>' +
+    '<div class="card"><b>Plans (' + pl.length + ')</b>' + (pl.length ? pl.map(function(x){ return '<div class="muted">▣ ' + esc(x.nom) + '</div>'; }).join('') : '<div class="muted">Aucun plan marqué « visible du client ».</div>') + '</div>' +
+    '<div class="card"><b>Comptes rendus (' + cr.length + ')</b>' + (cr.length ? cr.map(function(x){ return '<div class="muted">▣ ' + esc(x.num) + ' · ' + frDate(x.date) + '</div>'; }).join('') : '<div class="muted">Aucun compte rendu marqué « Client ». Les photos, réserves et messages des artisans ne sont jamais montrés.</div>') + '</div><button class="btn ghost" type="button" data-x="1">Fermer</button></div>';
+  document.body.appendChild(bg);
+  bg.onclick = function(e){ if (e.target === bg || e.target.getAttribute('data-x')) bg.remove(); };
+}
+/* + Lot */
+function sheetLot(){
+  var c = chantier(); if (!c) return; var bg = document.createElement('div'); bg.className = 'sheetbg';
+  var ivs = D.intervenants.filter(function(i){ return i.chantierId == c.id || !i.chantierId; });
+  bg.innerHTML = '<div class="sheet"><div class="eyebrow">Nouveau lot · ' + esc(c.nom || '') + '</div><label style="display:flex;flex-direction:column;gap:4px"><span class="eyebrow">Nom du lot</span><input id="l-n" placeholder="ex. 09 — Carrelage" style="min-height:48px"></label><label style="display:flex;flex-direction:column;gap:4px"><span class="eyebrow">Entreprise</span><select id="l-e" style="min-height:48px"><option value="">Aucune entreprise</option>' + ivs.map(function(i){ return '<option value="' + i.id + '">' + esc(i.nom) + '</option>'; }).join('') + '</select></label><div style="display:flex;gap:10px"><label style="flex:1;display:flex;flex-direction:column;gap:4px"><span class="eyebrow">Début</span><input id="l-d" type="date" style="min-height:48px"></label><label style="flex:1;display:flex;flex-direction:column;gap:4px"><span class="eyebrow">Fin</span><input id="l-f" type="date" style="min-height:48px"></label></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn big pri" type="button" id="l-ok">Créer le lot</button><button class="btn big ghost" type="button" data-x="1">Annuler</button></div></div>';
+  document.body.appendChild(bg);
+  bg.onclick = function(e){ if (e.target === bg || e.target.getAttribute('data-x')) bg.remove(); };
+  bg.querySelector('#l-ok').onclick = function(){
+    var n = bg.querySelector('#l-n').value.trim(); if (!n) { toast('Donnez un nom au lot.'); return; }
+    var d = bg.querySelector('#l-d').value, f = bg.querySelector('#l-f').value, e = bg.querySelector('#l-e').value;
+    var l = { id:uid(), chantierId:c.id, nom:n, cat:'Autre', interv:e ? (isNaN(+e) ? e : +e) : null, statut:e ? 'attribue' : 'chiffrage', av:0, debut:d || f || '', fin:f || d || '' };
+    D.lots.push(l); save('lots', l); bg.remove(); toast('Lot créé'); renderBureau();
+  };
+}
+/* Importer depuis Chiffrage : la synthèse envoyée par Phénix Chiffrage (même lecture que l'ancien module) */
+function importChiffrage(){
+  var c = chantier(); if (!c) return;
+  if (FB.demo) { toast('Import indisponible en démonstration.'); return; }
+  if (!c.projetId) { toast('Ce chantier n\'est pas lié à un dossier Phénix : liez-le avant d\'importer.'); return; }
+  FB.chImport(c.projetId).then(function(data){
+    var items = data && data.lots || []; if (!items.length) { toast('Aucune synthèse Chiffrage pour ce dossier : utilisez « Envoyer vers Chantier » dans Phénix Chiffrage.'); return; }
+    var nu = function(x){ return String(x || '').replace(/^\s*LOT\s*\d+[A-Za-z]?\s*[—–-]\s*/i, '').trim().toLowerCase(); }, pris = {}, cr = 0, up = 0;
+    items.forEach(function(it){
+      var nom = (it.num ? it.num + ' — ' : '') + it.nom, cand = D.lots.filter(function(l){ return l.chantierId == c.id && !pris[l.id]; });
+      var ex = cand.filter(function(l){ return l.nom === nom || l.nom === it.nom; })[0] || cand.filter(function(l){ return nu(l.nom) === nu(it.nom); })[0];
+      var st = it.statut === 'Valide' ? 'attribue' : 'chiffrage', l = ex;
+      if (ex) { pris[ex.id] = 1; ex.ht = it.montantHt; ex.tva = it.tva; ex.nom = nom; if (it.debut && it.fin && (!ex.datesManuelles || !(ex.debut && ex.fin))) { ex.debut = it.debut; ex.fin = it.fin; } if (ex.statut === 'chiffrage' || ex.statut === 'attribue') ex.statut = st; up++; }
+      else { l = { id:uid(), chantierId:c.id, nom:nom, cat:'Autre', interv:null, statut:st, ht:it.montantHt, tva:it.tva, av:0, debut:it.debut || '', fin:it.fin || '', notes:'Importé depuis Phénix Chiffrage le ' + new Date().toLocaleDateString('fr-FR') }; D.lots.push(l); cr++; }
+      if (it.entreprise && !l.interv) { var iv = D.intervenants.filter(function(i){ return String(i.nom || '').trim().toLowerCase() === String(it.entreprise).trim().toLowerCase(); })[0]; if (iv) { l.interv = iv.id; delete l.entrepriseNom; } else l.entrepriseNom = it.entreprise; }
+      save('lots', l);
+    });
+    toast('Import terminé : ' + cr + ' créé(s), ' + up + ' mis à jour.'); renderBureau();
+  }).catch(function(){ toast('Échec de l\'import depuis Chiffrage.'); });
+}
+function sheetCrEdit(id){
+  var c = D.crs.filter(function(y){ return y.id == id; })[0]; if (!c) return;
+  var bg = document.createElement('div'); bg.className = 'sheetbg'; var F = [['meteo', 'Météo', 1], ['presents', 'Présents', 1], ['avancement', 'Avancement', 3], ['decisions', 'Décisions', 3], ['prochaine', 'Prochaine réunion', 1]];
+  bg.innerHTML = '<div class="sheet"><div class="eyebrow">Modifier · ' + esc(c.num) + '</div>' + F.map(function(f){ return '<label style="display:flex;flex-direction:column;gap:4px"><span class="eyebrow">' + f[1] + '</span><textarea data-ce="' + f[0] + '" rows="' + f[2] + '">' + esc(c[f[0]] || '') + '</textarea></label>'; }).join('') + '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn big pri" type="button" id="ce-ok">Enregistrer</button><button class="btn big ghost" type="button" data-x="1">Annuler</button></div></div>';
+  document.body.appendChild(bg);
+  bg.onclick = function(e){ if (e.target === bg || e.target.getAttribute('data-x')) bg.remove(); };
+  bg.querySelector('#ce-ok').onclick = function(){ [].forEach.call(bg.querySelectorAll('[data-ce]'), function(t){ c[t.getAttribute('data-ce')] = t.value.trim(); }); c.taches = decList(c.decisions); save('crs', c); bg.remove(); toast('Compte rendu modifié'); renderBureau(); };
 }
 function validerCR(id){
   var c = D.crs.filter(function(y){ return y.id == id; })[0]; if (!c) return;
   (c.propositions || []).forEach(function(q){ var l = D.lots.filter(function(y){ return y.id == q.lotId; })[0]; if (!l) return; l.av = q.a; if (q.a > 0 && q.a < 100 && l.statut === 'attribue') l.statut = 'en_cours'; if (q.a === 100) l.statut = 'termine'; save('lots', l); });
   var n = D.reserves.filter(function(r){ return r.chantierId == c.chantierId; }).length;
   (c.reservesNouvelles || []).forEach(function(r){ n++; var photos = r.photoMediaId ? [{ mediaId:r.photoMediaId, caption:'' }] : []; var rs = { id:uid(), chantierId:c.chantierId, ref:'R' + String(n).padStart(2, '0'), titre:r.titre, description:r.description || '', lieu:r.lieu || '', lotId:r.lotId || null, intervId:null, priorite:'normale', origine:'visite ' + c.num, echeance:'', statut:'ouverte', dateLevee:'', photos:photos }; D.reserves.push(rs); save('reserves', rs); });
+  var ch = D.chantiers.filter(function(y){ return y.id == c.chantierId; })[0];
+  if (ch && (c.taches || []).length) { ch.taches = (ch.taches || []).concat(c.taches.map(function(t){ return { id:uid(), txt:t, fait:false, crId:c.id }; })); save('chantiers', ch); }
   c.aValider = false; c.valideLe = new Date().toISOString(); save('crs', c);
   toast('Compte rendu validé : lots et réserves mis à jour.'); renderBureau(); renderTabs();
 }
@@ -1094,19 +1245,20 @@ function openGarde(id){
 function renderGarde(){
   var c = chantier(); if (!c) { $('garde').innerHTML = ''; return; }
   var x = chStats(c), ph = PHASES[phaseIdx(c.etape)], staff = S.role !== 'chantier', fin = staff;
-  var arts = D.lots.filter(function(l){ return l.chantierId == c.id && stOf(l) === 'doing' && entrepriseOf(l); }).map(function(l){ var e = entrepriseOf(l); var nm = e.nom || e.societe || ''; return nm ? esc(nm) + ' (' + esc(lotLabel(l)) + ')' : esc(lotLabel(l)); });
+  var arts = D.lots.filter(function(l){ return l.chantierId == c.id && stOf(l) === 'doing' && entrepriseOf(l); }).map(function(l){ var nm = entrepriseOf(l) || ''; return nm ? esc(nm) + ' (' + esc(lotLabel(l)) + ')' : esc(lotLabel(l)); });
   var k = function(a, b){ return '<div class="card" style="display:flex;flex-direction:column;gap:2px"><div class="eyebrow">' + a + '</div><div style="font:400 22px var(--fd)">' + b + '</div></div>'; };
   var h = '<div style="display:grid;grid-template-columns:minmax(300px,3fr) minmax(280px,2fr);gap:14px;align-items:start" class="gdg"><div class="parc ' + x.st + '" style="padding:10px"><div id="gd-3d" style="position:relative;width:100%;height:min(62vh,520px);min-height:300px;border-radius:12px;overflow:hidden;background:#0d1d36;display:flex;align-items:center;justify-content:center">' + houseSvg(c.etape) + '</div><div class="muted" style="font-size:13px;padding:6px 4px 0">Maquette 3D du Carnet à l\'étape réelle du chantier. Glisser pour tourner, pincer ou molette pour zoomer.</div></div>' +
     '<div style="display:flex;flex-direction:column;gap:12px"><div class="card"><span class="chip">' + chIco(x.st) + ' ' + CH_ST[x.st][0] + '</span><div style="font:400 26px var(--fd);margin-top:6px">' + esc(c.nom || c.id) + '</div>' + (c.adresse ? '<div class="muted">' + esc(c.adresse) + '</div>' : '') +
     '<div style="margin-top:10px" class="muted">' + (c.etape ? 'Étape ' + c.etape + ' sur 26 · ' + esc(ph ? ph[0] : '') : 'Étape non renseignée') + '</div><div class="bar" aria-hidden="true"><i style="width:' + Math.round((c.etape || 0) / 26 * 100) + '%"></i></div>' +
     '<div class="muted" style="font-size:13px;margin-top:6px">' + (x.lots ? x.done + ' lot(s) terminé(s) sur ' + x.lots + ' · ' + x.avg + ' % fait' : 'Aucun lot') + (c.fin ? ' · fin prévue ' + frDate(c.fin) : '') + '</div></div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' + k('Réserves ouvertes', x.rs) + k('Messages non lus', x.msgs) + k('Comptes rendus à valider', x.crPend) + k('Prochaine réunion', x.prochaine ? esc(x.prochaine) : '—') + '</div>' +
-    '<div class="card"><div class="eyebrow">Sur le chantier</div><div style="margin-top:4px">' + (arts.length ? arts.join('<br>') : '<span class="muted">Aucun lot en cours.</span>') + '</div></div>' +
+    '<div class="card"><div class="eyebrow">À faire</div><div id="gd-tk" style="margin-top:4px">' + tachesHtml(c) + '</div></div><div class="card"><div class="eyebrow">Sur le chantier</div><div style="margin-top:4px">' + (arts.length ? arts.join('<br>') : '<span class="muted">Aucun lot en cours.</span>') + '</div></div>' +
     (x.flags.length ? '<div style="display:flex;flex-direction:column;gap:6px">' + x.flags.slice(0, 5).map(function(f){ return '<button type="button" class="flag" data-gt="' + (f.tab || '') + '"><b style="flex-shrink:0">' + (f.lvl === 2 ? '✕ Bloquant' : '⚠ À voir') + '</b><span>' + esc(f.txt) + '</span></button>'; }).join('') + '</div>' : '<div class="card">✓ Rien à signaler.</div>') +
     '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn pri" type="button" data-gm="terrain">Ouvrir sur le terrain</button>' + (staff ? '<button class="btn" type="button" data-gm="bureau">Bureau</button>' : '') + '</div></div></div>';
   $('garde').innerHTML = h;
   [].forEach.call($('garde').querySelectorAll('[data-gm]'), function(b){ b.onclick = function(){ openChantier(c.id, b.getAttribute('data-gm')); }; });
   [].forEach.call($('garde').querySelectorAll('[data-gt]'), function(b){ b.onclick = function(){ var t = b.getAttribute('data-gt'); if (t) S.tab = t; openChantier(c.id, t ? 'bureau' : S.mode); }; });
+  [].forEach.call($('garde').querySelectorAll('[data-tk]'), function(b){ b.onchange = function(){ tacheFait(c, b.getAttribute('data-tk'), b.checked); }; });
   gdMaquette(c);
 }
 function gdMaquette(c){
