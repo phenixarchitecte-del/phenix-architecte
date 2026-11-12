@@ -352,6 +352,8 @@ select.field{appearance:auto}
 .c-amt{font-weight:600;color:#fff;white-space:nowrap;text-align:right}
 .c-amt small{display:block;font-size:10px;color:var(--text3);font-weight:400}
 .c-last{font-size:12px;color:var(--text3);margin-top:7px}
+.c-quick{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.c-quick .btn{min-height:38px;flex:1;min-width:84px}
 .btn.red{background:var(--red-bg);border-color:rgba(224,119,108,.4);color:var(--red)}
 .btn[disabled],.btn.off{opacity:.4;pointer-events:none}
 .seg{display:flex;gap:6px;margin-top:10px}
@@ -1253,10 +1255,15 @@ function card(it){
     if (e.type === 'cloture') chips += '<span class="chip violet">Dernière relance ou clôture</span>';
     else chips += '<span class="chip blue">Relance n°' + (e.nb + 1) + '</span>';
     chips += '<span class="chip">Devis du ' + fmtDate(e.base) + ' · ' + ago(e.age) + '</span>';
-    if (e.der) chips += '<span class="chip">Dernière relance le ' + fmtDate(e.der) + '</span>';
   }
   var histo = Array.isArray(f.relanceHisto) ? f.relanceHisto : [];
   var last = histo.length ? histo[histo.length-1] : null;
+  // Compteur : jours écoulés depuis la dernière relance (ou depuis l'envoi si jamais relancé) ; repart de 0 à chaque relance consignée
+  if (e.type !== 'completer') {
+    var cptJ = e.der ? Math.max(0, diffDays(todayISO(), e.der)) : e.age;
+    var cptTxt = e.der ? '⏱ ' + (last && last.canal ? canalIcon(last.canal) + ' ' : '') + 'Relancé ' + ago(cptJ) : '⏱ Jamais relancé · ' + cptJ + ' j depuis l\'envoi';
+    chips = '<span class="chip ' + (e.der ? 'green' : 'amber') + '">' + cptTxt + '</span>' + chips;
+  }
   var lastTxt = '';
   if (last) {
     var ld = normDate(last.d);
@@ -1272,6 +1279,7 @@ function card(it){
     var d = normDate(h.d);
     return '<li>' + canalIcon(h.canal) + ' <b>' + fmtDate(d) + '</b> · ' + esc(resLabel(h.res)) + (h.note ? ' — ' + esc(h.note) : '') + (h.par ? ' <span style="color:var(--text3)">(' + esc(String(h.par).split('@')[0]) + ')</span>' : '') + '</li>';
   }).join('') + '</ul>' : '<div class="note" style="margin:0 0 10px">Aucune relance consignée pour l\'instant.</div>';
+  if (last && last.res !== 'signed' && last.res !== 'lost') det += '<div class="row" style="margin-bottom:10px"><button class="btn ghost" data-act="undorelance" data-id="' + esc(id) + '">↩ Annuler la dernière relance (erreur de clic)</button></div>';
   if (!RESTREINT) det += '<div class="row"><div style="flex:1;min-width:160px"><span class="lbl">Date d\'envoi du devis</span><input class="field" type="date" id="env-' + esc(id) + '" value="' + esc(e.base) + '"></div>' +
          '<button class="btn" data-act="saveenvoi" data-id="' + esc(id) + '" style="align-self:flex-end">Enregistrer</button></div>';
   det += '<div class="row" style="margin-top:12px">' +
@@ -1291,6 +1299,9 @@ function card(it){
       '<button class="btn" data-act="msg" data-id="' + esc(id) + '">✉️ Message</button>' +
       '<button class="btn primary" data-act="log" data-id="' + esc(id) + '">✓ Consigner</button>' +
       '<button class="btn ghost" data-act="more" data-id="' + esc(id) + '" title="Détails" aria-label="Détails">⋯</button>' +
+    '</div>' +
+    '<div class="c-quick"><span class="lbl" style="margin:0">J\'ai relancé par :</span>' +
+      ['tel','mail','sms'].map(function(k){ return '<button class="btn" data-act="quick" data-id="' + esc(id) + '" data-v="' + k + '">' + CANAUX[k] + '</button>'; }).join('') +
     '</div>' + statutBtns(it) +
     '<div class="c-more">' + det + '</div></div>';
 }
@@ -1401,6 +1412,7 @@ async function saveRefus(){
 }
 
 var RESULTATS = [
+  { k:'done',     l:'Relance faite',      cls:'' },   // relance rapide (boutons 📞 ✉️ 💬 de la carte) : remet le compteur à zéro
   { k:'noans',    l:'Pas de réponse',     cls:'' },
   { k:'callback', l:'À rappeler',         cls:'', ask:3 },
   { k:'think',    l:'Veut réfléchir',     cls:'', ask:7 },
@@ -1466,6 +1478,26 @@ function findItem(id){
   var all = allItems();
   for (var i=0;i<all.length;i++) if (String(all[i].f.id) === String(id)) { all[i].e = etat(all[i].f, todayISO(), CFG); return all[i]; }
   return null;
+}
+
+/* Relance rapide : un clic sur 📞 / ✉️ / 💬 consigne la relance du jour et remet le compteur à zéro */
+async function relanceRapide(id, canal){
+  var it = findItem(id); if (!it || !CANAUX[canal]) return;
+  var f = it.f, today = todayISO();
+  var entry = { d: new Date().toISOString(), canal: canal, res: 'done', note: '', par: ME };
+  var histo = (Array.isArray(f.relanceHisto) ? f.relanceHisto : []).concat([entry]);
+  await persist(it, { relanceHisto: histo, relanceNb: (parseInt(f.relanceNb,10)||0) + 1, relanceDerniere: today, relanceProchaine: '' },
+    '✅ Relance par ' + CANAUX[canal].replace(/^\S+\s/, '').toLowerCase() + ' consignée — compteur remis à zéro.');
+}
+async function annulerRelance(id){
+  var it = findItem(id); if (!it) return;
+  var f = it.f, histo = Array.isArray(f.relanceHisto) ? f.relanceHisto.slice() : [];
+  var last = histo[histo.length - 1];
+  if (!last || last.res === 'signed' || last.res === 'lost') return;
+  if (!confirm('Annuler la dernière relance (' + canalIcon(last.canal) + ' ' + fmtDate(normDate(last.d)) + ') ?')) return;
+  histo.pop();
+  var prev = histo.length ? normDate(histo[histo.length - 1].d) : '';
+  await persist(it, { relanceHisto: histo, relanceNb: Math.max(0, (parseInt(f.relanceNb,10)||0) - 1), relanceDerniere: prev, relanceProchaine: '' }, 'Dernière relance annulée.');
 }
 
 function consigner(id, canal){
@@ -1904,6 +1936,8 @@ document.addEventListener('click', function(ev){
     case 'tab': tab = el.getAttribute('data-tab'); render(); break;
     case 'more': openIds[id] = !openIds[id]; render(); break;
     case 'log': consigner(id); break;
+    case 'quick': relanceRapide(id, v); break;
+    case 'undorelance': annulerRelance(id); break;
     case 'msg': message(id); break;
     case 'settings': if (!RESTREINT) openSettings(); break;
     case 'closesheet': closeSheet(); break;
