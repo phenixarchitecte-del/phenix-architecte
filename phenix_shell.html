@@ -684,7 +684,7 @@ window.ouvrirValidation = async function(id) {
     .map(e => '<div style="font-size:12.5px;margin:2px 0"><span style="color:#6b7a99">' + _ncEsc(_dateCourte(e.recuLe || e.creeLe)) + ' · ' + (e.source === 'sms' ? 'SMS' : 'mail') + '</span> — ' + _ncEsc(e.resume || e.titre || e.objet || '') + '</div>').join('');
   document.getElementById('valBox').innerHTML =
     '<div class="vh"><div><b>' + (x.source === 'sms' ? '💬 SMS' : '✉️ Mail') + ' · ' + _ncEsc(x.artisanNom || x.de) + (x.expediteurType === 'client' ? ' (client)' : x.expediteurType === 'inconnu' ? ' (expéditeur inconnu)' : ' (artisan)') + '</b><br><span style="font-size:12px;color:#6b7a99">' +
-      _ncEsc(new Date(x.recuLe || x.creeLe).toLocaleString('fr-FR')) + (x.projetNom ? ' · dossier « ' + _ncEsc(x.projetNom) + ' »' : ' · dossier non identifié') + ' · ' + _ncEsc(CLASSE_LIB[x.classe] || 'Autre') + '</span><div style="margin-top:4px">' + _echEtatTexte(x) + '</div></div><button class="vbtn" onclick="fermerValidation()" aria-label="Fermer">✕</button></div>' +
+      _ncEsc(new Date(x.recuLe || x.creeLe).toLocaleString('fr-FR')) + (x.projetNom ? ' · dossier « ' + _ncEsc(x.projetNom) + ' »' : ' · dossier non identifié') + ' · ' + _ncEsc(CLASSE_LIB[x.classe] || 'Autre') + '</span><div style="margin-top:4px">' + _echEtatTexte(x) + '</div></div><span style="display:flex;gap:6px;flex:none">' + (_estATraiter(x) ? '<button class="vbtn p" onclick="validerTermine()" title="Rien à faire : retirer des messages à traiter">✓ Lu</button>' : '') + '<button class="vbtn" onclick="fermerValidation()" aria-label="Fermer">✕</button></span></div>' +
     '<div class="vb"><div style="font-weight:700">Résumé</div><div>' + _ncEsc(x.resume || x.titre || '—') + (x.confiance != null && x.confiance < 0.5 ? ' <i>(lecture peu sûre : à vérifier)</i>' : '') + '</div>' +
     '<div style="font-weight:700;margin-top:10px">Message reçu</div><div class="vq">' + _ncEsc((x.objet && x.objet !== x.extrait ? x.objet + '\n' : '') + (x.extrait || '')) + '</div>' +
     (acts ? '<div style="font-weight:700;margin-bottom:6px">Actions proposées <span style="font-weight:400;color:#6b7a99">(rien n’est fait sans votre clic)</span></div>' + acts : '<div style="color:#6b7a99;margin-bottom:10px">Aucune action proposée pour ce message.</div>') +
@@ -692,7 +692,7 @@ window.ouvrirValidation = async function(id) {
     '<div class="vact"><b>Ajouter une tâche libre</b><label>Titre</label><input id="vlt" placeholder="Ex. : Rappeler cet artisan"><div class="vrow"><div><label>Assigner à</label><select id="vla">' + opts + '</select></div><div><label>Pour le</label><input type="date" id="vlj"></div></div><div style="margin-top:8px"><button class="vbtn" onclick="validerAction(-1)">Créer la tâche</button></div></div>' +
     (precedents ? '<div style="font-weight:700;margin:6px 0 2px">Échanges précédents avec cette personne</div>' + precedents : '') +
     '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">' + (x.projetId ? '<button class="vbtn" onclick="validerOuvrirDossier()">Ouvrir le dossier</button>' : '') +
-    (_estATraiter(x) ? '<button class="vbtn p" onclick="validerTermine()">Traité — retirer des à-traiter</button>' : '<button class="vbtn" onclick="validerRouvrir()">Remettre à traiter</button>') + '</div></div>';
+    (_estATraiter(x) ? '<button class="vbtn p" onclick="validerTermine()">✓ Lu — rien à faire, retirer des à traiter</button>' : '<button class="vbtn" onclick="validerRouvrir()">Remettre à traiter</button>') + '</div></div>';
   document.getElementById('valBack').classList.add('open');
 };
 
@@ -739,7 +739,7 @@ async function ouvrirRattacher(x) {
       '<label style="display:flex;gap:6px;align-items:center;font-weight:600"><input type="checkbox" id="vrAdr" checked style="width:auto"> Reconnaître cette adresse (' + _ncEsc(x.de || '') + ') la prochaine fois</label>' +
       '<div style="margin-top:8px"><button class="vbtn p" onclick="rattacherDecennale()">Ranger dans la fiche</button></div></div>' : '') +
     '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="vbtn" onclick="fermerValidation();fermerEchanges();shellOpenModule(\'annuaire\',document.querySelector(\'.shell-nav-item[data-module=annuaire]\'))">Ouvrir l’Annuaire</button>' +
-    (_estATraiter(x) ? '<button class="vbtn p" onclick="validerTermine()">Traité — retirer des à-traiter</button>' : '<button class="vbtn" onclick="validerRouvrir()">Remettre à traiter</button>') + '</div></div>';
+    (_estATraiter(x) ? '<button class="vbtn p" onclick="validerTermine()">✓ Lu — rien à faire, retirer des à traiter</button>' : '<button class="vbtn" onclick="validerRouvrir()">Remettre à traiter</button>') + '</div></div>';
   document.getElementById('valBack').classList.add('open');
 }
 window.rattacherDecennale = async function() {
@@ -1367,6 +1367,11 @@ window.addEventListener('message', (ev) => {
   if (msg.source === 'phenix-synthese' && msg.action === 'ouvrir-echanges') {
     try { ev.source && ev.source.postMessage({ source:'phenix-shell', action:'ack-module' }, '*'); } catch(e) {}
     try { window.ouvrirEchanges(); if (msg.id) setTimeout(() => window.ouvrirValidation(String(msg.id)), 150); } catch (e) { console.warn('Échanges', e); }
+    return;
+  }
+  // [Synthèse 3D] « ✓ Lu » sur un message de la gare : même effet que dans Échanges (statut « lu », le train repart)
+  if (msg.source === 'phenix-synthese' && msg.action === 'marquer-echange-lu' && msg.id) {
+    try { window.echLu(String(msg.id)); } catch (e) { console.warn('Lu', e); }
     return;
   }
   // [Synthèse 3D · v65] la gare des messages : ouvre Chantier › Messages, sur la conversation demandée si elle est connue
