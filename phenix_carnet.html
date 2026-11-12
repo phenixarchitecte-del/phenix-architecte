@@ -1807,6 +1807,9 @@ function onUser(u){
   });
 }
 S.src={proj:[],imp:[],idx:[]};S.got={};S.listUnsubs=[];
+/* [Synthèse v66] ?projet=ID : la page chantier de la Synthèse 3D ouvre directement le carnet de ce dossier (présentation du projet) */
+var _PRJ=(function(){try{return new URLSearchParams(location.search).get('projet')||''}catch(e){return ''}})();
+if(_PRJ)lsSet('phenix-carnet-last',String(_PRJ));
 function rebuildList(){
   if(!(S.got.proj&&S.got.imp&&S.got.idx))return;
   var m={};
@@ -1830,6 +1833,8 @@ function loadStaff(){
   S.listUnsubs.push(window._fb.listIndex(function(l){S.src.idx=l;S.got.idx=1;rebuildList()},eh));
 }
 function loadMember(){
+  if(_PRJ&&S.role==='chantier'&&S.chIds.indexOf(String(_PRJ))<0)S.chIds=[String(_PRJ)].concat(S.chIds);   /* Kevin : lecture du carnet de tout chantier ouvert depuis la Synthèse */
+  if(_PRJ&&S.chIds.indexOf(String(_PRJ))>0){S.chIds=[String(_PRJ)].concat(S.chIds.filter(function(x){return x!==String(_PRJ)}))}
   if(!S.chIds.length){S.chList=[];S.syncMsg='Aucun projet n’est associé à votre compte. Contactez Phénix.';renderAll();return}
   Promise.all(S.chIds.map(function(id){return window._fb.getIndex(id).then(function(f){return {id:id,nom:(f&&f.nom)||('Projet '+id)}},function(){return {id:id,nom:'Projet '+id}})})).then(function(l){S.chList=l.map(function(e){e.label=e.nom;return e});openProject(l[0].id)});
 }

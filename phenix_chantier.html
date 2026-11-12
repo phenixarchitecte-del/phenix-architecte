@@ -4978,7 +4978,7 @@ function annSync() {
   if (ch) { try { saveLocal(); renderIntervenants(); } catch (e) {} }
 }
 /* [Avancement] ordre du shell « open-projet » (Synthèse 3D) : ouvrir le chantier du dossier sur la bonne page.
-   onglet : 'avancement' (défaut) → Lots ; 'planning' → Planning ; 'reception' → Réserves. */
+   onglet : 'avancement' (défaut) → Lots ; 'planning' → Planning ; 'reception' → Réserves ; 'plans' → Plans & pastilles (v66). */
 window.addEventListener('message', ev => {
   const d = ev.data; if (!d || d.source !== 'phenix-shell' || d.action !== 'open-projet' || d.id == null) return;
   let essais = 0;
@@ -4989,9 +4989,9 @@ window.addEventListener('message', ev => {
     window._chOuvert = c.id + '|' + d.onglet; window._chOuvertT = Date.now();
     activeChantier = String(c.id);
     const sel = document.getElementById('sidebarChantierSelect'); if (sel) sel.value = c.id;
-    const page = d.onglet === 'planning' ? 'planning' : d.onglet === 'reception' ? 'reserves' : 'lots';
+    const page = d.onglet === 'planning' ? 'planning' : d.onglet === 'reception' ? 'reserves' : d.onglet === 'plans' ? 'plans' : 'lots';   // [Synthèse v66] 'plans' : Plans & pastilles du chantier
     show(page, navEl(page));
-    const f = document.getElementById({ lots: 'lots-filter-ch', planning: 'planning-filter-ch', reserves: 'res-filter-ch' }[page]);
+    const f = document.getElementById({ lots: 'lots-filter-ch', planning: 'planning-filter-ch', reserves: 'res-filter-ch', plans: 'plans-filter-ch' }[page]);
     if (f) { f.value = c.id; f.dispatchEvent(new Event('change')); }
     if (page === 'lots') setTimeout(() => {
       // premier lot en dessous de l'attendu (sinon le premier lot) : champ sélectionné, prêt à taper
