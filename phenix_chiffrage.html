@@ -2185,7 +2185,7 @@ if (window.parent !== window) {
       </div>
       <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <label for="import-entreprise" style="font-size:12px;color:var(--text2);font-weight:600">Entreprise du devis</label>
-        <input type="text" id="import-entreprise" list="ann-names" onfocus="annLoad()" autocomplete="off" placeholder="Raison sociale de l'artisan" style="min-width:240px;padding:5px 8px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:13px;font-family:var(--font-sans);background:var(--bg);color:var(--text)">
+        <input type="text" id="import-entreprise" list="ann-names" onfocus="annLoad()" oninput="annPrefillDiffere()" onchange="annPrefill()" autocomplete="off" placeholder="Raison sociale de l'artisan" style="min-width:240px;padding:5px 8px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:13px;font-family:var(--font-sans);background:var(--bg);color:var(--text)">
         <span style="font-size:12px;color:var(--text2)">→ retire la mention rouge « Aucune entreprise » du lot</span>
       </div>
       <div style="margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap" id="import-contacts">
@@ -2794,6 +2794,7 @@ window.chargerOffresArtisansEnAttente = chargerOffresArtisansEnAttente;
 
 function ouvrirModalOffresArtisans(){
   renderOffresArtisansList();
+  try{ _annLoaded=false; annLoad().then(()=>{ try{ renderOffresArtisansList(); }catch(e){} }); }catch(e){}
   document.getElementById('modal-offres-artisans').classList.add('open');
 }
 window.ouvrirModalOffresArtisans = ouvrirModalOffresArtisans;
@@ -2845,7 +2846,7 @@ function renderOffresArtisansList(){
         </div>
         <div style="font-weight:700;color:#2E7D4F">${fmt(_totalUtileOffre(o))} € HT</div>
       </div>
-      <div style="font-size:12px;color:var(--text2);margin:4px 0">${nbLignesChiffrees} ligne(s) chiffrée(s)${o.artisan?.tel?' · 📞 '+esc_dpgf(o.artisan.tel):''}${o.disponibilite?' · 📅 dispo. '+esc_dpgf(o.disponibilite):''}</div>
+      <div style="font-size:12px;color:var(--text2);margin:4px 0">${nbLignesChiffrees} ligne(s) chiffrée(s)${(o.artisan?.tel||(annTrouve(o.artisan?.nom)||{}).tel)?' · 📞 '+esc_dpgf(o.artisan?.tel||annTrouve(o.artisan?.nom).tel):''}${(annTrouve(o.artisan?.nom)?' · ✓ fiche Annuaire existante':' · fiche créée à l’import du lot')}${o.disponibilite?' · 📅 dispo. '+esc_dpgf(o.disponibilite):''}</div>
       ${o.commentaireGeneral ? `<div style="font-size:12px;color:var(--text2);font-style:italic;margin-bottom:6px">"${esc_dpgf(o.commentaireGeneral)}"</div>` : ''}
       <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
         <select id="offre-dest-${oi}" style="flex:1;min-width:180px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
@@ -2897,6 +2898,10 @@ async function creerLotDepuisOffreArtisan(oi){
   else if (o.numLot || o.lotNum || o.numero){ const _n=String(o.numLot||o.lotNum||o.numero).replace(/\D/g,''); if(_n) _lnum='LOT '+_n.padStart(2,'0'); }
   if (!_lnum) _lnum = 'LOT '+(nbExistants+1).toString().padStart(2,'0');
   const _ent = (o.artisan?.nom || 'Artisan');
+  // Fiche Annuaire : créée si l'entreprise n'y est pas, sinon complétée (champs vides seulement) avec téléphone et mail de l'offre
+  if (o.artisan && o.artisan.nom){
+    annEnsure(_ent, { tel: PhenixMsg.normTel(o.artisan.tel) || String(o.artisan.tel||'').trim(), email: PhenixMsg.normMail(o.artisan.email) || String(o.artisan.email||'').trim(), metier: _lnom });
+  }
   chantier.lots.push({
     num: _lnum,
     nom: (_lnom ? _lnom + ' — ' : '') + _ent,
@@ -5264,6 +5269,7 @@ RÈGLES STRICTES :
         : '⚠ ' + (!_tel&&!_mail ? 'Aucun téléphone ni mail détecté' : !_tel ? 'Téléphone non détecté' : 'Mail non détecté') + ' — à compléter pour pouvoir demander la décennale.';
     }catch(e){}
     try{ const _a=window._impArt, _ie=document.getElementById('import-entreprise'); if(_a && _a.entreprise && _ie && !_ie.value.trim()){ _ie.value=_a.entreprise; annAlerteMaj(); } }catch(e){}
+    annPrefill();   // fiche Annuaire déjà existante : coordonnées reprises automatiquement
     showImportPreview(postesExtraits);
 
     // Contrôle de cohérence : compare la somme des lignes extraites au total HT
@@ -8943,6 +8949,31 @@ function annTrouve(nom,siret){
   return _annList.find(a=>(sr.length>=9 && String(a.siret||'').replace(/\D/g,'')===sr) || (n && (_annN(a.entreprise)===n || _annN(a.nom)===n))) || null;
 }
 function annAlerteMaj(){}
+/* Import d'un devis : si l'entreprise a déjà une fiche dans l'Annuaire, ses coordonnées remplissent les champs vides de la fenêtre d'import ;
+   sinon on prévient qu'une fiche sera créée. Les valeurs reprises de la fiche sont repérées (data-pref) pour être retirées si l'entreprise change. */
+var _annPfT=null;
+function annPrefillDiffere(){ clearTimeout(_annPfT); _annPfT=setTimeout(annPrefill,400); }
+async function annPrefill(){
+  try{
+    const ie=document.getElementById('import-entreprise'), it=document.getElementById('import-tel'), im=document.getElementById('import-email'), ic=document.getElementById('import-contacts-etat');
+    if(!ie||!it||!im) return;
+    const nom=(ie.value||'').trim(), a=window._impArt||(window._impArt={});
+    await annLoad();
+    const ex=nom ? annTrouve(nom,a.siret) : null;
+    [it,im].forEach(e=>{ if(e.dataset.pref && !ex){ e.value=''; delete e.dataset.pref; } });   // entreprise changée : valeurs de l'ancienne fiche retirées
+    let repris=[];
+    if(ex){
+      const t=PhenixMsg.normTel(ex.tel)||String(ex.tel||'').trim(), m=PhenixMsg.normMail(ex.email)||String(ex.email||'').trim();
+      if(!it.value.trim() && t){ it.value=t; it.dataset.pref='1'; repris.push('téléphone'); }
+      if(!im.value.trim() && m){ im.value=m; im.dataset.pref='1'; repris.push('mail'); }
+    }
+    if(!ic||!nom) return;
+    const t2=PhenixMsg.normTel(it.value), m2=PhenixMsg.normMail(im.value);
+    const manque=!t2&&!m2 ? 'Aucun téléphone ni mail' : !t2 ? 'Téléphone manquant' : !m2 ? 'Mail manquant' : '';
+    ic.textContent=(manque ? '⚠ '+manque+' — à compléter pour pouvoir demander la décennale.' : '✓ Téléphone et mail renseignés — ils serviront à demander la décennale.')
+      + (ex ? ' Fiche Annuaire existante ('+(ex.entreprise||ex.nom)+')'+(repris.length ? ' : '+repris.join(' et ')+' repris automatiquement.' : '.') : ' Une fiche sera créée dans l’Annuaire à l’import.');
+  }catch(e){ console.warn('annPrefill :',e); }
+}
 /* Devis importé : fiche créée dans l'Annuaire si l'entreprise n'y est pas, sinon complétée (champs vides seulement) */
 async function annEnsure(nom,info){
   info=info||{}; nom=(nom||info.entreprise||'').trim(); if(!nom) return;
