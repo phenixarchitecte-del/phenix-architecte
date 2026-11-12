@@ -317,7 +317,7 @@ function readPhoto(file){
 function pickPhoto(cb){ var i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.setAttribute('capture', 'environment'); i.onchange = function(){ if (i.files && i.files[0]) readPhoto(i.files[0]).then(cb).catch(function(){ toast('Photo illisible.'); }); }; i.click(); }
 
 /* ═══════════ Maquette 3D (moteur partagé) ═══════════ */
-var M3 = { inited:false, failed:false, cid:null, X:null };
+var M3 = { inited:false, failed:false, cid:null, X:null, why:'' };
 function PX(){ return M3.X || window.PXModel; }
 function px3Free(){ if (M3.X) { try{ M3.X.dispose(); }catch(e){} M3.X = null; } M3.inited = false; }
 function zoneStates(){
@@ -333,10 +333,10 @@ function loadMaquette(){
     showTiles(false); var P0 = window.PXModel, go0 = function(){ var P = window.PXModel; P.loader = function(){ return Promise.resolve(window.__DEMO_GLB); }; P.cfg = window.__DEMO_CFG || {}; P.init($('h3-host'), HZ, function(id){ pickZone(id); }); P.update(zoneStates()); P.setActive(true); M3.inited = true; };
     if (P0) go0(); else window.addEventListener('px3dm-ready', go0, {once:true}); return;
   }
-  if (!c || FB.demo || !c.projetId) { px3Free(); showTiles(true); return; }
+  if (!c || FB.demo || !c.projetId) { px3Free(); M3.why = 'pid'; showTiles(true); return; }
   if (M3.cid === c.id) return; M3.cid = c.id; px3Free(); showTiles(false);
   FB.fiche(c.projetId).then(function(f){
-    var m = f && f.maquette; if (!(m && m.on && (m.n || m.url))) { showTiles(true); return; }
+    var m = f && f.maquette; if (!(m && m.on && (m.n || m.url))) { M3.why = 'off'; showTiles(true); return; }
     S.maq = m;
     var go = function(){
       try{
@@ -345,14 +345,14 @@ function loadMaquette(){
         var P = window.PXModel.create(); M3.X = P; P.quiet = true;
         P.loader = maqLoader(c, m);
         P.cfg = m;
-        P.onfail = function(){ if (M3.X === P) { px3Free(); showTiles(true); } };
+        P.onfail = function(){ if (M3.X === P) { px3Free(); M3.why = 'fail'; showTiles(true); } };
         P.init($('h3-host'), HZ, function(id){ pickZone(id); });
         P.update(zoneStates()); P.setActive(true);
         M3.inited = true; applyStage();
       }catch(e){ console.error(e); showTiles(true); }
     };
     if (window.PXModel && window.PXModel.create) go(); else { window.addEventListener('px3dm-ready', go, {once:true}); setTimeout(function(){ if (!window.PXModel) showTiles(true); }, 12000); }
-  }).catch(function(){ showTiles(true); });
+  }).catch(function(){ M3.why = 'fail'; showTiles(true); });
 }
 /* chargeur du .glb d'un chantier (url, ou morceaux dans la fiche du portail) : partagé par le Terrain et les miniatures */
 function maqLoader(c, m){
@@ -419,7 +419,9 @@ function renderStageBar(){
 }
 function renderTiles(){
   var ls = lotsOf(); if (!M3.failed) return;
-  $('tiles').innerHTML = ls.length ? ls.map(function(l, i){ return '<button class="tile" type="button" data-lot="' + l.id + '" aria-pressed="' + (l.id == S.lotId) + '"><span class="eyebrow">Lot ' + esc(lotNum(l, i)) + '</span><b>' + esc(lotLabel(l)) + '</b>' + stHtml(stOf(l)) + '<span class="muted">' + (l.av || 0) + ' % fait</span></button>'; }).join('') : '<div class="muted" style="padding:20px">Aucun lot pour ce chantier. Ils se créent au Bureau (« Importer depuis Chiffrage »).</div>';
+  var why = M3.why === 'pid' ? 'Ce chantier n\'est pas relié à un dossier : la maquette du Carnet ne peut pas s\'afficher.' : M3.why === 'off' ? 'La maquette de ce dossier n\'est pas publiée dans le Carnet : à activer dans le Carnet, elle apparaîtra ici sans rien recopier.' : M3.why === 'fail' ? 'La maquette du Carnet n\'a pas pu se charger (réseau ou appareil) : réessayez en rouvrant le chantier.' : '';
+  var note = why ? '<div class="card" style="grid-column:1/-1;border:2px dashed var(--amber);display:flex;gap:8px;align-items:flex-start"><span aria-hidden="true">⚠</span><span><b>Maquette indisponible</b><br><span class="muted">' + why + ' Les lots restent accessibles ci-dessous.</span></span></div>' : '';
+  $('tiles').innerHTML = note + (ls.length ? ls.map(function(l, i){ return '<button class="tile" type="button" data-lot="' + l.id + '" aria-pressed="' + (l.id == S.lotId) + '"><span class="eyebrow">Lot ' + esc(lotNum(l, i)) + '</span><b>' + esc(lotLabel(l)) + '</b>' + stHtml(stOf(l)) + '<span class="muted">' + (l.av || 0) + ' % fait</span></button>'; }).join('') : '<div class="muted" style="padding:20px">Aucun lot pour ce chantier. Ils se créent dans l\'onglet Lots (« Importer depuis Chiffrage »).</div>');
   [].forEach.call($('tiles').querySelectorAll('[data-lot]'), function(b){ b.onclick = function(){ S.lotId = +b.getAttribute('data-lot'); S.tab = 'lots'; renderTabs(); renderBureau(); renderTiles(); }; });
 }
 function renderSide(){
