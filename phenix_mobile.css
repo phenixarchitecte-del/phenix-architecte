@@ -1,0 +1,41 @@
+/* Phénix — vue téléphone commune (≤ 700 px). Chargée par le Shell dans chaque module (voir phenix_mobile.js).
+   Principe : une colonne, tableaux en fiches, champs et boutons à taille tactile, fenêtres plein écran.
+   Rien n'est porté par la couleur seule. Aucun effet à l'impression ni sur ordinateur. */
+@media screen and (max-width:700px){
+  html{-webkit-text-size-adjust:100%}
+  body{overflow-x:hidden}
+  img,video,canvas,svg{max-width:100%}
+  /* Grilles : colonnes qui passent à la ligne au lieu de déborder */
+  [style*="grid-template-columns"],.grid,.grid-2,.grid-3,.grid-4,.row2,.row3,.form-grid,.cols,.two-col,.three-col{
+    grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr))!important}
+  /* Barres de boutons / filtres : retour à la ligne, défilement horizontal pour les onglets */
+  .toolbar,.actions,.row-actions,.btn-row,.btn-group,.filters,.filtres,.page-actions,.header-actions,.topbar-actions{flex-wrap:wrap!important;gap:6px!important}
+  .tabs,.tab-bar,.onglets,.subnav,.sub-tabs{display:flex;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;flex-wrap:nowrap!important}
+  .tabs::-webkit-scrollbar,.tab-bar::-webkit-scrollbar,.onglets::-webkit-scrollbar,.subnav::-webkit-scrollbar,.sub-tabs::-webkit-scrollbar{display:none}
+  .tabs>*,.tab-bar>*,.onglets>*,.subnav>*,.sub-tabs>*{flex:0 0 auto}
+  /* Champs et boutons : 16 px (évite le zoom iOS) et cibles de 44 px */
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),select,textarea{font-size:16px!important;min-height:44px;max-width:100%}
+  textarea{min-height:88px}
+  button,.btn,[role=button],.topbar-btn{min-height:40px}
+  input[type=checkbox],input[type=radio]{width:22px;height:22px}
+  /* Fenêtres modales : plein écran, défilement interne, pied de fenêtre toujours visible */
+  .modal,.modal-box,.modal-content,.modal-card,.modal-ia,.modal-questionnaire,.modal-lg,.modal-xl,[class*="modal-"][class*="box"],dialog{
+    width:100%!important;max-width:100%!important;min-width:0!important;max-height:94dvh!important;overflow-y:auto;border-radius:16px 16px 0 0!important;margin:0!important}
+  .modal-overlay,.modal-bg,.modal-backdrop,.overlay{align-items:flex-end!important;padding:0!important}
+  /* Espacements généreux d'ordinateur réduits */
+  .page,.main,.content,.container,.table-wrap,.detail-body,.panel-body,.card-body{padding-left:12px!important;padding-right:12px!important}
+  h1{font-size:24px!important;line-height:1.2}
+  h2{font-size:20px!important}
+  /* Tableaux → fiches (classe posée par phenix_mobile.js sur les tableaux simples) */
+  table.ph-cartes,table.ph-cartes tbody{display:block;width:100%!important;min-width:0!important}
+  table.ph-cartes thead,table.ph-cartes colgroup{display:none}
+  table.ph-cartes tr{display:block;margin:0 0 10px;padding:8px 12px;border:1.5px solid rgba(125,198,232,.28);border-radius:12px;background:rgba(255,255,255,.04)}
+  table.ph-cartes td,table.ph-cartes th{display:flex;align-items:center;justify-content:space-between;gap:12px;width:auto!important;min-width:0!important;padding:7px 0!important;border:0!important;border-bottom:1px solid rgba(125,198,232,.14)!important;text-align:right!important;white-space:normal!important}
+  table.ph-cartes td:last-child{border-bottom:0!important}
+  table.ph-cartes td::before{content:attr(data-label);flex:0 0 38%;max-width:44%;text-align:left;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;opacity:.72}
+  table.ph-cartes td[data-label=""]::before{content:none}
+  table.ph-cartes td>input,table.ph-cartes td>select,table.ph-cartes td>textarea{flex:1 1 auto;min-width:0;width:100%}
+  table.ph-cartes td:empty{display:none}
+  /* Autres tableaux (colonnes fusionnées…) : défilement horizontal plutôt que coupure */
+  table.ph-defile{display:block;width:100%;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+}
