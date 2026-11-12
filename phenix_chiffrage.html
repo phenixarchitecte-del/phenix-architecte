@@ -5523,6 +5523,29 @@ function appliquerNouveauLotSelection(){
   appliquerChoixAuxLignesSelectionnees('new:'+nom, nom);
 }
 
+// Import d'un devis artisan : une ligne dont la désignation est IDENTIQUE mot pour mot (espaces superflus ignorés,
+// majuscules/accents/ponctuation respectés) à une ligne déjà présente dans le lot écrase cette ligne au lieu d'être ajoutée en double.
+// Seules les lignes présentes AVANT l'import peuvent être écrasées, et chacune une seule fois (deux lignes identiques dans un même devis restent deux lignes).
+function posteCle(n){ return String(n==null?'':n).replace(/\s+/g,' ').trim(); }
+function ajouterOuEcraserPoste(ctx, lot, poste){
+  if(!lot.postes) lot.postes=[];
+  let c=ctx.get(lot);
+  if(!c){ c={n0:lot.postes.length, used:new Set()}; ctx.set(lot,c); }
+  const cle=posteCle(poste.n);
+  if(cle){
+    for(let i=0;i<c.n0;i++){
+      if(c.used.has(i)) continue;
+      if(posteCle(lot.postes[i].n)===cle){
+        Object.assign(lot.postes[i], poste);
+        c.used.add(i);
+        return true;
+      }
+    }
+  }
+  lot.postes.push(poste);
+  return false;
+}
+
 function confirmImportArtisan(){
   const marge=parseFloat(document.getElementById('import-marge').value)||20;
   const coef=1+(marge/100);
@@ -5544,7 +5567,8 @@ function confirmImportArtisan(){
       puClient:Math.round((r.puArtisan||0)*coef*100)/100,
       pu:r.puArtisan||0
     }));
-    lot.postes=[...(lot.postes||[]),...newPostes];
+    const _ctx=new Map(); let nbEcrase=0;
+    newPostes.forEach(p=>{ if(ajouterOuEcraserPoste(_ctx,lot,p)) nbEcrase++; });
     marquerDevis(lot);
     if(typeof majBadgeEntrepriseDetail==='function') majBadgeEntrepriseDetail(lot);
     const _de=document.getElementById('detail-entreprise'); if(_de) _de.value=lot.entreprise||'';
@@ -5554,12 +5578,13 @@ function confirmImportArtisan(){
     renderPostes();
     computeLotTotal();
     closeModal('modal-import-artisan');
-    showToast(newPostes.length+' postes importés — marge '+marge+'% appliquée');
+    showToast(newPostes.length+' postes importés'+(nbEcrase?' ('+nbEcrase+' ligne(s) identique(s) mise(s) à jour, pas de doublon)':'')+' — marge '+marge+'% appliquée');
     return;
   }
 
   // ── Mode global : répartition automatique par lot ──
-  let nbCreated=0, nbUpdated=0;
+  let nbCreated=0, nbUpdated=0, nbEcrase=0;
+  const _ctxG=new Map();
   const newLotCache = {}; // nom → index du lot nouvellement créé dans ce batch
 
   importPreviewData.forEach(r=>{
@@ -5610,8 +5635,7 @@ function confirmImportArtisan(){
         nbCreated++;
       }
     }
-    if(!chantier.lots[lotIdx].postes) chantier.lots[lotIdx].postes=[];
-    chantier.lots[lotIdx].postes.push(poste);
+    if(ajouterOuEcraserPoste(_ctxG, chantier.lots[lotIdx], poste)) nbEcrase++;
     marquerDevis(chantier.lots[lotIdx]);
     nbUpdated++;
   });
@@ -5621,7 +5645,7 @@ function confirmImportArtisan(){
   renderChantierGrid();
   closeModal('modal-import-artisan');
   importGlobalMode = false;
-  showToast(nbUpdated+' poste(s) répartis sur '+(nbCreated?nbCreated+' nouveau(x) lot(s) et ':'')+'les lots existants');
+  showToast(nbUpdated+' poste(s) répartis sur '+(nbCreated?nbCreated+' nouveau(x) lot(s) et ':'')+'les lots existants'+(nbEcrase?' — '+nbEcrase+' ligne(s) identique(s) mise(s) à jour, pas de doublon':''));
 }
 
 // === EXPORT ===
