@@ -8,6 +8,16 @@
 ══════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_chantier2.html
 ──────────────────────────────────────────────────────────────────
+ 13/11/2026 (2) — [Travaux] Nouvel onglet « Travaux » (le premier) : ce qu'il y a à faire sur ce chantier. Construction neuve (tout est à faire)
+   ou rénovation / extension : on coche les postes concernés (pré-cochés d'après les lots du chiffrage) et on décrit les travaux en une phrase.
+   Il s'ouvre tout seul à l'arrivée d'un chantier envoyé depuis Chiffrage tant qu'il n'est pas validé. Enregistré sur le chantier (champ perimetre).
+   Effet : en rénovation, la maquette montre le bâtiment entier, les postes non concernés en « existant conservé » (pas de construction depuis le sol),
+   l'avancement du chantier = celui des lots (pondéré par les montants), plus d'alerte « étape réelle non renseignée ». La Synthèse 3D lit le même champ.
+ 13/11/2026 — [Chiffrage → Chantier] « Envoyer vers Chantier » de Phénix Chiffrage arrive enfin dans CE module (le shell ouvre phenix_chantier2, la reprise d'hier
+   était dans l'ancien) : le chantier est créé tout seul à la première ouverture depuis la Synthèse, avec ses lots, montants HT et entreprises
+   (intervenant créé s'il n'existe pas). Ensuite, à chaque ouverture, la dernière synthèse de Chiffrage est reprise : lots ajoutés, montants mis à jour,
+   entreprises rattachées ; l'avancement, les dates réglées à la main et les statuts déjà avancés ne sont jamais touchés. Plus de bouton « Importer depuis Chiffrage ».
+   [Récap] Le Récapitulatif commence par les entreprises qui interviennent et le montant de leur lot (montants : agence seulement, pas Kevin).
  12/11/2026 — REFONTE DE LA PAGE CHANTIER : une seule page, plus de modes Terrain / Bureau. Maquette 3D du Carnet à gauche (40 % de l'écran, manipulable),
    panneau à droite (60 %) qui change : Récapitulatif, Lots, Planning, Réserves, Plans, Finances, Comptes rendus, Messages. La maquette sert de support : un clic sur un lot de la maquette ouvre
    Lots, un clic sur un lot de la liste cadre la maquette. Ouverture directe depuis la Synthèse 3D (plus de page de garde), « ← Synthèse 3D » pour revenir. Bouton « Dicter le compte rendu » toujours visible.
@@ -144,6 +154,13 @@ h1,h2,h3{margin:0;font-weight:400;font-family:var(--fd)}
 .pldot{position:absolute;transform:translate(-50%,-50%);min-width:30px;height:30px;padding:0 4px;border:2px solid #fff;color:#fff;font:700 13px var(--fs);display:flex;align-items:center;justify-content:center;cursor:pointer}
 .pldot.photo{border-radius:50%}.pldot.info{border-radius:7px}.pldot.question{clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);border:0;width:36px;height:36px}
 @media(max-width:900px){#terrain{flex-direction:column;overflow:auto}#panel{flex:none;min-height:70vh}#stage{min-height:46vh;flex:none}}
+.rent{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:30px minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:8px 6px;min-height:52px;border-top:1px solid var(--line,rgba(255,255,255,.08));border-radius:8px}
+.rent:hover,.rent:focus-visible{background:rgba(120,170,220,.10)}
+.rent:focus-visible{outline:2px solid var(--accent)}
+@media (max-width:640px){.rent{grid-template-columns:26px minmax(0,1fr) auto}.rent>span:last-child{grid-column:2/-1}}
+.trv{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;min-height:52px;border-radius:12px;border:1px solid var(--line);cursor:pointer}
+.trv.on{border-color:var(--accent);background:rgba(79,168,240,.10)}
+.trv input{width:22px;height:22px;margin-top:2px;flex-shrink:0}
 </style>
 </head>
 <body>
@@ -321,7 +338,8 @@ var M3 = { inited:false, failed:false, cid:null, X:null, why:'' };
 function PX(){ return M3.X || window.PXModel; }
 function px3Free(){ if (M3.X) { try{ M3.X.dispose(); }catch(e){} M3.X = null; } M3.inited = false; }
 function zoneStates(){
-  var out = {};
+  var out = {}, c = chantier(), zt = renov(c) ? zonesTravaux(c) : null;
+  if (zt) HZ.forEach(function(z){ if (!zt[z.id]) out[z.id] = { state:'done', sub:'Existant conservé' }; });   /* [Travaux] hors travaux = existant */
   lotsOf().forEach(function(l){ var z = zoneOf(l); if (!z) return; var k = stOf(l), prev = out[z];
     var rank = RANK;
     if (!prev || rank[k] > rank[prev.state]) out[z] = { state:k, sub:lotLabel(l) + ' · ' + (l.av || 0) + ' %' }; });
@@ -365,7 +383,7 @@ function maqLoader(c, m){
 function showTiles(on){ M3.failed = on; $('tiles').style.display = on ? 'grid' : 'none'; $('h3-host').style.display = on ? 'none' : 'block'; renderStageBar(); renderTiles(); }
 function applyStage(){
   var P = PX(); if (!(P && P.ready && M3.inited)) return;
-  try{ P.update(zoneStates()); P.setStage(S.real ? (chantier() && chantier().etape) || null : null); }catch(e){}
+  try{ P.update(zoneStates()); P.setStage(S.real && !renov(chantier()) ? (chantier() && chantier().etape) || null : null);   /* [Travaux] rénovation : le bâtiment existe déjà, pas de montée depuis le sol */ }catch(e){}
 }
 var RANK = { issue:3, doing:2, todo:1, done:0 };
 function pickZone(zoneId){   /* plusieurs lots sur une zone : celui qui demande l'attention (réserve > en cours > à venir > terminé) */
@@ -421,7 +439,7 @@ function renderTiles(){
   var ls = lotsOf(); if (!M3.failed) return;
   var why = M3.why === 'pid' ? 'Ce chantier n\'est pas relié à un dossier : la maquette du Carnet ne peut pas s\'afficher.' : M3.why === 'off' ? 'La maquette de ce dossier n\'est pas publiée dans le Carnet : à activer dans le Carnet, elle apparaîtra ici sans rien recopier.' : M3.why === 'fail' ? 'La maquette du Carnet n\'a pas pu se charger (réseau ou appareil) : réessayez en rouvrant le chantier.' : '';
   var note = why ? '<div class="card" style="grid-column:1/-1;border:2px dashed var(--amber);display:flex;gap:8px;align-items:flex-start"><span aria-hidden="true">⚠</span><span><b>Maquette indisponible</b><br><span class="muted">' + why + ' Les lots restent accessibles ci-dessous.</span></span></div>' : '';
-  $('tiles').innerHTML = note + (ls.length ? ls.map(function(l, i){ return '<button class="tile" type="button" data-lot="' + l.id + '" aria-pressed="' + (l.id == S.lotId) + '"><span class="eyebrow">Lot ' + esc(lotNum(l, i)) + '</span><b>' + esc(lotLabel(l)) + '</b>' + stHtml(stOf(l)) + '<span class="muted">' + (l.av || 0) + ' % fait</span></button>'; }).join('') : '<div class="muted" style="padding:20px">Aucun lot pour ce chantier. Ils se créent dans l\'onglet Lots (« Importer depuis Chiffrage »).</div>');
+  $('tiles').innerHTML = note + (ls.length ? ls.map(function(l, i){ return '<button class="tile" type="button" data-lot="' + l.id + '" aria-pressed="' + (l.id == S.lotId) + '"><span class="eyebrow">Lot ' + esc(lotNum(l, i)) + '</span><b>' + esc(lotLabel(l)) + '</b>' + stHtml(stOf(l)) + '<span class="muted">' + (l.av || 0) + ' % fait</span></button>'; }).join('') : '<div class="muted" style="padding:20px">Aucun lot pour ce chantier. Ils arrivent tout seuls quand le chiffrage est envoyé depuis Phénix Chiffrage (« Envoyer vers Chantier »), ou se créent avec « + Lot ».</div>');
   [].forEach.call($('tiles').querySelectorAll('[data-lot]'), function(b){ b.onclick = function(){ S.lotId = +b.getAttribute('data-lot'); S.tab = 'lots'; renderTabs(); renderBureau(); renderTiles(); }; });
 }
 function renderSide(){
@@ -655,8 +673,8 @@ function sendCR(){
 }
 
 /* ═══════════ Mode Bureau ═══════════ */
-var TABS_ALL = [['recap', 'Récapitulatif'], ['lots', 'Lots'], ['planning', 'Planning'], ['reserves', 'Réserves'], ['plans', 'Plans'], ['finances', 'Finances'], ['atraiter', 'Comptes rendus'], ['messages', 'Messages']];
-var TABS_SITE = ['recap', 'lots', 'reserves', 'plans'];   /* l'équipe de chantier : pas de finances ni de messages */
+var TABS_ALL = [['travaux', 'Travaux'], ['recap', 'Récapitulatif'], ['lots', 'Lots'], ['planning', 'Planning'], ['reserves', 'Réserves'], ['plans', 'Plans'], ['finances', 'Finances'], ['atraiter', 'Comptes rendus'], ['messages', 'Messages']];
+var TABS_SITE = ['travaux', 'recap', 'lots', 'reserves', 'plans'];   /* l'équipe de chantier : pas de finances ni de messages */
 function tabsOk(){ return TABS_ALL.filter(function(t){ return S.role !== 'chantier' || TABS_SITE.indexOf(t[0]) >= 0; }); }
 function renderTabs(){
   var el = $('ptabs'); if (!el) return;
@@ -676,7 +694,8 @@ function renderBureau(){
   var b = $('bureau'); if (!b || S.screen !== 'chantier') return;
   var t = S.tab; S.view = t === 'planning' ? 'planning' : 'liste'; S.rp = t === 'plans' ? 'plans' : 'res';
   var h;
-  if (t === 'recap') h = viewRecap();
+  if (t === 'travaux') h = viewTravaux();
+  else if (t === 'recap') h = viewRecap();
   else if (t === 'lots') h = '<div id="side"></div>' + viewListeTable();
   else if (t === 'planning') h = viewPlanning();
   else if (t === 'finances') h = viewFinances();
@@ -689,19 +708,82 @@ function renderBureau(){
   if (t === 'plans') plBind();
   if (t === 'messages') msgBind();
   if (t === 'recap') bindRecap();
+  if (t === 'travaux') bindTravaux();
   if (t === 'lots') renderSide();
 }
+/* ═══════════ [Travaux] périmètre des travaux du chantier ═══════════
+   c.perimetre = { type:'neuf'|'renovation', postes:{ <poste>: true }, texte, le, par }
+   Postes : ce que la maquette sait montrer (zones) + les corps d'état sans géométrie (réseaux, finitions). */
+var POSTES = [
+  ['dalle', 'Fondations, dalles, planchers', /fondation|terrassement|radier|dalle|plancher|chape|soubassement/i, ['plancher']],
+  ['wall', 'Murs, façades, enduits', /gros.?oeuvre|gros.?œuvre|ma[cç]onn|b[ée]ton|mur|fa[cç]ade|enduit|bardage|ravalement/i, ['murs']],
+  ['charpente', 'Charpente', /charpente/i, ['couverture']],
+  ['roof', 'Couverture, zinguerie', /couverture|toiture|zinguerie|tuile|ardoise|[ée]tanch/i, ['couverture']],
+  ['frame', 'Menuiseries extérieures, volets', /menuiserie|fen[eê]tre|baie|volet|vitr|velux/i, ['menuiseries', 'volets']],
+  ['door', 'Portes', /porte/i, ['porte']],
+  ['cloison', 'Isolation, cloisons, plâtrerie', /pl[aâ]tr|cloison|doublage|placo|isolation/i, []],
+  ['reseaux', 'Électricité, plomberie, chauffage', /[ée]lectric|plomberie|sanitaire|chauff|ventilation|vmc|pompe/i, []],
+  ['finitions', 'Sols, peinture, cuisine, salle de bain', /carrel|sol|peinture|cuisine|salle de bain|faïence|parquet|finition/i, []],
+  ['vrd', 'Extérieurs : clôture, portail, allée, réseaux', /vrd|cl[oô]ture|portail|all[ée]e|terrasse\b|assainissement|enrob/i, ['cloture', 'portail', 'allee']]
+];
+function trvAFaire(c){ return !!(c && !perimetreDe(c) && (c.autoChiffrage || c.chiffrageMaj)); }   /* chantier venu de Chiffrage, travaux pas encore précisés */
+function perimetreDe(c){ return c && c.perimetre && c.perimetre.type ? c.perimetre : null; }
+function renov(c){ var p = perimetreDe(c); return !!(p && p.type === 'renovation'); }
+function postesDesLots(){ var o = {}; lotsOf().forEach(function(l){ POSTES.forEach(function(p){ if (p[2].test(l.nom || '')) o[p[0]] = true; }); }); return o; }
+function texteTravaux(postes){
+  var n = POSTES.filter(function(p){ return postes[p[0]]; }).map(function(p){ return p[1].split(',')[0].toLowerCase(); });
+  if (!n.length) return '';
+  if (postes.roof && postes.charpente && n.length <= 3) return 'Réfection de la toiture : ' + n.join(', ');
+  return 'Travaux : ' + n.join(', ');
+}
+/* zones de la maquette (moteur partagé) que les travaux touchent ; les autres sont l'existant conservé */
+function zonesTravaux(c){ var p = perimetreDe(c), z = {}; if (!p) return null; POSTES.forEach(function(x){ if (p.type === 'neuf' || (p.postes || {})[x[0]]) x[3].forEach(function(k){ z[k] = true; }); }); return z; }
+var TRV = null;   /* brouillon de l'onglet Travaux */
+function viewTravaux(){
+  var c = chantier(); if (!c) return '<div class="card muted">Aucun chantier.</div>';
+  var p = perimetreDe(c), edit = S.role !== 'chantier';
+  if (!TRV || TRV.cid !== c.id) { var auto = postesDesLots(), nb = Object.keys(auto).length; TRV = { cid:c.id, type:p ? p.type : (nb && nb <= 5 ? 'renovation' : 'neuf'), postes:p ? Object.assign({}, p.postes || {}) : auto, texte:p ? (p.texte || '') : '', auto:!p }; if (!TRV.texte) TRV.texte = TRV.type === 'renovation' ? texteTravaux(TRV.postes) : 'Construction neuve'; }
+  var h = '<div style="display:flex;flex-direction:column;gap:14px;max-width:760px">';
+  h += '<div><div class="eyebrow">Travaux à réaliser</div><h2 style="font-size:26px;line-height:1.15">Qu\'est-ce qu\'on fait sur ce chantier ?</h2><div class="muted">' + (p ? 'Validé' + (p.le ? ' le ' + frDate(p.le) : '') + (p.par ? ' par ' + esc(p.par) : '') + '. La maquette et le suivi s\'y adaptent.' : (TRV.auto && Object.keys(TRV.postes).length ? 'Pré-rempli d\'après les lots du chiffrage : vérifiez puis validez.' : 'À renseigner : la maquette et le suivi s\'y adaptent.')) + '</div></div>';
+  if (!p && edit) h += '<div class="card" style="border:2px dashed var(--amber);display:flex;gap:8px"><span aria-hidden="true">⚠</span><span>Sans cette page, le chantier part du principe que <b>tout est à construire</b> (maquette qui monte depuis les fondations).</span></div>';
+  h += '<div class="seg light" role="radiogroup" aria-label="Type de travaux" style="align-self:flex-start">' + [['neuf', 'Construction neuve · tout est à faire'], ['renovation', 'Rénovation ou extension · une partie']].map(function(o){ return '<button type="button" role="radio" data-ttype="' + o[0] + '" aria-pressed="' + (TRV.type === o[0]) + '" aria-checked="' + (TRV.type === o[0]) + '"' + (edit ? '' : ' disabled') + '>' + (TRV.type === o[0] ? '● ' : '○ ') + o[1] + '</button>'; }).join('') + '</div>';
+  if (TRV.type === 'renovation') {
+    h += '<div class="card" style="padding:12px 14px"><div class="eyebrow">Postes concernés par les travaux</div><div class="muted" style="font-size:13px;margin:4px 0 8px">Coché = travaux à faire. Non coché = existant conservé (montré terminé sur la maquette).</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:6px">' +
+      POSTES.map(function(x){ var on = !!TRV.postes[x[0]]; return '<label class="trv' + (on ? ' on' : '') + '"><input type="checkbox" data-tposte="' + x[0] + '"' + (on ? ' checked' : '') + (edit ? '' : ' disabled') + '><span><b>' + esc(x[1]) + '</b><span class="muted" style="display:block;font-size:12.5px">' + (on ? '✎ Travaux' : '▣ Existant conservé') + '</span></span></label>'; }).join('') + '</div></div>';
+  }
+  h += '<label style="display:flex;flex-direction:column;gap:4px"><span class="eyebrow">En une phrase (affichée en tête du récapitulatif et dans la Synthèse)</span><textarea id="trv-t" rows="2"' + (edit ? '' : ' disabled') + ' placeholder="ex. Réfection de la toiture : dépose, charpente reprise, couverture tuiles canal">' + esc(TRV.texte) + '</textarea></label>';
+  if (edit) h += '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn big pri" type="button" id="trv-ok">✓ Valider les travaux</button>' + (p ? '<button class="btn big ghost" type="button" id="trv-x">Annuler les modifications</button>' : '') + '</div>';
+  return h + '</div>';
+}
+function bindTravaux(){
+  var c = chantier(), b = $('bureau'); if (!c || !TRV) return;
+  [].forEach.call(b.querySelectorAll('[data-ttype]'), function(x){ x.onclick = function(){ var avant = TRV.type; TRV.type = x.getAttribute('data-ttype'); if (TRV.type !== avant) TRV.texte = TRV.type === 'renovation' ? texteTravaux(TRV.postes) : 'Construction neuve'; renderBureau(); }; });
+  [].forEach.call(b.querySelectorAll('[data-tposte]'), function(x){ x.onchange = function(){ var t = $('trv-t'), auto = t && t.value === texteTravaux(TRV.postes); if (x.checked) TRV.postes[x.getAttribute('data-tposte')] = true; else delete TRV.postes[x.getAttribute('data-tposte')]; if (auto || !TRV.texte) TRV.texte = texteTravaux(TRV.postes); else if (t) TRV.texte = t.value; renderBureau(); }; });
+  var t = $('trv-t'); if (t) t.oninput = function(){ TRV.texte = t.value; };
+  if ($('trv-x')) $('trv-x').onclick = function(){ TRV = null; renderBureau(); };
+  if ($('trv-ok')) $('trv-ok').onclick = function(){
+    if (TRV.type === 'renovation' && !Object.keys(TRV.postes).length) { toast('Cochez au moins un poste concerné par les travaux.'); return; }
+    c.perimetre = { type:TRV.type, postes:TRV.type === 'renovation' ? TRV.postes : {}, texte:String(TRV.texte || '').trim(), le:today(), par:String(S.user || '').split('@')[0] };
+    save('chantiers', c); TRV = null; S.tab = 'recap'; toast('Travaux enregistrés : la maquette et le suivi s\'adaptent.'); renderTabs(); renderBureau(); renderTop(); applyStage();
+  };
+}
+/* avancement d'un chantier en rénovation : celui des lots, pondéré par leur montant */
+function avLots(c){ var ls = D.lots.filter(function(l){ return l.chantierId == c.id; }), W = 0, t = 0; ls.forEach(function(l){ var w = +l.ht > 0 ? +l.ht : 1; W += w; t += (+l.av || 0) * w; }); return W ? Math.round(t / W) : 0; }
 /* Récapitulatif : tout le chantier en un regard ; chaque signal ouvre le bon panneau */
 function viewRecap(){
   var c = chantier(); if (!c) return '<div class="card muted">Aucun chantier.</div>';
   var x = chStats(c), staff = S.role !== 'chantier', n = c.etape || 0, ph = PHASES[phaseIdx(n)];
   var flags = x.flags.filter(function(f){ return staff || f.tab !== 'finances'; });
-  var TN = { lots:'Lots', finances:'Finances', reserves:'Réserves', atraiter:'Comptes rendus', messages:'Messages' };
+  var TN = { travaux:'Travaux', lots:'Lots', finances:'Finances', reserves:'Réserves', atraiter:'Comptes rendus', messages:'Messages' };
   var k = function(a, b, sub){ return '<div class="card" style="padding:12px 14px;display:flex;flex-direction:column;gap:2px"><div class="eyebrow">' + a + '</div><div style="font:400 28px/1.1 var(--fd)">' + b + '</div><div class="muted" style="font-size:13px">' + sub + '</div></div>'; };
   var arts = D.lots.filter(function(l){ return l.chantierId == c.id && stOf(l) === 'doing'; }).map(function(l){ var ent = entrepriseOf(l); return '<div>' + ico('doing') + ' <b>' + esc(lotLabel(l)) + '</b> · ' + (l.av || 0) + ' %' + (ent ? '<div class="muted" style="font-size:13px">' + esc(ent) + '</div>' : '<div style="font-size:13px;color:#f3dfb0;font-weight:600">⚠ Aucune entreprise</div>') + '</div>'; });
   var h = '<div style="display:flex;flex-direction:column;gap:14px">';
-  h += '<div><div class="eyebrow">Récapitulatif</div><h2 style="font-size:26px;line-height:1.15">Tout le chantier, en un regard</h2>' + (c.adresse ? '<div class="muted">' + esc(c.adresse) + '</div>' : '') + '</div>';
-  h += '<div><div style="display:flex;justify-content:space-between;font-size:14px" class="muted"><span>Avancement : ' + (n ? 'étape ' + n + ' sur 26, ' + esc(ETAPES[n - 1]) : 'étape non renseignée') + '</span><b style="color:var(--text)">' + Math.round(n / 26 * 100) + ' %</b></div><div class="bar" style="height:12px;margin:6px 0" aria-hidden="true"><i style="width:' + Math.round(n / 26 * 100) + '%"></i></div>' +
+  var pm = perimetreDe(c);
+  h += '<div><div class="eyebrow">Récapitulatif</div><h2 style="font-size:26px;line-height:1.15">' + esc(c.nom || 'Chantier') + '</h2>' + (c.adresse ? '<div class="muted">' + esc(c.adresse) + '</div>' : '') +
+    '<button type="button" class="flag" data-gt="travaux" style="margin-top:8px;align-items:center;min-height:48px">' + (pm ? '<b style="flex-shrink:0">🛠 ' + (pm.type === 'neuf' ? 'Neuf' : 'Rénovation') + '</b><span style="flex:1">' + esc(pm.texte || (pm.type === 'neuf' ? 'Construction neuve' : '')) + '</span>' : '<b style="flex-shrink:0;color:#f3dfb0">⚠ Travaux à préciser</b><span style="flex:1" class="muted">Neuf ou rénovation ? Quels postes ?</span>') + '<span style="font-weight:600;color:#cfe6fb;white-space:nowrap">' + (pm ? 'Modifier' : 'Renseigner') + ' ›</span></button></div>';
+  h += recapEntreprises(c, staff);
+  if (renov(c)) { var al = avLots(c); h += '<div><div style="display:flex;justify-content:space-between;font-size:14px" class="muted"><span>Avancement des travaux (moyenne des lots, pondérée par les montants)</span><b style="color:var(--text)">' + al + ' %</b></div><div class="bar" style="height:12px;margin:6px 0" aria-hidden="true"><i style="width:' + al + '%"></i></div></div>'; }
+  else h += '<div><div style="display:flex;justify-content:space-between;font-size:14px" class="muted"><span>Avancement : ' + (n ? 'étape ' + n + ' sur 26, ' + esc(ETAPES[n - 1]) : 'étape non renseignée') + '</span><b style="color:var(--text)">' + Math.round(n / 26 * 100) + ' %</b></div><div class="bar" style="height:12px;margin:6px 0" aria-hidden="true"><i style="width:' + Math.round(n / 26 * 100) + '%"></i></div>' +
     '<div style="display:flex;flex-wrap:wrap;gap:6px">' + PHASES.map(function(p){ var cur = n >= p[1] && n <= p[2]; return '<button class="ph' + (n > p[2] ? ' past' : '') + '" type="button" data-ph="' + p[1] + '"' + (cur ? ' aria-current="step"' : '') + '>' + (n > p[2] ? '✓ ' : cur ? '▸ ' : '') + esc(p[0]) + '</button>'; }).join('') + '</div></div>';
   h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px">' + k('Lots', x.done + ' / ' + x.lots, 'terminés') + k('Réserves', x.rs, 'ouvertes') + k('Comptes rendus', x.crPend, 'à valider') + k('Fin prévue', c.fin ? frDate(c.fin).slice(0, 5) : '—', c.fin ? frDate(c.fin) : 'non renseignée') + '</div>';
   h += flags.length ? '<div style="display:flex;flex-direction:column;gap:8px"><div class="eyebrow" style="color:#f6cdc8">À débloquer · un clic ouvre le bon panneau</div>' + flags.slice(0, 6).map(function(f){ return '<button type="button" class="flag" data-gt="' + (f.tab || '') + '" style="min-height:52px;align-items:center;' + (f.lvl === 2 ? 'border:1px solid rgba(224,119,108,.55);background:rgba(224,119,108,.08)' : '') + '"><b style="flex-shrink:0">' + (f.lvl === 2 ? '✕ Bloquant' : '⚠ À voir') + '</b><span style="flex:1">' + esc(f.txt) + '</span>' + (f.tab ? '<span style="font-weight:600;color:#cfe6fb;white-space:nowrap">' + TN[f.tab] + ' ›</span>' : '<span style="font-weight:600;color:#cfe6fb;white-space:nowrap">Renseigner ›</span>') + '</button>'; }).join('') + '</div>' : '<div class="card">✓ Rien à signaler.</div>';
@@ -710,15 +792,33 @@ function viewRecap(){
   h += '<div class="card" style="padding:12px 14px"><div class="eyebrow">À faire · issu des décisions</div><div id="gd-tk" style="margin-top:4px">' + tachesHtml(c) + '</div></div></div>';
   return h;
 }
+/* [Récap] 13/11/2026 — en premier : qui intervient et pour combien. Une ligne par lot (n°, lot, entreprise, montant HT, état).
+   Montants et total : agence seulement (pas Kevin). Un clic sur une ligne ouvre le lot (onglet Lots, cadré sur la maquette). */
+function recapEntreprises(c, staff){
+  var ls = lotsOf(), tot = 0, sans = 0;
+  if (!ls.length) return '<div class="card"><div class="eyebrow">Entreprises et lots</div><div class="muted" style="margin-top:6px">Aucun lot. Ils arrivent tout seuls quand le chiffrage est envoyé depuis Phénix Chiffrage (« Envoyer vers Chantier »).</div></div>';
+  var rows = ls.map(function(l, i){
+    var ent = entrepriseOf(l), ht = +l.ht || 0; tot += ht; if (!ent) sans++;
+    return '<button type="button" class="rent" data-rlot="' + l.id + '"><span class="muted" style="font-weight:600">' + esc(lotNum(l, i)) + '</span>' +
+      '<span style="min-width:0"><b style="display:block">' + (ent ? esc(ent) : '<span style="color:#f3dfb0">⚠ Entreprise à choisir</span>') + '</b><span class="muted" style="font-size:13px">' + esc(lotLabel(l)) + '</span></span>' +
+      (staff ? '<span style="font-weight:600;font-size:16px;white-space:nowrap;text-align:right">' + (ht ? fE(ht) : '<span class="muted">—</span>') + '</span>' : '') +
+      '<span style="white-space:nowrap;font-size:13px">' + stHtml(stOf(l)) + '</span></button>';
+  }).join('');
+  return '<div class="card" style="padding:12px 14px;display:flex;flex-direction:column;gap:6px"><div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span class="eyebrow" style="flex:1">Entreprises et lots · ' + ls.length + '</span>' +
+    (staff && tot ? '<span class="muted" style="font-size:13px">Total HT</span><b style="font:400 24px var(--fd)">' + fE(tot) + '</b>' : '') + '</div>' +
+    '<div style="display:flex;flex-direction:column">' + rows + '</div>' +
+    (sans ? '<div style="font-size:13px;color:#f3dfb0;font-weight:600">⚠ ' + sans + ' lot' + (sans > 1 ? 's' : '') + ' sans entreprise</div>' : '') + '</div>';
+}
 function bindRecap(){
   var c = chantier(), b = $('bureau'), q = function(sel, f){ [].forEach.call(b.querySelectorAll(sel), f); };
   q('[data-gt]', function(x){ x.onclick = function(){ var t = x.getAttribute('data-gt'); if (t) { S.tab = t; renderTabs(); renderBureau(); } else sheetEtape(c && c.etape || 1); }; });
   q('[data-ph]', function(x){ x.onclick = function(){ sheetEtape(+x.getAttribute('data-ph')); }; });
+  q('[data-rlot]', function(x){ x.onclick = function(){ S.lotId = +x.getAttribute('data-rlot'); S.tab = 'lots'; focusLot(); renderTabs(); renderBureau(); }; });
   q('[data-tk]', function(x){ x.onchange = function(){ tacheFait(c, x.getAttribute('data-tk'), x.checked); }; });
 }
 function lotsHead(){
   return '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:12px"><h2 style="font-size:24px">' + (S.view === 'liste' ? 'Lots' : 'Planning') + '</h2>' +
-    (S.view === 'planning' ? '<span class="seg light"><button type="button" data-zoom="mois" aria-pressed="' + (S.zoom === 'mois') + '">Mois</button><button type="button" data-zoom="sem" aria-pressed="' + (S.zoom === 'sem') + '">Semaines</button></span><button class="btn" type="button" id="g-today">Aller à aujourd\'hui</button><span class="muted">Glissez une barre pour décaler un lot, tirez ses bords pour changer les dates.</span>' : '<span class="muted">' + lotsOf().length + ' lots</span>') + '<span style="flex:1"></span><button class="btn" type="button" id="g-client">Voir ce que voit le client</button>' + (S.view === 'liste' && S.role !== 'chantier' ? '<button class="btn" type="button" id="g-imp">Importer depuis Chiffrage</button><button class="btn pri" type="button" id="g-new">+ Lot</button>' : '') + '</div>';
+    (S.view === 'planning' ? '<span class="seg light"><button type="button" data-zoom="mois" aria-pressed="' + (S.zoom === 'mois') + '">Mois</button><button type="button" data-zoom="sem" aria-pressed="' + (S.zoom === 'sem') + '">Semaines</button></span><button class="btn" type="button" id="g-today">Aller à aujourd\'hui</button><span class="muted">Glissez une barre pour décaler un lot, tirez ses bords pour changer les dates.</span>' : '<span class="muted">' + lotsOf().length + ' lots</span>') + '<span style="flex:1"></span><button class="btn" type="button" id="g-client">Voir ce que voit le client</button>' + (S.view === 'liste' && S.role !== 'chantier' ? '<button class="btn pri" type="button" id="g-new">+ Lot</button>' : '') + '</div>';
 }
 function viewListe(){
   var c = chantier(), open = lk('px2.maq') !== '0', sel = D.lots.filter(function(x){ return x.id == S.lotId; })[0];
@@ -788,7 +888,6 @@ function bindBureau(){
   if ($('g-maq')) $('g-maq').onclick = function(){ lk('px2.maq', lk('px2.maq') === '0' ? '1' : '0'); renderBureau(); };
   if ($('g-client')) $('g-client').onclick = sheetClient;
   if ($('g-new')) $('g-new').onclick = function(){ sheetLot(); };
-  if ($('g-imp')) $('g-imp').onclick = importChiffrage;
   if (b.querySelector('[data-art]') && chantier()) thQueue([chantier()]);
   q('[data-gomsg]', function(x){ x.onclick = function(){ MSG.cur = x.getAttribute('data-gomsg'); S.tab = 'messages'; renderBureau(); renderTabs(); }; });
   q('[data-rp]', function(x){ x.onclick = function(){ S.rp = x.getAttribute('data-rp'); renderBureau(); }; });
@@ -808,7 +907,7 @@ function bindBureau(){
   q('[data-valid]', function(x){ x.onclick = function(){ validerCR(+x.getAttribute('data-valid')); }; });
   q('[data-ignore]', function(x){ x.onclick = function(){ var c = D.crs.filter(function(y){ return y.id == x.getAttribute('data-ignore'); })[0]; if (c && confirm('Ignorer : le compte rendu reste enregistré mais rien n\'est appliqué aux lots ni aux réserves.')) { c.aValider = false; c.ignore = true; save('crs', c); renderBureau(); renderTabs(); } }; });
   q('[data-bar]', function(x){ barDrag(x); });
-  q('[data-d]', function(x){ x.onchange = function(){ var l = D.lots.filter(function(y){ return y.id == x.getAttribute('data-lot'); })[0]; if (!l) return; l[x.getAttribute('data-d')] = x.value; if (l.debut && !l.fin) { l.fin = l.debut; } if (l.fin && !l.debut) { l.debut = l.fin; } save('lots', l); renderBureau(); }; });
+  q('[data-d]', function(x){ x.onchange = function(){ var l = D.lots.filter(function(y){ return y.id == x.getAttribute('data-lot'); })[0]; if (!l) return; l[x.getAttribute('data-d')] = x.value; l.datesManuelles = true; if (l.debut && !l.fin) { l.fin = l.debut; } if (l.fin && !l.debut) { l.debut = l.fin; } save('lots', l); renderBureau(); }; });
 }
 /* Ce que voit le client : l'étape publiée, les plans et comptes rendus marqués « client » */
 function sheetClient(){
@@ -834,25 +933,71 @@ function sheetLot(){
     D.lots.push(l); save('lots', l); bg.remove(); toast('Lot créé'); renderBureau();
   };
 }
-/* Importer depuis Chiffrage : la synthèse envoyée par Phénix Chiffrage (même lecture que l'ancien module) */
-function importChiffrage(){
-  var c = chantier(); if (!c) return;
-  if (FB.demo) { toast('Import indisponible en démonstration.'); return; }
-  if (!c.projetId) { toast('Ce chantier n\'est pas lié à un dossier Phénix : liez-le avant d\'importer.'); return; }
+/* [Chiffrage → Chantier] 13/11/2026 — la synthèse envoyée par Phénix Chiffrage (phenix_chantier_import/{projetId}) est reprise TOUTE SEULE :
+   - dossier sans chantier ouvert depuis la Synthèse : le chantier est créé avec ses lots (creerDepuisChiffrage) ;
+   - chantier existant : à l'ouverture, si Chiffrage a envoyé une synthèse plus récente que la dernière reprise (c.chiffrageMaj), on l'applique.
+   Ce qui est repris : lots manquants, nom, montant HT et TVA, entreprise (intervenant du même nom, sinon créé), dates du contrat si le lot n'en a pas
+   ou ne les a pas réglées à la main. Jamais touchés : avancement, statut déjà « en cours / terminé / réserves », dates réglées à la main. Agence seulement. */
+var SYNC = { fait:{}, cree:{} };
+var METIERS = [[/ma[cç]onn|gros.?oeuvre|fondation|terrassement|dalle/i, 'Maçonnerie / Gros œuvre'], [/charpente/i, 'Charpente'], [/couverture|toiture|zinguerie/i, 'Couverture'], [/menuiserie|fen[eê]tre|volet|porte/i, 'Menuiserie'], [/[ée]lectric/i, 'Électricité'], [/plomberie|sanitaire/i, 'Plomberie'], [/chauff|ventilation|vmc|cvc/i, 'Chauffage / ventilation'], [/pl[aâ]tr|isolation|cloison/i, 'Plâtrerie / isolation'], [/carrel|sol/i, 'Carrelage / sols'], [/peinture/i, 'Peinture'], [/vrd|assainissement|r[ée]seaux/i, 'VRD']];
+function intervPour(nom, lotNom){
+  nom = String(nom || '').trim(); if (!nom) return null;
+  var n = norm(nom), iv = D.intervenants.filter(function(i){ return norm(i.nom).trim() === n; })[0];
+  if (iv) return iv;
+  var mt = (METIERS.filter(function(m){ return m[0].test(lotNom || ''); })[0] || [0, 'Autre'])[1];
+  iv = { id:uid(), nom:nom, metier:mt, contact:'', tel:'', email:'', siret:'', assurance:'', assuranceDate:'', note:'', notes:'Créé depuis Phénix Chiffrage le ' + new Date().toLocaleDateString('fr-FR') };
+  D.intervenants.push(iv); save('intervenants', iv); return iv;
+}
+function appliquerChiffrage(c, data){
+  var items = data && data.lots || [], nu = function(x){ return norm(String(x || '').replace(/^\s*(?:lot\s*)?\d+[A-Za-z]?\s*[—–\-.:]?\s*/i, '')).trim(); }, pris = {}, cr = 0, up = 0;
+  items.forEach(function(it){
+    var nom = (it.num ? it.num + ' — ' : '') + it.nom, cand = D.lots.filter(function(l){ return l.chantierId == c.id && !pris[l.id]; });
+    var l = cand.filter(function(x){ return x.nom === nom || x.nom === it.nom; })[0] || cand.filter(function(x){ return nu(x.nom) === nu(it.nom); })[0];
+    var st = it.statut === 'Valide' ? 'attribue' : 'chiffrage', av = false;
+    if (l) {
+      pris[l.id] = 1;
+      if (l.nom !== nom) { l.nom = nom; av = true; }
+      if (it.montantHt != null && +l.ht !== +it.montantHt) { l.ht = it.montantHt; av = true; }
+      if (it.tva != null && +l.tva !== +it.tva) { l.tva = it.tva; av = true; }
+      if (it.debut && it.fin && !l.datesManuelles && (l.debut !== it.debut || l.fin !== it.fin) && !(+l.av > 0)) { l.debut = it.debut; l.fin = it.fin; av = true; }
+      if ((l.statut === 'chiffrage' || l.statut === 'attribue' || !l.statut) && l.statut !== st && !(+l.av > 0)) { l.statut = st; av = true; }
+      if (av) up++;
+    } else {
+      l = { id:uid(), chantierId:c.id, nom:nom, cat:'Autre', interv:null, statut:st, ht:it.montantHt, tva:it.tva, av:0, debut:it.debut || '', fin:it.fin || '', notes:'Importé depuis Phénix Chiffrage le ' + new Date().toLocaleDateString('fr-FR') };
+      D.lots.push(l); pris[l.id] = 1; cr++; av = true;
+    }
+    if (it.entreprise && !l.interv) { var iv = intervPour(it.entreprise, nom); if (iv) { l.interv = iv.id; delete l.entrepriseNom; av = true; } }
+    if (av) save('lots', l);
+  });
+  c.chiffrageMaj = data.exportedAt || new Date().toISOString();
+  if (!c.budget) c.budget = Math.round(items.reduce(function(t, x){ return t + (+x.montantHt || 0); }, 0));
+  save('chantiers', c);
+  return { cr:cr, up:up };
+}
+function syncChiffrage(c){
+  if (!c || !c.projetId || FB.demo || S.role === 'chantier' || SYNC.fait[c.id]) return;
+  SYNC.fait[c.id] = 1;
   FB.chImport(c.projetId).then(function(data){
-    var items = data && data.lots || []; if (!items.length) { toast('Aucune synthèse Chiffrage pour ce dossier : utilisez « Envoyer vers Chantier » dans Phénix Chiffrage.'); return; }
-    var nu = function(x){ return String(x || '').replace(/^\s*LOT\s*\d+[A-Za-z]?\s*[—–-]\s*/i, '').trim().toLowerCase(); }, pris = {}, cr = 0, up = 0;
-    items.forEach(function(it){
-      var nom = (it.num ? it.num + ' — ' : '') + it.nom, cand = D.lots.filter(function(l){ return l.chantierId == c.id && !pris[l.id]; });
-      var ex = cand.filter(function(l){ return l.nom === nom || l.nom === it.nom; })[0] || cand.filter(function(l){ return nu(l.nom) === nu(it.nom); })[0];
-      var st = it.statut === 'Valide' ? 'attribue' : 'chiffrage', l = ex;
-      if (ex) { pris[ex.id] = 1; ex.ht = it.montantHt; ex.tva = it.tva; ex.nom = nom; if (it.debut && it.fin && (!ex.datesManuelles || !(ex.debut && ex.fin))) { ex.debut = it.debut; ex.fin = it.fin; } if (ex.statut === 'chiffrage' || ex.statut === 'attribue') ex.statut = st; up++; }
-      else { l = { id:uid(), chantierId:c.id, nom:nom, cat:'Autre', interv:null, statut:st, ht:it.montantHt, tva:it.tva, av:0, debut:it.debut || '', fin:it.fin || '', notes:'Importé depuis Phénix Chiffrage le ' + new Date().toLocaleDateString('fr-FR') }; D.lots.push(l); cr++; }
-      if (it.entreprise && !l.interv) { var iv = D.intervenants.filter(function(i){ return String(i.nom || '').trim().toLowerCase() === String(it.entreprise).trim().toLowerCase(); })[0]; if (iv) { l.interv = iv.id; delete l.entrepriseNom; } else l.entrepriseNom = it.entreprise; }
-      save('lots', l);
-    });
-    toast('Import terminé : ' + cr + ' créé(s), ' + up + ' mis à jour.'); renderBureau();
-  }).catch(function(){ toast('Échec de l\'import depuis Chiffrage.'); });
+    if (!data || !(data.lots || []).length) return;
+    if (c.chiffrageMaj && data.exportedAt && String(data.exportedAt) <= String(c.chiffrageMaj)) return;   /* déjà repris */
+    var r = appliquerChiffrage(c, data);
+    if (r.cr || r.up) { toast('Chiffrage repris : ' + (r.cr ? r.cr + ' lot' + (r.cr > 1 ? 's' : '') + ' ajouté' + (r.cr > 1 ? 's' : '') : '') + (r.cr && r.up ? ', ' : '') + (r.up ? r.up + ' mis à jour' : '') + '.'); renderAll(); }
+  }).catch(function(e){ SYNC.fait[c.id] = 0; console.warn('Chiffrage', e && e.message); });
+}
+/* dossier envoyé depuis Chiffrage, ouvert depuis la Synthèse, sans chantier : on le crée */
+function creerDepuisChiffrage(pid, onglet){
+  if (FB.demo || S.role === 'chantier' || SYNC.cree[pid]) return;
+  SYNC.cree[pid] = 1;
+  FB.chImport(pid).then(function(data){
+    if (!data || !(data.lots || []).length) { SYNC.cree[pid] = 0; toast('Aucun chantier pour ce dossier : envoyez d\'abord le chiffrage depuis Phénix Chiffrage (« Envoyer vers Chantier »).'); return; }
+    if (D.chantiers.some(function(x){ return String(x.projetId) === String(pid); })) return;
+    var c = { id:uid(), nom:data.chantierNom || ('Chantier ' + pid), client:data.client || '', projetId:String(pid), statut:'preparation', type:'Construction neuve', adresse:'', debut:'', fin:'', budget:0, honoraires:0, commissions:0, notes:'Créé depuis Phénix Chiffrage le ' + new Date().toLocaleDateString('fr-FR'), autoChiffrage:true };
+    D.chantiers.push(c);
+    var r = appliquerChiffrage(c, data);
+    S.cid = c.id; lk('px2.cid', String(c.id)); S.screen = 'chantier'; S.tab = 'recap'; M3.cid = null; SYNC.fait[c.id] = 1;
+    toast('Chantier « ' + c.nom + ' » créé depuis Chiffrage : ' + r.cr + ' lot' + (r.cr > 1 ? 's' : '') + '.');
+    setMode(S.mode); boot2();
+  }).catch(function(e){ SYNC.cree[pid] = 0; toast('Lecture du chiffrage impossible : ' + (e && e.message || e)); });
 }
 function sheetCrEdit(id){
   var c = D.crs.filter(function(y){ return y.id == id; })[0]; if (!c) return;
@@ -1198,7 +1343,9 @@ function chStats(c){
   if (crPend) flags.push({ lvl:1, tab:'atraiter', txt:pl(crPend, 'compte rendu à valider', 'comptes rendus à valider') });
   if (msgs) flags.push({ lvl:1, tab:'messages', txt:pl(msgs, 'message non lu', 'messages non lus') });
   if (fVal) flags.push({ lvl:1, tab:'finances', txt:pl(fVal, 'situation à valider', 'situations à valider') });
-  if (!c.etape) flags.push({ lvl:1, tab:null, txt:'Étape réelle non renseignée' });
+  if (trvAFaire(c)) flags.push({ lvl:1, tab:'travaux', txt:'Travaux à préciser : neuf ou rénovation, postes concernés' });
+  if (renov(c)) {}   /* [Travaux] rénovation : pas d'étape 1 à 26, l'avancement vient des lots */
+  else if (!c.etape) flags.push({ lvl:1, tab:null, txt:'Étape réelle non renseignée' });
   else if (c.etape >= 3 && c.etape < 26 && (jours == null || jours > 14)) flags.push({ lvl:1, tab:null, txt:jours == null ? 'Aucune visite enregistrée' : 'Pas de visite depuis ' + jours + ' jours' });
   flags.sort(function(a, b){ return b.lvl - a.lvl; });
   var st = flags.some(function(f){ return f.lvl === 2; }) ? 'bloque' : flags.length ? 'surveiller' : 'ras';
@@ -1346,7 +1493,7 @@ function barDrag(el){
   el.onpointerup = function(){
     if (!mode) return; mode = null; var r = rangeDates(lotsOf()), a = parseFloat(el.style.left), w = parseFloat(el.style.width);
     var iso = function(px){ var d = new Date(r.min.getTime() + Math.round(px / ppd) * 864e5); return d.toISOString().slice(0, 10); };
-    lot.debut = iso(a); lot.fin = iso(a + w); save('lots', lot); renderBureau();
+    lot.debut = iso(a); lot.fin = iso(a + w); lot.datesManuelles = true; save('lots', lot); renderBureau();
   };
 }
 
@@ -1354,6 +1501,9 @@ function barDrag(el){
 function renderAll(){ renderTop(); renderTabs(); if (S.screen === 'home') { renderHome(); return; } if (S.screen === 'garde') { renderGarde(); return; } renderStageBar(); renderTiles(); renderBureau(); renderMic(); applyStage(); }
 function boot2(){
   var c = chantier(); if (!c) { renderAll(); return; }
+  syncChiffrage(c);   /* [Chiffrage → Chantier] */
+  S.trvVu = S.trvVu || {};
+  if (trvAFaire(c) && S.role !== 'chantier' && !S.trvVu[c.id] && (S.tab === 'recap' || !S.tab)) { S.trvVu[c.id] = 1; S.tab = 'travaux'; }   /* [Travaux] 1re page d'un chantier venu de Chiffrage, tant que ce n'est pas validé */
   visGet(c.id).then(function(v){ VIS = v; renderAll(); loadMaquette(); });
 }
 function ensureChantier(){
@@ -1362,6 +1512,14 @@ function ensureChantier(){
   var pick = D.chantiers.filter(function(c){ return String(c.id) === want; })[0] || act[0] || D.chantiers[0];
   if (pick) { S.cid = pick.id; boot2(); }
 }
+/* [Chiffrage → Chantier] ordre « open-projet » : il peut arriver avant les données ; on le garde jusqu'à ce que les chantiers soient lus */
+function ouvrirVoulu(){
+  var w = S.wantPid; if (!w || (!FB.demo && !S.loaded)) return;
+  S.wantPid = null;
+  var c = D.chantiers.filter(function(x){ return String(x.projetId) === w.id; })[0];
+  if (!c) { creerDepuisChiffrage(w.id, w.onglet); return; }
+  S.cid = c.id; lk('px2.cid', String(c.id)); S.screen = 'chantier'; M3.cid = null; S.tab = w.onglet === 'planning' ? 'planning' : w.onglet === 'avancement' ? 'lots' : w.onglet === 'reception' ? 'reserves' : w.onglet === 'plans' ? 'plans' : 'recap'; setMode(S.mode); boot2();
+}
 function cliStart(){
   if (FB.demo || S.role !== 'admin' || !FB.listenId) return;
   if (!CLI.on.__n) { CLI.on.__n = 1; FB.listenId('phenix_notifs_client', function(a){ CLI.notifs = (a || []).filter(function(x){ return x.lu === false; }); if (S.tab === 'messages' && S.screen === 'chantier') renderBureau(); renderTabs(); }); }
@@ -1369,7 +1527,7 @@ function cliStart(){
 }
 function startData(){
   var n = 0, any = function(){ ensureChantier(); if (S.screen === 'home') { renderTop(); renderHome(); return; } renderTop(); renderTabs(); renderBureau(); renderTiles(); applyStage(); };
-  ['chantiers', 'lots', 'intervenants', 'reserves', 'crs', 'factures', 'plans', 'messages'].forEach(function(k){ FB.listen(k, function(a, pend){ D[k] = a; S.pending = !!pend; if (k === 'chantiers') cliStart(); any(); }); });
+  ['chantiers', 'lots', 'intervenants', 'reserves', 'crs', 'factures', 'plans', 'messages'].forEach(function(k){ FB.listen(k, function(a, pend){ D[k] = a; S.pending = !!pend; if (k === 'chantiers') cliStart(); if (k === 'intervenants' || k === 'lots' || k === 'chantiers') { n |= { chantiers:1, lots:2, intervenants:4 }[k]; if (n === 7 && !S.loaded) { S.loaded = true; ouvrirVoulu(); } } any(); }); });
 }
 var ADMIN_EMAILS = ['contact@phenixarchitecte.fr'];   /* même repli que l'ancien Chantier */
 function authed(email){
@@ -1384,7 +1542,7 @@ function init(){
   S.mode = lk('px2.mode') === 'bureau' ? 'bureau' : 'terrain';
   window.addEventListener('online', function(){ S.online = true; renderTop(); }); window.addEventListener('offline', function(){ S.online = false; renderTop(); });
   /* ordres du Shell : ouvrir le chantier d'un dossier */
-  window.addEventListener('message', function(ev){ var d = ev.data; if (!d || d.source !== 'phenix-shell' || d.action !== 'open-projet' || d.id == null) return; if (String(d.id) === 'fiches') { S.screen = 'home'; setMode(S.mode); return; } var c = D.chantiers.filter(function(x){ return String(x.projetId) === String(d.id); })[0]; if (c) { S.cid = c.id; S.screen = 'chantier'; M3.cid = null; S.tab = d.onglet === 'planning' ? 'planning' : d.onglet === 'avancement' ? 'lots' : d.onglet === 'reception' ? 'reserves' : 'recap'; setMode(S.mode); boot2(); } });
+  window.addEventListener('message', function(ev){ var d = ev.data; if (!d || d.source !== 'phenix-shell' || d.action !== 'open-projet' || d.id == null) return; if (String(d.id) === 'fiches') { S.screen = 'home'; setMode(S.mode); return; } S.wantPid = { id:String(d.id), onglet:d.onglet || '', t:Date.now() }; ouvrirVoulu(); });
   try { window.parent.postMessage({ source:'phenix-chantier', ready:true }, '*'); } catch (e) {}
   if (FB.demo) { demoSeed(); setMode(S.mode); boot2(); return; }
   $('lg-go').onclick = function(){ FB.login($('lg-e').value.trim(), $('lg-p').value).catch(function(){ $('lg-m').textContent = 'Connexion refusée.'; }); };

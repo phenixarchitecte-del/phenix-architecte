@@ -80,6 +80,11 @@ window._fbContrat = {
     const l = snap.docs.map(d => d.data()).filter(f => String(f.projetId) === String(pid) && f.statut === 'accepte');
     return l.length ? l[l.length - 1] : null;
   },
+  // [Contrat 13/11/2026] projets qui ont au moins un devis SIGNÉ (statut « accepte ») : seuls ceux-là sont proposés à la mise en contrat
+  async projetsDevisSignes() {
+    const snap = await getDocs(query(collection(db, 'phenix_factures'), where('type', '==', 'devis')));
+    return new Set(snap.docs.map(d => d.data()).filter(f => f.statut === 'accepte' && f.projetId != null).map(f => String(f.projetId)));
+  },
   async listContrats() {
     const snap = await getDocs(collection(db, 'phenix_contrats'));
     return snap.docs.map(d => Object.assign({ _id: d.id }, d.data()));
@@ -437,6 +442,7 @@ const PHASES = ['ESQ','APS','APD','PC','DCE','ACT','DET','AOR'];
 const PHASES_LABELS = {ESQ:'Esquisse',APS:'Avant-projet sommaire',APD:'Avant-projet détaillé',PC:'Permis de construire',DCE:'Dossier de consultation',ACT:'Assistance contrats travaux',DET:'Direction exécution travaux',AOR:'Assistance opérations réception'};
 
 // ── Bibliothèque de clauses ──────────────────────────────────
+// 13/11/2026 — [Contrat] La liste ne propose plus « À établir » un brouillon dont le devis n'est pas signé (statut « accepte » dans Dossier) : mis de côté, visible d'un clic ; le sélecteur marque « (devis non signé) ».
 // 20/10/2026 — REFONTE : le contrat se déclenche à la signature du devis (Dossier → Contrat).
 // Principe directeur : le client est LIBRE d'arrêter à tout moment, sans pénalité ; en contrepartie
 // tout le travail réellement réalisé reste dû, et rien d'autre (jamais de prestation non faite).
@@ -1240,14 +1246,21 @@ async function renderListeContrats(){
   try { rows = await window._fbContrat.listContrats(); }
   catch(e) { box.innerHTML = '<div class="muted">Liste indisponible pour le moment.</div>'; return; }
   rows.sort((a,b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')));
+  // [Contrat 13/11/2026] un brouillon dont le devis n'est pas (ou plus) signé n'est plus proposé « À établir » : il est mis de côté
+  let signes = null; try { signes = await window._fbContrat.projetsDevisSignes(); } catch (e) {}
+  const pidDe = r => String(r.projetId || String(r._id).replace(/_(moe|cg)$/, ''));
+  const enAttente = signes ? rows.filter(r => (r.statut || 'brouillon') === 'brouillon' && !signes.has(pidDe(r))) : [];
+  window._devisSignes = signes;
+  if (enAttente.length && !window._voirNonSignes) rows = rows.filter(r => enAttente.indexOf(r) < 0);
   window._contratRows = rows;
   renderSelecteur();
-  if (!rows.length) { box.innerHTML = '<div class="muted">Aucun contrat pour l\'instant. Le premier sera préparé automatiquement à la prochaine signature de devis.</div>'; return; }
+  const note = enAttente.length ? '<div class="muted" style="margin-top:.6rem;font-size:13px">' + (window._voirNonSignes ? '⚠ Les brouillons marqués « devis non signé » sont affichés. ' : enAttente.length + ' brouillon' + (enAttente.length > 1 ? 's' : '') + ' mis de côté : devis pas encore signé. ') + '<a href="#" onclick="window._voirNonSignes=!window._voirNonSignes;renderListeContrats();return false" style="color:var(--accent,#4fa8f0)">' + (window._voirNonSignes ? 'Les masquer' : 'Les voir') + '</a></div>' : '';
+  if (!rows.length) { box.innerHTML = '<div class="muted">Aucun contrat à établir. Le prochain sera préparé automatiquement à la signature d\'un devis.</div>' + note; return; }
   box.innerHTML = rows.map((r,i) => {
     const p = r.projet || {};
-    const st = r.statut || 'brouillon';
-    return '<div class="liste-row" onclick="ouvrirContratListe(' + i + ')"><div class="nm">' + escH(p.client || p.nom || ('Projet ' + (r.projetId || r._id))) + '<div class="sb">' + escH(r.contractType === 'cg' ? 'Contractant général' : 'Maîtrise d\'œuvre') + (r.devis && r.devis.numero ? ' · devis ' + escH(r.devis.numero) : '') + (r.montant ? ' · ' + euro(r.montant) + ' HT' : '') + '</div></div><span class="stat ' + st + '">' + (STAT_LABEL[st] || st) + '</span></div>';
-  }).join('');
+    const st = r.statut || 'brouillon', nonSigne = enAttente.indexOf(r) >= 0;
+    return '<div class="liste-row" onclick="ouvrirContratListe(' + i + ')"><div class="nm">' + escH(p.client || p.nom || ('Projet ' + (r.projetId || r._id))) + '<div class="sb">' + escH(r.contractType === 'cg' ? 'Contractant général' : 'Maîtrise d\'œuvre') + (r.devis && r.devis.numero ? ' · devis ' + escH(r.devis.numero) : '') + (r.montant ? ' · ' + euro(r.montant) + ' HT' : '') + '</div></div><span class="stat ' + st + '">' + (nonSigne ? '⚠ Devis non signé' : (STAT_LABEL[st] || st)) + '</span></div>';
+  }).join('') + note;
 }
 // ── Sélecteur : passer d'un projet (et de son contrat) à un autre ──
 let _projetsSel = [];
@@ -1259,7 +1272,7 @@ async function renderSelecteur(){
   const cur = currentProjet ? String(currentProjet.projetId) : '';
   sel.innerHTML = '<option value="">— Choisir un projet —</option>' + _projetsSel.map(p => {
     const id = String(p.id != null ? p.id : p._id);
-    return '<option value="' + escH(id) + '"' + (id === cur ? ' selected' : '') + '>' + escH((p.nom || p.client || ('Projet ' + id)) + (p.client && p.client !== p.nom ? ' — ' + p.client : '')) + (avec.has(id) ? '  ✓ contrat' : '') + (p.statut === 'cloture' ? '  (clôturé)' : '') + '</option>';
+    return '<option value="' + escH(id) + '"' + (id === cur ? ' selected' : '') + '>' + escH((p.nom || p.client || ('Projet ' + id)) + (p.client && p.client !== p.nom ? ' — ' + p.client : '')) + (avec.has(id) ? '  ✓ contrat' : '') + (window._devisSignes && !window._devisSignes.has(id) ? '  (devis non signé)' : '') + (p.statut === 'cloture' ? '  (clôturé)' : '') + '</option>';
   }).join('');
 }
 async function choisirProjet(id){
