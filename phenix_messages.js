@@ -55,6 +55,20 @@
     }
   };
 
+  /* [Relance décennale] 13/11/2026 : même demande, ton de rappel bienveillant. */
+  MODELES['decennale-relance'] = {
+    libelle: 'Relance d\u2019attestation de d\u00e9cennale',
+    sujet: 'Chantier {chantier} \u2014 attestation de d\u00e9cennale',
+    mail:
+      '{salutation},\n\n' +
+      'Je me permets de revenir vers vous pour le chantier {chantier} : nous n\u2019avons pas encore re\u00e7u votre attestation de d\u00e9cennale en cours de validit\u00e9.\n\n' +
+      'Pourriez-vous nous l\u2019envoyer par mail \u00e0 ' + EXPEDITEUR.mail + ' ? ' +
+      'Il nous la faut pour contractualiser le chantier. Si c\u2019est d\u00e9j\u00e0 parti, n\u2019h\u00e9sitez pas \u00e0 me le dire.\n\n' +
+      'Merci beaucoup\n\n' +
+      'Phénix-Architecture \uD83D\uDC26\u200D\uD83D\uDD25'
+  };
+  MODELES['decennale-relance'].sms = MODELES['decennale-relance'].mail;
+
   /* Correction d'une attestation reçue : un modèle, et une phrase par point à régler (clé = code de PhenixDecennale.controler).
      Variables des phrases : {dateFin} {dateDebut} {nomAtt} {lot}. Les codes sans phrase (info, territoire…) ne génèrent rien. */
   MODELES['decennale-correction'] = {

@@ -2037,7 +2037,7 @@ if (window.parent !== window) {
   <div class="modal" style="max-width:900px;width:96%;max-height:92vh;overflow-y:auto">
     <div class="modal-title"><i class="ti ti-shield-check" style="color:var(--accent);margin-right:8px" aria-hidden="true"></i>Attestations décennales des artisans</div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">Un artisan par entreprise chiffrée. « Mail » ou « SMS » ouvre un message déjà rédigé (Outlook ou Lien avec Windows) : il ne reste qu'à envoyer. L'attestation reçue se dépose ici : elle est lue automatiquement et comparée au devis, à la fiche de l'artisan et au chantier.</div>
-    <div style="margin-bottom:.75rem"><button class="btn btn-primary" onclick="chdPreparerFile()"><i class="ti ti-send" aria-hidden="true"></i> Demander toutes les décennales manquantes</button></div>
+    <div style="margin-bottom:.75rem"><button class="btn btn-primary" onclick="chdPreparerFile()"><i class="ti ti-send" aria-hidden="true"></i> Demander / relancer les décennales manquantes</button></div>
     <div id="chd-batch" style="display:none"></div>
     <div id="chd-corps"></div>
     <div class="modal-actions"><button class="btn btn-outline" onclick="closeModal('modal-dec')">Fermer</button></div>
@@ -8896,8 +8896,8 @@ function chdRender(){
     const detail = (a.decennaleStatut === 'recue' && att) ? '<div class="dec-contact">Attestation lue : ' + _centEsc(att.assureur || 'assureur non lu') + (att.police ? ' · police ' + _centEsc(att.police) : '') + (att.dateDebut || att.dateFin ? ' · du ' + PhenixMsg.dateFr(att.dateDebut) + ' au ' + PhenixMsg.dateFr(att.dateFin) : '') + (att.activites && att.activites.length ? '<br>Activités garanties : ' + _centEsc(att.activites.join(' ; ')) : '') + (a.decennaleUrl ? ' · <a href="' + _centEsc(a.decennaleUrl) + '" target="_blank" rel="noopener" style="color:var(--accent)">Ouvrir le PDF</a>' : '') + '</div>' : '';
     return '<div class="dec-row"><div class="dec-top"><div><div class="dec-nom">' + _centEsc(g.nom) + '</div><div class="dec-lots">' + g.lots.map(l => _centEsc((l.num || '') + ' ' + (l.nom || ''))).join(' · ') + '</div><div class="dec-contact">' + contact + '</div>' + saisie + '</div>' +
       '<div class="dec-statut" role="status">' + _centEsc(chdStatutTexte(g)) + '</div></div>' + detail + (lis ? '<ul class="dec-inc">' + lis + '</ul>' : '') +
-      '<div class="dec-actions"><button class="btn btn-sm btn-outline" onclick="chdAction(' + i + ',\'mail\')"' + (mail ? '' : ' disabled title="Mail manquant"') + '><i class="ti ti-mail" aria-hidden="true"></i> Demander par mail</button>' +
-      '<button class="btn btn-sm btn-outline" onclick="chdAction(' + i + ',\'sms\')"' + (tel ? '' : ' disabled title="Téléphone manquant"') + '><i class="ti ti-message" aria-hidden="true"></i> Demander par SMS</button>' +
+      '<div class="dec-actions"><button class="btn btn-sm btn-outline" onclick="chdAction(' + i + ',\'mail\')"' + (mail ? '' : ' disabled title="Mail manquant"') + '><i class="ti ti-mail" aria-hidden="true"></i> ' + (a.decennaleStatut === 'demandee' ? 'Relancer par mail' : 'Demander par mail') + '</button>' +
+      '<button class="btn btn-sm btn-outline" onclick="chdAction(' + i + ',\'sms\')"' + (tel ? '' : ' disabled title="Téléphone manquant"') + '><i class="ti ti-message" aria-hidden="true"></i> ' + (a.decennaleStatut === 'demandee' ? 'Relancer par SMS' : 'Demander par SMS') + '</button>' +
       '<button class="btn btn-sm btn-outline" onclick="chdAction(' + i + ',\'copie\')"><i class="ti ti-copy" aria-hidden="true"></i> Copier le SMS</button>' +
       (pts.length ? '<button class="btn btn-sm btn-outline" onclick="chdCorriger(' + i + ',\'mail\')"' + (mail ? '' : ' disabled title="Mail manquant"') + '><i class="ti ti-mail-forward" aria-hidden="true"></i> Écrire pour corriger (' + pts.length + ' point' + (pts.length > 1 ? 's' : '') + ')</button>' : '') +
       '<button class="btn btn-sm btn-primary" onclick="chdDeposer(' + i + ')"><i class="ti ti-upload" aria-hidden="true"></i> Déposer l’attestation reçue</button></div></div>';
@@ -8927,13 +8927,14 @@ async function chdAction(i, type){
   const g = _chdG[i]; if (!g) return false;
   const art = chdArtisanOuCreer(g), c = _centC();
   const contact = (art.nom && _annN(art.nom) !== _annN(g.nom)) ? art.nom : '';
-  const msg = PhenixMsg.preparer('decennale', { contact:contact, entreprise:g.nom, metier:art.metier && art.metier !== 'À préciser' ? art.metier : '', chantier:PhenixMsg.libelleChantier(c) || c.nom || '', lot:g.lots.map(l => l.nom).filter(Boolean).join(' ; '), dateValidite:art.assuranceDate || '' });
+  const relance = art.decennaleStatut === 'demandee';   // [Relance décennale] déjà demandée : message de rappel
+  const msg = PhenixMsg.preparer(relance ? 'decennale-relance' : 'decennale', { contact:contact, entreprise:g.nom, metier:art.metier && art.metier !== 'À préciser' ? art.metier : '', chantier:PhenixMsg.libelleChantier(c) || c.nom || '', lot:g.lots.map(l => l.nom).filter(Boolean).join(' ; '), dateValidite:art.assuranceDate || '' });
   if (type === 'copie'){ const ok = await PhenixMsg.copier(msg.sms); showToast(ok ? '✓ SMS copié — colle-le dans ta messagerie' : '⚠️ Copie impossible'); return; }
   const surTel = /Android|iPhone|iPad/i.test(navigator.userAgent);
   const ok = type === 'mail' ? PhenixMsg.ouvrirMail(art.email, msg) : PhenixMsg.ouvrirSms(art.tel, msg);
   if (ok && type === 'sms' && !surTel) PhenixMsg.copier(msg.sms);
   if (!ok){ showToast('⚠️ ' + (type === 'mail' ? 'Mail' : 'Téléphone') + ' manquant ou invalide'); return false; }
-  const deja = art.decennaleStatut === 'demandee' && (art.decennaleDemandeLe || '') < _chdAuj();
+  const deja = art.decennaleStatut === 'demandee';   // [Relance décennale] chaque nouvel envoi après une première demande compte comme une relance
   art.decennaleStatut = 'demandee'; art.decennaleDemandeLe = _chdAuj(); art.decennaleCanal = type;
   art.decennaleRelances = deja ? (art.decennaleRelances || 0) + 1 : (art.decennaleRelances || 0);
   try { await chdSauver(art); } catch(e){ showToast('⚠️ Brouillon ouvert, mais suivi non enregistré (droits ou connexion)'); }
@@ -8954,23 +8955,23 @@ async function chdCorriger(i, type){
   showToast(type === 'mail' ? '✓ Brouillon de mail ouvert — relis et envoie' : '✓ SMS préparé — il ne reste qu’à envoyer');
   chdRender();
 }
-function chdAFaire(){
+function chdAFaire(inclureAujourdhui){
   return _chdG.map((g, i) => ({ g:g, i:i })).filter(x => {
     const a = x.g.artisan;
     if (a && a.decennaleStatut === 'recue' && !PhenixDecennale.resume(chdControles(x.g)).bloquants) return false;
-    if (a && a.decennaleStatut === 'demandee' && a.decennaleDemandeLe === _chdAuj()) return false;
+    if (!inclureAujourdhui && a && a.decennaleStatut === 'demandee' && a.decennaleDemandeLe === _chdAuj()) return false;
     return true;
   });
 }
-function chdPreparerFile(){
+function chdPreparerFile(inclureAujourdhui){
   _chdG = chdGroupes();
-  const aFaire = chdAFaire(); _chdFile = []; _chdPos = 0;
+  const aFaire = chdAFaire(inclureAujourdhui === true); _chdFile = []; _chdPos = 0;
   const sansContact = [], fixeSeul = [];
   aFaire.forEach(x => { const a = x.g.artisan || {}, mail = PhenixMsg.normMail(a.email), tel = PhenixMsg.normTel(a.tel);
     if (mail) _chdFile.push({ i:x.i, canal:'mail' }); if (tel && PhenixMsg.estMobile(tel)) _chdFile.push({ i:x.i, canal:'sms' });
     if (tel && !PhenixMsg.estMobile(tel)) fixeSeul.push(x.g.nom); if (!mail && !tel) sansContact.push(x.g.nom); });
   const z = document.getElementById('chd-batch'); z.style.display = '';
-  if (!aFaire.length){ z.innerHTML = '<div class="dec-row">Toutes les attestations sont déjà reçues ou demandées aujourd’hui.</div>'; return; }
+  if (!aFaire.length){ const dem = chdAFaire(true).length; z.innerHTML = '<div class="dec-row">Toutes les attestations sont déjà reçues ou demandées aujourd’hui.' + (dem ? '<div class="dec-actions"><button class="btn btn-sm btn-outline" onclick="chdPreparerFile(true)"><i class="ti ti-refresh" aria-hidden="true"></i> Relancer quand même (' + dem + ')</button></div>' : '') + '</div>'; return; }
   const nbMail = _chdFile.filter(x => x.canal === 'mail').length, nbSms = _chdFile.length - nbMail;
   z.innerHTML = '<div class="dec-row" role="region" aria-label="Demande groupée"><div class="dec-nom">Demande groupée — ' + aFaire.length + ' artisan' + (aFaire.length > 1 ? 's' : '') + '</div>' +
     '<div class="dec-contact">' + _chdFile.length + ' message' + (_chdFile.length > 1 ? 's' : '') + ' à envoyer : ' + nbMail + ' mail' + (nbMail > 1 ? 's' : '') + ' et ' + nbSms + ' SMS (aux numéros de mobile uniquement).</div>' +
