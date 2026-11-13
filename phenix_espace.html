@@ -1610,18 +1610,25 @@ function gabarit(it, canal){
     return { subject:'', text: lignes.join('\n') };
   }
   var subject = 'Votre devis' + (f.numero ? ' ' + f.numero : '') + (f.objet ? ' — ' + f.objet : '');
-  if (canal === 'sms') {
-    corps = salut + ' ' + (stade === 1 ? 'Je me permets de revenir vers vous au sujet ' + refDu + '. Avez-vous pu le consulter ?' :
-      stade === 2 ? 'Je reviens vers vous concernant ' + refLe + '. Avez-vous des questions ou souhaitez-vous ajuster certains points ?' :
-                    'Sans nouvelle de votre part concernant ' + refLe + ', votre projet est-il toujours d\'actualité ?') + ' ' + sig;
-    return { subject:'', text: corps };
-  }
-  var mid = stade === 1 ?
-    'Je me permets de revenir vers vous au sujet ' + refDu + envoye + '. Avez-vous bien pu en prendre connaissance ?\n\nN\'hésitez pas si vous avez la moindre question : nous restons à votre disposition pour en discuter.' :
-    stade === 2 ?
-    'Je reviens vers vous concernant ' + refLe + envoye + '. Avez-vous eu le temps de l\'étudier ?\n\nSi certains points méritent d\'être précisés ou ajustés (contenu, périmètre, budget), nous pouvons en parler quelques minutes par téléphone.' :
-    'Je n\'ai pas eu de retour concernant ' + refLe + envoye + ', et je souhaitais savoir si votre projet est toujours d\'actualité.\n\nSans nouvelle de votre part, je clôturerai le dossier ; vous pourrez bien sûr nous recontacter quand vous le souhaitez.';
-  return { subject: subject, text: salut + '\n\n' + mid + '\n\nCordialement,\n' + sig };
+  // [Relances] 13/11/2026 — texte de Maxime, le même à chaque relance (mail et SMS), sans « Cordialement » ni signature dans le mail (signature Outlook)
+  var texte = salutCivil(it) + '\n\nNous n\'avons pas eu de retour concernant ' + refLe + envoye + ', et nous souhaiterions savoir si votre projet est toujours d\'actualité.\n' +
+    'Nous vous laissons revenir vers nous pour confirmer votre intérêt ou non pour notre accompagnement.';
+  if (canal === 'sms') return { subject:'', text: texte + '\n\n' + sig };
+  return { subject: subject, text: texte };
+}
+/* « Bonjour Madame Priam, » / « Bonjour Monsieur Priam, » / « Bonjour Madame, Monsieur Priam, » : civilité d'après le client, nom = nom du dossier */
+function salutCivil(it){
+  var p = it.p || {}, cli = String((p.client || it.f.client || '')).trim(), dos = String(p.nom || '').trim();
+  var c = cli.toLowerCase();
+  var hom = /(^|[\s,/])(m\.?|mr\.?|monsieur)(\s|$)/.test(c), fem = /(^|[\s,/])(mme\.?|madame|mlle\.?|mademoiselle)(\s|$)/.test(c);
+  var civ = hom && !fem ? 'Monsieur' : fem && !hom ? 'Madame' : 'Madame, Monsieur';
+  var CIV = /\b(m\.?|mr\.?|mme\.?|mlle\.?|monsieur|madame|mademoiselle|et|sci|sarl|sas)\b/gi;
+  var titre = function(x){ return x === x.toUpperCase() ? x.charAt(0) + x.slice(1).toLowerCase() : x; };
+  /* nom du dossier (« Priam », « Maison Durand » → « Durand ») ; s'il est long (réf., commune…), nom de famille du client */
+  var d = dos.replace(/_/g, ' ').replace(/\b\d{3,}\b|[—–-]/g, ' ').replace(/\b(maison|villa|r[ée]novation|extension|r[ée]habilitation|am[ée]nagement|projet|dossier|garage|grange|construction|sur[ée]l[ée]vation|toiture|appartement|chez)\b/gi, ' ').replace(CIV, ' ').replace(/\s+/g, ' ').trim();
+  var k = cli.replace(CIV, ' ').replace(/\s+/g, ' ').trim().split(' '), nomCli = k[k.length - 1] || '';
+  var nom = d && d.split(' ').length === 1 ? d : nomCli || d;
+  return 'Bonjour ' + civ + (nom ? ' ' + nom.split(' ').map(titre).join(' ') : '') + ',';
 }
 
 function message(id, canal){
