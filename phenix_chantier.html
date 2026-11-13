@@ -32,6 +32,12 @@
       visibilité par entreprise et par client (client : non par défaut). Collection phenix_ch_plans. Repérer : [Plans].
    Repérer : [Journal], [Espace assistante], « Aucune entreprise ».
 ══════════════════════════════════════════════════════════════════
+ 13/11/2026 — [Dates artisans] DEMANDER SES DATES À CHAQUE ENTREPRISE PAR UN LIEN (demande : « envoyer un lien aux artisans pour qu'ils rentrent leurs dates,
+   directement dans Chantier »). Planning › « Demander les dates » : un lien personnel par entreprise et par chantier (page publique
+   phenix_dates.html, sans compte) ; l'entreprise saisit début / fin (ou « à rediscuter ») pour chacun de ses lots, avec une remarque.
+   Les dates sont appliquées automatiquement aux lots (marqués « dates manuelles ») dès que ce module est ouvert ; remarque et
+   indisponibilité sont ajoutées aux notes du lot. Collection phenix_ch_dates (règle Firestore à ajouter : voir regles_phenix_ch_dates.txt).
+   Lien valable 90 jours. Repérer : [Dates artisans].
  27/10/2026 — [Avancement] AVANCEMENT DES LOTS RÉGLABLE EN UN CLIC (demande : « je ne sais pas où régler l'avancement »).
    Page Lots : la colonne Avancement est un champ % modifiable directement (enregistré aussitôt, sans ouvrir la fiche du lot),
    avec l'avancement ATTENDU d'après les dates du lot (« ⚠ attendu 80 % ») ; bandeau en tête de page : avancement réel
@@ -104,7 +110,7 @@ const TACHES_COL     = collection(db, 'phenix_taches');
 
 // ── Exposition globale pour le code non-module ci-dessous ──
 window._fb = {
-  db, doc, setDoc, deleteDoc, getDoc, getDocs, collection,
+  db, doc, setDoc, deleteDoc, getDoc, getDocs, collection, onSnapshot,   // [Dates artisans] onSnapshot : écoute des liens de dates
   PROJETS_COL, ECHEANCES_COL,
 
   // Sauvegarde un projet (crée ou met à jour)
@@ -1040,7 +1046,9 @@ body.role-equipe .admin-only { display:none !important; }
 .pg-bar{position:absolute;height:30px;border-radius:5px;z-index:4;display:flex;align-items:center;color:#fff;font-size:11px;font-weight:600;padding:0 10px;cursor:grab;touch-action:none;user-select:none;box-shadow:0 1px 3px rgba(0,0,0,.25);overflow:hidden}
 .pg-bar span{pointer-events:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;position:relative}.pg-bar.late{outline:2px solid #e74c3c}.pg-bar.drag{cursor:grabbing;opacity:.85;box-shadow:0 4px 12px rgba(0,0,0,.35)}
 .pg-av{position:absolute;left:0;top:0;bottom:0;background:rgba(0,0,0,.28);pointer-events:none}.pg-h{position:absolute;top:0;bottom:0;width:9px;cursor:ew-resize;z-index:2}.pg-h.l{left:0}.pg-h.r{right:0}
-.pg-h:hover{background:rgba(255,255,255,.35)}.pg-sans{margin-top:10px;font-size:12px;color:var(--text2);padding:8px 10px;background:var(--bg);border-radius:var(--r-md)}.pg-sans a{color:var(--accent2);font-weight:600}
+.pg-h:hover{background:rgba(255,255,255,.35)}.dt-ban{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin:0 0 12px;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);background:var(--bg);font-size:13px}.dt-ban a{color:var(--accent);font-weight:700;cursor:pointer}
+.dt-row{border:1.5px solid var(--border);border-radius:var(--r-md);padding:10px 12px;margin-bottom:8px;display:flex;flex-direction:column;gap:6px}.dt-row .h{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline}.dt-etat{font-size:12.5px;font-weight:700}.dt-act{display:flex;flex-wrap:wrap;gap:6px}.dt-rep{font-size:12.5px;color:var(--text2);line-height:1.5}
+.pg-sans{margin-top:10px;font-size:12px;color:var(--text2);padding:8px 10px;background:var(--bg);border-radius:var(--r-md)}.pg-sans a{color:var(--accent2);font-weight:600}
 .pg-zoom button{border:1.5px solid var(--border);background:var(--card);color:var(--text2);padding:6px 12px;font-size:12px;cursor:pointer;font-family:inherit}.pg-zoom button:first-child{border-radius:7px 0 0 7px}.pg-zoom button:last-child{border-radius:0 7px 7px 0;border-left:0}.pg-zoom button.pg-on{background:var(--accent);border-color:var(--accent);color:#fff}
 </style>
 <style id="px-iframe-hide"></style>
@@ -1131,6 +1139,23 @@ if (window.parent !== window) {
 </div>
 
 <!-- Modal : Lot -->
+<!-- [Dates artisans] demander leurs dates aux entreprises par un lien personnel -->
+<div class="modal-overlay" id="modalDates">
+  <div class="modal" style="max-width:720px">
+    <div class="modal-header">
+      <div class="modal-title">Demander les dates aux entreprises</div>
+      <button class="btn btn-sm btn-icon" onclick="closeModal('modalDates')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label>Chantier</label><select id="dates-ch" onchange="datesRender()"></select></div>
+      <div style="font-size:12.5px;color:var(--text2);margin:10px 0">Chaque entreprise reçoit <b>un lien personnel</b> : depuis son téléphone, sans compte, elle indique ses dates (ou « à rediscuter »). Elles arrivent <b>directement dans le planning</b> dès que vous ouvrez ce module.</div>
+      <div class="form-group"><label>Message pour les entreprises (facultatif)</label><textarea id="dates-msg" rows="2" maxlength="400" placeholder="Ex. : le gros œuvre démarre le 2 mars ; merci de caler vos dates après."></textarea></div>
+      <div id="dates-liste" style="margin-top:14px"></div>
+    </div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modalDates')">Fermer</button></div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modalLot">
   <div class="modal">
     <div class="modal-header">
@@ -1834,9 +1859,11 @@ if (window.parent !== window) {
             </select>
             <span class="pg-zoom"><button id="pg-zoom-jour" class="pg-on" onclick="pgSetZoom('jour')">Jour</button><button id="pg-zoom-semaine" onclick="pgSetZoom('semaine')">Semaine</button></span>
             <button class="btn" onclick="openModalLot()"><i class="ti ti-plus"></i> Lot</button>
+            <button class="btn" id="btn-dates-art" onclick="ouvrirDatesArtisans()" title="Envoyer à chaque entreprise un lien pour saisir ses dates"><i class="ti ti-send"></i> Demander les dates</button>
             <button class="btn" onclick="exportPlanningPDF()"><i class="ti ti-file-export"></i> Export PDF</button>
           </div>
         </div>
+        <div id="dates-bandeau" style="display:none"></div>
         <div class="card">
           <div class="card-header"><div class="card-title">Diagramme de Gantt</div><div style="font-size:12px;color:var(--text3)">Couleur = métier · zone sombre = avancement · contour rouge = en retard</div></div>
           <div class="gantt-wrap" id="gantt-content">
@@ -2545,6 +2572,7 @@ function _onBoot() {
   refreshAll();
   if (IS_STAFF()) _reconcileCharges(true);
   _maybeMigrate();
+  if (typeof datesStart === 'function') datesStart();   // [Dates artisans]
   if (_legacyMode && IS_ADMIN()) toast('⚠️ Sécurité multi-utilisateur non configurée (voir page « Équipe & accès »).');
 }
 
@@ -5191,6 +5219,7 @@ function pgSetZoom(z) { _pgZoom = z; renderPlanning(); }
 function renderPlanning() {
   const cont = document.getElementById('gantt-content');
   if (!cont) return;
+  if (typeof datesBandeau === 'function') datesBandeau();   // [Dates artisans]
   const filter = document.getElementById('planning-filter-ch')?.value || activeChantier;
   const tous = filter ? state.lots.filter(l => l.chantierId == filter) : state.lots;
   const lots = tous.filter(l => l.debut && l.fin).sort((a, b) => String(a.debut).localeCompare(String(b.debut)));
@@ -5245,6 +5274,155 @@ function renderPlanning() {
     <div class="pg-body"><div class="pg-sidebar">${side}</div><div class="pg-plot" style="width:${W}px;height:${lots.length * rowH}px"><div class="pg-plotbg">${bg}${lines}</div>${todayHtml}${bars}</div></div>
   </div></div></div>` + sansHtml;
   pgAttach(dw, minD);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  [Dates artisans] 13/11/2026 — lien personnel par entreprise pour saisir ses dates (page publique phenix_dates.html).
+//  phenix_ch_dates/{jeton} : { chantierId, chantierNom, intervenantId, entreprise, lots:[{id,nom,debut,fin}], message, expireMs,
+//  statut: envoye | repondu | applique, reponses:{ [lotId]: {debut,fin,note,indispo} }, repondu_le, applique_le }.
+//  Les réponses sont appliquées aux lots dès que ce module est ouvert (après contrôle strict des dates et des lots du lien).
+// ══════════════════════════════════════════════════════════════════════════
+const DATES_COL = 'phenix_ch_dates';
+let DATES = [], _datesUnsub = null, _datesBusy = false, _datesRefuse = false;
+const _dtOk = s => (/^\d{4}-\d{2}-\d{2}$/.test(String(s || '')) && !isNaN(Date.parse(s)) && s >= '2020-01-01' && s <= '2040-12-31') ? s : null;
+const _dtFr = iso => /^\d{4}-\d{2}-\d{2}/.test(iso || '') ? String(iso).slice(0, 10).split('-').reverse().join('/') : '';
+function _dtToken() { const a = new Uint8Array(18); crypto.getRandomValues(a); return btoa(String.fromCharCode.apply(null, a)).replace(/\+/g, '-').replace(/\//g, '_'); }
+function _dtUrl(tok) { return new URL('phenix_dates.html', location.href).href.split('?')[0].split('#')[0] + '?t=' + tok; }
+const _dtActif = d => d && !(d.expireMs && Date.now() > d.expireMs);
+
+function datesStart() {
+  if (_datesUnsub || !IS_STAFF()) return;
+  const f = window._fb; if (!f || !f.onSnapshot || !f.collection) return;
+  try {
+    _datesUnsub = f.onSnapshot(f.collection(f.db, DATES_COL), snap => {
+      DATES = []; snap.forEach(d => DATES.push(Object.assign({ token: d.id }, d.data())));
+      datesBandeau(); datesRender();
+      datesAppliquer();
+    }, err => { _datesUnsub = null; if (err && err.code === 'permission-denied') _datesRefuse = true; console.warn('Dates artisans :', err && err.code); });
+  } catch (e) { console.warn('Dates artisans', e); }
+}
+
+// Applique les réponses reçues aux lots (dates + remarque), puis marque le lien « appliqué »
+async function datesAppliquer() {
+  if (_datesBusy) return; _datesBusy = true;
+  try {
+    const f = window._fb;
+    for (const d of DATES.filter(x => x.statut === 'repondu' && x.reponses && typeof x.reponses === 'object')) {
+      const ch = state.chantiers.find(c => c.id == d.chantierId); if (!ch) continue;
+      const maj = [], indispo = []; let nb = 0;
+      for (const lr of (d.lots || [])) {
+        const r = d.reponses[lr.id]; if (!r || typeof r !== 'object') continue;
+        const l = state.lots.find(x => String(x.id) === String(lr.id) && x.chantierId == d.chantierId); if (!l) continue;
+        const note = String(r.note || '').slice(0, 300).trim(), tag = '[Dates ' + (d.entreprise || 'entreprise') + ' ' + _dtFr(d.repondu_le || new Date().toISOString()) + ']';
+        let touche = false;
+        if (r.indispo) { indispo.push(l.nom); }
+        else {
+          const a = _dtOk(r.debut), b = _dtOk(r.fin);
+          if (a && b && b >= a && (l.debut !== a || l.fin !== b)) { l.debut = a; l.fin = b; l.datesManuelles = true; touche = true; maj.push(l.nom); }
+        }
+        const ligne = tag + (r.indispo ? ' À rediscuter (indisponible sur les dates prévues).' : '') + (note ? ' ' + note : '');
+        if ((r.indispo || note) && String(l.notes || '').indexOf(ligne) < 0) { l.notes = (l.notes ? l.notes + '\n' : '') + ligne; touche = true; }
+        if (touche) { l.updatedAt = new Date().toISOString(); nb++; }
+      }
+      if (nb) { saveLocal(); if (typeof renderLots === 'function') try { renderLots(); } catch (e) {} renderPlanning(); updateBadges(); }
+      const qui = d.entreprise || 'Une entreprise';
+      if (maj.length) toast('📅 ' + qui + ' : dates reçues (' + maj.length + ' lot' + (maj.length > 1 ? 's' : '') + ') — planning mis à jour');
+      else if (indispo.length) toast('⚠️ ' + qui + ' demande à rediscuter ses dates');
+      if (maj.length || indispo.length) { try { window.phenixJournal && window.phenixJournal('chantier', 'dates', 'lot', qui + ' : dates reçues' + (maj.length ? ' (' + maj.join(', ') + ')' : '') + (indispo.length ? ' · à rediscuter : ' + indispo.join(', ') : '')); } catch (e) {} }
+      await f.setDoc(f.doc(f.db, DATES_COL, d.token), { statut: 'applique', applique_le: new Date().toISOString() }, { merge: true });
+    }
+  } catch (e) { console.warn('Dates artisans : application', e); }
+  finally { _datesBusy = false; }
+}
+
+// Ligne d'état au-dessus du Gantt
+function datesBandeau() {
+  const el = document.getElementById('dates-bandeau'); if (!el) return;
+  const filter = document.getElementById('planning-filter-ch')?.value || '';
+  const L = DATES.filter(d => _dtActif(d) && (!filter || d.chantierId == filter));
+  if (!L.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  const recu = L.filter(d => d.statut === 'repondu' || d.statut === 'applique'), att = L.filter(d => d.statut === 'envoye');
+  el.style.display = '';
+  el.innerHTML = '<div class="dt-ban"><b>📅 Dates demandées aux entreprises</b><span>✓ ' + recu.length + ' reçue' + (recu.length > 1 ? 's' : '') + '</span><span>⏳ ' + att.length + ' en attente' +
+    (att.length ? ' (' + att.slice(0, 4).map(d => esc(d.entreprise || '?')).join(', ') + (att.length > 4 ? '…' : '') + ')' : '') + '</span><a onclick="ouvrirDatesArtisans()">Gérer</a></div>';
+}
+
+function ouvrirDatesArtisans() {
+  const sel = document.getElementById('dates-ch');
+  const cur = document.getElementById('planning-filter-ch')?.value || activeChantier || '';
+  sel.innerHTML = state.chantiers.map(c => '<option value="' + esc(c.id) + '"' + (String(c.id) === String(cur) ? ' selected' : '') + '>' + esc(c.nom) + '</option>').join('');
+  if (!sel.value && state.chantiers[0]) sel.value = state.chantiers[0].id;
+  datesStart(); datesRender(); openModal('modalDates');
+}
+
+function _dtLots(chId, ivId) { return state.lots.filter(l => l.chantierId == chId && String(l.interv) === String(ivId) && l.statut !== 'termine'); }
+function _dtLien(chId, ivId) {
+  return DATES.filter(d => d.chantierId == chId && String(d.intervenantId) === String(ivId)).sort((a, b) => String(b.creeLe || '').localeCompare(String(a.creeLe || '')))[0] || null;
+}
+
+function datesRender() {
+  const box = document.getElementById('dates-liste'); if (!box) return;
+  const chId = document.getElementById('dates-ch').value; if (!chId) { box.innerHTML = ''; return; }
+  const lots = state.lots.filter(l => l.chantierId == chId && l.statut !== 'termine');
+  const ivIds = [...new Set(lots.filter(l => l.interv).map(l => String(l.interv)))];
+  const sans = lots.filter(l => !l.interv).length;
+  let h = _datesRefuse ? '<div class="pg-sans" style="border:1.5px solid var(--red);color:var(--red)">⚠️ Accès refusé à la collection phenix_ch_dates : la règle Firestore doit être ajoutée (fichier regles_phenix_ch_dates.txt).</div>' : '';
+  if (!ivIds.length) h += '<div class="empty-sub">Aucun lot n\'a d\'entreprise attribuée sur ce chantier. Attribuez une entreprise aux lots (page Lots) puis revenez ici.</div>';
+  ivIds.forEach(iid => {
+    const iv = state.intervenants.find(i => String(i.id) === iid); if (!iv) return;
+    const mes = _dtLots(chId, iid), lien = _dtLien(chId, iid), actif = _dtActif(lien);
+    const idsLien = lien ? (lien.lots || []).map(x => String(x.id)).sort().join(',') : '', idsNow = mes.map(l => String(l.id)).sort().join(',');
+    let etat = '', rep = '', act = '';
+    if (!lien || !actif) {
+      etat = lien ? '⌛ Lien expiré' : '— Pas encore demandé';
+      act = '<button class="btn btn-primary btn-sm" onclick="datesCreer(\'' + esc(chId) + '\',\'' + esc(iid) + '\')"><i class="ti ti-link"></i> ' + (lien ? 'Créer un nouveau lien' : 'Créer le lien') + '</button>';
+    } else {
+      const recu = lien.statut === 'repondu' || lien.statut === 'applique';
+      etat = recu ? '✓ Dates reçues' + (lien.repondu_le ? ' le ' + _dtFr(lien.repondu_le) : '') + (lien.statut === 'applique' ? ' · appliquées au planning' : '') : '⏳ En attente de réponse';
+      if (recu && lien.reponses) rep = '<div class="dt-rep">' + (lien.lots || []).map(lr => { const r = lien.reponses[lr.id]; return r ? esc(lr.nom) + ' : ' + (r.indispo ? '⚠ à rediscuter' : _dtFr(r.debut) + ' → ' + _dtFr(r.fin)) + (r.note ? ' — « ' + esc(r.note) + ' »' : '') : ''; }).filter(Boolean).join('<br>') + '</div>';
+      const tel = (iv.tel || '').replace(/[^\d+]/g, ''), url = _dtUrl(lien.token), nomCh = (state.chantiers.find(c => c.id == chId) || {}).nom || '';
+      const sms = 'Bonjour, pour organiser le chantier ' + nomCh + ', pouvez-vous indiquer vos dates d\'intervention ? Lien simple, sans compte : ' + url + ' Merci beaucoup !';
+      const mail = 'Bonjour,\n\nPour organiser le chantier ' + nomCh + ', pourriez-vous nous indiquer vos dates d\'intervention ? Ce lien personnel, sans compte à créer, vous permet de les saisir en deux minutes depuis votre téléphone :\n' + url + '\n\nMerci beaucoup pour votre aide.';
+      act = '<button class="btn btn-sm" onclick="datesCopier(\'' + esc(lien.token) + '\')"><i class="ti ti-copy"></i> Copier le lien</button>' +
+        (tel ? '<a class="btn btn-sm" href="sms:' + esc(tel) + '?body=' + encodeURIComponent(sms) + '"><i class="ti ti-message"></i> SMS</a>' : '') +
+        (iv.email ? '<a class="btn btn-sm" href="mailto:' + esc(iv.email) + '?subject=' + encodeURIComponent('Chantier ' + nomCh + ' : vos dates d\'intervention') + '&body=' + encodeURIComponent(mail) + '"><i class="ti ti-mail"></i> Mail</a>' : '') +
+        (idsLien !== idsNow ? '<button class="btn btn-sm" onclick="datesActualiser(\'' + esc(lien.token) + '\',\'' + esc(chId) + '\',\'' + esc(iid) + '\')" title="Les lots de l\'entreprise ont changé depuis l\'envoi"><i class="ti ti-refresh"></i> Mettre à jour les lots</button>' : '') +
+        '<button class="btn btn-sm" onclick="datesRetirer(\'' + esc(lien.token) + '\')" title="Désactiver ce lien"><i class="ti ti-trash"></i></button>';
+    }
+    h += '<div class="dt-row"><div class="h"><b>' + esc(iv.nom) + '</b><span class="dt-etat">' + etat + '</span></div>' +
+      '<div class="dt-rep">Lots : ' + (mes.length ? mes.map(l => esc(l.nom) + (l.debut && l.fin ? ' (' + _dtFr(l.debut) + ' → ' + _dtFr(l.fin) + ')' : ' (sans dates)')).join(' · ') : '—') + '</div>' + rep +
+      '<div class="dt-act">' + act + '</div></div>';
+  });
+  if (sans) h += '<div class="empty-sub" style="margin-top:6px">' + sans + ' lot' + (sans > 1 ? 's' : '') + ' sans entreprise : non inclus.</div>';
+  box.innerHTML = h;
+}
+
+async function datesCreer(chId, iid) {
+  const f = window._fb, ch = state.chantiers.find(c => c.id == chId), iv = state.intervenants.find(i => String(i.id) === String(iid));
+  const mes = _dtLots(chId, iid);
+  if (!ch || !iv || !mes.length) { toast('⚠️ Aucun lot à planifier pour cette entreprise.'); return; }
+  const tok = _dtToken(), rec = {
+    projetId: ch.projetId ? String(ch.projetId) : '', chantierId: ch.id, chantierNom: ch.nom || '', intervenantId: iv.id, entreprise: iv.nom || '',
+    lots: mes.map(l => ({ id: l.id, nom: l.nom, debut: l.debut || '', fin: l.fin || '' })),
+    message: (document.getElementById('dates-msg').value || '').trim().slice(0, 400),
+    creeLe: new Date().toISOString(), creePar: CH_ME.email || '', expireMs: Date.now() + 90 * 864e5, statut: 'envoye', reponses: {}
+  };
+  try { await f.setDoc(f.doc(f.db, DATES_COL, tok), rec); toast('🔗 Lien créé pour ' + (iv.nom || 'l\'entreprise')); datesStart(); }
+  catch (e) { _datesRefuse = e && e.code === 'permission-denied'; toast('⛔ Création impossible' + (_datesRefuse ? ' : règle Firestore à ajouter (phenix_ch_dates)' : '')); datesRender(); }
+}
+async function datesActualiser(tok, chId, iid) {
+  const mes = _dtLots(chId, iid), f = window._fb;
+  try { await f.setDoc(f.doc(f.db, DATES_COL, tok), { lots: mes.map(l => ({ id: l.id, nom: l.nom, debut: l.debut || '', fin: l.fin || '' })), statut: 'envoye' }, { merge: true }); toast('Lots du lien mis à jour'); } catch (e) { toast('⛔ Mise à jour impossible'); }
+}
+async function datesRetirer(tok) {
+  if (!confirm('Désactiver ce lien ? L\'entreprise ne pourra plus saisir ses dates avec.')) return;
+  try { await window._fb.deleteDoc(window._fb.doc(window._fb.db, DATES_COL, tok)); toast('Lien désactivé'); } catch (e) { toast('⛔ Suppression impossible'); }
+}
+function datesCopier(tok) {
+  const url = _dtUrl(tok);
+  const ok = () => toast('🔗 Lien copié');
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(ok, () => prompt('Copiez ce lien :', url));
+  else prompt('Copiez ce lien :', url);
 }
 
 function pgAttach(dw, minD) {
