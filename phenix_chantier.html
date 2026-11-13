@@ -32,6 +32,9 @@
       visibilité par entreprise et par client (client : non par défaut). Collection phenix_ch_plans. Repérer : [Plans].
    Repérer : [Journal], [Espace assistante], « Aucune entreprise ».
 ══════════════════════════════════════════════════════════════════
+ 13/11/2026 — [Envoi → Chantier] « Envoyer vers Chantier » (Chiffrage) fait entrer le dossier dans le district Chantier de la Synthèse 3D (phase DCE) ;
+   la fiche chantier et ses lots sont créés ici à la première ouverture depuis la Synthèse (agence). Ctrl+Z dans Chiffrage annule l'envoi.
+   Repérer : [Envoi → Chantier].
  13/11/2026 — [Dates artisans] DEMANDER SES DATES À CHAQUE ENTREPRISE PAR UN LIEN (demande : « envoyer un lien aux artisans pour qu'ils rentrent leurs dates,
    directement dans Chantier »). Planning › « Demander les dates » : un lien personnel par entreprise et par chantier (page publique
    phenix_dates.html, sans compte) ; l'entreprise saisit début / fin (ou « à rediscuter ») pour chacun de ses lots, avec une remarque.
@@ -4598,11 +4601,11 @@ function lierEntrepriseLot(lot, nom, devis) {
   lot.entrepriseNom = nom;
 }
 
-async function importFromChiffrage() {
+async function importFromChiffrage(chOverride) {
   if (IS_EXT()) return;
-  const filter = document.getElementById('lots-filter-ch')?.value || activeChantier;
+  const filter = (chOverride && chOverride.id) || document.getElementById('lots-filter-ch')?.value || activeChantier;   // [Envoi → Chantier] chOverride : chantier créé automatiquement
   if (!filter) { toast('⚠️ Sélectionnez un chantier dans le filtre avant d\'importer.'); return; }
-  const chantier = state.chantiers.find(c => c.id == filter);
+  const chantier = (chOverride && chOverride.id) ? chOverride : state.chantiers.find(c => c.id == filter);
   if (!chantier) { toast('⚠️ Chantier introuvable.'); return; }
   if (!chantier.projetId) { toast('⚠️ Ce chantier n\'est pas lié à un projet Phénix Dossier — modifiez-le pour le lier avant d\'importer.'); return; }
 
@@ -5007,11 +5010,37 @@ function annSync() {
 }
 /* [Avancement] ordre du shell « open-projet » (Synthèse 3D) : ouvrir le chantier du dossier sur la bonne page.
    onglet : 'avancement' (défaut) → Lots ; 'planning' → Planning ; 'reception' → Réserves ; 'plans' → Plans & pastilles (v66). */
+// [Envoi → Chantier] 13/11/2026 — le dossier envoyé depuis Chiffrage n'a pas encore sa fiche chantier : elle est créée à la première
+// ouverture depuis la Synthèse 3D, avec ses lots (synthèse phenix_chantier_import/{projetId}). Agence seulement.
+const _chAutoPid = {};
+async function chantierAutoDepuisImport(pid) {
+  if (_chAutoPid[pid] || !_booted || !IS_STAFF()) return false;
+  _chAutoPid[pid] = 1;
+  const f = window._fb; if (!f || !f.getDoc) { _chAutoPid[pid] = 0; return false; }
+  try {
+    const snap = await f.getDoc(f.doc(f.db, 'phenix_chantier_import', String(pid)));
+    if (!snap.exists()) return false;
+    const data = snap.data(), lots = data.lots || [], pj = (dossierProjets || []).find(p => String(p.id) === String(pid)) || {};
+    const ch = {
+      id: uid(), nom: data.chantierNom || pj.nom || ('Chantier ' + pid), ref: pj.ref || '', client: data.client || pj.client || '',
+      type: 'Construction neuve', adresse: pj.adresse || '', debut: '', fin: '',
+      budget: Math.round(lots.reduce((t, l) => t + (+l.montantHt || 0), 0)), statut: 'preparation',
+      notes: 'Créé depuis Phénix Chiffrage le ' + new Date().toLocaleDateString('fr-FR'), honoraires: 0, commissions: 0, projetId: String(pid), autoChiffrage: true   // [Envoi → Chantier] repère : Ctrl+Z de Chiffrage peut le supprimer tant qu'il est vierge
+    };
+    state.chantiers.push(ch); saveLocal();
+    await importFromChiffrage(ch);
+    refreshAll();
+    try { window.phenixJournal && window.phenixJournal('chantier', 'cree', 'chantier', ch.nom + ' (depuis Chiffrage)'); } catch (e) {}
+    toast('✅ Chantier « ' + ch.nom + ' » créé depuis Chiffrage (' + lots.length + ' lot' + (lots.length > 1 ? 's' : '') + '). Pensez à renseigner les honoraires.');
+    return true;
+  } catch (e) { console.warn('Chantier auto', e); _chAutoPid[pid] = 0; return false; }
+}
 window.addEventListener('message', ev => {
   const d = ev.data; if (!d || d.source !== 'phenix-shell' || d.action !== 'open-projet' || d.id == null) return;
   let essais = 0;
   (function ouvrir() {
     const c = state && state.chantiers && state.chantiers.find(x => String(x.projetId) === String(d.id) || String(x.id) === String(d.id));
+    if (!c && essais >= 3 && typeof chantierAutoDepuisImport === 'function') chantierAutoDepuisImport(String(d.id));   // [Envoi → Chantier]
     if (!c) { if (essais++ < 40) { setTimeout(ouvrir, 400); return; } toast('⚠️ Aucun chantier relié à ce dossier dans Chantier.'); return; }
     if (window._chOuvert === c.id + '|' + d.onglet && Date.now() - (window._chOuvertT || 0) < 4000) return;   // ordre reçu deux fois
     window._chOuvert = c.id + '|' + d.onglet; window._chOuvertT = Date.now();

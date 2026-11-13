@@ -2415,6 +2415,58 @@ async function pushChiffrageToChantierImport(projetId, payload){
 }
 window.pushChiffrageToChantierImport = pushChiffrageToChantierImport;
 
+// [Envoi → Chantier] 13/11/2026 — « Envoyer vers Chantier » fait aussi entrer le dossier dans le district Chantier de la Synthèse 3D :
+// la phase du dossier passe à DCE (seulement si elle est avant : jamais de retour en arrière). Le chantier lui-même (fiche + lots) est créé
+// dans Chantier à la première ouverture depuis la Synthèse. Renvoie de quoi annuler (Ctrl+Z) : import précédent et phase précédente.
+const _PH_ORDRE = ['ESQ','APS','APD','PC','DCE','ACT','DET','AOR'];
+async function envoyerVersChantierComplet(projetId, payload){
+  const id = String(projetId), impRef = doc(db,'phenix_chantier_import',id), prjRef = doc(db,'phenix_projets',id);
+  const [imp, prj] = await Promise.all([getDoc(impRef), getDoc(prjRef)]);
+  const undo = { projetId:id, importAvant: imp.exists() ? imp.data() : null, phaseChange:false, phaseAvant:'', historiqueAvant:[], phaseApres:'DCE' };
+  await setDoc(impRef, payload);
+  if(prj.exists()){
+    const p = prj.data(), ph = p.phase || '', i = _PH_ORDRE.indexOf(ph);
+    if(ph === '' || (i >= 0 && i < _PH_ORDRE.indexOf('DCE'))){
+      const hist = Array.isArray(p.historique) ? p.historique : [];
+      const entry = { id:'h-'+Date.now()+'-'+Math.random().toString(36).slice(2,6), type:'phase', date:new Date().toISOString(),
+        changes:[{champ:'Phase', avant:ph, apres:'DCE'}], note:'Envoyé vers Chantier depuis Chiffrage',
+        snapshotPhase:'DCE', snapshotStatut:p.statut||'', snapshotAvancement:p.avancement||0 };
+      await setDoc(prjRef, { phase:'DCE', historique:[...hist, entry] }, { merge:true });
+      Object.assign(undo, { phaseChange:true, phaseAvant:ph, historiqueAvant:hist });
+    }
+  }
+  return undo;
+}
+window.envoyerVersChantierComplet = envoyerVersChantierComplet;
+// Annule le dernier envoi : remet l'import et la phase d'avant ; dit si le chantier a déjà été créé dans Chantier
+async function annulerEnvoiChantier(undo){
+  const id = undo.projetId;
+  if(undo.importAvant) await setDoc(doc(db,'phenix_chantier_import',id), undo.importAvant); else await deleteDoc(doc(db,'phenix_chantier_import',id));
+  if(undo.phaseChange){
+    const cur = await getDoc(doc(db,'phenix_projets',id));
+    if(cur.exists() && cur.data().phase === undo.phaseApres) await setDoc(doc(db,'phenix_projets',id), { phase:undo.phaseAvant, historique:undo.historiqueAvant }, { merge:true });
+  }
+  // Chantier créé automatiquement depuis la Synthèse : supprimé s'il est resté vierge (aucun avancement saisi), sinon conservé.
+  let existe = false;
+  try{
+    const snap = await getDocs(collection(db,'phenix_ch_chantiers'));
+    const aSupprimer = [];
+    snap.forEach(d => { const c = d.data()||{}; if(String(c.projetId) === id){ if(c.autoChiffrage) aSupprimer.push(d.id); else existe = true; } });
+    if(aSupprimer.length){
+      const lsnap = await getDocs(collection(db,'phenix_ch_lots'));
+      for(const cid of aSupprimer){
+        const lots = []; lsnap.forEach(l => { if(String((l.data()||{}).chantierId) === String(cid)) lots.push(l); });
+        const touche = lots.some(l => +((l.data()||{}).av) > 0);
+        if(touche){ existe = true; continue; }
+        for(const l of lots) await deleteDoc(doc(db,'phenix_ch_lots',l.id));
+        await deleteDoc(doc(db,'phenix_ch_chantiers',cid));
+      }
+    }
+  }catch(e){ console.warn('annulation chantier', e); }
+  return { chantierExiste: existe };
+}
+window.annulerEnvoiChantierFb = annulerEnvoiChantier;
+
 async function loadChantiers(){
   const user = auth.currentUser;
   if(!user) return;
@@ -2652,6 +2704,14 @@ document.addEventListener('keydown',function(ev){
   if(t&&(t.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;   // annulation de saisie native du navigateur
   if(document.querySelector('.modal-overlay.open')) return;
   ev.preventDefault();
+  // [Envoi → Chantier] Ctrl+Z juste après un envoi (rien d'autre modifié depuis) : annule l'envoi et remet le dossier en Chiffrage
+  const u = window._undoChantier;
+  if(k==='z' && !ev.shiftKey && u && u.stackLen === _undoStack.length && typeof window.annulerEnvoiChantierFb === 'function'){
+    window._undoChantier = null; showToast('↩ Annulation de l\'envoi vers Chantier…');
+    window.annulerEnvoiChantierFb(u).then(r => showToast(r && r.chantierExiste ? '↩ Envoi annulé : le dossier est revenu en Chiffrage. Le chantier avait déjà été créé dans Chantier : supprimez-le depuis Chantier si besoin.' : '↩ Envoi annulé : le dossier est revenu en Chiffrage.'))
+      .catch(e => { console.error(e); showToast('⚠️ Annulation impossible'); });
+    return;
+  }
   if(k==='y'||(k==='z'&&ev.shiftKey)) redoAction(); else undoAction();
 });
 
@@ -4252,8 +4312,14 @@ async function exportToChantier(){
 
   try{
     if(typeof window.pushChiffrageToChantierImport !== 'function'){ showToast('⚠️ Connexion Firebase indisponible'); return; }
-    await window.pushChiffrageToChantierImport(c.projetId, payload);
-    showToast('✅ ' + lotsExport.length + ' lot(s) prêt(s) à importer dans Phénix Chantier');
+    if(typeof window.envoyerVersChantierComplet === 'function'){
+      const undo = await window.envoyerVersChantierComplet(c.projetId, payload);
+      window._undoChantier = Object.assign(undo, { stackLen: _undoStack.length, nom: c.nom||'' });
+      showToast('✅ ' + lotsExport.length + ' lot(s) envoyé(s) : le dossier entre dans le district Chantier de la Synthèse 3D — Ctrl+Z pour annuler');
+    } else {
+      await window.pushChiffrageToChantierImport(c.projetId, payload);
+      showToast('✅ ' + lotsExport.length + ' lot(s) prêt(s) à importer dans Phénix Chantier');
+    }
     try{ window.phenixJournal && window.phenixJournal('chiffrage','exporte','chiffrage → chantier',(c.nom||'')+' · '+lotsExport.length+' lots',{projetId:String(c.projetId),projetNom:c.nom||''}); }catch(e){}
   }catch(e){
     console.error('Export chantier error', e);

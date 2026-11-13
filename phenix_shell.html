@@ -1196,6 +1196,9 @@ window.appliquerRestrictionsShell = function(email, fiche) {
   const _in = l => l.map(x => String(x).toLowerCase()).indexOf(e) >= 0;
   const role = fiche && fiche.role ? String(fiche.role) : '';
   let modules = null, tachesSeules = false;
+  // [Envoi → Chantier] 13/11/2026 : on ouvre un chantier depuis la Synthèse 3D (parcelle du district Chantier) : le bouton « Chantier » du bas disparaît
+  // pour tous ceux qui ont la Synthèse (Maxime, Kevin) ; il reste pour les comptes « Chantier seul ».
+  const _cacherChantier = () => { const n = document.querySelector('.shell-nav-item[data-module="chantier"]'); if (n) n.style.display = 'none'; };
   if (role === 'admin') modules = null;
   else if (role === 'assistante') modules = COMPTES_MODULES_AUTORISES.slice();
   else if (role === 'equipe') { modules = ['espace']; tachesSeules = true; }
@@ -1208,13 +1211,14 @@ window.appliquerRestrictionsShell = function(email, fiche) {
   if (modules && COMPTES_SYNTHESE_ETUDES.map(x => x.toLowerCase()).indexOf(e) >= 0 && modules.indexOf('synthese') < 0) modules.push('synthese');
   window._phenixRestreint = !!modules;
   window._phenixTachesSeules = tachesSeules;
-  if (!modules) return false;
+  if (!modules) { _cacherChantier(); return false; }
   window._phenixModules = modules;   // Kevin : Chantier seulement ; assistante : devis + tâches ; équipe : ses tâches
   window._phenixAccueil = window._phenixModules[0];
   document.querySelectorAll('.shell-nav-item').forEach(n => {
     const ok = window._phenixModules.indexOf(n.getAttribute('data-module')) >= 0;
     n.style.display = ok ? '' : 'none';
   });
+  if (window._phenixModules.indexOf('synthese') >= 0) _cacherChantier();
   return true;
 };
 
