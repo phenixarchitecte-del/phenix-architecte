@@ -5,6 +5,8 @@
 ══════════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_dossier.html
 ──────────────────────────────────────────────────────────────────────
+ 13/11/2026 — SYNTHÈSE 3D, MISSIONS : chaque case cochée mémorise aussi son texte et sa fiche dans p.checklistDerniereTache { texte, fiche, le }
+   (la mission de la Synthèse affiche « dernière coche : … »). Repérer : _ckTexteDe.
  05/11/2026 (4) — Retrait de « Importer devis signé → nouveau dossier » (page Honoraires) et de la bannière « Vous avez déjà le devis ? » (Nouveau projet) :
    l'import de devis par IA se fait depuis la Synthèse 3D (tuile Devis en attente → Devis à relancer › Nouveau devis). Fonctions conservées.
  05/11/2026 (3) — CHECKLIST : F7 = chiffrage IA seul ; l'appel d'offres passe dans le groupe DCE « selection-entreprises » (après F8) ; les 4 tâches
@@ -5663,7 +5665,7 @@ async function appliquerCochesEquipe() {
       const p = stateDossier.projets.find(x => String(x.id) === pid);
       if (p) {
         p.checklist = _checklistNormalise(p.checklist);
-        parProjet[pid].forEach(o => { if (o.v) { p.checklist[o.itemId] = true; const j = String(o.at || '').slice(0,10) || _jourLocalISO(); if (!p.checklistDerniere || j > p.checklistDerniere) p.checklistDerniere = j; } else delete p.checklist[o.itemId]; });
+        parProjet[pid].forEach(o => { if (o.v) { p.checklist[o.itemId] = true; const j = String(o.at || '').slice(0,10) || _jourLocalISO(); if (!p.checklistDerniere || j >= p.checklistDerniere) { p.checklistDerniere = j; const _tx = _ckTexteDe(o.itemId); if (_tx) p.checklistDerniereTache = Object.assign(_tx, { le: j }); } } else delete p.checklist[o.itemId]; });
         p.avancementAuto = true; p.avancement = avancementProjet(p);
         _majClotureAuto(p);
         await saveProjet(p);
@@ -6420,6 +6422,16 @@ function _checklistNormalise(ck) {
   return out;
 }
 
+// [Synthèse 3D] 13/11/2026 — texte et fiche d'une tâche à partir de son identifiant (pour « dernière coche » des missions)
+function _ckTexteDe(itemId) {
+  try {
+    for (const g of CHECKLIST_TEMPLATE) for (const sg of (g.sousGroupes || [])) for (const t of (sg.taches || [])) {
+      const tx = typeof t === 'string' ? t : (t && (t.texte || t.label)) || '';
+      if (_checklistItemId(g.id, sg.id, tx) === itemId) return { texte: tx.replace(/\s+/g, ' ').trim().slice(0, 160), fiche: String(g.titre || '').replace(/\s+—\s+/, ' · ') };
+    }
+  } catch (e) {}
+  return null;
+}
 function _checklistItemId(groupId, sgId, texteOuIdx, taches) {
   let texte = texteOuIdx;
   if (typeof texteOuIdx === 'number' && Array.isArray(taches)) texte = taches[texteOuIdx];
@@ -6626,7 +6638,7 @@ async function toggleChecklistItem(projetId, itemId, valeur) {
   const p = stateDossier.projets.find(x => x.id == projetId);
   if (!p) return;
   p.checklist = _checklistNormalise(p.checklist);   // première coche depuis le déplacement des tâches d'appel d'offres : on enregistre les nouveaux identifiants
-  if (valeur) { p.checklist[itemId] = true; p.checklistDerniere = _jourLocalISO(); } else delete p.checklist[itemId];   // [Synthèse 3D] date de la dernière case cochée : sans coche depuis 15 j, la Synthèse crée une mission
+  if (valeur) { p.checklist[itemId] = true; p.checklistDerniere = _jourLocalISO(); const _tx = _ckTexteDe(itemId); if (_tx) p.checklistDerniereTache = Object.assign(_tx, { le: p.checklistDerniere }); } else delete p.checklist[itemId];   // [Synthèse 3D] date de la dernière case cochée : sans coche depuis 15 j, la Synthèse crée une mission
   p.avancementAuto = true; p.avancement = avancementProjet(p);   // valeur mémorisée pour les autres modules
   const _clo = _majClotureAuto(p);
   await saveProjet(p);
