@@ -5,6 +5,7 @@
 ══════════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_shell.html
 ──────────────────────────────────────────────────────────────────────
+   13/11/2026 — [Échanges] Reconnaissance de l'expéditeur d'un SMS par son numéro : import des contacts du téléphone (.vcf) ou nom saisi sur un numéro inconnu (phenix_meta/repertoire, noms et numéros seulement).
  15/10/2026 — FUSION de deux versions du shell, sans perte :
    • Base conservée = shell « (3) » : module Carnet, connexion SANS empreinte
      (nettoyage des anciens identifiants biométriques au chargement).
@@ -512,7 +513,7 @@ function renderNC() {
   NC.devis.forEach(x => items.push({ ico: x.projet ? '📝' : '📄', t: x.date || x.at, h: (x.projet ? 'Devis signé · ' : 'Devis · ') + (x.client || ''), txt: x.projet ? (x.vers === 'accepte' ? 'signé (dossier déjà créé)' : (x.vers || '')) + ' — cliquer pour ouvrir le contrat' : 'statut → ' + (x.vers || ''), go: x.projet ? 'contrat' : 'espace', order: x.projet ? { source: 'phenix-shell', action: 'ouvrir-contrat', projet: x.projet } : null, col: 'phenix_notifs', id: x._id, patch: { lu: true } }));
   NC.taches.forEach(x => items.push({ ico: '✅', t: x.quand || x.date, h: 'Tâche', txt: (String(x.par || '').split('@')[0] || 'L\'assistante') + ' · « ' + (x.titre || '') + ' »', go: 'dossier', col: 'phenix_notifs_taches', id: x._id, patch: { lu: true } }));
   NC.ent.forEach(x => x.type === 'echange'
-    ? items.push({ ico: x.source === 'sms' ? '💬' : '✉️', t: x.recuLe || x.creeLe, h: (x.source === 'sms' ? 'SMS · ' : 'Mail · ') + (x.artisanNom || x.de || '') + (x.expediteurType === 'client' ? ' (client)' : '') + (x.urgence === 'haute' ? ' · urgent' : ''), txt: (CLASSE_LIB[x.classe] ? CLASSE_LIB[x.classe] + ' — ' : '') + (x.resume || x.objet || ''), go: 'valider', valId: x._id, col: 'phenix_entrants', id: x._id, patch: { statut: 'lu' } })
+    ? items.push({ ico: x.source === 'sms' ? '💬' : '✉️', t: x.recuLe || x.creeLe, h: (x.source === 'sms' ? 'SMS · ' : 'Mail · ') + _nomExp(x) + (x.expediteurType === 'client' ? ' (client)' : '') + (x.urgence === 'haute' ? ' · urgent' : ''), txt: (CLASSE_LIB[x.classe] ? CLASSE_LIB[x.classe] + ' — ' : '') + (x.resume || x.objet || ''), go: 'valider', valId: x._id, col: 'phenix_entrants', id: x._id, patch: { statut: 'lu' } })
     : items.push({ ico: x.source === 'sms' ? '💬' : x.resultat === 'bloquant' ? '⚠️' : x.resultat === 'conforme' ? '📄' : '📬', t: x.recuLe || x.creeLe, h: (x.source === 'sms' ? 'Reçu par SMS · ' : 'Reçu par mail · ') + (x.artisanNom || x.de || 'artisan'), txt: (x.titre || 'Nouveau message') + (x.objet ? ' — « ' + x.objet + ' »' : ''), go: x.resultat === 'a_rattacher' ? 'valider' : 'annuaire', valId: x._id, col: 'phenix_entrants', id: x._id, patch: { statut: 'lu' } }));
   items.sort((a, b) => String(b.t || '').localeCompare(String(a.t || '')));
   const n = items.length;
@@ -548,6 +549,13 @@ window.ncOpen = function(i) {
 // Page « Échanges » : tout ce qui est à traiter / à répondre. Un clic ouvre « À valider » : l'IA propose, Maxime valide d'un clic.
 // Rien n'est créé, envoyé ni écrit dans un agenda sans son clic. États : « À traiter » (statut nouveau) · « Traité » (statut lu).
 const ECH = { all: [], f: { etat: 'traiter', canal: '', qui: '', q: '' } };
+// [Échanges] 13/11/2026 — répertoire : reconnaît l'expéditeur d'un SMS d'après son numéro (contacts du téléphone importés en .vcf, ou nom saisi à la main).
+//   Stocké dans phenix_meta/repertoire { noms: { <9 derniers chiffres>: nom } } — noms et numéros seulement, jamais le contenu des messages. Administrateur seulement.
+let REP = {};
+const _cleNum = n => { const d = String(n || '').replace(/\D/g, ''); return d.length >= 9 ? d.slice(-9) : ''; };
+const _nomRep = x => (x && x.source === 'sms' && x.de) ? (REP[_cleNum(x.de)] || '') : '';
+const _nomExp = x => x.artisanNom || x.deNom || _nomRep(x) || x.de || '';
+const _inconnuEff = x => x.expediteurType === 'inconnu' && !_nomRep(x);
 const _jour = (d = new Date()) => { const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000); return z.toISOString().slice(0, 10); };
 const _plusJours = n => { const d = new Date(); d.setDate(d.getDate() + n); return _jour(d); };
 const _dateCourte = iso => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); };
@@ -576,20 +584,20 @@ function renderEchanges(refaireFiltres) {
     '<select onchange="echFiltre(\'canal\',this.value)" aria-label="Canal"><option value="">SMS et mails</option><option value="sms">SMS</option><option value="mail">Mails</option></select>' +
     '<select onchange="echFiltre(\'qui\',this.value)" aria-label="Expéditeur"><option value="">Artisans et clients</option><option value="artisan">Artisans</option><option value="client">Clients</option><option value="inconnu">Inconnus (numéro ou adresse)</option></select>' +
     '<input type="search" placeholder="Rechercher (nom, dossier, mot…)" oninput="echFiltre(\'q\',this.value)" style="flex:1;min-width:160px" aria-label="Rechercher">' +
-    '<button type="button" class="vbtn" onclick="echToutLu()">✓ Tout marquer lu</button><button type="button" class="vbtn" onclick="ouvrirIgnores()">🚫 Numéros ignorés</button>';
+    '<button type="button" class="vbtn" onclick="echToutLu()">✓ Tout marquer lu</button><button type="button" class="vbtn" onclick="ouvrirIgnores()">🚫 Numéros ignorés</button><button type="button" class="vbtn" onclick="importerContacts()" title="Exporte tes contacts du téléphone en .vcf, puis choisis le fichier : les SMS seront reconnus par le nom">📇 Importer mes contacts' + (Object.keys(REP).length ? ' (' + Object.keys(REP).length + ')' : '') + '</button><input type="file" id="repFile" accept=".vcf,text/vcard,text/x-vcard" style="display:none" onchange="importerContactsFichier(this)">';
   fz.querySelectorAll('select').forEach((sel, k) => { sel.value = [f.etat, f.canal, f.qui][k]; });
   const q = String(f.q || '').toLowerCase().trim();
   let l = (ECH.all || []).filter(x => (f.etat === 'tous') || (f.etat === 'traite' ? !_estATraiter(x) : _estATraiter(x)) && (f.etat !== 'repondre' || (x.reponseAttendue && !x.reponduLe)));
   l = l.filter(x => (!f.canal || x.source === f.canal) && (!f.qui || (x.expediteurType || 'artisan') === f.qui) &&
-    (!q || [x.artisanNom, x.deNom, x.projetNom, x.resume, x.extrait, x.objet, x.titre].join(' ').toLowerCase().includes(q)));
+    (!q || [x.artisanNom, x.deNom, _nomRep(x), x.projetNom, x.resume, x.extrait, x.objet, x.titre].join(' ').toLowerCase().includes(q)));
   l.sort((a, b) => ((_estATraiter(b) ? 1 : 0) - (_estATraiter(a) ? 1 : 0)) || ((b.urgence === 'haute' ? 1 : 0) - (a.urgence === 'haute' ? 1 : 0)) || String(b.recuLe || b.creeLe).localeCompare(String(a.recuLe || a.creeLe)));
   document.getElementById('echListe').innerHTML = l.length ? l.slice(0, 150).map(x =>
     '<div class="ec" tabindex="0" role="button" onclick="ouvrirValidation(\'' + _ncEsc(x._id) + '\')" onkeydown="if(event.key===\'Enter\')ouvrirValidation(\'' + _ncEsc(x._id) + '\')">' +
-    '<div class="et"><span>' + (x.source === 'sms' ? '💬' : '✉️') + ' ' + _ncEsc(x.artisanNom || x.deNom || x.de || '') + '</span><span class="es">' + (x.expediteurType === 'client' ? 'client' : x.expediteurType === 'inconnu' ? '? expéditeur inconnu' : 'artisan') + (x.projetNom ? ' · dossier ' + _ncEsc(x.projetNom) : '') + ' · ' + _ncEsc(_dateCourte(x.recuLe || x.creeLe)) + '</span></div>' +
+    '<div class="et"><span>' + (x.source === 'sms' ? '💬' : '✉️') + ' ' + _ncEsc(_nomExp(x)) + '</span><span class="es">' + (x.expediteurType === 'client' ? 'client' : _inconnuEff(x) ? '? expéditeur inconnu' : x.expediteurType === 'inconnu' ? 'contact' : 'artisan') + (x.projetNom ? ' · dossier ' + _ncEsc(x.projetNom) : '') + ' · ' + _ncEsc(_dateCourte(x.recuLe || x.creeLe)) + '</span></div>' +
     '<div>' + (CLASSE_LIB[x.classe] ? '<b>' + _ncEsc(CLASSE_LIB[x.classe]) + '</b> — ' : '') + _ncEsc(x.resume || x.titre || x.objet || '') + '</div>' +
     '<div style="margin-top:4px">' + _echEtatTexte(x) + ((x.actions || []).length ? ' <span class="es">' + (x.actions || []).length + ' action' + (x.actions.length > 1 ? 's' : '') + ' proposée' + (x.actions.length > 1 ? 's' : '') + (x.faites && x.faites.length ? ' · ' + x.faites.length + ' faite' + (x.faites.length > 1 ? 's' : '') : '') + '</span>' : '') + '</div>' +
     '<div class="ea" onclick="event.stopPropagation()">' + (_estATraiter(x) ? '<button type="button" class="vbtn p" onclick="event.stopPropagation();echLu(\'' + _ncEsc(x._id) + '\')">✓ Lu</button>' : '') +
-    (x.expediteurType === 'inconnu' && x.de ? '<button type="button" class="vbtn" onclick="event.stopPropagation();echIgnorer(\'' + _ncEsc(x._id) + '\')">🚫 Ne plus notifier ' + _ncEsc(x.source === 'sms' ? 'ce numéro' : 'cette adresse') + '</button>' : '') + '</div></div>').join('')
+    (_inconnuEff(x) && x.de ? '<button type="button" class="vbtn" onclick="event.stopPropagation();echIgnorer(\'' + _ncEsc(x._id) + '\')">🚫 Ne plus notifier ' + _ncEsc(x.source === 'sms' ? 'ce numéro' : 'cette adresse') + '</button>' : '') + '</div></div>').join('')
     : '<div class="nc-e">Rien à afficher avec ces filtres.</div>';
 }
 
@@ -683,12 +691,12 @@ window.ouvrirValidation = async function(id) {
   const precedents = (ECH.all || []).filter(e => e._id !== x._id && e.de && e.de === x.de).sort((a, b) => String(b.recuLe).localeCompare(String(a.recuLe))).slice(0, 4)
     .map(e => '<div style="font-size:12.5px;margin:2px 0"><span style="color:#6b7a99">' + _ncEsc(_dateCourte(e.recuLe || e.creeLe)) + ' · ' + (e.source === 'sms' ? 'SMS' : 'mail') + '</span> — ' + _ncEsc(e.resume || e.titre || e.objet || '') + '</div>').join('');
   document.getElementById('valBox').innerHTML =
-    '<div class="vh"><div><b>' + (x.source === 'sms' ? '💬 SMS' : '✉️ Mail') + ' · ' + _ncEsc(x.artisanNom || x.de) + (x.expediteurType === 'client' ? ' (client)' : x.expediteurType === 'inconnu' ? ' (expéditeur inconnu)' : ' (artisan)') + '</b><br><span style="font-size:12px;color:#6b7a99">' +
+    '<div class="vh"><div><b>' + (x.source === 'sms' ? '💬 SMS' : '✉️ Mail') + ' · ' + _ncEsc(_nomExp(x)) + (x.expediteurType === 'client' ? ' (client)' : _inconnuEff(x) ? ' (expéditeur inconnu)' : x.expediteurType === 'inconnu' ? ' (contact)' : ' (artisan)') + '</b><br><span style="font-size:12px;color:#6b7a99">' +
       _ncEsc(new Date(x.recuLe || x.creeLe).toLocaleString('fr-FR')) + (x.projetNom ? ' · dossier « ' + _ncEsc(x.projetNom) + ' »' : ' · dossier non identifié') + ' · ' + _ncEsc(CLASSE_LIB[x.classe] || 'Autre') + '</span><div style="margin-top:4px">' + _echEtatTexte(x) + '</div></div><span style="display:flex;gap:6px;flex:none">' + (_estATraiter(x) ? '<button class="vbtn p" onclick="validerTermine()" title="Rien à faire : retirer des messages à traiter">✓ Lu</button>' : '') + '<button class="vbtn" onclick="fermerValidation()" aria-label="Fermer">✕</button></span></div>' +
     '<div class="vb"><div style="font-weight:700">Résumé</div><div>' + _ncEsc(x.resume || x.titre || '—') + (x.confiance != null && x.confiance < 0.5 ? ' <i>(lecture peu sûre : à vérifier)</i>' : '') + '</div>' +
     '<div style="font-weight:700;margin-top:10px">Message reçu</div><div class="vq">' + _ncEsc((x.objet && x.objet !== x.extrait ? x.objet + '\n' : '') + (x.extrait || '')) + '</div>' +
     (acts ? '<div style="font-weight:700;margin-bottom:6px">Actions proposées <span style="font-weight:400;color:#6b7a99">(rien n’est fait sans votre clic)</span></div>' + acts : '<div style="color:#6b7a99;margin-bottom:10px">Aucune action proposée pour ce message.</div>') +
-    (x.expediteurType === 'inconnu' || x.probable ? await _blocInconnu(x) : '') +
+    (_inconnuEff(x) || x.probable ? await _blocInconnu(x) : '') +
     '<div class="vact"><b>Ajouter une tâche libre</b><label>Titre</label><input id="vlt" placeholder="Ex. : Rappeler cet artisan"><div class="vrow"><div><label>Assigner à</label><select id="vla">' + opts + '</select></div><div><label>Pour le</label><input type="date" id="vlj"></div></div><div style="margin-top:8px"><button class="vbtn" onclick="validerAction(-1)">Créer la tâche</button></div></div>' +
     (precedents ? '<div style="font-weight:700;margin:6px 0 2px">Échanges précédents avec cette personne</div>' + precedents : '') +
     '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">' + (x.projetId ? '<button class="vbtn" onclick="validerOuvrirDossier()">Ouvrir le dossier</button>' : '') +
@@ -705,12 +713,42 @@ async function _blocInconnu(x) {
   return '<div class="vact"><b>' + (x.probable ? 'Adresse reconnue d’après le nom (à confirmer) : ' : (x.source === 'sms' ? 'Numéro' : 'Adresse') + ' inconnu(e) : ') + _ncEsc(x.de || '') + '</b>' + (x.sansIA === 'inconnu' ? '<div style="font-size:12.5px;color:#6b7a99">Message non analysé par l’IA (expéditeur inconnu, aucun dossier cité). Rattachez-le pour que les prochains soient lus et classés.</div>' : x.sansIA === 'leger' ? '<div style="font-size:12.5px;color:#6b7a99">Résumé court uniquement, sans actions proposées (expéditeur inconnu, aucun dossier cité). Rattachez-le pour que les prochains soient analysés en entier.</div>' : '') + '<div style="font-size:12.5px;color:#6b7a99">Rattachez-le pour que ses prochains messages soient reconnus. Sinon, cliquez « Traité » : rien d’autre n’est modifié.</div>' +
     '<label>Artisan de l’Annuaire</label><select id="viArt"><option value="">— choisir —</option>' + o(_valArt, x.artisanId) + '</select>' +
     '<label>ou client d’un dossier</label><select id="viPro"><option value="">— choisir —</option>' + o(_valPro, x.projetId) + '</select>' +
-    '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="vbtn p" onclick="rattacherNumero()">Rattacher</button><button class="vbtn" onclick="ignorerExpediteur()">Ne plus afficher cet expéditeur</button></div></div>';
+    '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="vbtn p" onclick="rattacherNumero()">Rattacher</button>' + (x.source === 'sms' ? '<div style="margin-top:8px"><label>ou simple contact (équipe, proche…)</label><input id="viContact" placeholder="Nom, par ex. Cassandra" style="width:100%"> <button class="vbtn" onclick="enregistrerContact()" style="margin-top:6px">Enregistrer ce numéro comme contact</button></div>' : '') + '<button class="vbtn" onclick="ignorerExpediteur()">Ne plus afficher cet expéditeur</button></div></div>';
 }
 window.ignorerExpediteur = async function() {
   const x = _echTrouve(_valId); if (!x || !x.de) return;
   try { await setDoc(doc(db, 'phenix_meta', 'tri_ignores'), { adresses: arrayUnion(String(x.de).toLowerCase()) }, { merge: true }); await updateDoc(doc(db, 'phenix_entrants', x._id), { statut: 'lu', resultat: 'ignore_expediteur' });
     toast('✓ ' + x.de + ' ne sera plus affiché'); fermerValidation(); } catch (e) { toast('⚠️ Impossible : ' + (e && (e.code || e.message) || e)); }
+};
+window.enregistrerContact = async function() {
+  const x = _echTrouve(_valId); if (!x || !x.de) return; const nom = String((document.getElementById('viContact') || {}).value || '').trim(), k = _cleNum(x.de);
+  if (!nom || !k) { toast('Indiquez un nom'); return; }
+  try { await setDoc(doc(db, 'phenix_meta', 'repertoire'), { noms: { [k]: nom }, maj: new Date().toISOString() }, { merge: true }); REP[k] = nom;
+    await updateDoc(doc(db, 'phenix_entrants', x._id), { deNom: nom }); toast('✓ Ce numéro est maintenant reconnu : ' + nom); renderEchanges(false); setTimeout(() => ouvrirValidation(x._id), 300);
+  } catch (e) { toast('⚠️ Enregistrement impossible : ' + (e && (e.code || e.message) || e)); }
+};
+window.importerContacts = function() { const f = document.getElementById('repFile'); if (f) f.click(); };
+// Lit un fichier .vcf (export des contacts du téléphone) : nom + numéros, rien d'autre
+function _lireVcf(txt) {
+  const out = {}, cartes = String(txt || '').replace(/\r/g, '').replace(/\n[ \t]/g, '').split(/BEGIN:VCARD/i).slice(1);
+  cartes.forEach(c => {
+    const l = c.split('\n'); let nom = '', tels = [];
+    l.forEach(ln => { const m = /^([A-Z]+)(?:;[^:]*)?:(.*)$/i.exec(ln); if (!m) return; const t = m[1].toUpperCase(), v = m[2].trim();
+      if (t === 'FN') nom = v; else if (t === 'N' && !nom) nom = v.split(';').filter(Boolean).reverse().join(' ').trim(); else if (t === 'ORG' && !nom) nom = v.replace(/;/g, ' ').trim(); else if (t === 'TEL') tels.push(v); });
+    nom = nom.replace(/\\,/g, ',').slice(0, 80);
+    if (nom) tels.forEach(t => { const k = _cleNum(t); if (k) out[k] = nom; });
+  });
+  return out;
+}
+window.importerContactsFichier = async function(inp) {
+  const f = inp && inp.files && inp.files[0]; if (!f) return;
+  try {
+    const noms = _lireVcf(await f.text()), n = Object.keys(noms).length;
+    if (!n) { toast('Aucun contact avec numéro dans ce fichier'); return; }
+    await setDoc(doc(db, 'phenix_meta', 'repertoire'), { noms, maj: new Date().toISOString() }, { merge: true });
+    Object.assign(REP, noms); toast('✓ ' + n + ' numéro' + (n > 1 ? 's' : '') + ' importé' + (n > 1 ? 's' : '') + ' : les SMS de ces contacts seront reconnus'); renderEchanges(false); renderNC();
+  } catch (e) { toast('⚠️ Import impossible : ' + (e && (e.code || e.message) || e)); }
+  inp.value = '';
 };
 window.rattacherNumero = async function() {
   const x = _echTrouve(_valId); if (!x || !x.de) return; const a = document.getElementById('viArt').value, p = document.getElementById('viPro').value;
@@ -855,6 +893,7 @@ function startNotifsCentre(estAdmin) {
     unsubNC.push(onSnapshot(query(collection(db, 'phenix_ch_messages'), where('de', '==', 'artisan'), where('luPhenix', '==', false)), snap => { NC.art = snap.docs.map(d => ({ _id: d.id, ...(d.data() || {}) })); renderNC(); }, err => console.warn('Messages artisans :', err && err.message)));
     unsubNC.push(onSnapshot(query(collection(db, 'phenix_entrants'), orderBy('recuLe', 'desc'), limit(300)), snap => { ECH.all = snap.docs.map(d => ({ _id: d.id, ...(d.data() || {}) })); _echMajBadge(); renderEchanges(false); }, err => console.warn('Échanges :', err && err.message)));
     unsubNC.push(onSnapshot(query(collection(db, 'phenix_entrants'), where('statut', '==', 'nouveau')), snap => { NC.ent = snap.docs.map(d => ({ _id: d.id, ...(d.data() || {}) })); renderNC(); }, err => console.warn('Réceptions mail :', err && err.message)));
+    unsubNC.push(onSnapshot(doc(db, 'phenix_meta', 'repertoire'), snap => { REP = (snap.exists() && snap.data().noms) || {}; renderEchanges(false); renderNC(); }, err => console.warn('Répertoire :', err && err.message)));
     unsubNC.push(onSnapshot(query(collection(db, 'phenix_notifs_client'), where('lu', '==', false)), snap => { NC.cli = snap.docs.map(d => ({ _id: d.id, ...(d.data() || {}) })); renderNC(); }, err => console.warn('Messages client :', err && err.message)));
   } catch (e) { console.warn('Centre de notifications :', e); }
 }

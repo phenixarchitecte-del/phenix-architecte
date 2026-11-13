@@ -5,6 +5,8 @@
 ══════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_chantier.html
 ──────────────────────────────────────────────────────────────────
+ 13/11/2026 — [Chiffrage → Chantier] Les entreprises de Chiffrage deviennent de vrais intervenants (même sans fiche Annuaire), rattachés à leur lot ;
+   à l'ouverture d'un chantier depuis la Synthèse 3D, les lots et entreprises manquants de la dernière synthèse sont ajoutés (sans toucher aux lots existants).
  15/10/2026 — Base : phenix_chantier_1.html (version fournie le 15/10).
    1. « AUCUNE ENTREPRISE » : sur la page Lots, tout lot sans entreprise
       (ni intervenant attribué, ni entreprise issue d'un devis artisan) affiche
@@ -4598,7 +4600,33 @@ function lierEntrepriseLot(lot, nom, devis) {
     if (!nv) { nv = { id: uid(), nom: annName(an), metier: an.metier || '', contact: an.entreprise && an.nom && an.nom !== an.entreprise ? an.nom : '', tel: an.tel || '', email: an.email || '', siret: an.siret || '', assurance: an.assurance || '', assuranceDate: an.assuranceDate || '', note: an.note || '', notes: '', color: AVATAR_COLORS_EXT[Math.floor(Math.random() * AVATAR_COLORS_EXT.length)], artId: an.id }; state.intervenants.push(nv); }
     lot.interv = nv.id; delete lot.entrepriseNom; return;
   }
-  lot.entrepriseNom = nom;
+  // [Chiffrage → Chantier] pas de fiche Annuaire : on crée quand même l'intervenant (nom + métier déduit du lot) pour qu'il apparaisse dans Intervenants, sur le lot et dans la Synthèse 3D
+  const metiers = [[/ma[cç]onn|gros.?oeuvre|fondation|terrassement|dalle/i, 'Maçonnerie / Gros œuvre'], [/charpente/i, 'Charpente'], [/couverture|toiture|zinguerie/i, 'Couverture'], [/menuiserie|fen[eê]tre|volet|porte/i, 'Menuiserie'], [/[ée]lectric/i, 'Électricité'], [/plomberie|sanitaire/i, 'Plomberie'], [/chauff|ventilation|vmc|cvc/i, 'CVC / Chauffage'], [/carrel|sol/i, 'Carrelage'], [/peinture/i, 'Peinture'], [/vrd|assainissement|r[ée]seaux/i, 'VRD']];
+  const lnom = String(lot.nom || ''), mt = (metiers.find(([re]) => re.test(lnom)) || [0, 'Autre'])[1];
+  const nv2 = { id: uid(), nom: nom, metier: mt, contact: '', tel: '', email: '', siret: '', assurance: '', assuranceDate: '', note: '', notes: 'Créé depuis Phénix Chiffrage le ' + new Date().toLocaleDateString('fr-FR'), color: AVATAR_COLORS_EXT[Math.floor(Math.random() * AVATAR_COLORS_EXT.length)] };
+  state.intervenants.push(nv2); lot.interv = nv2.id; delete lot.entrepriseNom;
+}
+
+/* [Chiffrage → Chantier] complète un chantier DÉJÀ créé avec la synthèse la plus récente de Chiffrage : ajoute les lots qui manquent et
+   rattache les entreprises des lots sans entreprise. Ne touche jamais aux montants, statuts, avancements ni dates des lots existants. */
+const _chCompl = {};
+async function completerDepuisImport(c) {
+  if (!c || !c.projetId || _chCompl[c.id] || IS_EXT() || !window._fb || !window._fb.getDoc) return;
+  _chCompl[c.id] = 1;
+  try {
+    const snap = await window._fb.getDoc(window._fb.doc(window._fb.db, 'phenix_chantier_import', String(c.projetId)));
+    if (!snap.exists()) return;
+    const items = snap.data().lots || [], nu = x => String(x || '').replace(/^\s*LOT\s*\d+[A-Za-z]?\s*[—–-]\s*/i, '').trim().toLowerCase();
+    const pris = new Set(); let ajoutes = 0, lies = 0;
+    items.forEach(item => {
+      const composed = (item.num ? item.num + ' — ' : '') + item.nom, cand = state.lots.filter(l => l.chantierId == c.id && !pris.has(l.id));
+      const ex = cand.find(l => l.nom === composed || l.nom === item.nom) || cand.find(l => nu(l.nom) === nu(item.nom));
+      if (ex) { pris.add(ex.id); if (!ex.interv && !ex.entrepriseNom && item.entreprise) { lierEntrepriseLot(ex, item.entreprise, item.devisArtisan); lies++; } return; }
+      const nl = { id: uid(), chantierId: c.id, nom: composed, cat: 'Autre', interv: null, statut: mapStatutChiffrage(item.statut), ht: item.montantHt, tva: item.tva, av: 0, debut: item.debut || '', fin: item.fin || '', notes: 'Importé depuis Phénix Chiffrage le ' + new Date().toLocaleDateString('fr-FR') };
+      state.lots.push(nl); pris.add(nl.id); if (item.entreprise || item.devisArtisan) lierEntrepriseLot(nl, item.entreprise, item.devisArtisan); ajoutes++;
+    });
+    if (ajoutes || lies) { saveLocal(); refreshAll(); toast('✅ Complété depuis Chiffrage : ' + ajoutes + ' lot(s) ajouté(s), ' + lies + ' entreprise(s) rattachée(s).'); }
+  } catch (e) { console.warn('Compléter depuis Chiffrage', e); _chCompl[c.id] = 0; }
 }
 
 async function importFromChiffrage(chOverride) {
@@ -5042,6 +5070,7 @@ window.addEventListener('message', ev => {
     const c = state && state.chantiers && state.chantiers.find(x => String(x.projetId) === String(d.id) || String(x.id) === String(d.id));
     if (!c && essais >= 3 && typeof chantierAutoDepuisImport === 'function') chantierAutoDepuisImport(String(d.id));   // [Envoi → Chantier]
     if (!c) { if (essais++ < 40) { setTimeout(ouvrir, 400); return; } toast('⚠️ Aucun chantier relié à ce dossier dans Chantier.'); return; }
+    if (c && !c.autoChiffrage) completerDepuisImport(c);   // [Chiffrage → Chantier] lots / entreprises manquants
     if (window._chOuvert === c.id + '|' + d.onglet && Date.now() - (window._chOuvertT || 0) < 4000) return;   // ordre reçu deux fois
     window._chOuvert = c.id + '|' + d.onglet; window._chOuvertT = Date.now();
     activeChantier = String(c.id);
