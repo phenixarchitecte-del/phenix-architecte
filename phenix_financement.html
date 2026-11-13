@@ -339,7 +339,7 @@ if (window.parent !== window) {
     <div class="card" id="decennaleCard">
       <div class="card-title"><i class="ti ti-shield-check"></i> Attestations décennales des artisans</div>
       <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">
-        Récapitulatif en lecture seule. Les demandes (mail, SMS), le dépôt et la lecture des attestations se font dans <b>Chiffrage</b>, bouton « Décennales des artisans » : l'état se met à jour ici automatiquement.
+        Pour une entreprise qui ne nous a pas encore transmis sa décennale : « Demander » ou « Relancer » ouvre un mail ou un SMS déjà rédigé. Le dépôt de l'attestation reçue se fait dans l'<b>Annuaire</b> (fiche de l'artisan) ou dans <b>Chiffrage</b> ; l'état se met à jour ici.
       </div>
       <div id="decennaleBody"><div style="font-size:12.5px;color:var(--text3)">Chargement…</div></div>
     </div>
@@ -730,11 +730,44 @@ async function renderDecennales() {
       '<div class="dec-contact">' + contact + '</div></div>' +
       '<div class="dec-statut" role="status">' + escH(decStatutTexte(g, true)) + '</div></div>' + detail +
       (lis ? '<ul class="dec-inc">' + lis + '</ul>' : '') +
+      // [Décennale] 13/11/2026 — retour des boutons dans Financement (entreprises nouvelles qui n'ont pas transmis leur décennale) : demander, relancer, écrire pour corriger
+      ((a.decennaleStatut === 'recue' && !pts.length) ? '' : '<div class="dec-actions" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">' +
+        (a.decennaleStatut !== 'recue' ? '<button type="button" class="btn btn-sm btn-outline" onclick="decDemanderFin(' + i + ',\'mail\')"' + (mail ? '' : ' disabled title="Mail manquant dans l’Annuaire"') + '>✉ ' + (a.decennaleStatut === 'demandee' ? 'Relancer' : 'Demander') + ' par mail</button>' +
+          '<button type="button" class="btn btn-sm btn-outline" onclick="decDemanderFin(' + i + ',\'sms\')"' + (tel ? '' : ' disabled title="Téléphone manquant dans l’Annuaire"') + '>💬 ' + (a.decennaleStatut === 'demandee' ? 'Relancer' : 'Demander') + ' par SMS</button>' : '') +
+        (pts.length ? '<button type="button" class="btn btn-sm btn-outline" onclick="decCorrigerFin(' + i + ')"' + (mail ? '' : ' disabled title="Mail manquant dans l’Annuaire"') + '>✉ Écrire pour corriger (' + pts.length + ' point' + (pts.length > 1 ? 's' : '') + ')</button>' : '') + '</div>') +
       '</div>';
   }).join('') + (groupes.sansEntreprise ? '<div style="font-size:12px;color:var(--text2)">' + groupes.sansEntreprise + ' lot(s) du chiffrage n’ont pas d’entreprise : ils ne sont pas listés ici.</div>' : '');
   syncChecklistDecennale(groupes);
 }
 
+/* [Décennale] 13/11/2026 — demande / relance / correction depuis Financement : brouillon mail ou SMS (PhenixMsg), suivi écrit sur la fiche Annuaire de l'artisan. */
+function _decVars(g, a) {
+  const ch = window._chantierLive || {};
+  return { contact: a.nom && _nnDec(a.nom) !== _nnDec(g.nom) ? a.nom : '', entreprise: g.nom, metier: a.metier && a.metier !== 'À préciser' ? a.metier : '', chantier: (PhenixMsg.libelleChantier ? PhenixMsg.libelleChantier(ch) : '') || ch.nom || (document.getElementById('i-client') || {}).value || '', lot: g.lots.map(l => l.nom).filter(Boolean).join(' ; '), dateValidite: a.assuranceDate || '' };
+}
+async function decDemanderFin(i, type) {
+  const g = _decGroupes[i]; if (!g || !g.artisan) { toast('⚠️ Artisan absent de l’Annuaire : ajoutez ses coordonnées dans l’Annuaire'); return; }
+  const a = g.artisan, rel = a.decennaleStatut === 'demandee';
+  const msg = PhenixMsg.preparer(rel ? 'decennale-relance' : 'decennale', _decVars(g, a));
+  const ok = type === 'mail' ? PhenixMsg.ouvrirMail(a.email, msg) : PhenixMsg.ouvrirSms(a.tel, msg);
+  if (!ok) { toast('⚠️ ' + (type === 'mail' ? 'Mail' : 'Téléphone') + ' manquant ou invalide'); return; }
+  if (type === 'sms' && !/Android|iPhone|iPad/i.test(navigator.userAgent)) PhenixMsg.copier(msg.sms);
+  a.decennaleRelances = rel ? (a.decennaleRelances || 0) + 1 : (a.decennaleRelances || 0);
+  a.decennaleStatut = 'demandee'; a.decennaleDemandeLe = todayISO(); a.decennaleCanal = type; a.updatedAt = new Date().toISOString();
+  try { await window._fbFin.saveArtisan(a); } catch (e) { toast('⚠️ Brouillon ouvert, mais suivi non enregistré (droits ou connexion)'); }
+  toast(type === 'mail' ? '✓ Brouillon de mail ouvert : relis et envoie' : '✓ SMS préparé : il ne reste qu’à envoyer (texte aussi copié)');
+  renderDecennales();
+}
+async function decCorrigerFin(i) {
+  const g = _decGroupes[i]; if (!g || !g.artisan) return;
+  const a = g.artisan, att = a.decennaleAtt || {}, v = _decVars(g, a);
+  const msg = PhenixMsg.preparerCorrection(decControles(g), { contact: v.contact, chantier: v.chantier, lot: v.lot, dateFin: att.dateFin, dateDebut: att.dateDebut, nomAtt: att.entreprise });
+  if (!msg) { toast('Aucun point à corriger'); return; }
+  if (!PhenixMsg.ouvrirMail(a.email, msg)) { toast('⚠️ Mail manquant ou invalide'); return; }
+  a.decennaleCorrectionLe = todayISO(); a.decennaleCorrections = (a.decennaleCorrections || 0) + 1; a.updatedAt = new Date().toISOString();
+  try { await window._fbFin.saveArtisan(a); } catch (e) { toast('⚠️ Brouillon ouvert, mais suivi non enregistré (droits ou connexion)'); }
+  toast('✓ Brouillon de mail ouvert : relis et envoie'); renderDecennales();
+}
 function syncChecklistDecennale(groupes) {
   if (!groupes.length) return;
   if (!currentDossier.checklist) currentDossier.checklist = {};

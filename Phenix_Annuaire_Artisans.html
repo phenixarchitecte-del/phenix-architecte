@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+<script src="phenix_messages.js"></script>   <!-- [Décennale] modèles de demande / relance (mêmes textes que Chiffrage) -->
 <script src="phenix_decennale.js"></script>   <!-- lecture IA des attestations décennales (fichier partagé avec Chiffrage) -->
 <script type="module">
 import{initializeApp}from'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
@@ -540,8 +541,28 @@ function decFicheHtml(a){
   if(a.decennaleCorrectionLe)h+='<br>Correction demandée le '+fr(a.decennaleCorrectionLe);
   if(a.decennaleUrl)h+='<br><a href="'+esc(a.decennaleUrl)+'" target="_blank" rel="noopener">Ouvrir le PDF de l’attestation</a>';
   h+=a.id?'<div style="margin-top:8px"><button type="button" class="btn" onclick="decJoindre(\''+esc(a.id)+'\')" style="border:1.5px solid #1b2d5b;border-radius:8px;padding:6px 12px;background:#fff;color:#1b2d5b;font-weight:600;cursor:pointer">📎 '+(a.decennaleUrl?'Remplacer l’attestation (PDF)':'Joindre l’attestation (PDF)')+'</button> <span style="font-size:11.5px;color:#6b7a99">lue par l’IA : assureur, police, dates, activités</span></div>':'<div style="margin-top:6px;font-size:12px;color:#6b7a99">Enregistrez d’abord la fiche pour pouvoir joindre l’attestation.</div>';
+  // [Décennale] 13/11/2026 — demander (1re fois) ou relancer l'attestation depuis la fiche de l'artisan, par mail ou SMS (brouillon déjà rédigé)
+  if(a.id&&window.PhenixMsg&&d.cls!=='ok'){ const rel=a.decennaleStatut==='demandee', st='border:1.5px solid #1b2d5b;border-radius:8px;padding:6px 12px;background:#fff;color:#1b2d5b;font-weight:600;cursor:pointer;margin:6px 6px 0 0';
+    h+='<div>'+['mail','sms'].map(t=>'<button type="button" class="btn" onclick="decDemander(\''+esc(a.id)+'\',\''+t+'\')" style="'+st+'">'+(t==='mail'?'✉ ':'💬 ')+(rel?'Relancer':'Demander')+' par '+(t==='mail'?'mail':'SMS')+'</button>').join('')+'</div>'; }
   h+='<br><span style="font-size:11.5px;color:#6b7a99">Les contrôles détaillés (cohérence avec le devis, lot couvert, fin de chantier) s’affichent dans Financement.</span></div>';
   return h;
+}
+/* [Décennale] 13/11/2026 — demande ou relance : brouillon mail / SMS (PhenixMsg), puis suivi sur la fiche (statut « demandée », nombre de relances). */
+async function decDemander(id,type){
+  const a=arts.find(x=>String(x.id)===String(id)); if(!a||!window.PhenixMsg) return;
+  const tel=(document.getElementById('f-tel')||{}).value||a.tel||'', mail=(document.getElementById('f-email')||{}).value||a.email||'';
+  const rel=a.decennaleStatut==='demandee', nom=a.entreprise||a.nom||'', contact=a.nom&&a.entreprise&&a.nom!==a.entreprise?a.nom:'';
+  const ch=prompt('Pour quel chantier ? (le nom apparaît dans le message)',a.decennaleChantier||''); if(ch===null) return;
+  a.decennaleChantier=ch.trim();
+  const msg=PhenixMsg.preparer(rel?'decennale-relance':'decennale',{contact:contact,entreprise:nom,metier:a.metier&&a.metier!=='À préciser'?a.metier:'',chantier:a.decennaleChantier,lot:a.metier||'',dateValidite:a.assuranceDate||''});
+  const ok=type==='mail'?PhenixMsg.ouvrirMail(mail,msg):PhenixMsg.ouvrirSms(tel,msg);
+  if(!ok){toast('⚠️ '+(type==='mail'?'Adresse mail':'Numéro de téléphone')+' manquant ou invalide sur la fiche');return;}
+  if(type==='sms'&&!/Android|iPhone|iPad/i.test(navigator.userAgent)) PhenixMsg.copier(msg.sms);
+  a.decennaleRelances=rel?(a.decennaleRelances||0)+1:(a.decennaleRelances||0);
+  a.decennaleStatut='demandee'; a.decennaleDemandeLe=new Date().toISOString().slice(0,10); a.decennaleCanal=type;
+  try{ sync(true); await window._fb.save(a); }catch(e){ toast('⚠️ Brouillon ouvert, mais suivi non enregistré : '+(e.code||e.message||e)); }
+  const df=document.getElementById('f-decfiche'); if(df&&_eid===a.id) df.innerHTML=decFicheHtml(a);
+  toast(type==='mail'?'✓ Brouillon de mail ouvert : relis et envoie':'✓ SMS préparé : il ne reste qu’à envoyer (texte aussi copié)');
 }
 /* Joindre l'attestation décennale depuis la fiche : PDF lu par l'IA (PhenixDecennale), fichier rangé dans le stockage, fiche mise à jour. */
 function decJoindre(id){
