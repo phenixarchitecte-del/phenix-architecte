@@ -3,6 +3,9 @@
 <title>Phénix-Architecture · Carnet de projet</title>
 <!--
  HISTORIQUE DES MODIFICATIONS — phenix_carnet.html (version 3D)
+ 13/11/2026 — DÉPÔT EN LOT : Fiche projet › Maquette 3D › « Déposer toutes les maquettes (lot) » : on choisit le dossier 1_CLIENTS, chaque export .obj est rattaché
+   au dossier par son numéro, converti et classé automatiquement (Atelier) puis enregistré dans son carnet, masqué au client sauf case cochée.
+   Une maquette déjà en ligne n'est jamais remplacée sans case. Repérer : [Dépôt en lot].
  05/11/2026 — ATELIER : import d'un carnet préparé. Déposer ensemble un .glb déjà converti et son .json (fiche + réglages : calques, pastilles, vues, étapes) charge tout d'un coup et propose de remplir la fiche projet.
  30/10/2026 — MOTEUR 3D PARTAGÉ : le moteur de la maquette (PXModel) est sorti de ce fichier vers phenix_maquette3d.js, chargé ici
    et par le nouveau Chantier (un seul code, écrit une fois). Aucun changement de fonctionnement. Repérer : [Moteur partagé].
@@ -1541,6 +1544,7 @@ function cfgAct(a,el){
   if(a==='expcsv'){dlChoix(true);return true}
   if(a==='fsave'){saveFiche();return true}
   if(a==='atl'){if(window.PXAtelier)window.PXAtelier.open();else{S.mqMsg='L’Atelier se charge, réessayez dans un instant.';var mm=document.getElementById('mq-msg');if(mm)mm.textContent=S.mqMsg}return true}
+  if(a==='atllot'){if(window.PXAtelier&&window.PXAtelier.lot)window.PXAtelier.lot();return true}   /* [Dépôt en lot] */
   if(a==='fpub'){publierMaj();return true}
   if(a==='fver'){restaurerVer(el.getAttribute('data-id'));return true}
   if(a==='jpost'){postJ();return true}
@@ -1718,7 +1722,7 @@ function majCard(){
 function saveFiche(){
   var d={},f=S.fiche;Object.keys(f).forEach(function(k){d[k]=f[k]});d.updatedAt=nowIso();d.sid=S.sid;
   if(!S.db){S.ficheMsg='Enregistrement en ligne indisponible dans cet aperçu.';renderAll();return}
-  S.db.doc('projet/fiche').set(d).then(function(){S.dirty=false;if(window._fb&&window._fb.saveIndex)window._fb.saveIndex(S.cid,{nom:f.nom,clients:f.clients,updatedAt:nowIso()}).catch(function(){});S.ficheMsg='Fiche enregistrée. '+(f.publie?'Le configurateur est ouvert au client.':'Le configurateur reste fermé au client.');logJ('fiche','Fiche projet mise à jour'+(f.publie?' (configurateur ouvert au client).':'.'));renderAll()}).catch(function(e){S.ficheMsg=(e&&e.code==='invalid_argument')?'Seul un éditeur peut modifier la fiche.':'Enregistrement impossible ('+(e&&e.code||'réseau')+').';renderAll()});
+  return S.db.doc('projet/fiche').set(d).then(function(){S.dirty=false;if(window._fb&&window._fb.saveIndex)window._fb.saveIndex(S.cid,{nom:f.nom,clients:f.clients,updatedAt:nowIso()}).catch(function(){});S.ficheMsg='Fiche enregistrée. '+(f.publie?'Le configurateur est ouvert au client.':'Le configurateur reste fermé au client.');logJ('fiche','Fiche projet mise à jour'+(f.publie?' (configurateur ouvert au client).':'.'));renderAll();return true}).catch(function(e){S.ficheMsg=(e&&e.code==='invalid_argument')?'Seul un éditeur peut modifier la fiche.':'Enregistrement impossible ('+(e&&e.code||'réseau')+').';renderAll();return false});
 }
 
 /* Journal de chantier */
@@ -2654,7 +2658,7 @@ function maquetteCard(){
     h+='<p><b>Maquette en ligne</b>'+(m.name?' · '+esc(m.name):'')+(m.size?' · '+(m.size/1048576).toFixed(1).replace('.',',')+' Mo':'')+' · '+((m.spots||[]).length?(m.spots.length+' pastille'+(m.spots.length>1?'s':'')):'pastilles automatiques')+' · '+(m.views||[]).length+' point'+((m.views||[]).length>1?'s':'')+' de vue</p>'+
      '<label class="chk" for="fi-mq"><input id="fi-mq" type="checkbox" data-fi-mq="1"'+(m.on?' checked':'')+'><span>Afficher la maquette du projet au client (sinon : maison phare)</span></label>';
   }
-  h+='<div class="actrow"><button class="btn solid" data-act="atl">Ouvrir l’Atelier maquette</button></div>'+
+  h+='<div class="actrow"><button class="btn solid" data-act="atl">Ouvrir l’Atelier maquette</button>'+(S.owner?'<button class="btn" data-act="atllot">Déposer toutes les maquettes (lot)</button>':'')+'</div>'+
    '<p class="cap" id="mq-msg" role="status">'+esc(S.mqMsg||'')+'</p></div>';
   return h;
 }
@@ -2830,7 +2834,7 @@ window.addEventListener('message',function(ev){
   if(S.owner&&S.chList&&S.chList.some(function(c){return c.id===pid})&&S.cid!==pid){openProject(pid);renderUbar()}
 });
 /* [Atelier] passerelle vers le module Atelier maquette (le carnet vit dans cette fonction fermée) */
-window.PXC={S:S,HZ:HZ,ST:ST,mqLoader:mqLoader,mqB64:mqB64,saveFiche:saveFiche,logJ:logJ};
+window.PXC={S:S,HZ:HZ,ST:ST,mqLoader:mqLoader,mqB64:mqB64,saveFiche:saveFiche,logJ:logJ,mergeFiche:mergeFiche,openProject:openProject};   /* [Dépôt en lot] mergeFiche, openProject */
 renderAll();
 /* Connexion Firebase (client / équipe). Ajouter ?demo à l'adresse pour la démonstration sans connexion. */
 if(!/[?&]demo\b/.test(location.search))bootFb();
@@ -4796,12 +4800,13 @@ window.dispatchEvent(new Event('fb-ready'));
   }
   function download(buf, name){ var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([buf], { type:'model/gltf-binary' })); a.download = name; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 800); }
 
-  async function save(){
-    if(A.busy) return;
+  async function save(opts){
+    opts = (opts && opts.lot) ? opts : {};   /* [Dépôt en lot] opts.lot : pas de rechargement, opts.on : affichage client */
+    if(A.busy) return false;
     if(!A.groups.length){ setMsg('Rien à enregistrer : déposez d’abord l’OBJ d’ArchiCAD.'); render(); return; }
     var cfg = clone(A.cfg); A.busy = true; setMsg('Préparation…'); render();
     try{
-      var m = S.fiche.maquette || {}, out = Object.assign({}, m, { layers:cfg.layers, spots:cfg.spots, views:cfg.views, stages:cfg.stages, colors:cfg.colors, cuts:cfg.cuts || null, on:true });
+      var m = S.fiche.maquette || {}, out = Object.assign({}, m, { layers:cfg.layers, spots:cfg.spots, views:cfg.views, stages:cfg.stages, colors:cfg.colors, cuts:cfg.cuts || null, on:(opts.on !== false) });
       try{ out.metrics = metrics(); }catch(x){}
       if(A.src || A.glbOnly){ /* nouveau fichier : OBJ converti ici, ou .glb déposé tel quel */
         var buf;
@@ -4823,11 +4828,13 @@ window.dispatchEvent(new Event('fb-ready'));
       }
       S.fiche.maquette = out; S.dirty = true; A.dirty = false;
       if(!S.db){ A.busy = false; setMsg('Aperçu hors ligne : réglages gardés dans cette page.'); render(); return; }
-      PXC.saveFiche();
+      var okF = await PXC.saveFiche();
+      if(opts.lot){ A.busy = false; if(okF === false) return false; }
       try{ if(PXC.logJ) PXC.logJ('fiche', 'Maquette 3D mise à jour dans l’Atelier' + (A.src ? ' (' + A.src.name + ')' : '') + '.'); }catch(x){}
+      if(opts.lot){ setMsg('Maquette enregistrée.'); return true; }
       setMsg('Maquette enregistrée et en ligne. La page va se recharger pour l’afficher.'); render();
       setTimeout(function(){ location.reload(); }, 1600);
-    }catch(x){ A.busy = false; setMsg('Enregistrement interrompu (' + (x && (x.code || x.message) || 'erreur') + '). Vérifiez la connexion et les règles Firestore (phenix_portail/…/maquette).'); render(); }
+    }catch(x){ A.busy = false; setMsg('Enregistrement interrompu (' + (x && (x.code || x.message) || 'erreur') + '). Vérifiez la connexion et les règles Firestore (phenix_portail/…/maquette).'); render(); if(opts.lot) return false; }
   }
 
   /* ---------- interface ---------- */
@@ -5032,7 +5039,137 @@ window.dispatchEvent(new Event('fb-ready'));
     if(!A.groups.length){ await fromCurrent(); if(!A.groups.length){ A.tab = 'fichier'; setMsg('Déposez l’export ArchiCAD (.obj + .mtl) pour commencer.'); } }
     render(); vResize();
   }
-  window.PXAtelier = { open:open, close:close, _A:A, _metrics:function(){ return metrics(); }, _apply:applyOps, _autoCat:autoCat, _export:exportGlb, _fromObj:fromObj, _send:sendPrompt };
+
+  /* ---------- [Dépôt en lot] 13/11/2026 ----------
+     Choisir le dossier « 1_CLIENTS » : chaque export ArchiCAD (.obj + .mtl) trouvé est rattaché au dossier par son numéro (6 chiffres du nom du
+     dossier), converti avec le même classement automatique des calques que l'Atelier, pastilles et vues proposées, puis enregistré dans le carnet
+     du dossier. Une maquette déjà en ligne n'est jamais remplacée sans la case « Remplacer ». Repérer : [Dépôt en lot]. */
+  var LOT = { items:[], busy:false, stop:false, replace:false, show:false, cap:80, root:'', msg:'' };
+  function lotDlg(){
+    var d = document.getElementById('atl-lot'); if(d){ d.hidden = false; return d; }
+    d = document.createElement('div'); d.id = 'atl-lot'; d.setAttribute('role','dialog'); d.setAttribute('aria-modal','true'); d.setAttribute('aria-label','Dépôt en lot des maquettes');
+    d.style.cssText = 'position:fixed;inset:0;z-index:100001;background:rgba(10,18,40,.78);display:flex;align-items:center;justify-content:center;padding:12px';
+    d.innerHTML = '<div id="atl-lot-box" style="background:#fff;color:#0B1630;border-radius:14px;max-width:820px;width:100%;max-height:94vh;overflow:auto;padding:16px;font:15px/1.45 system-ui,sans-serif"></div>';
+    d.addEventListener('click', lotClick); d.addEventListener('change', lotChange);
+    document.body.appendChild(d); return d;
+  }
+  function lotRender(){
+    var b = document.getElementById('atl-lot-box'); if(!b) return;
+    var btn = 'style="min-height:44px;padding:8px 14px;border-radius:10px;border:1.5px solid #1b2d5b;background:#fff;color:#1b2d5b;font:600 15px system-ui,sans-serif;cursor:pointer"';
+    var pri = 'style="min-height:44px;padding:8px 14px;border-radius:10px;border:0;background:#1F62B8;color:#fff;font:700 15px system-ui,sans-serif;cursor:pointer"';
+    var n = LOT.items.filter(function(it){ return it.on && it.pid; }).length;
+    var h = '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b style="font-size:18px">Déposer toutes les maquettes</b><button type="button" ' + btn + ' data-lot="close">Fermer</button></div>' +
+      '<p style="margin:8px 0">Choisissez votre dossier <b>1_CLIENTS</b> (ou le dossier d’un seul client). Chaque export ArchiCAD <b>.obj</b> est converti, ses calques sont classés automatiquement, puis la maquette est enregistrée dans le carnet du dossier. Le plus récent est pris quand un dossier en contient plusieurs.</p>' +
+      '<p style="margin:0 0 8px"><button type="button" ' + pri + ' data-lot="pick"' + (LOT.busy ? ' disabled' : '') + '>📁 Choisir le dossier 1_CLIENTS</button> ' + (LOT.root ? '<span>Dossier lu : <b>' + e(LOT.root) + '</b></span>' : '') + '</p>' +
+      (window.showDirectoryPicker ? '' : '<p style="background:#FBE9E3;border:1.5px solid #A33A1F;border-radius:10px;padding:8px 10px">⚠ Ce navigateur ne sait pas lire un dossier : ouvrez le Carnet dans Chrome ou Edge, sur ordinateur.</p>') +
+      '<div style="display:flex;flex-wrap:wrap;gap:14px;margin:8px 0">' +
+      '<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-lot="replace"' + (LOT.replace ? ' checked' : '') + ' style="width:20px;height:20px"> Remplacer une maquette déjà en ligne</label>' +
+      '<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-lot="show"' + (LOT.show ? ' checked' : '') + ' style="width:20px;height:20px"> Afficher aussitôt la maquette au client</label>' +
+      '<label style="display:flex;gap:6px;align-items:center">Ignorer au-delà de <input type="number" min="5" max="300" value="' + LOT.cap + '" data-lot="cap" style="width:70px;min-height:36px;padding:4px 6px;border:1.5px solid #CBD3E2;border-radius:8px"> Mo</label></div>';
+    if(LOT.msg) h += '<p role="status" style="margin:6px 0"><b>' + e(LOT.msg) + '</b></p>';
+    if(LOT.items.length){
+      h += '<div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-size:14px"><thead><tr style="text-align:left;border-bottom:2px solid #CBD3E2"><th style="padding:6px">✓</th><th>Dossier (dossier client)</th><th>Fichier</th><th>Carnet</th><th>État</th></tr></thead><tbody>';
+      LOT.items.forEach(function(it, i){
+        var opts = '<option value="">— choisir —</option>' + (S.chList || []).map(function(c){ return '<option value="' + e(c.id) + '"' + (c.id === it.pid ? ' selected' : '') + '>' + e((c.ref ? c.ref + ' · ' : '') + c.nom) + '</option>'; }).join('');
+        h += '<tr style="border-bottom:1px solid #E3E8F2;vertical-align:top"><td style="padding:6px"><input type="checkbox" data-lot="on" data-i="' + i + '"' + (it.on ? ' checked' : '') + (it.pid ? '' : ' disabled') + ' aria-label="Déposer ' + e(it.client) + '" style="width:20px;height:20px"></td>' +
+          '<td style="padding:6px"><b>' + e(it.client) + '</b></td><td style="padding:6px">' + e(it.name) + '<br><small>' + mo(it.size) + (it.nb > 1 ? ' · +' + (it.nb - 1) + ' autre(s) fichier(s) .obj, le plus récent est pris' : '') + (it.mtl ? '' : ' · sans .mtl (couleurs grises)') + '</small></td>' +
+          '<td style="padding:6px"><select data-lot="sel" data-i="' + i + '" style="max-width:210px;min-height:36px;border:1.5px solid #CBD3E2;border-radius:8px"' + (LOT.busy ? ' disabled' : '') + '>' + opts + '</select>' + (it.fuzzy ? '<br><small>⚠ rattaché d’après le nom : à vérifier</small>' : '') + '</td>' +
+          '<td style="padding:6px">' + e(it.st || (it.pid ? '○ En attente' : '⚠ Dossier à choisir')) + '</td></tr>';
+      });
+      h += '</tbody></table></div><p style="margin:10px 0 0">' + (LOT.busy ? '<button type="button" ' + btn + ' data-lot="stop">Arrêter après celui-ci</button>' : '<button type="button" ' + pri + ' data-lot="go"' + (n ? '' : ' disabled') + '>▶ Lancer le dépôt (' + n + ')</button>') + '</p>';
+    }
+    b.innerHTML = h;
+  }
+  function lotClick(ev){
+    var t = ev.target.closest('[data-lot]'); if(!t) return; var a = t.getAttribute('data-lot');
+    if(a === 'close'){ if(LOT.busy){ LOT.msg = 'Dépôt en cours : arrêtez-le d’abord.'; lotRender(); return; } document.getElementById('atl-lot').hidden = true; }
+    else if(a === 'pick') lotPick();
+    else if(a === 'go') lotGo();
+    else if(a === 'stop'){ LOT.stop = true; LOT.msg = 'Arrêt demandé : le dépôt s’arrête après la maquette en cours.'; lotRender(); }
+  }
+  function lotChange(ev){
+    var t = ev.target.closest('[data-lot]'); if(!t) return; var a = t.getAttribute('data-lot'), i = +t.getAttribute('data-i');
+    if(a === 'replace') LOT.replace = t.checked; else if(a === 'show') LOT.show = t.checked;
+    else if(a === 'cap') LOT.cap = Math.max(5, +t.value || 80);
+    else if(a === 'on') LOT.items[i].on = t.checked;
+    else if(a === 'sel'){ var it = LOT.items[i]; it.pid = t.value; it.fuzzy = false; it.on = !!t.value; }
+    lotRender();
+  }
+  function lotMatch(folder){
+    var cl = S.chList || [], m = /^\s*(\d{5,7})/.exec(folder), ref = m ? m[1] : '', hit = null;
+    if(ref){ hit = cl.filter(function(c){ var r = String(c.ref || '').replace(/\D/g, ''); return r && (r === ref || r.indexOf(ref) >= 0 || ref.indexOf(r) >= 0 && r.length >= 5); })[0]; if(hit) return { pid:hit.id, fuzzy:false }; }
+    var words = nrm(folder).split(/[^a-z0-9]+/).filter(function(w){ return w.length >= 4 && !/^\d+$/.test(w); }), best = null, bs = 0;
+    cl.forEach(function(c){ var hay = nrm((c.nom || '') + ' ' + (c.client || '')), sc = words.filter(function(w){ return hay.indexOf(w) >= 0; }).length; if(sc > bs){ bs = sc; best = c; } });
+    return best && bs >= 2 ? { pid:best.id, fuzzy:true } : { pid:'', fuzzy:false };
+  }
+  async function lotPick(){
+    if(!window.showDirectoryPicker || LOT.busy) return;
+    var root; try{ root = await window.showDirectoryPicker({ mode:'read' }); }catch(x){ return; }
+    LOT.msg = 'Lecture du dossier…'; LOT.items = []; LOT.root = root.name; lotRender(); syncS();
+    var found = {};
+    async function walk(dir, depth, client){
+      for await (var ent of dir.entries()){
+        var nm = ent[0], h = ent[1];
+        if(h.kind === 'directory'){ if(depth < 6 && !/^(node_modules|\.|\$)/.test(nm)) await walk(h, depth + 1, client); }
+        else if(/\.obj$/i.test(nm)){ var f = await h.getFile(); (found[client] = found[client] || { objs:[], dirs:{} }).objs.push({ name:nm, file:f, dir:dir }); }
+      }
+    }
+    try{
+      var direct = false, top = [];
+      for await (var ent of root.entries()){ top.push(ent); if(ent[1].kind === 'file' && /\.obj$/i.test(ent[0])) direct = true; }
+      if(direct || /^\d{5,7}/.test(root.name)) await walk(root, 1, root.name);
+      else for(var k = 0; k < top.length; k++){ if(top[k][1].kind === 'directory') await walk(top[k][1], 1, top[k][0]); }
+    }catch(x){ LOT.msg = 'Lecture interrompue : ' + (x && x.message || x); lotRender(); return; }
+    var names = Object.keys(found).sort();
+    for(var q = 0; q < names.length; q++){
+      var g = found[names[q]], best = g.objs.sort(function(a, b){ return b.file.lastModified - a.file.lastModified; })[0], mt = null;
+      var base = best.name.replace(/\.obj$/i, '').toLowerCase();
+      try{ var arr = []; for await (var e2 of best.dir.entries()){ if(e2[1].kind === 'file' && /\.mtl$/i.test(e2[0])) arr.push(e2); }
+        mt = (arr.filter(function(x){ return x[0].replace(/\.mtl$/i, '').toLowerCase() === base; })[0] || arr[0] || [])[1] || null; }catch(x){}
+      var mm = lotMatch(names[q]);
+      LOT.items.push({ client:names[q], name:best.name, file:best.file, size:best.file.size, nb:g.objs.length, mtl:mt, pid:mm.pid, fuzzy:mm.fuzzy, on:!!mm.pid && !mm.fuzzy, st:'' });
+    }
+    LOT.msg = names.length ? names.length + ' dossier(s) avec une maquette trouvée(s).' : 'Aucun fichier .obj trouvé dans ce dossier.';
+    lotRender();
+  }
+  async function lotGo(){
+    if(LOT.busy) return; syncS();
+    var todo = LOT.items.filter(function(it){ return it.on && it.pid; }); if(!todo.length) return;
+    LOT.busy = true; LOT.stop = false; LOT.msg = 'Dépôt en cours… laissez cette page ouverte.'; lotRender();
+    var keep = S.cid, done = 0;
+    try{ await open(); }catch(x){}
+    for(var i = 0; i < todo.length; i++){
+      if(LOT.stop) break;
+      var it = todo[i]; it.st = '➤ En cours…'; lotRender();
+      try{
+        if(it.size > LOT.cap * 1048576){ it.st = '⚠ Trop lourd (' + mo(it.size) + ') : à alléger depuis ArchiCAD (sans meubles)'; continue; }
+        var c = (S.chList || []).filter(function(x){ return x.id === it.pid; })[0] || {};
+        S.cid = String(it.pid); S.db = window._fb.mkDb(S.cid);
+        var snap = await S.db.doc('projet/fiche').get();
+        S.fiche = PXC.mergeFiche(snap.exists ? snap.data() : null, { nom:c.nom || 'Projet', dossier:c.ref || '', clients:c.client || '', terrain:c.adresse || '', fictif:false, plansOk:false, publie:false });
+        S.dirty = false; var mq = S.fiche.maquette || {};
+        if((mq.n || mq.url) && !LOT.replace){ it.st = '○ Une maquette est déjà en ligne : conservée'; continue; }
+        it.st = '➤ Lecture du fichier…'; lotRender();
+        var objTxt = await it.file.text(), mtlTxt = it.mtl ? await (await it.mtl.getFile()).text() : '';
+        A.groups = []; A.src = null; A.glbOnly = null; A.prepared = null; A.byKey = {}; A.up = 'auto'; A.keepMob = false; A.busy = false;
+        it.st = '➤ Conversion et classement…'; lotRender();
+        await fromObj(objTxt, mtlTxt, it.name);
+        if(!A.groups.length) throw new Error('aucun volume lu dans le fichier');
+        if(!(A.cfg.views || []).length){ viewFrom('home', 'Vue d’ensemble', true); viewFrom('aerien', 'Vue aérienne'); }
+        var tri = A.est ? A.est.tris : 0; A.dirty = true; it.st = '➤ Enregistrement…'; lotRender();
+        var ok = await save({ lot:true, on:LOT.show });
+        it.st = ok ? '✓ Déposée (' + mo(A.glb ? A.glb.byteLength : 0) + ', ' + nf(tri) + ' triangles' + (LOT.show ? ', visible du client' : ', masquée au client') + ')' : '✖ Enregistrement impossible (droits ou connexion)';
+        if(ok) done++;
+      }catch(x){ it.st = '✖ ' + (x && x.message || x); }
+      finally{ try{ A.groups.forEach(function(g){ if(g.geo) g.geo.dispose(); }); }catch(y){} A.groups = []; A.src = null; A.glb = null; A.dirty = false; A.busy = false; }
+      lotRender();
+    }
+    A.on = false; A.dirty = false; var ad = document.getElementById('atl'); if(ad) ad.hidden = true; document.body.classList.remove('atl-open');
+    try{ if(keep) PXC.openProject(keep); }catch(x){}
+    LOT.busy = false; LOT.msg = done + ' maquette(s) déposée(s) sur ' + todo.length + ' demandée(s).' + (LOT.show ? '' : ' Elles sont masquées au client : cochez « Afficher la maquette du projet au client » dans chaque Fiche projet.'); lotRender();
+  }
+  function lotOpen(){ syncS(); if(!S || !S.owner) return; lotDlg(); lotRender(); }
+  window.PXAtelier = { lot:lotOpen, open:open, close:close, _A:A, _metrics:function(){ return metrics(); }, _apply:applyOps, _autoCat:autoCat, _export:exportGlb, _fromObj:fromObj, _send:sendPrompt };
 })();
 </script>
 
