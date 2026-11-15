@@ -7,6 +7,12 @@
 ══════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_chiffrage.html
 ──────────────────────────────────────────────────────────────────
+ 14/11/2026 — [Devis mail] Les devis d'artisans reçus par mail se rangent seuls : la surveillance des mails lit le PDF, reconnaît le
+   dossier et dépose le devis dans phenix_chiffrage_import (source 'mail'). Dossier sûr (deux indices concordants) et total des lignes =
+   total imprimé : le lot est créé à l'ouverture de Chiffrage dans le projet du dossier (« 📧 Reçu par mail — à vérifier », lien PDF,
+   n° du devis dans les notes, entreprise ajoutée à l'Annuaire). Sinon il attend dans « Offres reçues », dossier présélectionné, avec la
+   raison. Rangement seulement après chargement du chiffrage depuis le cloud (window._chiffrageCharge). Création du lot factorisée
+   (_lotDepuisOffre) avec les offres d'appels d'offres. Repérer : [Devis mail].
  11/11/2026 — [Vignettes] Une image par projet pour le reconnaître d'un coup d'œil : la page « Projets » devient une mosaïque de
    grandes cartes (image du projet en pleine carte, nom, commune et montant par-dessus) ; bouton « Image » sur chaque carte
    (choisir, changer, retirer). L'image apparaît aussi à gauche du titre de « Lots & Chiffrage ». Les montants restent sur fond uni.
@@ -2499,6 +2505,7 @@ async function loadChantiers(){
         state.chantiers = [];
       }
     }
+    window._chiffrageCharge = true;   // [Devis mail] les devis reçus par mail ne sont rangés qu'une fois le chiffrage du cloud chargé (jamais sur une copie locale)
     initUI();
     updateSyncStatus('ok');
     _jrnPrev = _jrnSnap();
@@ -2825,10 +2832,59 @@ function _appliquerOffresArtisans(snap, notifier){
   if (badge) badge.textContent = offresArtisansEnAttente.length ? '(' + offresArtisansEnAttente.length + ')' : '';
   const m = document.getElementById('modal-offres-artisans');
   if (m && m.classList.contains('open')) { try{ renderOffresArtisansList(); }catch(e){} }
-  if (notifier && nouvelles.length){
-    const o = nouvelles[0];
+  if (notifier && nouvelles.length && !nouvelles.every(o => o.source === 'mail' && o.valide)){
+    const o = nouvelles.find(x => !(x.source === 'mail' && x.valide)) || nouvelles[0];
     showToast('📥 Nouvelle offre reçue : ' + ((o.artisan&&o.artisan.nom)||'artisan') + (o.lot?' — '+o.lot:''));
   }
+  _rangerDevisMail();
+}
+
+// [Devis mail] 15/11/2026 — Devis d'artisan reçus par mail : la surveillance des mails lit le PDF, propose un dossier et dépose le devis ici
+// (phenix_chiffrage_import, source 'mail'). La notification du Shell (cloche) propose ce dossier à Maxime ; quand il clique « Ranger dans
+// ce dossier », l'offre reçoit valide = true et le lot est créé ici dans le projet du dossier (projet de chiffrage créé s'il n'existe pas),
+// marqué « 📧 Reçu par mail — à vérifier » avec le PDF. Non validé : le devis reste dans « Offres reçues », dossier présélectionné.
+// Jamais d'écrasement : un devis = un nouveau lot.
+let _rangementMail = false;
+async function _rangerDevisMail(){
+  if (_rangementMail || !window._chiffrageCharge) return;
+  const aRanger = offresArtisansEnAttente.filter(o => o.source === 'mail' && o.valide && o.projetId);
+  if (!aRanger.length) return;
+  _rangementMail = true;
+  const ranges = [];
+  try {
+    const { db, doc, deleteDoc, getDoc } = await _phenixFbRefs();
+    for (const o of aRanger){
+      try {
+        const encore = await getDoc(doc(db, 'phenix_chiffrage_import', o._id));   // déjà rangé depuis un autre appareil ?
+        if (!encore.exists()) continue;
+        let ci = state.chantiers.findIndex(c => String(c.projetId||'') === String(o.projetId));
+        if (ci < 0){   // le dossier n'a pas encore de projet de chiffrage : on le crée à partir de la fiche du dossier
+          let pr = {}; try { const ps = await getDoc(doc(db, 'phenix_projets', String(o.projetId))); if (ps.exists()) pr = ps.data() || {}; } catch(e){}
+          state.chantiers.push({ nom: pr.nom || o.chantierTitre || pr.client || 'Dossier', client: pr.client || '', adresse: pr.adresse || pr.adresseProjet || '', type: pr.typeProjet || pr.type || '', surface: pr.surface || '',
+            projetId: String(o.projetId), lots: [], statut: 'En cours', date: new Date().toISOString().split('T')[0], notes: 'Créé à la réception d’un devis par mail' });
+          ci = state.chantiers.length - 1;
+        }
+        const r = _lotDepuisOffre(o, state.chantiers[ci]);
+        if (!r) continue;
+        state.chantiers[ci].lots.push(r.lot);
+        await deleteDoc(doc(db, 'phenix_chiffrage_import', o._id));
+        const k = offresArtisansEnAttente.indexOf(o); if (k >= 0) offresArtisansEnAttente.splice(k, 1);
+        ranges.push({ ci, libelle: r.libelle, nom: state.chantiers[ci].nom || '' });
+      } catch(e){ console.warn('rangement devis mail', e); }
+    }
+  } finally { _rangementMail = false; }
+  if (!ranges.length) return;
+  saveState(); renderChantierGrid(); renderChantierSelects();
+  if (ranges.some(r => r.ci === state.currentChantier)) renderChiffrage();
+  _majBadgeOffres();
+  setTimeout(() => showToast('📧 ' + (ranges.length === 1 ? 'Devis reçu par mail rangé : « ' + ranges[0].libelle + ' » dans ' + ranges[0].nom : ranges.length + ' devis reçus par mail rangés dans leurs dossiers') + ' (à vérifier)'), 1800);   // après le message de l'Annuaire
+}
+function _majBadgeOffres(){
+  const badge = document.getElementById('offres-artisans-badge'), btn = document.getElementById('btn-offres-artisans');
+  if (badge) badge.textContent = offresArtisansEnAttente.length ? '(' + offresArtisansEnAttente.length + ')' : '';
+  if (btn) btn.style.display = offresArtisansEnAttente.length ? '' : 'none';
+  const m = document.getElementById('modal-offres-artisans');
+  if (m && m.classList.contains('open')) { try{ renderOffresArtisansList(); }catch(e){} }
 }
 // Écoute en direct : une offre envoyée depuis Appels d'offres apparaît sans recharger la page
 let _offresUnsub = null, _offresPoll = null;
@@ -2902,7 +2958,11 @@ function renderOffresArtisansList(){
       <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap">
         <div>
           <strong style="color:var(--nav)">${esc_dpgf(o.lot||'')} — ${esc_dpgf(o.artisan?.nom||'Artisan')}</strong>
-          <span style="color:var(--text3);font-size:12px"> · pour "${esc_dpgf(o.chantierTitre||'')}"</span>
+          <span style="color:var(--text3);font-size:12px"> · ${o.chantierTitre ? 'pour "'+esc_dpgf(o.chantierTitre)+'"' : 'dossier à choisir'}</span>
+          ${o.source==='mail' ? `<div style="font-size:12px;color:var(--text2);margin-top:2px">📧 Reçu par mail le ${new Date(o.recuLe||Date.now()).toLocaleDateString('fr-FR')}${o.numero?' · devis n° '+esc_dpgf(o.numero):''}${o.pdf&&o.pdf.url?` · <a href="${esc_dpgf(o.pdf.url)}" target="_blank" rel="noopener" style="color:var(--accent)">Voir le PDF</a>`:''}</div>` : ''}
+          ${o.source==='mail' && o.raison ? `<div style="font-size:12px;color:#f0c674;margin-top:2px">⚠ ${esc_dpgf(o.raison)}</div>` : ''}
+          ${o.source==='mail' && o.projetId && !state.chantiers.some(c=>String(c.projetId||'')===String(o.projetId)) ? `<div style="font-size:12px;color:var(--text3);margin-top:2px">Dossier proposé : « ${esc_dpgf(o.chantierTitre||'')} », pas encore de projet dans Chiffrage (rangez-le depuis la notification : le projet sera créé).</div>` : ''}
+          ${o.source==='mail' && (o.clientLu||o.adresseLue) ? `<div style="font-size:11px;color:var(--text3);margin-top:2px">Lu sur le devis : ${esc_dpgf([o.clientLu,o.adresseLue].filter(Boolean).join(' · '))}</div>` : ''}
         </div>
         <div style="font-weight:700;color:#2E7D4F">${fmt(_totalUtileOffre(o))} € HT</div>
       </div>
@@ -2926,14 +2986,8 @@ function renderOffresArtisansList(){
   }
 }
 
-async function creerLotDepuisOffreArtisan(oi){
-  const o = offresArtisansEnAttente[oi];
-  if (!o) return;
-  const sel = document.getElementById('offre-dest-'+oi);
-  const ci = sel ? parseInt(sel.value, 10) : NaN;
-  if (isNaN(ci) || !state.chantiers[ci]){ showToast('⚠️ Choisissez un dossier de destination'); return; }
-  const chantier = state.chantiers[ci];
-
+// Lot construit à partir d'une offre (appel d'offres ou devis reçu par mail) : { lot, libelle, nbFrais } ou null si aucune ligne chiffrée
+function _lotDepuisOffre(o, chantier){
   const _nbFrais = (o.lignes||[]).filter(l => l.prixUnitaire != null && _ligneFraisInterne(l)).length;
   const postes = _lignesUtilesOffre(o)
     .map(l => ({
@@ -2942,12 +2996,16 @@ async function creerLotDepuisOffreArtisan(oi){
       puClient: parseFloat(l.prixUnitaire)||0, // pas de marge auto — à régler manuellement, comme pour l'import IA
       pu: parseFloat(l.prixUnitaire)||0
     }));
-  if (!postes.length){ showToast('⚠️ Aucune ligne chiffrée dans cette offre'); return; }
-
+  if (!postes.length) return null;
+  const mail = o.source === 'mail';
   const notes = [];
   if (o.disponibilite) notes.push('Disponible à partir du ' + o.disponibilite + '.');
   if (o.commentaireGeneral) notes.push(o.commentaireGeneral);
-
+  if (mail){
+    if (o.numero) notes.push('Devis n° ' + o.numero + (o.dateDevis ? ' du ' + new Date(o.dateDevis).toLocaleDateString('fr-FR') : '') + '.');
+    if (o.totalHtDevis) notes.push('Total HT imprimé sur le devis : ' + fmt(o.totalHtDevis) + ' €.');
+    if (o.pdf && o.pdf.url) notes.push('PDF : ' + o.pdf.url);
+  }
   const nbExistants = (chantier.lots||[]).length;
   chantier.lots = chantier.lots || [];
   // Le libellé reçu est « LOT 03 — Couverture » : on reprend le numéro et le nom du lot,
@@ -2955,20 +3013,36 @@ async function creerLotDepuisOffreArtisan(oi){
   let _lnum = '', _lnom = String(o.lot || '').trim();
   const _mm = _lnom.match(/^\s*(?:LOT\s*(?:N°|NO|N)?\s*)?(\d+\s*[A-Za-z]?)\s*[—–:\-.)]\s*(.*)$/i);
   if (_mm){ const _k=_mm[1].replace(/\s+/g,'').toUpperCase(); _lnum = 'LOT ' + (/^\d$/.test(_k) ? '0'+_k : _k); _lnom = _mm[2].trim(); }
-  else if (o.numLot || o.lotNum || o.numero){ const _n=String(o.numLot||o.lotNum||o.numero).replace(/\D/g,''); if(_n) _lnum='LOT '+_n.padStart(2,'0'); }
+  else if (o.numLot || o.lotNum || (!mail && o.numero)){ const _n=String(o.numLot||o.lotNum||o.numero).replace(/\D/g,''); if(_n) _lnum='LOT '+_n.padStart(2,'0'); }
   if (!_lnum) _lnum = 'LOT '+(nbExistants+1).toString().padStart(2,'0');
   const _ent = (o.artisan?.nom || 'Artisan');
   // Fiche Annuaire : créée si l'entreprise n'y est pas, sinon complétée (champs vides seulement) avec téléphone et mail de l'offre
   if (o.artisan && o.artisan.nom){
-    annEnsure(_ent, { tel: PhenixMsg.normTel(o.artisan.tel) || String(o.artisan.tel||'').trim(), email: PhenixMsg.normMail(o.artisan.email) || String(o.artisan.email||'').trim(), metier: _lnom });
+    try{ annEnsure(_ent, { tel: PhenixMsg.normTel(o.artisan.tel) || String(o.artisan.tel||'').trim(), email: PhenixMsg.normMail(o.artisan.email) || String(o.artisan.email||'').trim(), metier: _lnom || o.artisan.metier || '', siret: o.artisan.siret || '', contact: o.artisan.contact || '' }); }catch(e){}
   }
-  chantier.lots.push({
+  const entete = mail ? '--- Devis reçu par mail (' + _ent + ', ' + new Date(o.recuLe || Date.now()).toLocaleDateString('fr-FR') + ') ---\n'
+                      : '--- Offre reçue via Appels d\'offres (' + (o.artisan?.nom||'artisan') + ', ' + new Date().toLocaleDateString('fr-FR') + ') ---\n';
+  const lot = {
     num: _lnum,
     nom: (_lnom ? _lnom + ' — ' : '') + _ent,
     entreprise: _ent,
     postes, tva:20, statut:'Chiffrage', prestation:'std', marge:0,
-    notes: notes.length ? ('--- Offre reçue via Appels d\'offres (' + (o.artisan?.nom||'artisan') + ', ' + new Date().toLocaleDateString('fr-FR') + ') ---\n' + notes.join('\n')) : ''
-  });
+    notes: notes.length ? entete + notes.join('\n') : ''
+  };
+  if (mail){ lot.devisArtisan = true; lot.recuMail = { le: o.recuLe || new Date().toISOString(), pdf: (o.pdf && o.pdf.url) || '', numero: o.numero || '', totalDevis: o.totalHtDevis || 0, auto: true }; }
+  return { lot, libelle: _lnum + ' — ' + (_lnom ? _lnom + ' — ' : '') + _ent, nbFrais: _nbFrais };
+}
+
+async function creerLotDepuisOffreArtisan(oi){
+  const o = offresArtisansEnAttente[oi];
+  if (!o) return;
+  const sel = document.getElementById('offre-dest-'+oi);
+  const ci = sel ? parseInt(sel.value, 10) : NaN;
+  if (isNaN(ci) || !state.chantiers[ci]){ showToast('⚠️ Choisissez un dossier de destination'); return; }
+  const chantier = state.chantiers[ci];
+  const r = _lotDepuisOffre(o, chantier);
+  if (!r){ showToast('⚠️ Aucune ligne chiffrée dans cette offre'); return; }
+  chantier.lots.push(r.lot);
 
   try {
     const { db, doc, deleteDoc } = await _phenixFbRefs();
@@ -2978,12 +3052,9 @@ async function creerLotDepuisOffreArtisan(oi){
   offresArtisansEnAttente.splice(oi, 1);
   saveState(); renderChantierGrid(); renderChantierSelects();
   renderOffresArtisansList();
-  const badge = document.getElementById('offres-artisans-badge');
-  const btn = document.getElementById('btn-offres-artisans');
-  if (badge) badge.textContent = offresArtisansEnAttente.length ? '(' + offresArtisansEnAttente.length + ')' : '';
-  if (btn) btn.style.display = offresArtisansEnAttente.length ? '' : 'none';
+  _majBadgeOffres();
   if (state.currentChantier === ci) renderChiffrage();
-  showToast('✓ Nouveau lot « ' + _lnum + ' — ' + (_lnom ? _lnom + ' — ' : '') + _ent + ' » créé dans ' + (chantier.nom||'') + (_nbFrais ? ' (' + _nbFrais + ' ligne(s) de frais MOE/sécurité non reprise(s))' : ''));
+  showToast('✓ Nouveau lot « ' + r.libelle + ' » créé dans ' + (chantier.nom||'') + (r.nbFrais ? ' (' + r.nbFrais + ' ligne(s) de frais MOE/sécurité non reprise(s))' : ''));
 }
 window.creerLotDepuisOffreArtisan = creerLotDepuisOffreArtisan;
 
@@ -4173,7 +4244,17 @@ function margeBadgeHtml(margePct, extraStyle){
 // ── [Aucune entreprise] état d'un lot côté entreprise ──
 function lotEntrepriseNom(l){ return String((l && (l.entreprise || (l.contrat && l.contrat.entreprise))) || '').trim(); }
 function lotEntrepriseEtat(l){ return lotEntrepriseNom(l) ? 'ok' : (l && l.devisArtisan ? 'devis' : 'aucune'); }
+// [Devis mail] mention sous l'entreprise : devis reçu par mail (date, lien vers le PDF)
+function lotRecuMailHtml(l){
+  const m=l&&l.recuMail; if(!m) return '';
+  const d=new Date(m.le); const le=isNaN(d)?'':' le '+d.toLocaleDateString('fr-FR');
+  const pdf=m.pdf?' · <a href="'+String(m.pdf).replace(/"/g,'&quot;')+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--accent)">PDF</a>':'';
+  return '<div style="margin-top:3px;font-size:11px;color:var(--text2)" title="Devis lu automatiquement : vérifier les lignes et régler la marge"><i class="ti ti-mail" aria-hidden="true"></i> Reçu par mail'+le+(m.auto?' — à vérifier':'')+pdf+'</div>';
+}
 function lotEntrepriseHtml(l){
+  return _lotEntrepriseHtml0(l)+lotRecuMailHtml(l);
+}
+function _lotEntrepriseHtml0(l){
   const e=lotEntrepriseEtat(l);
   if(e==='ok') return '<div class="ent-line"><i class="ti ti-building" aria-hidden="true"></i> '+String(lotEntrepriseNom(l)).replace(/</g,'&lt;')+'</div>';
   if(e==='devis') return '<div style="margin-top:3px"><span class="no-ent devis" title="Un devis artisan a été importé mais le nom de l\'entreprise n\'est pas renseigné"><i class="ti ti-alert-circle" aria-hidden="true"></i> Devis reçu — entreprise à préciser</span></div>';

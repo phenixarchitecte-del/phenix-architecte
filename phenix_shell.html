@@ -5,6 +5,8 @@
 ══════════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_shell.html
 ──────────────────────────────────────────────────────────────────────
+   15/11/2026 — [Échanges] Contacts importés : le nom du répertoire remplace « Numéro inconnu 06… » (nom, résumé, notification) ; fichiers .vcf en UTF-16 lus.
+   15/11/2026 — [Devis mail] Devis d'artisan reçu par mail : la notification propose le dossier (lu sur le mail et le devis), modifiable ; « ✓ Ranger dans ce dossier » le range dans le chiffrage (phenix_chiffrage_import.valide), « Ne pas ranger » l'écarte. Rien n'est rangé sans ce clic.
    13/11/2026 (2) — [Échanges] Import des contacts : lecture des fichiers .vcf des Android (Honor/Huawei : noms codés QUOTED-PRINTABLE, lignes coupées, préfixes « item1. »).
    13/11/2026 — [Échanges] Reconnaissance de l'expéditeur d'un SMS par son numéro : import des contacts du téléphone (.vcf) ou nom saisi sur un numéro inconnu (phenix_meta/repertoire, noms et numéros seulement).
  15/10/2026 — FUSION de deux versions du shell, sans perte :
@@ -514,7 +516,7 @@ function renderNC() {
   NC.devis.forEach(x => items.push({ ico: x.projet ? '📝' : '📄', t: x.date || x.at, h: (x.projet ? 'Devis signé · ' : 'Devis · ') + (x.client || ''), txt: x.projet ? (x.vers === 'accepte' ? 'signé (dossier déjà créé)' : (x.vers || '')) + ' — cliquer pour ouvrir le contrat' : 'statut → ' + (x.vers || ''), go: x.projet ? 'contrat' : 'espace', order: x.projet ? { source: 'phenix-shell', action: 'ouvrir-contrat', projet: x.projet } : null, col: 'phenix_notifs', id: x._id, patch: { lu: true } }));
   NC.taches.forEach(x => items.push({ ico: '✅', t: x.quand || x.date, h: 'Tâche', txt: (String(x.par || '').split('@')[0] || 'L\'assistante') + ' · « ' + (x.titre || '') + ' »', go: 'dossier', col: 'phenix_notifs_taches', id: x._id, patch: { lu: true } }));
   NC.ent.forEach(x => x.type === 'echange'
-    ? items.push({ ico: x.source === 'sms' ? '💬' : '✉️', t: x.recuLe || x.creeLe, h: (x.source === 'sms' ? 'SMS · ' : 'Mail · ') + _nomExp(x) + (x.expediteurType === 'client' ? ' (client)' : '') + (x.urgence === 'haute' ? ' · urgent' : ''), txt: (CLASSE_LIB[x.classe] ? CLASSE_LIB[x.classe] + ' — ' : '') + (x.resume || x.objet || ''), go: 'valider', valId: x._id, col: 'phenix_entrants', id: x._id, patch: { statut: 'lu' } })
+    ? items.push({ ico: x.source === 'sms' ? '💬' : '✉️', t: x.recuLe || x.creeLe, h: (x.source === 'sms' ? 'SMS · ' : 'Mail · ') + _nomExp(x) + (x.expediteurType === 'client' ? ' (client)' : '') + (x.urgence === 'haute' ? ' · urgent' : ''), txt: (CLASSE_LIB[x.classe] ? CLASSE_LIB[x.classe] + ' — ' : '') + _txtRep(x, x.resume || x.objet || ''), go: 'valider', valId: x._id, col: 'phenix_entrants', id: x._id, patch: { statut: 'lu' } })
     : items.push({ ico: x.source === 'sms' ? '💬' : x.resultat === 'bloquant' ? '⚠️' : x.resultat === 'conforme' ? '📄' : '📬', t: x.recuLe || x.creeLe, h: (x.source === 'sms' ? 'Reçu par SMS · ' : 'Reçu par mail · ') + (x.artisanNom || x.de || 'artisan'), txt: (x.titre || 'Nouveau message') + (x.objet ? ' — « ' + x.objet + ' »' : ''), go: x.resultat === 'a_rattacher' ? 'valider' : 'annuaire', valId: x._id, col: 'phenix_entrants', id: x._id, patch: { statut: 'lu' } }));
   items.sort((a, b) => String(b.t || '').localeCompare(String(a.t || '')));
   const n = items.length;
@@ -555,7 +557,11 @@ const ECH = { all: [], f: { etat: 'traiter', canal: '', qui: '', q: '' } };
 let REP = {};
 const _cleNum = n => { const d = String(n || '').replace(/\D/g, ''); return d.length >= 9 ? d.slice(-9) : ''; };
 const _nomRep = x => (x && x.source === 'sms' && x.de) ? (REP[_cleNum(x.de)] || '') : '';
-const _nomExp = x => x.artisanNom || x.deNom || _nomRep(x) || x.de || '';
+// [Échanges] 15/11/2026 — le serveur nomme un SMS inconnu « Numéro inconnu 06… » (artisanNom / deNom) : le nom du répertoire passe AVANT,
+// sinon les contacts importés n'étaient jamais affichés. Même remplacement dans le résumé et le titre écrits par le serveur.
+const _estNomInconnu = t => /num[ée]ro inconnu|\(inconnu\)|exp[ée]diteur sms/i.test(String(t || ''));
+const _nomExp = x => { const r = _nomRep(x); if (r && (x.expediteurType === 'inconnu' || _estNomInconnu(x.artisanNom || x.deNom))) return r; return x.artisanNom || x.deNom || r || x.de || ''; };
+const _txtRep = (x, t) => { const r = _nomRep(x); return r && t ? String(t).replace(/(?:un |le )?num[ée]ro inconnu(?:\s*\+?[\d][\d\s.]{7,}\d)?/gi, r) : (t || ''); };
 const _inconnuEff = x => x.expediteurType === 'inconnu' && !_nomRep(x);
 const _jour = (d = new Date()) => { const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000); return z.toISOString().slice(0, 10); };
 const _plusJours = n => { const d = new Date(); d.setDate(d.getDate() + n); return _jour(d); };
@@ -595,7 +601,7 @@ function renderEchanges(refaireFiltres) {
   document.getElementById('echListe').innerHTML = l.length ? l.slice(0, 150).map(x =>
     '<div class="ec" tabindex="0" role="button" onclick="ouvrirValidation(\'' + _ncEsc(x._id) + '\')" onkeydown="if(event.key===\'Enter\')ouvrirValidation(\'' + _ncEsc(x._id) + '\')">' +
     '<div class="et"><span>' + (x.source === 'sms' ? '💬' : '✉️') + ' ' + _ncEsc(_nomExp(x)) + '</span><span class="es">' + (x.expediteurType === 'client' ? 'client' : _inconnuEff(x) ? '? expéditeur inconnu' : x.expediteurType === 'inconnu' ? 'contact' : 'artisan') + (x.projetNom ? ' · dossier ' + _ncEsc(x.projetNom) : '') + ' · ' + _ncEsc(_dateCourte(x.recuLe || x.creeLe)) + '</span></div>' +
-    '<div>' + (CLASSE_LIB[x.classe] ? '<b>' + _ncEsc(CLASSE_LIB[x.classe]) + '</b> — ' : '') + _ncEsc(x.resume || x.titre || x.objet || '') + '</div>' +
+    '<div>' + (CLASSE_LIB[x.classe] ? '<b>' + _ncEsc(CLASSE_LIB[x.classe]) + '</b> — ' : '') + _ncEsc(_txtRep(x, x.resume || x.titre || x.objet || '')) + '</div>' +
     '<div style="margin-top:4px">' + _echEtatTexte(x) + ((x.actions || []).length ? ' <span class="es">' + (x.actions || []).length + ' action' + (x.actions.length > 1 ? 's' : '') + ' proposée' + (x.actions.length > 1 ? 's' : '') + (x.faites && x.faites.length ? ' · ' + x.faites.length + ' faite' + (x.faites.length > 1 ? 's' : '') : '') + '</span>' : '') + '</div>' +
     '<div class="ea" onclick="event.stopPropagation()">' + (_estATraiter(x) ? '<button type="button" class="vbtn p" onclick="event.stopPropagation();echLu(\'' + _ncEsc(x._id) + '\')">✓ Lu</button>' : '') +
     (_inconnuEff(x) && x.de ? '<button type="button" class="vbtn" onclick="event.stopPropagation();echIgnorer(\'' + _ncEsc(x._id) + '\')">🚫 Ne plus notifier ' + _ncEsc(x.source === 'sms' ? 'ce numéro' : 'cette adresse') + '</button>' : '') + '</div></div>').join('')
@@ -679,6 +685,8 @@ window.ouvrirValidation = async function(id) {
       const canal = x.source === 'sms' ? 'par SMS' : 'par mail';
       corps = '<label>Texte de la réponse (modifiable) — ' + canal + '</label><textarea id="vr' + i + '" rows="5">' + _ncEsc(a.texte || '') + '</textarea><div style="font-size:12px;color:#6b7a99;margin-top:4px">Votre messagerie s’ouvre avec ce texte : vous relisez puis vous envoyez vous-même.</div>';
       bouton = '<button class="vbtn p" onclick="repondre(' + i + ')">Répondre ' + canal + '</button>';
+    } else if (a.type === 'chiffrage' && x.chiffrage && x.chiffrage.statut !== 'illisible' && x.chiffrage.statut !== 'sans_pdf') {
+      corps = _blocChiffrage(x); bouton = x.chiffrage.statut === 'valide' ? '<button class="vbtn p" onclick="ouvrirChiffrage(' + i + ')">Ouvrir Chiffrage</button>' : '';
     } else if (a.type === 'chiffrage') {
       const pcs = (x.pieces || []).map(pc => '<a href="' + _ncEsc(pc.url) + '" target="_blank" rel="noopener">' + _ncEsc(pc.nom) + '</a>').join(' · ') || '<i>aucune pièce jointe conservée : voir le mail d’origine</i>';
       corps = '<div>' + _ncEsc(a.detail || a.titre) + '</div><div style="margin-top:4px">Pièce(s) : ' + pcs + '</div><div style="font-size:12px;color:#6b7a99;margin-top:4px">Ouvrez la pièce, enregistrez-la, puis glissez-la dans « Importer un devis artisan (IA) » de Chiffrage.</div>';
@@ -694,7 +702,8 @@ window.ouvrirValidation = async function(id) {
   document.getElementById('valBox').innerHTML =
     '<div class="vh"><div><b>' + (x.source === 'sms' ? '💬 SMS' : '✉️ Mail') + ' · ' + _ncEsc(_nomExp(x)) + (x.expediteurType === 'client' ? ' (client)' : _inconnuEff(x) ? ' (expéditeur inconnu)' : x.expediteurType === 'inconnu' ? ' (contact)' : ' (artisan)') + '</b><br><span style="font-size:12px;color:#6b7a99">' +
       _ncEsc(new Date(x.recuLe || x.creeLe).toLocaleString('fr-FR')) + (x.projetNom ? ' · dossier « ' + _ncEsc(x.projetNom) + ' »' : ' · dossier non identifié') + ' · ' + _ncEsc(CLASSE_LIB[x.classe] || 'Autre') + '</span><div style="margin-top:4px">' + _echEtatTexte(x) + '</div></div><span style="display:flex;gap:6px;flex:none">' + (_estATraiter(x) ? '<button class="vbtn p" onclick="validerTermine()" title="Rien à faire : retirer des messages à traiter">✓ Lu</button>' : '') + '<button class="vbtn" onclick="fermerValidation()" aria-label="Fermer">✕</button></span></div>' +
-    '<div class="vb"><div style="font-weight:700">Résumé</div><div>' + _ncEsc(x.resume || x.titre || '—') + (x.confiance != null && x.confiance < 0.5 ? ' <i>(lecture peu sûre : à vérifier)</i>' : '') + '</div>' +
+    '<div class="vb"><div style="font-weight:700">Résumé</div><div>' + _ncEsc(_txtRep(x, x.resume || x.titre || '—')) + (x.confiance != null && x.confiance < 0.5 ? ' <i>(lecture peu sûre : à vérifier)</i>' : '') + '</div>' +
+    (x.chiffrage && !(x.actions || []).some(a => a.type === 'chiffrage') ? '<div style="margin-top:8px">' + _blocChiffrage(x) + '</div>' : '') +
     '<div style="font-weight:700;margin-top:10px">Message reçu</div><div class="vq">' + _ncEsc((x.objet && x.objet !== x.extrait ? x.objet + '\n' : '') + (x.extrait || '')) + '</div>' +
     (acts ? '<div style="font-weight:700;margin-bottom:6px">Actions proposées <span style="font-weight:400;color:#6b7a99">(rien n’est fait sans votre clic)</span></div>' + acts : '<div style="color:#6b7a99;margin-bottom:10px">Aucune action proposée pour ce message.</div>') +
     (_inconnuEff(x) || x.probable ? await _blocInconnu(x) : '') +
@@ -748,7 +757,9 @@ function _lireVcf(txt) {
 window.importerContactsFichier = async function(inp) {
   const f = inp && inp.files && inp.files[0]; if (!f) return;
   try {
-    const noms = _lireVcf(await f.text()), n = Object.keys(noms).length;
+    const buf = new Uint8Array(await f.arrayBuffer());   // [15/11/2026] certains téléphones exportent en UTF-16
+    const txt = buf[0] === 0xFF && buf[1] === 0xFE ? new TextDecoder('utf-16le').decode(buf) : buf[0] === 0xFE && buf[1] === 0xFF ? new TextDecoder('utf-16be').decode(buf) : new TextDecoder('utf-8').decode(buf);
+    const noms = _lireVcf(txt), n = Object.keys(noms).length;
     if (!n) { toast('Aucun contact avec numéro dans ce fichier'); return; }
     await setDoc(doc(db, 'phenix_meta', 'repertoire'), { noms, maj: new Date().toISOString() }, { merge: true });
     Object.assign(REP, noms); toast('✓ ' + n + ' numéro' + (n > 1 ? 's' : '') + ' importé' + (n > 1 ? 's' : '') + ' : les SMS de ces contacts seront reconnus'); renderEchanges(false); renderNC();
@@ -797,6 +808,50 @@ window.rattacherDecennale = async function() {
 window.fermerValidation = function() { document.getElementById('valBack').classList.remove('open'); _valId = null; };
 async function _echMaj(id, patch) { try { await updateDoc(doc(db, 'phenix_entrants', id), patch); return true; } catch (e) { toast('⚠️ Enregistrement impossible : ' + (e && e.code || e)); return false; } }
 window.validerTermine = async function() { const id = _valId; if (id && await _echMaj(id, { statut: 'lu' })) fermerValidation(); };
+// [Devis mail] 15/11/2026 — devis d'artisan reçu par mail : la surveillance des mails l'a lu et PROPOSE un dossier ; Maxime choisit et valide.
+// « Ranger dans ce dossier » : phenix_chiffrage_import/{importId} reçoit valide = true + le dossier, et Chiffrage crée le lot (à son ouverture,
+// ou tout de suite s'il est déjà ouvert). Rien n'est rangé sans ce clic.
+function _blocChiffrage(x) {
+  const c = x.chiffrage || {}, pcs = (x.pieces || []).map(pc => '<a href="' + _ncEsc(pc.url) + '" target="_blank" rel="noopener">' + _ncEsc(pc.nom) + '</a>').join(' · ');
+  const mt = c.total ? ' · ' + Math.round(c.total).toLocaleString('fr-FR') + ' € HT, ' + (c.nbLignes || 0) + ' ligne(s)' : '';
+  const ent = _ncEsc(c.entreprise || x.artisanNom || x.deNom || 'l’artisan');
+  let t = '';
+  if (c.statut === 'a_lire') t = '⏳ Devis en cours de lecture : le dossier proposé apparaîtra ici au prochain passage (10 minutes au plus).';
+  else if ((c.statut === 'propose' || c.statut === 'a_choisir' || c.statut === 'range') && c.importId) {
+    const actifs = (projets || []).filter(p => p.statut !== 'cloture' && p.statut !== 'archive' && p.id);
+    const opts = '<option value="">— choisir le dossier —</option>' + actifs.map(p => '<option value="' + _ncEsc(p.id) + '"' + (String(p.id) === String(c.projetId || '') ? ' selected' : '') + '>' + _ncEsc(p.nom || p.client || p.id) + (p.client && p.nom && p.client !== p.nom ? ' · ' + _ncEsc(p.client) : '') + '</option>').join('');
+    t = '<b>📄 Devis de ' + ent + mt + '</b>' +
+      '<div style="margin-top:4px">' + (c.projetId ? 'Dossier proposé : <b>« ' + _ncEsc(c.projetNom || '') + ' »</b>' + (c.sur ? ' (reconnu sur le mail et sur le devis)' : ' (à confirmer)') : 'Aucun dossier reconnu : choisissez-le.') + '</div>' +
+      (c.raison && !(!c.projetId && /^Dossier non reconnu/.test(c.raison)) ? '<div style="margin-top:4px">⚠ ' + _ncEsc(c.raison) + '</div>' : '') +
+      '<label style="margin-top:8px">Ranger dans le chiffrage du dossier</label><select id="vchDos">' + opts + '</select>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="vbtn p" onclick="rangerDevisChiffrage()">✓ Ranger dans ce dossier</button><button class="vbtn" onclick="refuserDevisChiffrage()">Ne pas ranger</button></div>' +
+      '<div style="margin-top:6px;font-size:12px;opacity:.85">Le devis devient un nouveau lot du chiffrage (rien n’est écrasé), marqué « Reçu par mail — à vérifier » : relisez les lignes et réglez la marge.</div>';
+  }
+  else if (c.statut === 'valide') t = '✔ Rangé dans le chiffrage de « ' + _ncEsc(c.projetNom || '') + ' »' + mt + '. Le lot apparaît dans Chiffrage, marqué « Reçu par mail — à vérifier ».';
+  else if (c.statut === 'refuse') t = 'Devis non rangé (à votre demande). Il reste dans Chiffrage › « Offres reçues » si vous changez d’avis.';
+  else if (c.statut === 'pas_un_devis') t = 'ℹ La pièce jointe n’est pas un devis (lu par l’IA) : rien n’a été proposé pour le chiffrage.';
+  else if (c.statut === 'illisible') t = '⚠ Le PDF n’a pas pu être lu : glissez-le dans « Importer un devis artisan (IA) » de Chiffrage.';
+  return '<div style="font-size:13px">' + t + '</div>' + (pcs ? '<div style="margin-top:4px;font-size:12.5px">Pièce(s) : ' + pcs + '</div>' : '');
+}
+window.rangerDevisChiffrage = async function() {
+  const x = _echTrouve(_valId), c = x && x.chiffrage; if (!c || !c.importId) return;
+  const pid = (document.getElementById('vchDos') || {}).value;
+  if (!pid) { toast('⚠️ Choisissez le dossier'); return; }
+  const p = (projets || []).find(q => String(q.id) === String(pid)) || {}, nom = p.nom || p.client || pid;
+  try {
+    const ref = doc(db, 'phenix_chiffrage_import', c.importId), cur = await getDoc(ref);
+    if (!cur.exists()) { toast('Ce devis a déjà été traité dans Chiffrage'); }
+    else await updateDoc(ref, { projetId: pid, chantierTitre: nom, valide: true, valideLe: new Date().toISOString() });
+    await updateDoc(doc(db, 'phenix_entrants', x._id), { 'chiffrage.statut': 'valide', 'chiffrage.projetId': pid, 'chiffrage.projetNom': nom, projetId: pid, projetNom: nom, statut: 'lu', resultat: 'devis_range',
+      titre: 'Devis de ' + (c.entreprise || x.artisanNom || x.deNom || 'l’artisan') + ' rangé dans le chiffrage de ' + nom });
+    toast('✓ Devis rangé dans le chiffrage de ' + nom + ' : le lot apparaît dans Chiffrage');
+    fermerValidation();
+  } catch (e) { toast('⚠️ Rangement impossible : ' + (e && e.code || e)); }
+};
+window.refuserDevisChiffrage = async function() {
+  const x = _echTrouve(_valId); if (!x) return;
+  if (await _echMaj(x._id, { 'chiffrage.statut': 'refuse', statut: 'lu', resultat: 'devis_non_range' })) { toast('Devis non rangé'); fermerValidation(); }
+};
 window.validerRouvrir = async function() { const id = _valId; if (id && await _echMaj(id, { statut: 'nouveau' })) fermerValidation(); };
 window.validerFait = async function(i) { const id = _valId; if (id && await _echMaj(id, { faites: arrayUnion(i) })) setTimeout(() => ouvrirValidation(id), 250); };
 window.validerOuvrirDossier = function() { const x = _echTrouve(_valId); if (!x || !x.projetId) return; fermerValidation(); fermerEchanges(); shellOpenModule('dossier', document.querySelector('.shell-nav-item[data-module="dossier"]'), { source: 'phenix-shell', action: 'open-projet', id: x.projetId }); };
