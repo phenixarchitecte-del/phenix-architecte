@@ -8,6 +8,8 @@
 ══════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_chantier2.html
 ──────────────────────────────────────────────────────────────────
+ 15/11/2026 — [Travaux] Ordre « open-projet » avec onglet 'travaux' (bouton « Préciser les travaux » de la Synthèse) : ouvre l'onglet Travaux ;
+   si le dossier n'a pas encore de chantier, il est créé vide depuis la fiche du dossier (phenix_projets) pour renseigner les travaux tout de suite.
  13/11/2026 (2) — [Travaux] Nouvel onglet « Travaux » (le premier) : ce qu'il y a à faire sur ce chantier. Construction neuve (tout est à faire)
    ou rénovation / extension : on coche les postes concernés (pré-cochés d'après les lots du chiffrage) et on décrit les travaux en une phrase.
    Il s'ouvre tout seul à l'arrivée d'un chantier envoyé depuis Chiffrage tant qu'il n'est pas validé. Enregistré sur le chantier (champ perimetre).
@@ -222,6 +224,7 @@ if (!DEMO) {
     del(key, id) { return S.deleteDoc(S.doc(db, COLS[key], String(id))); },
     async delMedia(id) { const m = await S.getDoc(S.doc(db, MEDIA, id)); const n = m.exists() ? (m.data().parts || 0) : 0; for (let i = 0; i < n; i++) await S.deleteDoc(S.doc(db, MEDIA, id + '__' + i)); await S.deleteDoc(S.doc(db, MEDIA, id)); },
     async chImport(pid) { const s = await S.getDoc(S.doc(db, 'phenix_chantier_import', String(pid))); return s.exists() ? s.data() : null; },
+    async projet(pid) { const s = await S.getDoc(S.doc(db, 'phenix_projets', String(pid))); return s.exists() ? s.data() : null; },   /* [Travaux] 15/11/2026 */
     async fiche(pid) { const s = await S.getDoc(S.doc(db, 'phenix_portail', String(pid), 'etat', 'fiche')); return s.exists() ? s.data() : null; },
     async chunk(pid, i) { const s = await S.getDoc(S.doc(db, 'phenix_portail', String(pid), 'maquette', 'c' + i)); return s.exists() ? (s.data().d || '') : ''; },
     putMedia(id, du, kind) {
@@ -989,12 +992,25 @@ function creerDepuisChiffrage(pid, onglet){
   if (FB.demo || S.role === 'chantier' || SYNC.cree[pid]) return;
   SYNC.cree[pid] = 1;
   FB.chImport(pid).then(function(data){
-    if (!data || !(data.lots || []).length) { SYNC.cree[pid] = 0; toast('Aucun chantier pour ce dossier : envoyez d\'abord le chiffrage depuis Phénix Chiffrage (« Envoyer vers Chantier »).'); return; }
+    if (!data || !(data.lots || []).length) {
+      /* [Travaux] 15/11/2026 — depuis la Synthèse « Préciser les travaux » : le chantier est créé vide (fiche du dossier) pour renseigner Travaux tout de suite ;
+         les lots arriveront avec l'envoi du chiffrage. */
+      if (onglet === 'travaux' && FB.projet) return FB.projet(pid).then(function(p){
+        if (D.chantiers.some(function(x){ return String(x.projetId) === String(pid); })) return;
+        p = p || {};
+        var c = { id:uid(), nom:p.nom || p.client || ('Chantier ' + pid), client:p.client || '', projetId:String(pid), statut:'preparation', type:'Construction neuve', adresse:p.adresse || p.adresseProjet || '', debut:'', fin:'', budget:0, honoraires:0, commissions:0, notes:'Créé depuis la Synthèse (Préciser les travaux)' };
+        D.chantiers.push(c); save('chantiers', c);
+        S.cid = c.id; lk('px2.cid', String(c.id)); S.screen = 'chantier'; S.tab = 'travaux'; M3.cid = null;
+        toast('Chantier « ' + c.nom + ' » créé : précisez les travaux. Les lots arriveront avec l\'envoi du chiffrage.');
+        setMode(S.mode); boot2();
+      });
+      SYNC.cree[pid] = 0; toast('Aucun chantier pour ce dossier : envoyez d\'abord le chiffrage depuis Phénix Chiffrage (« Envoyer vers Chantier »).'); return;
+    }
     if (D.chantiers.some(function(x){ return String(x.projetId) === String(pid); })) return;
     var c = { id:uid(), nom:data.chantierNom || ('Chantier ' + pid), client:data.client || '', projetId:String(pid), statut:'preparation', type:'Construction neuve', adresse:'', debut:'', fin:'', budget:0, honoraires:0, commissions:0, notes:'Créé depuis Phénix Chiffrage le ' + new Date().toLocaleDateString('fr-FR'), autoChiffrage:true };
     D.chantiers.push(c);
     var r = appliquerChiffrage(c, data);
-    S.cid = c.id; lk('px2.cid', String(c.id)); S.screen = 'chantier'; S.tab = 'recap'; M3.cid = null; SYNC.fait[c.id] = 1;
+    S.cid = c.id; lk('px2.cid', String(c.id)); S.screen = 'chantier'; S.tab = onglet === 'travaux' ? 'travaux' : 'recap'; M3.cid = null; SYNC.fait[c.id] = 1;
     toast('Chantier « ' + c.nom + ' » créé depuis Chiffrage : ' + r.cr + ' lot' + (r.cr > 1 ? 's' : '') + '.');
     setMode(S.mode); boot2();
   }).catch(function(e){ SYNC.cree[pid] = 0; toast('Lecture du chiffrage impossible : ' + (e && e.message || e)); });
@@ -1518,7 +1534,7 @@ function ouvrirVoulu(){
   S.wantPid = null;
   var c = D.chantiers.filter(function(x){ return String(x.projetId) === w.id; })[0];
   if (!c) { creerDepuisChiffrage(w.id, w.onglet); return; }
-  S.cid = c.id; lk('px2.cid', String(c.id)); S.screen = 'chantier'; M3.cid = null; S.tab = w.onglet === 'planning' ? 'planning' : w.onglet === 'avancement' ? 'lots' : w.onglet === 'reception' ? 'reserves' : w.onglet === 'plans' ? 'plans' : 'recap'; setMode(S.mode); boot2();
+  S.cid = c.id; lk('px2.cid', String(c.id)); S.screen = 'chantier'; M3.cid = null; S.tab = w.onglet === 'planning' ? 'planning' : w.onglet === 'avancement' ? 'lots' : w.onglet === 'reception' ? 'reserves' : w.onglet === 'plans' ? 'plans' : w.onglet === 'travaux' ? 'travaux' : 'recap'; setMode(S.mode); boot2();
 }
 function cliStart(){
   if (FB.demo || S.role !== 'admin' || !FB.listenId) return;
