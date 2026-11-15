@@ -1,4 +1,6 @@
 <!DOCTYPE html>
+<!-- HISTORIQUE DES MODIFICATIONS — phenix_rentabilite.html
+ 15/11/2026 [Sécurité] App Check ajouté (prérequis avant d'activer « Appliquer » dans la console Firebase). -->
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -27,6 +29,9 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+// [Sécurité] 15/11/2026 : App Check (même clé reCAPTCHA v3 que le reste de la suite)
+import { initializeAppCheck, ReCaptchaV3Provider } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js';
+try { initializeAppCheck(app, { provider: new ReCaptchaV3Provider('6LeObWktAAAAAL9eyppDRtLp5yZTyBaF4ZNKXNIO'), isTokenAutoRefreshEnabled: true }); } catch (e) { console.warn('App Check', e); }
 const db   = getFirestore(app);
 const auth = getAuth(app);
 

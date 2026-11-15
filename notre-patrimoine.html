@@ -1,4 +1,6 @@
 <!DOCTYPE html>
+<!-- HISTORIQUE DES MODIFICATIONS — notre-patrimoine.html
+ 15/11/2026 [Sécurité] App Check ajouté ; bouton « Créer le compte » et fonction d'inscription retirés (les inscriptions sont fermées sur le projet Firebase : seul le compte de Maxime ouvre cette page). -->
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -10,12 +12,16 @@
 <script type="module">
 import{initializeApp}from'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import{getFirestore,doc,onSnapshot,setDoc}from'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-import{getAuth,signInWithEmailAndPassword,createUserWithEmailAndPassword,signOut,onAuthStateChanged}from'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-const db=getFirestore(initializeApp({apiKey:"AIzaSyCjNKNvS6p3nqE6-_Gw9I397ZtXm2FG1ew",authDomain:"phenix-architecte-9151b.firebaseapp.com",projectId:"phenix-architecte-9151b",storageBucket:"phenix-architecte-9151b.firebasestorage.app",messagingSenderId:"811231684720",appId:"1:811231684720:web:413fa324ae43c07607acb5"}));
+import{getAuth,signInWithEmailAndPassword,signOut,onAuthStateChanged}from'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import{initializeAppCheck,ReCaptchaV3Provider}from'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js';
+const _app=initializeApp({apiKey:"AIzaSyCjNKNvS6p3nqE6-_Gw9I397ZtXm2FG1ew",authDomain:"phenix-architecte-9151b.firebaseapp.com",projectId:"phenix-architecte-9151b",storageBucket:"phenix-architecte-9151b.firebasestorage.app",messagingSenderId:"811231684720",appId:"1:811231684720:web:413fa324ae43c07607acb5"});
+// [Sécurité] 15/11/2026 : App Check (même clé reCAPTCHA v3 que le reste de la suite)
+try{initializeAppCheck(_app,{provider:new ReCaptchaV3Provider('6LeObWktAAAAAL9eyppDRtLp5yZTyBaF4ZNKXNIO'),isTokenAutoRefreshEnabled:true});}catch(e){console.warn('App Check',e);}
+const db=getFirestore(_app);
 const ref=doc(db,'phenix_patrimoine','foyer');
 window._fb={save:(json)=>setDoc(ref,{json,updated:Date.now()}),listen:(cb)=>onSnapshot(ref,s=>cb(s.exists()?s.data():null))};
 const authI=getAuth();
-window._auth={login:(e,p)=>signInWithEmailAndPassword(authI,e,p),signup:(e,p)=>createUserWithEmailAndPassword(authI,e,p),logout:()=>signOut(authI),current:()=>authI.currentUser,onChange:(cb)=>onAuthStateChanged(authI,cb)};
+window._auth={login:(e,p)=>signInWithEmailAndPassword(authI,e,p),logout:()=>signOut(authI),current:()=>authI.currentUser,onChange:(cb)=>onAuthStateChanged(authI,cb)};
 onAuthStateChanged(authI,u=>{const ov=document.getElementById('patri-login');if(ov)ov.style.display=u?'none':'flex';});
 window.dispatchEvent(new Event('fbready'));
 </script>
@@ -173,7 +179,7 @@ window.dispatchEvent(new Event('fbready'));
   <input id="pl-pwd" type="password" placeholder="Mot de passe" autocomplete="current-password">
   <div class="lerr" id="pl-err"></div>
   <button class="btn go lwide" id="pl-btn">Se connecter</button>
-  <button class="btn lwide" id="pl-signup">Créer le compte</button>
+  
   <button class="loff" id="pl-offline">Continuer hors connexion (cet appareil seulement)</button>
 </div></div>
 <div class="wrap">
@@ -332,9 +338,8 @@ function renderSync(){const el=$('#syncCard');if(!el)return;const T='<div class=
   const so=$('#signout');if(so)so.addEventListener('click',()=>window._auth.logout());}
  else{el.innerHTML=T+`<p class="lead" style="margin:6px 0 12px">Connecte-toi pour synchroniser tes données entre tous tes appareils.</p>
    <div class="grid2"><input id="syEmail" placeholder="Email" style="padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:var(--cream);font-family:Mulish"><input id="syPwd" type="password" placeholder="Mot de passe" style="padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:var(--cream);font-family:Mulish"></div>
-   <div class="actions"><button class="btn go" id="syIn">Se connecter</button><button class="btn" id="syUp">Créer le compte</button></div>`;
-  $('#syIn').addEventListener('click',()=>window._auth.login($('#syEmail').value.trim(),$('#syPwd').value).catch(e=>alert('Connexion : '+(e.message||e.code))));
-  $('#syUp').addEventListener('click',()=>window._auth.signup($('#syEmail').value.trim(),$('#syPwd').value).catch(e=>alert('Création : '+(e.message||e.code))));}}
+   <div class="actions"><button class="btn go" id="syIn">Se connecter</button></div>`;
+  $('#syIn').addEventListener('click',()=>window._auth.login($('#syEmail').value.trim(),$('#syPwd').value).catch(e=>alert('Connexion : '+(e.message||e.code))));}}
 function renderStamp(){$('#stamp').textContent=state.updated?('Dernière mise à jour : '+state.updated):'';}
 function accTot(a){return(a.positions&&a.positions.length)?a.positions.reduce((s,p)=>s+(+p.amount||0),0):(+a.amount||0);}
 function totals(){const by={};let assets=0,debt=0;const add=(c,v)=>{by[c]=(by[c]||0)+v;assets+=v};
@@ -671,8 +676,7 @@ document.querySelectorAll('[data-preset]').forEach(b=>b.addEventListener('click'
 document.querySelectorAll('[data-cpreset]').forEach(b=>b.addEventListener('click',()=>{const[name,type,fl,fr]=b.dataset.cpreset.split('|');const root=state.companies.find(c=>c.parent==null);state.companies.push({id:nid++,name,type,parent:root?root.id:null,ca:0,benefice:0,valeur:0,fricLabel:fl,fricRate:+fr});renderCompanies();renderOverview();openLast('#companies');}));
 function authMsg(x){const c=(x&&x.code)||'';return (c.includes('invalid-credential')||c.includes('wrong-password')||c.includes('user-not-found'))?'E-mail ou mot de passe incorrect.':c.includes('operation-not-allowed')?'Active « E-mail/Mot de passe » dans Firebase → Authentication.':c.includes('invalid-email')?'E-mail invalide.':c.includes('too-many-requests')?'Trop de tentatives, réessaie plus tard.':c.includes('network')?'Pas de connexion internet.':('Erreur : '+(c||(x&&x.message)||''));}
 (function(){const g=id=>document.getElementById(id);
- const lb=g('pl-btn');if(lb)lb.addEventListener('click',()=>{const e=g('pl-email').value.trim(),p=g('pl-pwd').value,er=g('pl-err');if(er)er.textContent='';if(!window._auth){if(er)er.textContent='Connexion à Firebase indisponible (hors ligne ou domaine non autorisé).';return;}window._auth.login(e,p).catch(x=>{if(er)er.textContent=authMsg(x);});});
- const su=g('pl-signup');if(su)su.addEventListener('click',()=>{const e=g('pl-email').value.trim(),p=g('pl-pwd').value,er=g('pl-err');if(er)er.textContent='';if(!window._auth){if(er)er.textContent='Connexion à Firebase indisponible.';return;}window._auth.signup(e,p).catch(x=>{if(er)er.textContent=authMsg(x);});});
+ const lb=g('pl-btn');if(lb)lb.addEventListener('click',()=>{const e=g('pl-email').value.trim(),p=g('pl-pwd').value,er=g('pl-err');if(er)er.textContent='';if(!window._auth){if(er)er.textContent='Connexion à Firebase indisponible (hors ligne ou domaine non autorisé).';return;}window._auth.login(e,p).catch(x=>{if(er)er.textContent=authMsg(x);});}); 
  const off=g('pl-offline');if(off)off.addEventListener('click',()=>{const ov=g('patri-login');if(ov)ov.style.display='none';});})();
 window.addEventListener('fbready',initSync);
 (async()=>{await load();renderOverview();renderStamp();renderAccounts();renderProps();renderCompanies();renderPerso();renderPrevisions();renderGloss();renderContacts();renderSync();const bh=$('#bankHolder');if(bh)bh.value=state.bankHolder||'';if(window._auth)initSync();})();
