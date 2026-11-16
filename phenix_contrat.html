@@ -1,4 +1,8 @@
 <!DOCTYPE html>
+<!--
+  HISTORIQUE DES MODIFICATIONS
+  16/11/2026 — [PDF] Contrat (MOE / contractant général) et décompte de fin de mission : vrais PDF à la charte commune phenix_pdf.js (style du dossier de financement), paraphes en pied de page du contrat.
+-->
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -8,6 +12,7 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="phenix_pdf.js"></script>   <!-- [PDF] 16/11/2026 charte commune des PDF -->
 <title>Phénix-Architecture · Générateur de Contrats</title>
 
 <script type="module">
@@ -1189,53 +1194,25 @@ function renderDecompte(garderFocus){
 }
 
 function genererDecomptePDF(){
-  const { jsPDF } = window.jspdf;
+  // [PDF] 16/11/2026 — charte commune phenix_pdf.js (style du dossier de financement)
   const d = decompteCalc();
-  const doc = new jsPDF();
-  const navy=[27,45,91], accent=[74,156,199];
   const client = currentProjet ? (currentProjet.client || 'client') : 'client';
-  let y = 20;
-  doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(...navy);
-  doc.text("ÉTAT D'AVANCEMENT ET DÉCOMPTE DE FIN DE MISSION", 15, y); y += 7;
-  doc.setDrawColor(...accent); doc.line(15, y, 195, y); y += 8;
-  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(15,30,61);
-  const lignes = [
-    'Maître d\'ouvrage : ' + client,
-    'Opération : ' + ((currentProjet && currentProjet.adresse) || '—') + ((currentProjet && currentProjet.ref) ? '  (réf. ' + currentProjet.ref + ')' : ''),
-    'Contrat : ' + (contractType === 'moe' ? 'maîtrise d\'œuvre' : 'contractant général') + (contratMeta.devis && contratMeta.devis.numero ? ' · devis n° ' + contratMeta.devis.numero : ''),
-    'Établi le : ' + dateFR(new Date().toISOString().slice(0,10)),
-    'Montant des honoraires / du prix : ' + euro(d.m) + ' HT'
-  ];
-  lignes.forEach(l => { doc.text(l, 15, y); y += 5.5; });
-  y += 4;
+  const px = PhenixPDF.create({ titre: 'État d’avancement et décompte de fin de mission', sousTitre: 'Établi le ' + dateFR(new Date().toISOString().slice(0,10)) });
+  px.cadres([{ titre: 'Maître d’ouvrage', lignes: ['**' + client + '**'].concat(currentProjet && currentProjet.adresse ? [currentProjet.adresse] : []) },
+             { titre: 'Contrat', lignes: ['**' + (contractType === 'moe' ? 'Maîtrise d’œuvre' : 'Contractant général') + '**'].concat(contratMeta.devis && contratMeta.devis.numero ? ['Devis n° ' + contratMeta.devis.numero] : [], currentProjet && currentProjet.ref ? ['Réf. ' + currentProjet.ref] : [], ['Montant : ' + euro(d.m) + ' HT']) }]);
+  px.section('Avancement des prestations', 30);
   if (contractType === 'moe') {
-    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...navy);
-    doc.text('Phase', 15, y); doc.text('État', 88, y); doc.text('Avanc.', 125, y); doc.text('Honoraires', 145, y); doc.text('Dû', 177, y); y += 2; doc.line(15, y, 195, y); y += 5;
-    doc.setFont('helvetica','normal'); doc.setTextColor(15,30,61);
-    d.rows.forEach(r => {
-      const et = r.etat === 'fait' ? 'Achevée' : r.etat === 'cours' ? 'En cours' : 'Non commencée';
-      doc.text(r.ph + ' — ' + r.label.slice(0, 34), 15, y); doc.text(et, 88, y); doc.text(Math.round(r.avanc) + ' %', 125, y);
-      doc.text(euro(r.montant), 145, y); doc.text(euro(r.du), 177, y); y += 5.5;
-    });
+    px.tableau({ colonnes: [{ titre: 'Phase', x: 17, w: 66 }, { titre: 'État', x: 86, w: 30 }, { titre: 'Avancement', x: 140, align: 'right' }, { titre: 'Honoraires', x: 166, align: 'right' }, { titre: 'Dû', x: 193, align: 'right', gras: true }],
+      lignes: d.rows.map(r => [r.ph + ' — ' + r.label, r.etat === 'fait' ? 'Achevée' : r.etat === 'cours' ? 'En cours' : 'Non commencée', Math.round(r.avanc) + ' %', euro(r.montant), euro(r.du)]) });
   } else {
-    const c = avancState.cg || {};
     const lignesCg = d.rows.length ? d.rows.map(r => [r.label + ' (' + Math.round(r.avanc) + ' %)', r.du]) : [['Études / conception réalisées', d.etudes]];
     lignesCg.push(['Travaux exécutés', d.travaux], ['Fournitures / engagements non annulables', d.fournitures]);
-    lignesCg.forEach(x => { doc.text(String(x[0]).slice(0, 78), 15, y); doc.text(euro(parseFloat(x[1]) || 0), 177, y); y += 5.5; });
+    px.tableau({ colonnes: [{ titre: 'Prestation', x: 17, w: 140 }, { titre: 'Montant dû', x: 193, align: 'right', gras: true }], lignes: lignesCg.map(x => [x[0], euro(parseFloat(x[1]) || 0)]) });
   }
-  y += 3; doc.line(15, y, 195, y); y += 6;
-  const lg = (t, v, b) => { doc.setFont('helvetica', b ? 'bold' : 'normal'); doc.text(t, 15, y); doc.text(v, 195, y, { align:'right' }); y += 6; };
-  lg('Prestations réalisées', euro(d.honos));
-  lg('Frais et débours justifiés', euro(d.frais));
-  lg('Total dû pour le travail réalisé', euro(d.total), true);
-  lg('Acomptes et règlements déjà perçus', '- ' + euro(d.acomptes));
-  lg(d.solde >= 0 ? 'Solde à régler par le Maître d\'ouvrage' : 'Trop-perçu à rembourser au Maître d\'ouvrage', euro(Math.abs(d.solde)), true);
-  y += 6; doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(74,96,128);
-  const note = doc.splitTextToSize("Seul le travail effectivement réalisé à la date de l'arrêt est facturé ; les phases non commencées ne sont pas dues. Le Maître d'ouvrage dispose de " + 15 + " jours pour contester cet état par écrit, en précisant les points contestés ; à défaut, il est réputé accepté. La part non contestée est exigible immédiatement.", 180);
-  doc.text(note, 15, y);
-  doc.setFontSize(8); doc.setTextColor(139,165,192);
-  doc.text("Phénix-Architecture EURL · Maître d'œuvre · Saint-Georges-de-Mons (63780) · contact@phenixarchitecte.fr · 04 73 73 00 59", 15, 292);
-  doc.save('Decompte-fin-de-mission-' + client.replace(/\s+/g,'-') + '.pdf');
+  px.totaux([{ libelle: 'Prestations réalisées', valeur: euro(d.honos) }, { libelle: 'Frais et débours justifiés', valeur: euro(d.frais) }, { libelle: 'Total dû', valeur: euro(d.total) },
+    { libelle: 'Acomptes déjà perçus', valeur: '- ' + euro(d.acomptes) }, { libelle: d.solde >= 0 ? 'SOLDE À RÉGLER' : 'TROP-PERÇU À REMBOURSER', valeur: euro(Math.abs(d.solde)), fort: true }]);
+  px.texte("Seul le travail effectivement réalisé à la date de l'arrêt est facturé ; les phases non commencées ne sont pas dues. Le Maître d'ouvrage dispose de 15 jours pour contester cet état par écrit, en précisant les points contestés ; à défaut, il est réputé accepté. La part non contestée est exigible immédiatement.", { taille: 8.8 });
+  px.enregistrer('Decompte-fin-de-mission-' + client.replace(/\s+/g,'-') + '.pdf');
 }
 
 // ── Liste des contrats ───────────────────────────────────────
@@ -1332,69 +1309,38 @@ function genererPDF(){
   const eT = echeTexte();
   const echeTable = '<div class="keep" style="margin:4px 0 12px"><table><thead><tr><th style="width:8%">N°</th><th>Livrable remis</th><th class="r" style="width:12%">Part</th><th class="r" style="width:20%">Montant HT</th></tr></thead><tbody>' + echeRows + '</tbody></table></div>';
   const client = P.client || '';
-  const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>${escH(d.title)} — ${escH(client)}</title>
-<style>*{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
-body{font-family:'Segoe UI',Arial,sans-serif;color:#1E293B;background:#fff;font-size:12px}
-.page{max-width:800px;margin:0 auto;padding:28px 32px 40px}
-.header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:16px;border-bottom:3px solid #1E3A5F;margin-bottom:20px}
-.brand{font-size:22px;font-weight:800;color:#1E3A5F}.brand span{color:#3B82F6}
-.brand-sub{font-size:9.5px;color:#64748B;letter-spacing:.12em;text-transform:uppercase;margin-top:2px}
-.brand-contact{font-size:10px;color:#64748B;margin-top:6px;line-height:1.7}
-.doc-badge{background:#1E3A5F;color:#fff;font-size:11px;font-weight:700;padding:4px 12px;border-radius:4px;display:inline-block;margin-bottom:6px}
-.doc-ref{font-size:10.5px;color:#64748B;line-height:1.8;text-align:right}
-.parties{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:22px;background:#F8FAFC;border-radius:8px;padding:14px}
-.plabel{font-size:9px;font-weight:700;color:#94A3B8;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
-.pname{font-size:13px;font-weight:700;color:#1E3A5F}.pdetail{font-size:10.5px;color:#475569;margin-top:2px;line-height:1.6}
-.objet{background:#EFF6FF;border-left:4px solid #3B82F6;padding:12px 14px;margin-bottom:26px;border-radius:0 6px 6px 0;display:flex;justify-content:space-between;gap:12px}
-.objet-lbl{font-size:9px;font-weight:700;color:#3B82F6;letter-spacing:.1em;text-transform:uppercase;margin-bottom:2px}
-.objet-val{font-size:13px;font-weight:600;color:#1E3A5F}.objet-det{font-size:10.5px;color:#64748B;margin-top:1px}
-.objet .mt{text-align:right;white-space:nowrap}.objet .mt .objet-val{font-size:16px}
-table{width:100%;border-collapse:collapse;margin:6px 0 4px}
-thead th{background:#1E3A5F;padding:7px 10px;color:#93C5FD;font-size:10px;font-weight:700;letter-spacing:.06em;text-align:left}
-td{padding:8px 10px;font-size:11px;border-bottom:1px solid #E2E8F0;line-height:1.5}
-tbody tr:nth-child(even) td{background:#F8FAFC}
-.r{text-align:right;white-space:nowrap}tr.tot td{font-weight:700;color:#1E3A5F;background:#EFF6FF!important}tr.mis td{font-weight:700;color:#1E3A5F;background:#E0EAF7!important;font-size:11px}
-.sec{margin-bottom:22px}.keep,.art,.artl,.fin{break-inside:avoid;page-break-inside:avoid}
-h3{font-size:12.5px;color:#1E3A5F;margin:0 0 9px;padding:7px 12px;background:#F1F5F9;border-left:3px solid #1E3A5F;border-radius:0 4px 4px 0;break-after:avoid;page-break-after:avoid}
-.art p,.artl p{font-size:11.2px;line-height:1.75;color:#334155;margin:0 0 9px;padding:0 4px;text-align:justify}
-.note{font-size:10px;color:#64748B;margin-top:4px}
-.fait{margin:0 0 14px;font-size:11.5px;color:#1E3A5F;font-weight:600}
-.sigs{display:grid;grid-template-columns:1fr 1fr;gap:24px;break-inside:avoid;page-break-inside:avoid}
-.sig{border:1.5px solid #E2E8F0;border-radius:6px;padding:12px;min-height:130px}.fin{margin-top:0}.fin .fait{margin-top:26px}
-.sig-lbl{font-size:9px;font-weight:700;color:#94A3B8;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
-.sig-name{font-size:10.5px;color:#475569}
-.footer{text-align:center;font-size:9px;color:#94A3B8;border-top:1px solid #E2E8F0;padding-top:8px;margin-top:18px;line-height:1.8}
-.no-print{text-align:right;margin-bottom:14px}.no-print button{background:#1E3A5F;color:#fff;border:none;padding:8px 18px;border-radius:6px;font-size:12px;cursor:pointer}
-@media print{.no-print{display:none}@page{size:A4;margin:16mm 16mm 18mm}h3{break-after:avoid;page-break-after:avoid}p{orphans:3;widows:3}.page{padding:0;max-width:none}}
-</style></head><body><div class="page">
-<div class="no-print"><button onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF</button></div>
-<div class="header">
-  <div><div class="brand">Phénix<span>-Architecture</span></div><div class="brand-sub">Maître d'Œuvre · Contractant Général</div>
-  <div class="brand-contact">${escH(FIRM.adresse)}<br>04 73 73 00 59 · contact@phenixarchitecte.fr<br>SIRET ${escH(FIRM.siret)}</div></div>
-  <div><div class="doc-badge">${estMoe ? "CONTRAT DE MAÎTRISE D'ŒUVRE" : 'CONTRAT DE CONTRACTANT GÉNÉRAL'}</div><div class="doc-ref">${P.ref ? 'Projet : ' + escH(P.ref) + '<br>' : ''}${dv && dv.numero ? 'Devis signé : n° ' + escH(dv.numero) + (dv.date ? ' du ' + dateFR(dv.date) : '') + '<br>' : ''}Date : ${escH(d.date || '—')}</div></div>
-</div>
-<div class="parties">
-  <div><div class="plabel">Maître d'ouvrage</div><div class="pname">${escH(client || '—')}</div><div class="pdetail">${escH(P.adresse || '')}${P.email ? '<br>' + escH(P.email) : ''}${P.tel ? ' · ' + escH(P.tel) : ''}</div></div>
-  <div><div class="plabel">${estMoe ? "Maître d'œuvre" : "Maître d'œuvre · contractant général"}</div><div class="pname">${escH(FIRM.nom)}</div><div class="pdetail">${escH(FIRM.representant)}<br>${escH(FIRM.adresse)}</div></div>
-</div>
-<div class="objet"><div><div class="objet-lbl">Opération</div><div class="objet-val">${escH(P.nom || client || '')}</div><div class="objet-det">${escH(P.adresse || 'Adresse à préciser')}${P.surface ? ' · ' + escH(P.surface) + ' m²' : ''}${nature ? ' · ' + escH(nature) : ''}</div></div>
-  <div class="mt"><div class="objet-lbl">${estMoe ? 'Honoraires' : 'Honoraires études et coordination'}</div><div class="objet-val">${estMoe ? (montant ? euro(montant) + ' HT' : '—') : (honosAffiche() ? euro(honosAffiche()) + ' HT' : '—')}</div>${!estMoe && travauxChamp() ? '<div class="objet-lbl" style="margin-top:6px">Travaux (prévisionnel)</div><div class="objet-val">' + euro(travauxChamp()) + ' HT</div>' : ''}</div></div>
-${d.parts.map((p, pi) => { if (pi === d.parts.length - 1) return ''; const k = p.texte.indexOf(eT); const corps = (eT && k >= 0) ? para(p.texte.slice(0, k)) + echeTable + para(p.texte.slice(k + eT.length)) : para(p.texte);
-  return '<div class="sec ' + ((eT && k >= 0) ? 'artl' : 'art') + '"><h3>Article ' + p.numero + ' — ' + escH(p.titre) + '</h3>' + corps + '</div>'; }).join('')}
-${annexe}
-<div class="fin">${d.parts.length ? (p => '<div class="sec art"><h3>Article ' + p.numero + ' — ' + escH(p.titre) + '</h3>' + para(p.texte) + '</div>')(d.parts[d.parts.length - 1]) : ''}<div class="fait">Fait à ${escH(d.lieu || '—')}, le ${escH(d.date || '—')}, en deux exemplaires.</div>
-<div class="sigs">
-  <div class="sig"><div class="sig-lbl">Le Maître d'Œuvre</div><div class="sig-name">${escH(FIRM.representant)} — Phénix-Architecture</div></div>
-  <div class="sig"><div class="sig-lbl">Le Maître d'Ouvrage</div><div class="sig-name">${escH(client)}</div><div style="font-size:9.5px;color:#94A3B8;margin-top:4px">Signature précédée de « Lu et approuvé »</div></div>
-</div>
-<div class="footer">${escH(FIRM.nom)} · SIRET ${escH(FIRM.siret)} · ${escH(FIRM.adresse)}<br>contact@phenixarchitecte.fr · 04 73 73 00 59</div></div>
-</div></body></html>`;
-  const blob = new Blob([html], { type:'text/html;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener';
-  document.body.appendChild(a); a.click();
-  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1500);
-  toast('Contrat ouvert — « Imprimer / Enregistrer en PDF »');
+  // [PDF] 16/11/2026 — vrai PDF à la charte commune (phenix_pdf.js), mêmes textes que l'ancien gabarit
+  const px = PhenixPDF.create({ titre: estMoe ? 'Contrat de maîtrise d’œuvre' : 'Contrat de contractant général', sousTitre: [P.ref ? 'Projet ' + P.ref : '', dv && dv.numero ? 'devis signé n° ' + dv.numero + (dv.date ? ' du ' + dateFR(dv.date) : '') : '', 'établi le ' + (d.date || '—')].filter(Boolean).join(' · '), reference: P.ref || '', paraphes: true });
+  px.cadres([{ titre: 'Maître d’ouvrage', lignes: ['**' + (client || '—') + '**'].concat(P.adresse ? [P.adresse] : [], (P.email || P.tel) ? [[P.email, P.tel].filter(Boolean).join(' · ')] : []) },
+             { titre: estMoe ? 'Maître d’œuvre' : 'Maître d’œuvre · contractant général', lignes: ['**' + FIRM.nom + '**', FIRM.representant, FIRM.adresse] }]);
+  const cles = [{ etiquette: 'Opération', valeur: String(P.nom || client || '—').slice(0, 34), detail: [P.surface ? P.surface + ' m²' : '', nature].filter(Boolean).join(' · ') },
+    { etiquette: estMoe ? 'Honoraires' : 'Honoraires études', valeur: estMoe ? (montant ? euro(montant) + ' HT' : '—') : (honosAffiche() ? euro(honosAffiche()) + ' HT' : '—') }];
+  if (!estMoe && travauxChamp()) cles.push({ etiquette: 'Travaux (prévisionnel)', valeur: euro(travauxChamp()) + ' HT' });
+  px.cles(cles);
+  const paras = t => String(t || '').split(/\n\n+/).forEach(x => { if (x.trim()) px.texte(x.replace(/\n/g, ' ')); });
+  const echeancier = () => {
+    const lignes = []; e.missions.filter(m => m.on).forEach(m => { const b = parseFloat(m.montant) || 0;
+      lignes.push(['', m.titre.toUpperCase(), '', b ? euro(b) + ' HT' : '']);
+      m.rows.forEach((r, i) => lignes.push([String(i + 1), cap1(r.liv) || '—', (parseFloat(r.pct) || 0) + ' %', b ? euro(b * (parseFloat(r.pct) || 0) / 100) : '—']));
+      if (m.key === 'decl') lignes.push(['', SAV_DECL, '', '']); });
+    px.tableau({ colonnes: [{ titre: 'N°', x: 17 }, { titre: 'Livrable remis', x: 27, w: 112 }, { titre: 'Part', x: 160, align: 'right' }, { titre: 'Montant HT', x: 193, align: 'right', gras: true }], lignes });
+  };
+  d.parts.forEach((p, pi) => {
+    if (pi === d.parts.length - 1) return;
+    px.article('Article ' + p.numero + ' — ' + p.titre);
+    const k = eT ? p.texte.indexOf(eT) : -1;
+    if (k >= 0) { paras(p.texte.slice(0, k)); echeancier(); paras(p.texte.slice(k + eT.length)); } else paras(p.texte);
+  });
+  if (d.annexe) {
+    px.section(d.annexe.titre, 30);
+    px.tableau({ colonnes: [{ titre: 'Phase', x: 17, w: 120 }, { titre: 'Part', x: 160, align: 'right' }, { titre: 'Honoraires HT', x: 193, align: 'right', gras: true }],
+      lignes: d.annexe.rows.map(r => [r.ph + ' — ' + r.label, r.pct.toFixed(1).replace('.', ',') + ' %', euro(r.montant)]), total: ['Total', '100 %', euro(d.annexe.total)] });
+  }
+  if (d.parts.length) { const p = d.parts[d.parts.length - 1]; px.article('Article ' + p.numero + ' — ' + p.titre, 60); paras(p.texte); }
+  px.texte('**Fait à ' + (d.lieu || '—') + ', le ' + (d.date || '—') + ', en deux exemplaires.**', { suite: 50 });
+  px.signatures([{ titre: 'Le maître d’œuvre', qualite: FIRM.representant + ' — Phénix-Architecture' }, { titre: 'Le maître d’ouvrage', qualite: client }]);
+  px.enregistrer(((estMoe ? 'Contrat_MOE_' : 'Contrat_CG_') + (client || P.nom || 'client')).replace(/[^\wÀ-ÿ\-]+/g, '_') + '.pdf');
+  toast('📄 Contrat enregistré en PDF');
 }
 
 function genererWord(){

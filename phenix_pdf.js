@@ -51,8 +51,10 @@
     var jsPDF = global.jspdf.jsPDF;
     this.doc = new jsPDF({ unit: 'mm', format: 'a4' });
     // [16/11/2026] caractères hors police standard (espaces fines insécables de toLocaleString, flèches, coches) : remplacés, jamais de signes illisibles
-    var dd = this.doc, net = function (t) { return Array.isArray(t) ? t.map(net) : typeof t === 'string' ? t.replace(/[\u202f\u00a0\u2007\u2009]/g, ' ').replace(/[\u2192\u279c\u27a4]/g, '>').replace(/[\u2714\u2713]/g, 'OK').replace(/[\u2716\u2715]/g, 'X').replace(/\u2026/g, '...') : t; };
+    var dd = this.doc, net = function (t) { return Array.isArray(t) ? t.map(net) : typeof t === 'string' ? t.replace(/[\u202f\u00a0\u2007\u2009]/g, ' ').replace(/[\u2192\u279c\u27a4]/g, '>').replace(/[\u2714\u2713]/g, 'OK').replace(/[\u2716\u2715]/g, 'X').replace(/\u2026/g, '...').replace(/\u2264/g, '<=').replace(/\u2265/g, '>=').replace(/[\u2212\u2010\u2011]/g, '-').replace(/[\u2032\u2035]/g, "'").replace(/[^\u0000-\u00ff\u20ac\u201a\u0192\u201e\u2026\u2020\u2021\u02c6\u2030\u0160\u2039\u0152\u017d\u2018\u2019\u201c\u201d\u2022\u2013\u2014\u02dc\u2122\u0161\u203a\u0153\u017e\u0178]/g, '') : t; };
     ['text', 'splitTextToSize', 'getTextWidth'].forEach(function (f) { var o = dd[f].bind(dd); dd[f] = function (t) { var a = [].slice.call(arguments); a[0] = net(t); return o.apply(null, a); }; });
+    // la table de largeurs de jsPDF sous-estime Œ / œ : mesurés comme W (même largeur Helvetica) (sinon le mot suivant se colle)
+    (function () { var gw = dd.getTextWidth; dd.getTextWidth = function (t) { return gw(typeof t === 'string' ? t.replace(/[\u0152\u0153]/g, 'W') : t); }; })();
     this.titre = opts.titre || '';
     this.sousTitre = opts.sousTitre || '';
     this.reference = opts.reference || '';      // affichée dans le pied de page de chaque page
