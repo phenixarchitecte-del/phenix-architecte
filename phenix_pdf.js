@@ -219,6 +219,7 @@
       this._sans(false, 9);
       cols.forEach(function (c, k) {
         var txt = String(cellules[k] == null ? '' : cellules[k]);
+        self._sans(!!c.gras, 9);   // [16/11/2026] mesure dans la graisse affichée (sinon le gras déborde sur la colonne voisine)
         var l = c.w ? d.splitTextToSize(txt, c.w) : [txt];
         mises.push(l); if (l.length > hauteurs) hauteurs = l.length;
       });
@@ -558,6 +559,206 @@
     this.y = y0 + h + 6; d.setTextColor.apply(d, COULEURS.encre);
   };
 
+  /* ═══ [16/11/2026] Texte saisi, images, plans annotés, cartes, planning (comptes rendus, réserves, Chantier, Dossier) ═══ */
+
+  function rgb(c, defaut) {
+    if (Array.isArray(c)) return c;
+    var m = /^#?([0-9a-f]{6})$/i.exec(String(c || '').trim()) || /^#?([0-9a-f]{3})$/i.exec(String(c || '').trim());
+    if (!m) return defaut || COULEURS.accent;
+    var h = m[1].length === 3 ? m[1].replace(/(.)/g, '$1$1') : m[1];
+    return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+  }
+  function formatImg(src) { return /^data:image\/png/i.test(src) ? 'PNG' : 'JPEG'; }
+
+  /* Texte saisi par l'utilisateur (retours à la ligne conservés ; lignes « - » ou « • » en puces). */
+  P.texteLibre = function (texte, opts) {
+    opts = opts || {};
+    var t = String(texte == null ? '' : texte).replace(/\r/g, '').replace(/\*\*/g, '');
+    if (!t.trim()) { this.texte(opts.vide || 'Néant', { taille: opts.taille }); return; }
+    var self = this, puces = [];
+    function viderPuces() { if (puces.length) { self.puces(puces, { taille: opts.taille }); puces = []; } }
+    t.split('\n').forEach(function (l) {
+      var s = l.trim();
+      if (!s) { viderPuces(); self.y += 1.2; return; }
+      var m = /^[-•*–]\s+(.*)$/.exec(s);
+      if (m) puces.push(m[1]); else { viderPuces(); self.texte(s, { taille: opts.taille, apres: 0.8 }); }
+    });
+    viderPuces();
+    this.y += 1.5;
+  };
+
+  P._dimImage = function (src) { try { var p = this.doc.getImageProperties(src); return { w: p.width, h: p.height }; } catch (e) { return null; } };
+
+  /* Grande image (plan, page de plan) ajustée à la largeur, avec pastilles numérotées optionnelles :
+     opts = { titre, hMax, pastilles:[{x:%, y:%, couleur, n}] } — la pastille porte un NUMÉRO (lisible sans la couleur). */
+  P.image = function (src, opts) {
+    opts = opts || {};
+    var dim = src && this._dimImage(src), d = this.doc;
+    if (!dim) return false;
+    var wMax = opts.w || (PAGE.w - 2 * PAGE.marge), hMax = opts.hMax || (PAGE.bas - PAGE.haut - 10 - (opts.titre ? 7 : 0));
+    var k = Math.min(wMax / dim.w, hMax / dim.h), w = dim.w * k, h = dim.h * k;
+    this.ensure(h + 4 + (opts.titre ? 7 : 0));
+    if (opts.titre) { this._sans(true, 8.5); d.setTextColor.apply(d, COULEURS.discret); d.text(String(opts.titre), PAGE.marge, this.y); this.y += 3.5; }
+    var x = PAGE.marge + (PAGE.w - 2 * PAGE.marge - w) / 2, y = this.y - 1;
+    try { d.addImage(src, formatImg(src), x, y, w, h, undefined, 'FAST'); } catch (e) { return false; }
+    d.setDrawColor.apply(d, COULEURS.filet); d.setLineWidth(0.3); d.rect(x, y, w, h);
+    var self = this;
+    (opts.pastilles || []).forEach(function (a, i) {
+      var cx = x + w * (parseFloat(a.x) || 0) / 100, cy = y + h * (parseFloat(a.y) || 0) / 100;
+      d.setFillColor.apply(d, rgb(a.couleur, [192, 57, 43])); d.setDrawColor(255, 255, 255); d.setLineWidth(0.6);
+      d.circle(cx, cy, 2.7, 'FD');
+      self._sans(true, 7); d.setTextColor(255, 255, 255);
+      d.text(String(a.n || i + 1), cx, cy + 1.1, { align: 'center' });
+    });
+    d.setTextColor.apply(d, COULEURS.encre);
+    this.y = y + h + 5;
+    return true;
+  };
+
+  /* Légende des pastilles d'un plan : [{n, texte, couleur}] — numéro dans une pastille + texte. */
+  P.legende = function (items) {
+    var d = this.doc, self = this;
+    items.forEach(function (it, i) {
+      var lignes = self._lignesRiches(String(it.texte || '(sans légende)'), PAGE.w - 2 * PAGE.marge - 10, 9);
+      self.ensure(lignes.length * 4.4 + 1.5);
+      d.setFillColor.apply(d, rgb(it.couleur, [192, 57, 43])); d.circle(PAGE.marge + 2.6, self.y - 1.3, 2.3, 'F');
+      self._sans(true, 6.8); d.setTextColor(255, 255, 255); d.text(String(it.n || i + 1), PAGE.marge + 2.6, self.y - 0.25, { align: 'center' });
+      lignes.forEach(function (l) { d.setTextColor.apply(d, COULEURS.encre); self._ligneRiche(l, PAGE.marge + 8, self.y, 9); self.y += 4.4; });
+      self.y += 1;
+    });
+    this.y += 2;
+  };
+
+  /* Vignettes photos en grille : [{src, legende}] ; chaque rangée insécable ; l'image est ajustée dans sa case sans déformation. */
+  P.vignettes = function (items, opts) {
+    opts = opts || {};
+    var d = this.doc, self = this, gap = 3, W = PAGE.w - 2 * PAGE.marge;
+    var wc = opts.w || 44, hc = opts.h || 33, n = Math.max(1, Math.floor((W + gap) / (wc + gap)));
+    var liste = items.filter(function (it) { return it && (it.src || typeof it === 'string'); }).map(function (it) { return typeof it === 'string' ? { src: it } : it; });
+    for (var r = 0; r < liste.length; r += n) {
+      var rang = liste.slice(r, r + n), hl = 0;
+      rang.forEach(function (it) { if (it.legende) { self._sans(false, 7); hl = Math.max(hl, Math.min(2, d.splitTextToSize(String(it.legende), wc).length) * 3.1 + 1); } });
+      this.ensure(hc + hl + 3);
+      var y = this.y - 2;
+      rang.forEach(function (it, k) {
+        var x = PAGE.marge + k * (wc + gap), dim = self._dimImage(it.src);
+        d.setFillColor.apply(d, COULEURS.zebre); d.rect(x, y, wc, hc, 'F');
+        if (dim) {
+          var s = Math.min(wc / dim.w, hc / dim.h), w = dim.w * s, h = dim.h * s;
+          try { d.addImage(it.src, formatImg(it.src), x + (wc - w) / 2, y + (hc - h) / 2, w, h, undefined, 'FAST'); } catch (e) {}
+        }
+        d.setDrawColor.apply(d, COULEURS.filet); d.setLineWidth(0.25); d.rect(x, y, wc, hc);
+        if (it.legende) { self._sans(false, 7); d.setTextColor.apply(d, COULEURS.discret); d.text(d.splitTextToSize(String(it.legende), wc).slice(0, 2), x, y + hc + 3); }
+      });
+      this.y = y + hc + hl + 5;
+    }
+    d.setTextColor.apply(d, COULEURS.encre);
+  };
+
+  /* Carte insécable (réserve, intervenant, compte rendu…) :
+     { titre, droite (statut en toutes lettres), lignes:['texte **gras**'], texte (saisi), photos:[src], repere:couleur } */
+  P.carte = function (c) {
+    var d = this.doc, self = this, x = PAGE.marge, W = PAGE.w - 2 * PAGE.marge, pad = 3.5, wi = W - 2 * pad - 2;
+    this._sans(true, 7.8); var wDroite = c.droite ? d.getTextWidth(String(c.droite)) + 6 : 0;
+    var titre = this._lignesRiches('**' + String(c.titre || '').replace(/\*\*/g, '') + '**', wi - wDroite, 10);
+    var lignes = (c.lignes || []).filter(Boolean).map(function (l) { return self._lignesRiches(l, wi, 8.6); });
+    var texte = c.texte ? String(c.texte).replace(/\r/g, '').split('\n').map(function (l) { return self._lignesRiches(l.replace(/\*\*/g, ''), wi, 9); }) : [];
+    var photos = (c.photos || []).filter(Boolean).slice(0, 4), hp = photos.length ? 26 : 0;
+    var h = pad + titre.length * 4.8 + lignes.reduce(function (s, l) { return s + l.length * 4; }, 0) + (texte.length ? 1.5 + texte.reduce(function (s, l) { return s + Math.max(1, l.length) * 4.3; }, 0) : 0) + (hp ? hp + 2 : 0) + pad - 1;
+    if (h > PAGE.bas - PAGE.haut - 4) {   // trop longue pour une page : sans cadre, coupée entre deux lignes
+      this.texte('**' + String(c.titre || '') + '**' + (c.droite ? ' — ' + c.droite : ''));
+      (c.lignes || []).forEach(function (l) { if (l) self.texte(l, { taille: 8.6, apres: 0.4 }); });
+      if (c.texte) this.texteLibre(c.texte, { taille: 9 });
+      if (photos.length) this.vignettes(photos.map(function (p) { return { src: p }; }), { w: 34, h: 25 });
+      return;
+    }
+    this.ensure(h + 3);
+    var y0 = this.y - 4;
+    d.setFillColor(255, 255, 255); d.setDrawColor.apply(d, COULEURS.filet); d.setLineWidth(0.3); d.roundedRect(x, y0, W, h, 1.5, 1.5, 'FD');
+    d.setFillColor.apply(d, rgb(c.repere, COULEURS.marine)); d.rect(x, y0, 1.6, h, 'F');
+    var y = y0 + pad + 3.2, xi = x + pad + 2;
+    if (c.droite) {
+      this._sans(true, 7.8); var wd = d.getTextWidth(String(c.droite)) + 4;
+      d.setFillColor.apply(d, COULEURS.total); d.roundedRect(x + W - pad - wd, y - 3.4, wd, 4.8, 1, 1, 'F');
+      d.setTextColor.apply(d, COULEURS.titre); d.text(String(c.droite), x + W - pad - 2, y - 0.1, { align: 'right' });
+    }
+    titre.forEach(function (l) { d.setTextColor.apply(d, COULEURS.titre); self._ligneRiche(l, xi, y, 10); y += 4.8; });
+    lignes.forEach(function (lg) { lg.forEach(function (l) { d.setTextColor.apply(d, COULEURS.discret); self._ligneRiche(l, xi, y, 8.6); y += 4; }); });
+    if (texte.length) { y += 1.5; texte.forEach(function (lg) { if (!lg.length) { y += 4.3; return; } lg.forEach(function (l) { d.setTextColor.apply(d, COULEURS.encre); self._ligneRiche(l, xi, y, 9); y += 4.3; }); }); }
+    if (hp) {
+      var yp = y - 2;
+      photos.forEach(function (src, k) {
+        var dim = self._dimImage(src), xp = xi + k * 37; if (!dim) return;
+        var s = Math.min(34 / dim.w, 25 / dim.h), w = dim.w * s, hh = dim.h * s;
+        d.setFillColor.apply(d, COULEURS.zebre); d.rect(xp, yp, 34, 25, 'F');
+        try { d.addImage(src, formatImg(src), xp + (34 - w) / 2, yp + (25 - hh) / 2, w, hh, undefined, 'FAST'); } catch (e) {}
+      });
+    }
+    this.y = y0 + h + 6;
+    d.setTextColor.apply(d, COULEURS.encre); this._sans(false, 10);
+  };
+
+  /* Bandeau marine (ex. « Prochaine réunion » + date). */
+  P.bandeau = function (etiquette, valeur) {
+    var d = this.doc; this.ensure(17);
+    var y0 = this.y - 4;
+    d.setFillColor.apply(d, COULEURS.marine); d.roundedRect(PAGE.marge, y0, PAGE.w - 2 * PAGE.marge, 13, 1.5, 1.5, 'F');
+    this._sans(true, 7.5); d.setTextColor(190, 208, 228); d.text(String(etiquette).toUpperCase(), PAGE.marge + 5, y0 + 8.2);
+    this._serif(14); d.setTextColor.apply(d, COULEURS.ciel); d.text(String(valeur), PAGE.w - PAGE.marge - 5, y0 + 8.6, { align: 'right' });
+    this.y = y0 + 19; d.setTextColor.apply(d, COULEURS.encre);
+  };
+
+  /* Planning en barres (A4 portrait) : { lignes:[{ libelle, detail, debut:'AAAA-MM-JJ', fin, couleur, texte }] , aujourdhui:true }
+     Chaque barre porte ses dates (ou texte) en clair : rien ne dépend de la couleur. En-tête des mois répété à chaque page. */
+  P.gantt = function (cfg) {
+    var d = this.doc, self = this, L = PAGE.marge, R = PAGE.w - PAGE.marge, LW = 56, X0 = L + LW, GW = R - X0, rh = 7.4;
+    function jour(s) { var t = new Date(String(s).slice(0, 10) + 'T12:00:00'); return isNaN(t) ? null : t; }
+    var lignes = (cfg.lignes || []).map(function (l) { return Object.assign({}, l, { a: jour(l.debut), b: jour(l.fin) }); }).filter(function (l) { return l.a && l.b; });
+    if (!lignes.length) return;
+    var min = new Date(Math.min.apply(null, lignes.map(function (l) { return l.a; }))), max = new Date(Math.max.apply(null, lignes.map(function (l) { return l.b; })));
+    min = new Date(min.getFullYear(), min.getMonth(), 1); max = new Date(max.getFullYear(), max.getMonth() + 1, 1);
+    var span = (max - min) / 864e5, px = function (t) { return X0 + (t - min) / 864e5 / span * GW; };
+    var MOIS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+    var auj = new Date(); auj.setHours(12, 0, 0, 0);
+    function entete() {
+      self.ensure(18);
+      d.setFillColor.apply(d, COULEURS.marine); d.rect(L, self.y - 4.6, R - L, 7.2, 'F');
+      self._sans(true, 8); d.setTextColor(255, 255, 255); d.text(cfg.titreLibelle || 'Lot / entreprise', L + 2, self.y);
+      var largMois = GW / Math.max(1, Math.round(span / 30.4));
+      for (var m = new Date(min); m < max; m = new Date(m.getFullYear(), m.getMonth() + 1, 1)) {
+        var xm = px(m); d.setDrawColor(70, 90, 120); d.setLineWidth(0.2); d.line(xm, self.y - 4.6, xm, self.y + 2.6);
+        self._sans(true, largMois < 9 ? 5.8 : 7); d.text(largMois < 9 ? MOIS[m.getMonth()].slice(0, 1).toUpperCase() : MOIS[m.getMonth()] + (m.getMonth() === 0 || +m === +min ? ' ' + String(m.getFullYear()).slice(2) : ''), xm + 0.8, self.y);
+      }
+      self.y += 5.6;
+    }
+    entete();
+    var yDebutPage = this.y - 3;
+    function traitsPage(yFin) {
+      for (var m = new Date(min); m < max; m = new Date(m.getFullYear(), m.getMonth() + 1, 1)) { d.setDrawColor.apply(d, COULEURS.filet); d.setLineWidth(0.15); d.line(px(m), yDebutPage, px(m), yFin); }
+      if (cfg.aujourdhui !== false && auj >= min && auj <= max) {
+        var xa = px(auj); d.setDrawColor(192, 57, 43); d.setLineWidth(0.35); d.setLineDashPattern([1, 0.8], 0); d.line(xa, yDebutPage, xa, yFin); d.setLineDashPattern([], 0);
+        self._sans(true, 6); d.setTextColor(192, 57, 43); d.text("Aujourd'hui", xa, yFin + 2.6, { align: 'center' });
+      }
+    }
+    lignes.forEach(function (l, i) {
+      self._sans(true, 8); var lib = d.splitTextToSize(String(l.libelle || ''), LW - 4).slice(0, 1)[0] || '';
+      if (self.y + rh > PAGE.bas - 4) { traitsPage(self.y - 3); self.nouvellePage(); entete(); yDebutPage = self.y - 3; }
+      if (i % 2 === 0) { d.setFillColor.apply(d, COULEURS.zebre); d.rect(L, self.y - 3.6, R - L, rh, 'F'); }
+      d.setTextColor.apply(d, COULEURS.encre); d.text(lib, L + 2, self.y - 0.2);
+      if (l.detail) { self._sans(false, 6.6); d.setTextColor.apply(d, COULEURS.discret); d.text(d.splitTextToSize(String(l.detail), LW - 4)[0], L + 2, self.y + 2.6); }
+      var xa = px(l.a), xb = Math.max(px(new Date(+l.b + 864e5)), xa + 1.2);
+      d.setFillColor.apply(d, rgb(l.couleur, COULEURS.accent)); d.roundedRect(xa, self.y - 2.6, xb - xa, 4.4, 0.8, 0.8, 'F');
+      var txt = l.texte != null ? String(l.texte) : (('0' + l.a.getDate()).slice(-2) + '/' + ('0' + (l.a.getMonth() + 1)).slice(-2) + ' > ' + ('0' + l.b.getDate()).slice(-2) + '/' + ('0' + (l.b.getMonth() + 1)).slice(-2));
+      self._sans(true, 6.4); var wt = d.getTextWidth(txt);
+      if (wt + 2 < xb - xa) { d.setTextColor(255, 255, 255); d.text(txt, xa + 1, self.y + 0.5); }
+      else if (xb + wt + 1.5 < R) { d.setTextColor.apply(d, COULEURS.encre); d.text(txt, xb + 1.2, self.y + 0.5); }
+      else { d.setTextColor.apply(d, COULEURS.encre); d.text(txt, xa - 1.2, self.y + 0.5, { align: 'right' }); }
+      self.y += rh;
+    });
+    traitsPage(this.y - 3);
+    this.y += 5; d.setTextColor.apply(d, COULEURS.encre); this._sans(false, 10);
+  };
+
   P.saut = function () { this.nouvellePage(); };
 
   /* Filigrane + mention « brouillon » (appelés depuis _pieds) */
@@ -607,6 +808,59 @@
     couleurs: COULEURS,
     societe: SOCIETE,
     page: PAGE,
-    create: function (opts) { return new Pdf(opts); }
+    create: function (opts) { return new Pdf(opts); },
+    /* [16/11/2026] Charge une image (data: ou URL) et la réduit en JPEG (côté max en px) : PDF légers, URL Storage lisibles.
+       Renvoie une promesse : dataURL, ou null si l'image est illisible (CORS, PDF…). */
+    charger: function (src, max) {
+      max = max || 1400;
+      return new Promise(function (ok) {
+        if (!src || /^data:application\/pdf/i.test(src)) return ok(null);
+        var img = new Image(); if (!/^data:/i.test(src)) img.crossOrigin = 'anonymous';
+        var fini = false, t = setTimeout(function () { if (!fini) { fini = true; ok(null); } }, 15000);
+        img.onload = function () {
+          if (fini) return; fini = true; clearTimeout(t);
+          try {
+            var k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight)), c = document.createElement('canvas');
+            c.width = Math.max(1, Math.round(img.naturalWidth * k)); c.height = Math.max(1, Math.round(img.naturalHeight * k));
+            var g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+            var u = c.toDataURL('image/jpeg', 0.82); c.width = c.height = 0; ok(u);
+          } catch (e) { ok(null); }
+        };
+        img.onerror = function () { if (!fini) { fini = true; clearTimeout(t); ok(null); } };
+        img.src = src;
+      });
+    },
+    /* [16/11/2026] Compte rendu (chantier, réunion) complet, partagé par Chantier et Dossier.
+       o = { titre, sousTitre, reference, cles, cadres, presents:[noms], sections:[{titre, texte, vide}], photos:[{src, legende}],
+             plans:[{ nom, pages:[src], lien, annotations:[{x,y,page,couleur,label}] }], prochaine, signatures, nomFichier } */
+    compteRendu: async function (o) {
+      var P = global.PhenixPDF, px = P.create({ titre: o.titre, sousTitre: o.sousTitre, reference: o.reference });
+      if (o.cles) px.cles(o.cles);
+      if (o.cadres) px.cadres(o.cadres);
+      if (o.presents) { px.section('Participants présents', 12); px.texte(o.presents.length ? o.presents.join(' · ') : 'Aucun participant renseigné'); }
+      (o.sections || []).forEach(function (s, i) { px.section((i + 1) + '. ' + s.titre, 16); px.texteLibre(s.texte, { vide: s.vide }); });
+      var photos = (o.photos || []).filter(function (p) { return p && p.src; });
+      if (photos.length) {
+        var srcs = await P.chargerTout(photos.map(function (p) { return p.src; }), 1000);
+        var vus = photos.map(function (p, i) { return { src: srcs[i], legende: p.legende }; }).filter(function (p) { return p.src; });
+        if (vus.length) { px.section('Photos (' + vus.length + ')', 46); px.vignettes(vus, { w: 58, h: 43 }); }
+      }
+      for (var k = 0; k < (o.plans || []).length; k++) {
+        var plan = o.plans[k], ann = plan.annotations || [], pages = await P.chargerTout(plan.pages || [], 2000);
+        px.nouvellePage(); px.section('Plan annoté : ' + (plan.nom || 'plan'), 60);
+        var aucune = true;
+        pages.forEach(function (src, pg) {
+          if (!src) return;
+          var pas = ann.map(function (a, i) { return { x: a.x, y: a.y, couleur: a.color || a.couleur, n: i + 1, page: a.page || 0 }; }).filter(function (a) { return a.page === pg; });
+          if (px.image(src, { titre: pages.length > 1 ? 'Page ' + (pg + 1) + ' / ' + pages.length : null, pastilles: pas })) aucune = false;
+        });
+        if (aucune) px.texte(plan.lien ? 'Plan consultable en ligne : ' + plan.lien : 'Plan non disponible dans le PDF.');
+        if (ann.length) { px.texte('**Légende**', { apres: 0.8 }); px.legende(ann.map(function (a, i) { return { n: i + 1, texte: (a.label || '(sans légende)') + (a.page ? ' (p. ' + (a.page + 1) + ')' : ''), couleur: a.color || a.couleur }; })); }
+      }
+      if (o.prochaine) px.bandeau('Prochaine réunion', o.prochaine);
+      if (o.signatures) px.signatures(o.signatures);
+      px.enregistrer(o.nomFichier || 'Compte_rendu.pdf');
+    },
+    chargerTout: function (liste, max) { return Promise.all((liste || []).map(function (s) { return global.PhenixPDF.charger(s, max); })); }
   };
 })(window);

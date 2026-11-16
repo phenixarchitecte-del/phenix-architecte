@@ -5,6 +5,9 @@
 ══════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_chantier.html
 ──────────────────────────────────────────────────────────────────
+ 16/11/2026 — [PDF] Toutes les sorties PDF (réserves, fiche mission, lots, planning, compte rendu, synthèse, financier) passent
+   par la charte commune phenix_pdf.js (style du dossier de financement) : vrais PDF téléchargés, photos et plans annotés inclus,
+   statuts en toutes lettres. Repérer : [PDF].
  13/11/2026 — [Chiffrage → Chantier] Les entreprises de Chiffrage deviennent de vrais intervenants (même sans fiche Annuaire), rattachés à leur lot ;
    à l'ouverture d'un chantier depuis la Synthèse 3D, les lots et entreprises manquants de la dernière synthèse sont ajoutés (sans toucher aux lots existants).
  15/10/2026 — Base : phenix_chantier_1.html (version fournie le 15/10).
@@ -2971,37 +2974,59 @@ function renderDashboardReserves() {
 }
 
 // ── Liste PDF par entreprise (à envoyer à chaque artisan) ──
-function exportReservesPDF() {
+// [PDF] 16/11/2026 — toutes les sorties PDF de Chantier passent par la charte commune phenix_pdf.js
+// (style du dossier de financement) : vrais fichiers PDF téléchargés, plus de fenêtre « Imprimer ».
+function _phxPdf(){
+  const charger = src => new Promise((ok, ko) => { const s = document.createElement('script'); s.src = src; s.onload = () => ok(); s.onerror = () => ko(new Error(src)); document.head.appendChild(s); });
+  return (window.jspdf && window.jspdf.jsPDF ? Promise.resolve() : charger('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'))
+    .then(() => window.PhenixPDF ? null : charger('phenix_pdf.js'));
+}
+async function _phxPret(){ try { await _phxPdf(); return true; } catch (e) { toast('⚠️ Bibliothèque PDF non chargée (connexion ?)'); return false; } }
+function _phxNom(s){ return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 50) || 'document'; }
+const _PHX_STAT_LOT = { chiffrage:'Chiffrage', ao:'Appel d’offres', attribue:'Attribué', en_cours:'En cours', termine:'Terminé', reserve:'Réserves' };
+const _PHX_STAT_CH = { preparation:'En préparation', actif:'En cours', pause:'En pause', reception:'Réceptionné', cloture:'Clôturé' };
+function _phxE(n){ return (!n && n !== 0) ? '—' : new Intl.NumberFormat('fr-FR', { style:'currency', currency:'EUR', maximumFractionDigits:0 }).format(n); }
+function _phxD(d){ if (!d) return '—'; try { return new Date(d).toLocaleDateString('fr-FR'); } catch (e) { return String(d); } }
+function _phxTableauLots(px, lots){
+  const now = new Date(), tHT = lots.reduce((s, l) => s + (l.ht || 0), 0), tTTC = lots.reduce((s, l) => s + (l.ht || 0) * (1 + (l.tva || 0) / 100), 0);
+  px.tableau({ colonnes: [
+      { titre:'Lot', x:17, w:44, gras:true }, { titre:'Entreprise', x:63, w:35 },
+      { titre:'HT', x:119, align:'right' }, { titre:'TTC', x:140, align:'right' }, { titre:'Av.', x:152, align:'right' },
+      { titre:'Dates', x:155, w:21 }, { titre:'Statut', x:177, w:18 } ],
+    lignes: lots.map(l => {
+      const inv = l.interv ? state.intervenants.find(i => i.id == l.interv) : null;
+      const retard = l.fin && new Date(l.fin) < now && l.statut !== 'termine';
+      return [(l.nom || '—') + (l.cat ? '\n' + l.cat : ''), inv ? inv.nom : (l.entrepriseNom || '—'), _phxE(l.ht), _phxE((l.ht || 0) * (1 + (l.tva || 0) / 100)), (l.av || 0) + ' %',
+        _phxD(l.debut) + '\n' + _phxD(l.fin) + (retard ? '\nEN RETARD' : ''), _PHX_STAT_LOT[l.statut] || l.statut || '—'];
+    }),
+    total: ['TOTAL', lots.filter(l => l.statut === 'termine').length + ' terminé(s)', _phxE(tHT), _phxE(tTTC), '', '', ''] });
+}
+
+async function exportReservesPDF() {
   const chId = document.getElementById('res-filter-ch')?.value || activeChantier;
   const ch = chId ? state.chantiers.find(c => c.id == chId) : null;
   const list = _resFiltered().filter(r => r.statut !== 'verifiee');
   if (!list.length) { toast('Aucune réserve à exporter avec ces filtres.'); return; }
+  if (!await _phxPret()) return;
+  toast('⏳ Préparation du PDF…');
   const groups = {};
   list.forEach(r => { const k = r.intervId || 0; (groups[k] = groups[k] || []).push(r); });
-  let body = '';
-  Object.keys(groups).forEach(k => {
+  const px = PhenixPDF.create({ titre: 'Liste des réserves à lever', sousTitre: (ch ? ch.nom : 'Tous les chantiers') + (ch && ch.adresse ? ' · ' + ch.adresse : '') + ' · édité le ' + new Date().toLocaleDateString('fr-FR'), reference: ch && ch.ref || '' });
+  const nbRetard = list.filter(resIsLate).length;
+  px.cles([{ etiquette:'Réserves à lever', valeur:String(list.length) }, { etiquette:'En retard', valeur:String(nbRetard), detail: nbRetard ? 'échéance dépassée' : 'aucune' }, { etiquette:'Entreprises', valeur:String(Object.keys(groups).length) }]);
+  for (const k of Object.keys(groups)) {
     const iv = state.intervenants.find(x => x.id == k);
-    body += '<h3>' + esc(iv ? esc(iv.nom) : 'Entreprise non attribuée') + (iv && iv.metier ? ' <small>· ' + esc(iv.metier) + '</small>' : '') + '</h3>' +
-      '<table><thead><tr><th>Réf.</th><th>Réserve</th><th>Lieu</th><th>Priorité</th><th>Échéance</th><th>Statut</th></tr></thead><tbody>' +
-      groups[k].sort((a, b) => String(a.echeance || '9999').localeCompare(String(b.echeance || '9999'))).map(r =>
-        '<tr><td><b>' + esc( esc(r.ref) || '') + '</b></td><td><b>' + esc(r.titre) + '</b>' + ( esc(r.description) ? '<div class="d">' + esc(r.description) + '</div>' : '') +
-        (r.photos && r.photos.length ? '<div class="ph">' + r.photos.filter(p => p.dataUrl).slice(0, 4).map(p => '<img src="' + esc(p.dataUrl) + '">').join('') + '</div>' : '') + '</td>' +
-        '<td>' + esc( esc(r.lieu) || '—') + '</td><td>' + esc((RES_PRIO[r.priorite] || RES_PRIO.normale)[0]) + '</td>' +
-        '<td>' + (r.echeance ? esc(fmtDate(r.echeance)) : '—') + (resIsLate(r) ? ' ⚠️' : '') + '</td><td>' + esc((RES_STATUTS[r.statut] || [r.statut])[0]) + '</td></tr>').join('') +
-      '</tbody></table>';
-  });
-  const html = '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Réserves</title><style>' +
-    '*{box-sizing:border-box}body{font-family:"DM Sans",Arial,sans-serif;color:#0F1E3D;margin:0;padding:24px 28px;font-size:12px}' +
-    'h1{font-size:20px;margin:0 0 2px;color:#1B2D5B}.sub{color:#4A6080;margin-bottom:16px}h3{margin:18px 0 6px;color:#1B2D5B;border-bottom:2px solid #4A9CC7;padding-bottom:3px}h3 small{color:#4A6080;font-weight:400}' +
-    'table{width:100%;border-collapse:collapse}th{background:#EEF4F9;text-align:left;padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.05em}td{padding:6px 8px;border-bottom:1px solid #E4ECF3;vertical-align:top}' +
-    '.d{color:#4A6080;margin-top:2px}.ph img{width:70px;height:70px;object-fit:cover;border-radius:4px;margin:4px 4px 0 0}' +
-    '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.np{display:none}}</style></head><body>' +
-    '<div class="np" style="text-align:right;margin-bottom:10px"><button onclick="window.print()" style="padding:8px 16px;border:0;border-radius:6px;background:#1B2D5B;color:#fff;cursor:pointer">Imprimer / PDF</button></div>' +
-    '<h1>Liste des réserves à lever</h1><div class="sub">' + esc(ch ? esc(ch.nom) : 'Tous les chantiers') + (ch && ch.adresse ? ' · ' + esc(ch.adresse) : '') + ' · édité le ' + new Date().toLocaleDateString('fr-FR') + ' · Phénix-Architecture</div>' +
-    body + '</body></html>';
-  const win = window.open('', '_blank', 'width=900,height=700');
-  if (!win) { toast('⚠️ Autorisez les fenêtres pop-up pour exporter.'); return; }
-  win.document.write(html); win.document.close();
+    px.section((iv ? iv.nom : 'Entreprise non attribuée') + (iv && iv.metier ? ' · ' + iv.metier : ''), 40);
+    const rs = groups[k].sort((a, b) => String(a.echeance || '9999').localeCompare(String(b.echeance || '9999')));
+    for (const r of rs) {
+      const photos = (await PhenixPDF.chargerTout((r.photos || []).map(p => p.dataUrl || p.storageUrl).filter(Boolean).slice(0, 4), 900)).filter(Boolean);
+      const retard = resIsLate(r);
+      px.carte({ titre: (r.ref ? r.ref + ' — ' : '') + (r.titre || 'Réserve'), droite: (RES_STATUTS[r.statut] || [r.statut])[0] + (retard ? ' · EN RETARD' : ''),
+        lignes: ['Lieu : **' + (r.lieu || '—') + '** · Priorité : **' + (RES_PRIO[r.priorite] || RES_PRIO.normale)[0] + '** · Échéance : **' + (r.echeance ? fmtDate(r.echeance) : '—') + '**'],
+        texte: r.description || '', photos, repere: retard ? '#C0392B' : null });
+    }
+  }
+  px.enregistrer('Reserves_' + _phxNom(ch ? ch.nom : 'chantiers') + '.pdf');
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -3612,21 +3637,28 @@ function copyMissionText() {
     });
 }
 
-function printMission() {
+async function printMission() {
   const m = _getActiveMission();
   if (!m) { toast('⚠️ Enregistrez d\'abord la fiche.'); return; }
-  const win = window.open('', '_blank', 'width=600,height=700');
-  win.document.write(`<!DOCTYPE html><html lang="fr"><head>
-    <meta charset="UTF-8"><title>Fiche Mission</title>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,600;9..40,700&display=swap" rel="stylesheet">
-    <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'DM Sans',sans-serif;padding:24px 28px;color:#0F1E3D;background:#fff;max-width:520px;margin:0 auto}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.np{display:none}}</style>
-  </head><body>
-    <div class="np" style="text-align:right;margin-bottom:16px">
-      <button onclick="window.print()" style="background:linear-gradient(135deg,#1B2D5B,#2A5298);color:#fff;border:none;padding:9px 18px;border-radius:8px;font-size:13px;cursor:pointer">🖨️ Imprimer / PDF</button>
-    </div>
-    ${_buildMissionHTML(m)}
-  </body></html>`);
-  win.document.close();
+  if (!await _phxPret()) return;
+  const inv = state.intervenants.find(i => i.id == m.intervId);
+  const ch  = m.chantierId ? state.chantiers.find(c => c.id == m.chantierId) : null;
+  const long = d => new Date(d).toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+  const isLate = m.fin && new Date(m.fin) < new Date() && m.statut !== 'terminee';
+  const px = PhenixPDF.create({ titre: 'Fiche mission', sousTitre: (m.libelle || 'Mission') + (ch ? ' · ' + ch.nom : '') + ' · émise le ' + new Date().toLocaleDateString('fr-FR'), reference: ch && ch.ref || '' });
+  if (m.priorite === 'urgente' || m.priorite === 'haute') px.bandeau('Priorité', m.priorite === 'urgente' ? 'URGENTE' : 'Haute priorité');
+  px.cadres([
+    { titre: 'À l’attention de', lignes: ['**' + (inv ? inv.nom : '—') + '**'].concat(inv && inv.metier ? [inv.metier] : [], inv && inv.tel ? ['Tél. ' + inv.tel] : [], inv && inv.email ? [inv.email] : []) },
+    { titre: 'Chantier', lignes: ch ? ['**' + ch.nom + '**'].concat(ch.adresse ? [ch.adresse] : [], ch.client ? ['Maître d’ouvrage : ' + ch.client] : []) : ['—'] }]);
+  px.section('Mission', 20);
+  px.texte('**' + (m.libelle || '—') + '**');
+  if (m.description) px.texteLibre(m.description);
+  px.section('Dates d’intervention', 24);
+  if (m.debut) px.cles([{ etiquette: 'Début' + (m.heure ? ' à ' + m.heure : ''), valeur: long(m.debut) }].concat(m.fin ? [{ etiquette: 'Fin prévue', valeur: long(m.fin), detail: isLate ? 'EN RETARD' : '' }] : []));
+  else px.texte('Dates à définir.');
+  if (m.montant > 0) px.totaux([{ libelle: 'Montant de la mission', valeur: fmtEur(m.montant) + ' HT', fort: true }]);
+  px.texte('Contact maître d’œuvre : **Phénix-Architecture** · 04 73 73 00 59 · contact@phenixarchitecte.fr', { taille: 8.8 });
+  px.enregistrer('Fiche_mission_' + _phxNom((inv ? inv.nom + '_' : '') + (m.libelle || '')) + '.pdf');
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -4723,136 +4755,25 @@ async function importFromCarnet() {
 }
 
 // ── Export PDF mis en page — page Lots ───────────
-function exportLotsPDF() {
+async function exportLotsPDF() {
   const filter = document.getElementById('lots-filter-ch')?.value || activeChantier;
-  const chantiersList = filter
-    ? state.chantiers.filter(c => c.id == filter)
-    : state.chantiers;
+  const chantiersList = filter ? state.chantiers.filter(c => c.id == filter) : state.chantiers;
   if (!chantiersList.length) { toast('⚠️ Aucun chantier à exporter.'); return; }
-
-  const now = new Date();
-  const today = now.toLocaleDateString('fr-FR');
-
-  function fE(n) {
-    if (!n && n !== 0) return '—';
-    return new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(n);
-  }
-  function fD(d) { if (!d) return '—'; try { return new Date(d).toLocaleDateString('fr-FR'); } catch(e){ return d; } }
-  function statLot(s){ const m={chiffrage:'Chiffrage',ao:'A.O.',attribue:'Attribué',en_cours:'En cours',termine:'Terminé',reserve:'Réserves'},
-    c={chiffrage:'#8BA5C0',ao:'#4A9CC7',attribue:'#8e44ad',en_cours:'#F5A623',termine:'#2D7A4F',reserve:'#C0392B'};
-    return '<span style="background:'+(c[s]||'#ccc')+'25;color:'+(c[s]||'#888')+';padding:1px 7px;border-radius:10px;font-size:10px;font-weight:700">'+(m[s]||s)+'</span>'; }
-  function ini(nom){ return (nom||'').split(' ').map(w=>w[0]||'').slice(0,2).join('').toUpperCase(); }
-
-  const CSS = `
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'DM Sans',sans-serif;font-size:12px;color:#0F1E3D;background:#fff;line-height:1.55}
-    .wrap{max-width:820px;margin:0 auto;padding:28px 36px}
-    .cover{background:linear-gradient(135deg,#0F1E3D,#1B2D5B,#2A5298);border-radius:12px;padding:36px;color:#fff;margin-bottom:28px}
-    .cover-brand{font-size:11px;opacity:.6;letter-spacing:.12em;text-transform:uppercase;margin-bottom:10px}
-    .cover-title{font-size:30px;font-weight:300;margin-bottom:6px}
-    .cover-date{font-size:12px;opacity:.6;margin-bottom:18px}
-    .cover-stats{display:flex;gap:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,.2);flex-wrap:wrap}
-    .cstat label{font-size:9px;opacity:.55;text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:2px}
-    .cstat span{font-size:20px;font-weight:700}
-    .ch-section{margin-bottom:26px;border:2px solid #E4ECF3;border-radius:10px;overflow:hidden;page-break-inside:avoid}
-    .ch-header{background:linear-gradient(135deg,#0F1E3D,#1B2D5B);color:#fff;padding:16px 20px}
-    .ch-header h2{font-size:17px;font-weight:600;margin-bottom:4px}
-    .ch-meta{font-size:11px;opacity:.7;display:flex;gap:10px;flex-wrap:wrap;margin-top:4px}
-    .kpi-row{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#E4ECF3}
-    .kpi{background:#F8FAFC;padding:12px 14px}
-    .kpi label{font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:#4A6080;display:block;margin-bottom:3px}
-    .kpi .val{font-size:18px;font-weight:700;color:#0F1E3D}
-    .kpi .sub{font-size:10px;color:#8BA5C0;margin-top:1px}
-    table{width:100%;border-collapse:collapse;font-size:11px}
-    th{text-align:left;font-size:9px;font-weight:700;color:#1B2D5B;padding:6px 8px;border-bottom:2px solid #4A9CC7;text-transform:uppercase;letter-spacing:.05em}
-    td{padding:7px 8px;border-bottom:1px solid #F0F4F8;vertical-align:top}
-    tr:nth-child(even) td{background:#FAFBFC}
-    .sec{padding:14px 20px 8px}
-    @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.noprint{display:none!important}}
-  `;
-
-  function buildCh(c) {
+  if (!await _phxPret()) return;
+  const allLots = state.lots.filter(l => chantiersList.some(c => c.id == l.chantierId));
+  const gHT  = allLots.reduce((s, l) => s + (l.ht || 0), 0);
+  const gTTC = allLots.reduce((s, l) => s + (l.ht || 0) * (1 + (l.tva || 0) / 100), 0);
+  const un = chantiersList.length === 1 ? chantiersList[0] : null;
+  const px = PhenixPDF.create({ titre: 'Suivi des lots', sousTitre: (un ? un.nom : chantiersList.length + ' chantiers') + ' · édité le ' + new Date().toLocaleDateString('fr-FR'), reference: un && un.ref || '' });
+  px.cles([{ etiquette:'Lots', valeur:String(allLots.length), detail: allLots.filter(l => l.statut === 'termine').length + ' terminé(s)' }, { etiquette:'Total HT', valeur:_phxE(gHT) }, { etiquette:'Total TTC', valeur:_phxE(gTTC) }]);
+  chantiersList.forEach(c => {
     const lots = sortLotsInPlace(state.lots.filter(l => l.chantierId == c.id));
-    const tHT  = lots.reduce((s,l)=>s+l.ht,0);
-    const tTTC = lots.reduce((s,l)=>s+l.ht*(1+l.tva/100),0);
-    const av   = avLots(lots);
-
-    let o = '<div class="ch-section">';
-    o += '<div class="ch-header"><h2>'+ esc(c.nom)+'</h2><div class="ch-meta">';
-    if( esc(c.client)) o += '<span>👤 '+ esc(c.client)+'</span>';
-    if( esc(c.adresse)) o += '<span>📍 '+ esc(c.adresse)+'</span>';
-    if( esc(c.ref)) o += '<span>📁 '+ esc(c.ref)+'</span>';
-    o += '</div></div>';
-
-    o += '<div class="kpi-row">';
-    o += '<div class="kpi"><label>Nombre de lots</label><div class="val">'+lots.length+'</div><div class="sub">'+lots.filter(l=>l.statut==='termine').length+' terminé(s)</div></div>';
-    o += '<div class="kpi"><label>Total HT</label><div class="val">'+fE(tHT)+'</div></div>';
-    o += '<div class="kpi"><label>Total TTC</label><div class="val">'+fE(tTTC)+'</div><div class="sub">Avancement moyen '+av+'%</div></div>';
-    o += '</div>';
-
-    if (lots.length) {
-      o += '<div class="sec"><table><thead><tr><th>Lot</th><th>Catégorie</th><th>Intervenant</th><th style="text-align:right">HT</th><th style="text-align:right">TTC</th><th>Av.</th><th>Dates</th><th>Statut</th></tr></thead><tbody>';
-      lots.forEach(l => {
-        const inv = l.interv ? state.intervenants.find(i=>i.id==l.interv) : null;
-        o += '<tr><td style="font-weight:600">'+( esc(l.nom)||'—')+'</td>';
-        o += '<td style="color:#4A6080">'+( esc(l.cat)||'—')+'</td>';
-        o += '<td>'+(inv? esc(inv.nom) :'<span style="color:#ccc">—</span>')+'</td>';
-        o += '<td style="text-align:right;font-weight:700">'+fE(l.ht)+'</td>';
-        o += '<td style="text-align:right;color:#4A6080">'+fE(l.ht*(1+l.tva/100))+'</td>';
-        o += '<td>'+(l.av||0)+'%</td>';
-        o += '<td style="font-size:10px;color:#4A6080">'+(l.debut?fD(l.debut):'—')+' → '+(l.fin?fD(l.fin):'—')+'</td>';
-        o += '<td>'+statLot( esc(l.statut))+'</td></tr>';
-      });
-      o += '<tr style="background:#F0F4F8"><td style="font-weight:700;color:#1B2D5B" colspan="3">TOTAUX</td>';
-      o += '<td style="text-align:right;font-weight:700;color:#1B2D5B">'+fE(tHT)+'</td>';
-      o += '<td style="text-align:right;font-weight:700;color:#1B2D5B">'+fE(tTTC)+'</td>';
-      o += '<td colspan="3"></td></tr>';
-      o += '</tbody></table></div>';
-    } else {
-      o += '<div class="sec" style="color:#8BA5C0;font-style:italic">Aucun lot pour ce chantier.</div>';
-    }
-    o += '</div>';
-    return o;
-  }
-
-  const allLots = state.lots.filter(l => chantiersList.some(c=>c.id==l.chantierId));
-  const gHT  = allLots.reduce((s,l)=>s+l.ht,0);
-  const gTTC = allLots.reduce((s,l)=>s+l.ht*(1+l.tva/100),0);
-
-  const body = chantiersList.map(buildCh).join('<div style="height:16px"></div>');
-
-  const fullHtml = `<!DOCTYPE html>
-<html lang="fr"><head>
-<meta charset="UTF-8">
-<title>Lots — Phénix-Architecture</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,600&display=swap" rel="stylesheet">
-<style>${CSS}</style></head><body>
-<div class="wrap">
-<div class="noprint" style="text-align:right;margin-bottom:20px">
-  <button onclick="window.print()" style="background:linear-gradient(135deg,#1B2D5B,#2A5298);color:#fff;border:none;padding:10px 22px;border-radius:8px;font-size:13px;cursor:pointer;font-family:sans-serif">🖨️ Imprimer / Enregistrer en PDF</button>
-</div>
-<div class="cover">
-  <div class="cover-brand">🏛 Phénix-Architecture · Maître d'Œuvre</div>
-  <div class="cover-title">Lots ${chantiersList.length>1?'— '+chantiersList.length+' chantiers':'— '+esc(chantiersList[0].nom)}</div>
-  <div class="cover-date">Généré le ${today}</div>
-  <div class="cover-stats">
-    <div class="cstat"><label>Lots</label><span>${allLots.length}</span></div>
-    <div class="cstat"><label>Total HT</label><span>${fE(gHT)}</span></div>
-    <div class="cstat"><label>Total TTC</label><span>${fE(gTTC)}</span></div>
-  </div>
-</div>
-${body}
-<div style="border-top:2px solid #E4ECF3;padding-top:14px;display:flex;justify-content:space-between;font-size:10px;color:#8BA5C0;margin-top:16px">
-  <div style="font-size:12px;font-weight:600;color:#1B2D5B">Phénix-Architecture · Maître d'Œuvre</div>
-  <div>Document confidentiel · ${today}</div>
-</div>
-</div></body></html>`;
-
-  const win = window.open('', '_blank', 'width=980,height=800');
-  if (!win) { toast('⚠️ Autorisez les pop-ups pour exporter.'); return; }
-  win.document.write(fullHtml);
-  win.document.close();
-  toast('📄 Export ouvert — Imprimer → Enregistrer en PDF');
+    px.section(c.nom || 'Chantier', 40);
+    const meta = [c.client ? 'Maître d’ouvrage : **' + c.client + '**' : '', c.adresse || '', c.ref ? 'Réf. ' + c.ref : ''].filter(Boolean).join(' · ');
+    px.texte((meta ? meta + ' — ' : '') + lots.length + ' lot(s), avancement moyen **' + avLots(lots) + ' %**', { taille: 8.8 });
+    if (lots.length) _phxTableauLots(px, lots); else px.texte('Aucun lot pour ce chantier.');
+  });
+  px.enregistrer('Lots_' + _phxNom(un ? un.nom : 'chantiers') + '.pdf');
 }
 
 // ── Tri numérique automatique des lots (Lot 01, Lot 02, ...) ──
@@ -5519,55 +5440,26 @@ function pgAttach(dw, minD) {
 }
 
 // ── Export PDF : page 1 = vue d'ensemble, page 2 = détail par lot ──
-function exportPlanningPDF() {
+async function exportPlanningPDF() {
   const filter = document.getElementById('planning-filter-ch')?.value || activeChantier;
   const tous = filter ? state.lots.filter(l => l.chantierId == filter) : state.lots;
   const lots = tous.filter(l => l.debut && l.fin).sort((a, b) => String(a.debut).localeCompare(String(b.debut)));
   if (!lots.length) { toast('⚠️ Aucun lot avec dates à exporter.'); return; }
+  if (!await _phxPret()) return;
   const ch = filter ? state.chantiers.find(c => c.id == filter) : null;
   const titre = ch ? ch.nom : 'Tous les chantiers';
-  const today = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
-  let minD = pgDate(lots[0].debut), maxD = pgDate(lots[0].fin);
-  lots.forEach(l => { const a = pgDate(l.debut), b = pgDate(l.fin); if (a < minD) minD = a; if (b > maxD) maxD = b; });
-  minD = pgAdd(minD, -2); maxD = pgAdd(maxD, 2);
-  const total = Math.max(pgDiff(minD, maxD), 7), LW = 210, TW = 760, dw = TW / total, rh = 22;
-  const off = iso => pgDiff(minD, pgDate(iso)) * dw;
-  let mt = '';
-  for (let cur = new Date(minD.getFullYear(), minD.getMonth(), 1); cur < maxD;) {
-    const next = new Date(cur.getFullYear(), cur.getMonth() + 1, 1), s = cur < minD ? minD : cur, e = next > maxD ? maxD : next, w = pgDiff(s, e) * dw;
-    mt += `<div style="position:absolute;left:${LW + pgDiff(minD, s) * dw}px;top:0;width:${w}px;height:16px;font-size:9px;font-weight:700;color:#0d1b3e;border-left:1px solid #dde4ee;padding-left:4px;box-sizing:border-box;overflow:hidden;white-space:nowrap">${w >= 34 ? PG_MOIS[cur.getMonth()].slice(0, 3) + ' ' + cur.getFullYear() : ''}</div>`;
-    cur = next;
-  }
-  let rows = '';
-  lots.forEach((l, i) => {
-    const top = 16 + i * rh, col = pgColor(l), lab = pgLabel(l), left = off(l.debut), w = Math.max(off(l.fin) - left, 3);
-    rows += `<div style="position:absolute;left:0;top:${top}px;width:${LW - 8}px;height:${rh}px;line-height:${rh}px;font-size:9.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(lab)}</div>` +
-      `<div style="position:absolute;top:${top + 4}px;left:${LW + left}px;width:${w}px;height:${rh - 8}px;border-radius:3px;background:${col}"></div>`;
-  });
-  const th = 16 + lots.length * rh + 6, td = pgDate(pgISO(new Date()));
-  const todayLine = (td >= minD && td <= maxD) ? `<div style="position:absolute;top:0;bottom:0;left:${LW + pgDiff(minD, td) * dw}px;width:1px;background:#c0392b"></div>` : '';
-  const head = `<div class="hd"><div class="br">Phénix<span>-Architecture</span></div><div class="mt"><b>${esc(titre)}</b>Planning de chantier — édité le ${today}</div></div>`;
-  const cards = lots.map(l => {
-    const col = pgColor(l), inv = l.interv ? state.intervenants.find(i => i.id == l.interv) : null, ent = inv ? inv.nom : (l.entrepriseNom || 'Sans entreprise'), d = pgDiff(pgDate(l.debut), pgDate(l.fin));
-    const c2 = !filter ? state.chantiers.find(c => c.id == l.chantierId) : null;
-    return `<div class="cd" style="border-left-color:${col}"><div class="ct">${esc(ent)}</div><div class="cl">${esc(l.nom)}${c2 ? ' · ' + esc(c2.nom) : ''}</div>` +
-      `<div class="cr"><span>Début</span><span>${pgLong(l.debut)}</span></div><div class="cr"><span>Fin</span><span>${pgLong(l.fin)}</span></div><div class="cr"><span>Durée</span><span>${d} jour${d > 1 ? 's' : ''}</span></div>` +
-      (l.notes ? `<div class="cn">${esc(l.notes)}</div>` : '') + '</div>';
-  }).join('');
-  const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Planning — ${esc(titre)}</title><style>
-    @page{size:A4 landscape;margin:10mm}*{box-sizing:border-box}body{font-family:'DM Sans',Arial,sans-serif;color:#0d1b3e;margin:0;padding:14px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .hd{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #2A5298;padding-bottom:8px;margin-bottom:12px}.br{font-family:Georgia,serif;font-size:22px}.br span{color:#2A5298}.mt{text-align:right;font-size:11px;color:#5b6270}.mt b{display:block;font-size:14px;color:#0d1b3e}
-    h3{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:#2A5298;margin:6px 0}.gt{position:relative;margin-top:6px}.ft{margin-top:14px;font-size:9px;color:#8a93a3}
-    .pg2{page-break-before:always}.gr{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.cd{border:1px solid #dde4ee;border-left:4px solid #2A5298;border-radius:6px;padding:8px 10px;break-inside:avoid}
-    .ct{font-weight:700;font-size:12px}.cl{font-size:10.5px;color:#5b6270;margin-bottom:6px}.cr{display:flex;justify-content:space-between;font-size:10.5px;padding:1px 0}.cn{font-size:10px;color:#5b6270;margin-top:5px;border-top:1px dashed #dde4ee;padding-top:4px}
-    .np{text-align:right;margin-bottom:8px}@media print{.np{display:none}}</style></head><body>
-    <div class="np"><button onclick="window.print()" style="padding:8px 16px;border:0;border-radius:6px;background:#1B2D5B;color:#fff;cursor:pointer">🖨️ Imprimer / PDF</button></div>
-    ${head}<h3>Vue d'ensemble</h3><div class="gt" style="height:${th}px"><div style="position:absolute;left:${LW}px;top:0;right:0;height:16px;border-bottom:1px solid #dde4ee"></div>${mt}${todayLine}${rows}</div>
-    <div class="ft">Phénix-Architecture — document généré automatiquement, à titre indicatif. Les dates peuvent évoluer selon l'avancement du chantier.</div>
-    <div class="pg2">${head}<h3>Détail des interventions</h3><div class="gr">${cards}</div></div></body></html>`;
-  const win = window.open('', '_blank', 'width=1000,height=720');
-  if (!win) { toast('⚠️ Autorisez les fenêtres pop-up pour exporter.'); return; }
-  win.document.write(html); win.document.close();
+  const info = l => {
+    const inv = l.interv ? state.intervenants.find(i => i.id == l.interv) : null, c2 = !filter ? state.chantiers.find(c => c.id == l.chantierId) : null;
+    return { ent: inv ? inv.nom : (l.entrepriseNom || 'Sans entreprise'), c2, d: pgDiff(pgDate(l.debut), pgDate(l.fin)) };
+  };
+  const px = PhenixPDF.create({ titre: 'Planning de chantier', sousTitre: titre + ' · édité le ' + new Date().toLocaleDateString('fr-FR'), reference: ch && ch.ref || '' });
+  px.section('Vue d’ensemble', 30);
+  px.gantt({ lignes: lots.map(l => { const x = info(l); return { libelle: l.nom || pgLabel(l), detail: x.ent + (x.c2 ? ' · ' + x.c2.nom : ''), debut: l.debut, fin: l.fin, couleur: pgColor(l) }; }) });
+  px.texte('Document indicatif : les dates peuvent évoluer selon l’avancement du chantier.', { taille: 8 });
+  px.section('Détail des interventions', 30);
+  px.tableau({ colonnes: [{ titre:'Entreprise', x:17, w:44, gras:true }, { titre:'Lot', x:63, w:58 }, { titre:'Début', x:123, w:24 }, { titre:'Fin', x:149, w:24 }, { titre:'Durée', x:193, align:'right' }],
+    lignes: lots.map(l => { const x = info(l); return [x.ent, (l.nom || '') + (x.c2 ? ' · ' + x.c2.nom : '') + (l.notes ? '\n' + l.notes : ''), fmtDate(l.debut), fmtDate(l.fin), x.d + ' j']; }) });
+  px.enregistrer('Planning_' + _phxNom(titre) + '.pdf');
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -6896,8 +6788,9 @@ async function exportCRPdfById(id) {
       }
     }
   }
-  printCRHtml(cr, ch);
-  toast('📄 Compte rendu ouvert — Imprimer → PDF');
+  if (!await _phxPret()) return;
+  await printCRHtml(cr, ch);   // [PDF] 16/11/2026 — vrai PDF téléchargé (charte commune)
+  toast('📄 Compte rendu téléchargé en PDF');
 }
 
 function exportCRPdf() {
@@ -6908,511 +6801,110 @@ function exportCRPdf() {
   exportCRPdfById(parseInt(id));
 }
 
-function printCRHtml(cr, ch) {
-  const presents = cr.presents || '—';
-  const dateStr = fmtDate(cr.date);
-  const prochaine = cr.prochaine ? fmtDate(cr.prochaine) : 'À définir';
-  const today = new Date().toLocaleDateString('fr-FR');
-
-  // ── Helper: build plan HTML (no nested templates) ──────────
-  function buildPlanHtml(plan) {
-    var isPdf = (plan.dataUrl && plan.dataUrl.startsWith('data:application/pdf')) ||
-                (plan.storageUrl && (plan.name||'').toLowerCase().endsWith('.pdf'));
-    // Priorité : pages rendues > URL Storage > dataUrl base64
-    var pages;
-    if (plan.renderedPages && plan.renderedPages.length) {
-      pages = plan.renderedPages;  // Pages pré-rendues (meilleur cas)
-    } else if (!isPdf) {
-      pages = [plan.storageUrl || plan.dataUrl];  // Image directe
-    } else {
-      // PDF : utiliser storageUrl si disponible (sera affiché comme image dans un nouvel onglet)
-      pages = plan.storageUrl ? ['__PDF_STORAGE__'] : null;
-    }
-    var out = '<div class="section" style="page-break-before:always">';
-    out += '<div class="section-title" style="font-size:14px">📐 Plan annoté : ' + esc(plan.name) + '</div>';
-    pages.forEach(function(pageImg, pgIdx) {
-      var pageAnnots = (plan.annotations||[]).filter(function(a){ return (a.page||0)===pgIdx; });
-      out += '<div style="position:relative;border:1px solid #C8D8E8;border-radius:8px;overflow:hidden;margin-top:8px;margin-bottom:12px">';
-      if (pages.length > 1) {
-        out += '<div style="padding:4px 10px;background:#F0F4F8;font-size:10px;color:#4A6080;font-weight:700">Page '+(pgIdx+1)+' / '+pages.length+'</div>';
-      }
-      if (pageImg === '__PDF_STORAGE__') {
-        out += '<div style="padding:20px;text-align:center;background:#F0F4F8;border-radius:6px">';
-        out += '<a href="'+plan.storageUrl+'" target="_blank" style="color:#2A5298;font-weight:600;font-size:13px">📄 Voir le plan PDF en ligne</a>';
-        out += '<div style="font-size:10px;color:#4A6080;margin-top:6px">'+plan.name+'</div></div>';
-      } else if (pageImg) {
-        out += '<img src="'+pageImg+'" style="width:100%;display:block;background:#f0f0f0">';
-      }
-      pageAnnots.forEach(function(a) {
-        var gIdx = (plan.annotations||[]).indexOf(a);
-        var top = pages.length>1 ? 'calc('+a.y+'% - 12px + 28px)' : 'calc('+a.y+'% - 12px)';
-        out += '<div style="position:absolute;left:calc('+a.x+'% - 12px);top:'+top+';width:24px;height:24px;border-radius:50%;background:'+(safeColor(a.color) || '#C0392B')+';color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3)">'+(gIdx+1)+'</div>';
-      });
-      out += '</div>';
-    });
-    if (plan.annotations && plan.annotations.length) {
-      out += '<div style="margin-top:12px;background:#F8FAFC;border:1px solid #E4ECF3;border-radius:6px;padding:12px 14px">';
-      out += '<div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#2A5298;font-weight:700;margin-bottom:8px">Légende</div>';
-      plan.annotations.forEach(function(a, aIdx) {
-        out += '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:5px">';
-        out += '<span style="width:20px;height:20px;border-radius:50%;background:'+(safeColor(a.color) || '#C0392B')+';color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">'+(aIdx+1)+'</span>';
-        out += '<span style="font-size:11px;color:#0F1E3D">'+esc( esc(a.label)||'(sans légende)')+(a.page&&a.page>0?' <em style="color:#8BA5C0">p.'+(a.page+1)+'</em>':'')+'</span>';
-        out += '</div>';
-      });
-      out += '</div>';
-    }
-    out += '</div>';
-    return out;
-  }
-
-  // ── Photos HTML ─────────────────────────────────────────────
-  function buildPhotosHtml(photos) {
-    if (!photos || !photos.length) return '';
-    var out = '<div class="section"><div class="section-title" style="font-size:14px">📷 Photos de chantier</div>';
-    out += '<div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:8px">';
-    photos.forEach(function(p, idx) {
-      out += '<div style="text-align:center">';
-      out += '<img src="'+p.dataUrl+'" style="width:180px;height:140px;object-fit:cover;border-radius:8px;border:1px solid #C8D8E8;display:block">';
-      if ( esc(p.caption)) out += '<div style="font-size:10px;color:#4A6080;margin-top:4px;max-width:180px;word-wrap:break-word">'+ esc(p.caption)+'</div>';
-      out += '</div>';
-    });
-    out += '</div></div>';
-    return out;
-  }
-
-  var photosHtml = buildPhotosHtml(cr.photos);
-  var plansHtml = '';
-  if (cr.plans && cr.plans.length) {
-    cr.plans.forEach(function(plan) { plansHtml += buildPlanHtml(plan); });
-  }
-
-  const html = `<!DOCTYPE html>
-<html lang="fr"><head>
-<meta charset="UTF-8">
-<title>${esc(cr.num)} — ${ch ? esc(ch.nom) : 'Chantier'}</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'DM Sans',sans-serif;font-size:12px;color:#0F1E3D;background:#fff;line-height:1.5}
-.page{max-width:800px;margin:0 auto;padding:32px 40px}
-.cover{min-height:200px;background:linear-gradient(135deg,#0F1E3D 0%,#1B2D5B 50%,#2A5298 100%);border-radius:10px;padding:36px;margin-bottom:28px;color:#fff}
-.cover-brand{font-family:'DM Serif Display',serif;font-size:12px;opacity:.7;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px}
-.cover-title{font-family:'DM Serif Display',serif;font-size:30px;margin-bottom:4px}
-.cover-sub{font-size:12px;opacity:.65;margin-bottom:16px}
-.cover-meta{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;padding-top:18px;border-top:1px solid rgba(255,255,255,.2)}
-.cover-meta-item label{font-size:9px;opacity:.6;text-transform:uppercase;letter-spacing:.1em;display:block}
-.cover-meta-item span{font-size:14px;font-weight:700}
-.chantier-block{background:#EEF4F9;border-left:4px solid #4A9CC7;border-radius:6px;padding:12px 16px;margin-bottom:18px;display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.chantier-block .field label{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:#4A6080;font-weight:700;display:block;margin-bottom:2px}
-.chantier-block .field span{font-size:12px;color:#0F1E3D;font-weight:500}
-.presents-block{background:#F0F8FF;border:1.5px solid #C8D8E8;border-radius:6px;padding:10px 14px;margin-bottom:18px}
-.presents-block .label{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:#4A6080;font-weight:700;margin-bottom:7px}
-.chips{display:flex;flex-wrap:wrap;gap:5px}
-.chip{background:#1B2D5B;color:#fff;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:600}
-.section{margin-bottom:18px;page-break-inside:avoid}
-.section-title{font-family:'DM Serif Display',serif;font-size:15px;color:#1B2D5B;padding-bottom:5px;border-bottom:2px solid #4A9CC7;margin-bottom:10px;display:flex;align-items:center;gap:8px}
-.section-num{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;background:#1B2D5B;color:#fff;border-radius:50%;font-size:10px;font-weight:700;flex-shrink:0}
-.section-body{background:#F8FAFC;border:1px solid #E4ECF3;border-radius:6px;padding:12px 14px;font-size:12px;line-height:1.7;color:#0F1E3D;white-space:pre-wrap;min-height:50px}
-.empty-val{color:#8BA5C0;font-style:italic}
-.next-meeting{background:#1B2D5B;color:#fff;border-radius:8px;padding:12px 18px;display:flex;align-items:center;justify-content:space-between;margin-bottom:22px}
-.footer{border-top:2px solid #E4ECF3;padding-top:14px;display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#8BA5C0}
-.signatures{display:flex;justify-content:space-between;margin:24px 0 18px}
-.sig-block{text-align:center}
-.sig-blank{border-top:1px solid #C8D8E8;margin-top:48px;padding-top:6px;width:160px;font-size:10px;color:#4A6080}
-@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.no-print{display:none!important}}
-</style></head><body>
-<div class="page">
-<div class="no-print" style="text-align:right;margin-bottom:16px">
-  <button onclick="window.print()" style="background:linear-gradient(135deg,#1B2D5B,#2A5298);color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif">🖨️ Imprimer / PDF</button>
-</div>
-<div class="cover">
-  <div class="cover-brand">🏛 Phénix-Architecture · Maître d'Œuvre</div>
-  <div class="cover-title">${esc(cr.num)} ${cr.meteo ? esc(cr.meteo.split(' ')[0]) : ''}</div>
-  <div class="cover-sub">Compte Rendu de Chantier · ${dateStr}</div>
-  <div class="cover-meta">
-    <div class="cover-meta-item"><label>Chantier</label><span>${ch ? esc(ch.nom) : '—'}</span></div>
-    <div class="cover-meta-item"><label>Rédigé par</label><span>${esc(cr.auteur) || '—'}</span></div>
-    <div class="cover-meta-item"><label>Prochaine réunion</label><span>${prochaine}</span></div>
-  </div>
-</div>
-<div class="chantier-block">
-  <div class="field"><label>Maître d'ouvrage</label><span>${ch && ch.client ? esc(ch.client) : '—'}</span></div>
-  <div class="field"><label>Référence</label><span>${ch && ch.ref ? esc(ch.ref) : '—'}</span></div>
-  <div class="field"><label>Adresse</label><span>${ch && ch.adresse ? esc(ch.adresse) : '—'}</span></div>
-  <div class="field"><label>Date</label><span>${dateStr}</span></div>
-</div>
-<div class="presents-block">
-  <div class="label">Participants présents</div>
-  <div class="chips">${presents.split(',').map(p=>p.trim()).filter(Boolean).map(p=>'<span class="chip">'+esc(p)+'</span>').join('') || '<span style="color:#8BA5C0;font-style:italic">Aucun participant</span>'}</div>
-</div>
-<div class="section">
-  <div class="section-title"><span class="section-num">1</span> Avancement des travaux</div>
-  <div class="section-body">${cr.avancement && cr.avancement.trim() ? esc(cr.avancement) : '<span class="empty-val">Néant</span>'}</div>
-</div>
-<div class="section">
-  <div class="section-title"><span class="section-num">2</span> Réserves / Points à lever</div>
-  <div class="section-body">${cr.reserves && cr.reserves.trim() ? esc(cr.reserves) : '<span class="empty-val">Néant — RAS</span>'}</div>
-</div>
-<div class="section">
-  <div class="section-title"><span class="section-num">3</span> Décisions et actions à mener</div>
-  <div class="section-body">${cr.decisions && cr.decisions.trim() ? esc(cr.decisions) : '<span class="empty-val">Néant</span>'}</div>
-</div>
-${photosHtml}
-${plansHtml}
-<div class="next-meeting">
-  <div><div style="font-size:10px;opacity:.7;text-transform:uppercase;letter-spacing:.1em">Prochaine réunion</div><div style="font-family:'DM Serif Display',serif;font-size:18px;color:#7DC6E8">${prochaine}</div></div>
-  <div style="font-size:24px;opacity:.4">📅</div>
-</div>
-<div class="signatures">
-  <div class="sig-block"><div style="font-size:10px;color:#4A6080">Le Maître d'Œuvre</div><div class="sig-blank">${esc(cr.auteur) || 'Phénix-Architecture'}</div></div>
-  <div class="sig-block"><div style="font-size:10px;color:#4A6080">Le Maître d'Ouvrage</div><div class="sig-blank">${ch && ch.client ? esc(ch.client) : '—'}</div></div>
-  <div class="sig-block"><div style="font-size:10px;color:#4A6080">Entreprise principale</div><div class="sig-blank">&nbsp;</div></div>
-</div>
-<div class="footer">
-  <div style="font-family:'DM Serif Display',serif;color:#1B2D5B;font-size:12px">Phénix-Architecture</div>
-  <div>${esc(cr.num)} · ${ch ? esc(ch.nom) : '—'} · ${dateStr}</div>
-  <div>Généré le ${today}</div>
-</div>
-</div></body></html>`;
-
-  const win = window.open('', '_blank', 'width=900,height=700');
-  win.document.write(html);
-  win.document.close();
+async function printCRHtml(cr, ch) {
+  // [PDF] 16/11/2026 — compte rendu de chantier au format de la charte commune (PhenixPDF.compteRendu)
+  const plans = (cr.plans || []).map(plan => {
+    const isPdf = (plan.dataUrl && plan.dataUrl.startsWith('data:application/pdf')) || (plan.storageUrl && (plan.name || '').toLowerCase().endsWith('.pdf'));
+    const pages = plan.renderedPages && plan.renderedPages.length ? plan.renderedPages : (!isPdf ? [plan.storageUrl || plan.dataUrl] : []);
+    return { nom: plan.name, pages, lien: isPdf ? plan.storageUrl : '', annotations: plan.annotations || [] };
+  });
+  await PhenixPDF.compteRendu({
+    titre: 'Compte rendu de chantier', sousTitre: (cr.num || '') + ' · ' + fmtDate(cr.date) + (ch ? ' · ' + ch.nom : ''), reference: ch && ch.ref || '',
+    cles: [{ etiquette:'Chantier', valeur: String(ch ? ch.nom : '—').slice(0, 30) }, { etiquette:'Rédigé par', valeur: String(cr.auteur || '—').slice(0, 30) }, { etiquette:'Météo', valeur: String(cr.meteo || '—').replace(/^\S+\s/, '').slice(0, 30) || '—' }],
+    cadres: [{ titre:'Maître d’ouvrage', lignes: ['**' + (ch && ch.client || '—') + '**'].concat(ch && ch.adresse ? [ch.adresse] : []) }, { titre:'Réunion', lignes: ['Date : **' + fmtDate(cr.date) + '**'].concat(ch && ch.ref ? ['Réf. ' + ch.ref] : []) }],
+    presents: String(cr.presents || '').split(',').map(x => x.trim()).filter(Boolean),
+    sections: [{ titre:'Avancement des travaux', texte: cr.avancement, vide:'Néant' }, { titre:'Réserves / points à lever', texte: cr.reserves, vide:'Néant — RAS' }, { titre:'Décisions et actions à mener', texte: cr.decisions, vide:'Néant' }],
+    photos: (cr.photos || []).map(p => ({ src: p.dataUrl || p.storageUrl, legende: p.caption || '' })),
+    plans,
+    prochaine: cr.prochaine ? fmtDate(cr.prochaine) : 'À définir',
+    signatures: [{ titre:'Le maître d’œuvre', qualite: cr.auteur || 'Phénix-Architecture' }, { titre:'Le maître d’ouvrage', qualite: ch && ch.client || '' }, { titre:'Entreprise principale' }],
+    nomFichier: 'CR_' + _phxNom((cr.num || '') + '_' + (ch ? ch.nom : '')) + '.pdf'
+  });
 }
 
-function exportSynthesePDF() {
-  const chantiersList = activeChantier
-    ? state.chantiers.filter(c => c.id == activeChantier)
-    : state.chantiers;
+async function exportSynthesePDF(chId) {
+  // [PDF] 16/11/2026 — synthèse au format de la charte commune ; chId optionnel (export Financier filtré)
+  const cible = chId || activeChantier;
+  const chantiersList = cible ? state.chantiers.filter(c => c.id == cible) : state.chantiers;
   if (!chantiersList.length) { toast('⚠️ Aucun chantier à exporter.'); return; }
-
-  const now   = new Date();
-  const today = now.toLocaleDateString('fr-FR');
-
-  // ── Helpers ────────────────────────────────────────────────
-  function fE(n) {
-    if (!n && n !== 0) return '—';
-    return new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(n);
-  }
-  function fD(d) { if (!d) return '—'; try { return new Date(d).toLocaleDateString('fr-FR'); } catch(e){ return d; } }
-  function pb(pct,col){ col=col||'#4A9CC7'; pct=Math.min(100,Math.max(0,pct));
-    return '<div style="height:8px;background:#E4ECF3;border-radius:4px;overflow:hidden;margin-top:4px"><div style="height:100%;border-radius:4px;background:'+col+';width:'+pct+'%"></div></div>'; }
-  function statCh(s){ const m={preparation:'En préparation',actif:'En cours',pause:'En pause',reception:'Réceptionné',cloture:'Clôturé'},
-    c={preparation:'#8BA5C0',actif:'#2D7A4F',pause:'#F5A623',reception:'#4A9CC7',cloture:'#6c3483'};
-    return '<span style="background:'+(c[s]||'#ccc')+'30;color:'+(c[s]||'#888')+';padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700">'+(m[s]||s)+'</span>'; }
-  function statLot(s){ const m={chiffrage:'Chiffrage',ao:'A.O.',attribue:'Attribué',en_cours:'En cours',termine:'Terminé',reserve:'Réserves'},
-    c={chiffrage:'#8BA5C0',ao:'#4A9CC7',attribue:'#8e44ad',en_cours:'#F5A623',termine:'#2D7A4F',reserve:'#C0392B'};
-    return '<span style="background:'+(c[s]||'#ccc')+'25;color:'+(c[s]||'#888')+';padding:1px 7px;border-radius:10px;font-size:10px;font-weight:700">'+(m[s]||s)+'</span>'; }
-  function ini(nom){ return (nom||'').split(' ').map(w=>w[0]||'').slice(0,2).join('').toUpperCase(); }
-
-  const CSS = `
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'DM Sans',sans-serif;font-size:12px;color:#0F1E3D;background:#fff;line-height:1.55}
-    .wrap{max-width:820px;margin:0 auto;padding:28px 36px}
-    .cover{background:linear-gradient(135deg,#0F1E3D,#1B2D5B,#2A5298);border-radius:12px;padding:40px;color:#fff;margin-bottom:32px}
-    .cover-brand{font-size:11px;opacity:.6;letter-spacing:.12em;text-transform:uppercase;margin-bottom:10px}
-    .cover-title{font-size:34px;font-weight:300;margin-bottom:6px}
-    .cover-date{font-size:12px;opacity:.6;margin-bottom:20px}
-    .cover-stats{display:flex;gap:20px;padding-top:18px;border-top:1px solid rgba(255,255,255,.2);flex-wrap:wrap}
-    .cstat label{font-size:9px;opacity:.55;text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:2px}
-    .cstat span{font-size:20px;font-weight:700}
-    .ch-section{margin-bottom:28px;border:2px solid #E4ECF3;border-radius:10px;overflow:hidden;page-break-inside:avoid}
-    .ch-header{background:linear-gradient(135deg,#0F1E3D,#1B2D5B);color:#fff;padding:18px 22px;display:flex;justify-content:space-between;align-items:flex-start}
-    .ch-header h2{font-size:19px;font-weight:600;margin-bottom:5px}
-    .ch-meta{font-size:11px;opacity:.7;display:flex;gap:10px;flex-wrap:wrap;margin-top:5px}
-    .ch-av{text-align:right;flex-shrink:0}
-    .ch-av .pct{font-size:30px;font-weight:700;color:#7DC6E8;line-height:1}
-    .ch-av .lbl{font-size:10px;opacity:.6;text-transform:uppercase}
-    .kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:#E4ECF3}
-    .kpi{background:#F8FAFC;padding:12px 14px}
-    .kpi label{font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:#4A6080;display:block;margin-bottom:3px}
-    .kpi .val{font-size:19px;font-weight:700;color:#0F1E3D}
-    .kpi .sub{font-size:10px;color:#8BA5C0;margin-top:1px}
-    .kpi.g .val{color:#2D7A4F} .kpi.a .val{color:#8A6020} .kpi.p .val{color:#8e44ad}
-    .info-row{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#E4ECF3}
-    .ic{background:#fff;padding:9px 13px}
-    .ic label{font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:#4A6080;display:block;margin-bottom:2px}
-    .ic span{font-size:12px;font-weight:600}
-    .sec{padding:0 22px;margin:16px 0 8px}
-    .sec h3{font-size:11px;font-weight:700;color:#1B2D5B;text-transform:uppercase;letter-spacing:.08em;border-bottom:2px solid #4A9CC7;padding-bottom:5px;display:flex;align-items:center;gap:6px}
-    table{width:100%;border-collapse:collapse;font-size:11px}
-    th{text-align:left;font-size:9px;font-weight:700;color:#1B2D5B;padding:5px 7px;border-bottom:2px solid #4A9CC7;text-transform:uppercase;letter-spacing:.05em}
-    td{padding:7px 7px;border-bottom:1px solid #F0F4F8;vertical-align:top}
-    tr:nth-child(even) td{background:#FAFBFC}
-    tfoot td{background:#F0F4F8!important;font-weight:700;color:#1B2D5B}
-    .av-row{display:flex;align-items:center;gap:10px;padding:8px 22px;background:#F8FAFC;border-bottom:1px solid #E4ECF3}
-    .irow{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #F0F4F8}
-    .irow:last-child{border-bottom:none}
-    .ava{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}
-    .cr-block{background:#F8FAFC;border-left:3px solid #4A9CC7;border-radius:0 5px 5px 0;padding:9px 12px;margin-bottom:7px}
-    .cr-block.res{border-left-color:#F5A623}
-    .nbox{background:#FFFBEB;border:1px solid #FDE68A;border-radius:5px;padding:8px 12px;font-size:11px;color:#78350F;font-style:italic;margin:8px 22px}
-    @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.noprint{display:none!important}}
-  `;
-
-  function buildCh(c, isFirst) {
-    const lots   = state.lots.filter(l => l.chantierId == c.id);
-    const facs   = state.factures.filter(f => f.chantierId == c.id);
-    const crs    = state.comptes_rendus.filter(r => r.chantierId == c.id);
-    const iIds   = [...new Set(lots.map(l=>l.interv).filter(Boolean))];
-    const intervs = state.intervenants.filter(i => iIds.includes(i.id));
-
-    const budHT  = lots.reduce((s,l)=>s+l.ht,0);
-    const budTTC = lots.reduce((s,l)=>s+l.ht*(1+l.tva/100),0);
-    const facHT  = facs.reduce((s,f)=>s+f.ht,0);
-    const payHT  = facs.filter(f=>f.statut==='payee').reduce((s,f)=>s+f.ht,0);
-    const hon    = (parseFloat(c.honoraires)||0)+(parseFloat(c.commissions)||0);
-    const av     = avLots(lots);
-    const avCol  = av<30?'#C0392B':av<70?'#F5A623':'#2D7A4F';
-
-    let o = '<div class="ch-section'+(isFirst?'':' page-break"')+'">';
-
-    // Header
-    o += '<div class="ch-header"><div><h2>'+ esc(c.nom)+'</h2>'+statCh( esc(c.statut));
-    o += '<div class="ch-meta">';
-    if( esc(c.client)) o += '<span>👤 '+ esc(c.client)+'</span>';
-    if( esc(c.adresse)) o += '<span>📍 '+ esc(c.adresse)+'</span>';
-    if( esc(c.ref)) o += '<span>📁 '+ esc(c.ref)+'</span>';
-    if(c.debut||c.fin) o += '<span>📅 '+fD(c.debut)+' → '+fD(c.fin)+'</span>';
-    o += '</div></div>';
-    o += '<div class="ch-av"><div class="pct">'+av+'%</div><div class="lbl">Avancement</div></div></div>';
-
-    // KPIs
-    o += '<div class="kpi-row">';
-    o += '<div class="kpi"><label>Budget TTC</label><div class="val">'+fE(budTTC)+'</div><div class="sub">'+lots.length+' lot(s) · '+fE(budHT)+' HT</div></div>';
-    o += '<div class="kpi a"><label>Facturé HT</label><div class="val">'+fE(facHT)+'</div><div class="sub">'+(budHT?Math.round(facHT/budHT*100):0)+'% du budget</div></div>';
-    o += '<div class="kpi g"><label>Payé HT</label><div class="val">'+fE(payHT)+'</div><div class="sub">'+facs.length+' situation(s)</div></div>';
-    o += '<div class="kpi p"><label>Honoraires MOE</label><div class="val">'+fE(hon)+'</div><div class="sub">'+(c.honoraires?fE(c.honoraires)+' hon.':'')+' '+(c.commissions?fE(c.commissions)+' com.':'')+'</div></div>';
-    o += '</div>';
-
-    // Avancement bar
-    o += '<div class="av-row"><div style="flex:1"><div style="display:flex;justify-content:space-between;font-size:10px;color:#4A6080;margin-bottom:2px"><span>Avancement global</span><span style="font-weight:700;color:'+avCol+'">'+av+'%</span></div>'+pb(av,avCol)+'</div></div>';
-
-    // Info
-    o += '<div class="info-row">';
-    o += '<div class="ic"><label>Type de travaux</label><span>'+( esc(c.type)||'—')+'</span></div>';
-    o += '<div class="ic"><label>Budget travaux HT</label><span>'+fE(c.budget||0)+'</span></div>';
-    o += '<div class="ic"><label>Reste à facturer</label><span style="color:'+(budHT-facHT<0?'#C0392B':'#2D7A4F')+'">'+fE(budHT-facHT)+'</span></div>';
-    o += '</div>';
-    if( esc(c.notes)) o += '<div class="nbox">📝 '+ esc(c.notes)+'</div>';
-
-    // LOTS
-    if(lots.length) {
-      o += '<div class="sec"><h3>📋 Lots ('+lots.length+')</h3></div>';
-      o += '<table><thead><tr><th style="padding-left:22px">Lot</th><th>Catégorie</th><th>Intervenant</th><th style="text-align:right">HT</th><th style="text-align:right">TTC</th><th>Av.</th><th>Dates</th><th>Statut</th></tr></thead><tbody>';
-      lots.forEach(l => {
-        const inv = l.interv ? state.intervenants.find(i=>i.id==l.interv) : null;
-        const isLate = l.fin && new Date(l.fin)<now && l.statut!=='termine';
-        o += '<tr><td style="padding-left:22px;font-weight:600">'+( esc(l.nom)||'—')+'</td>';
-        o += '<td style="color:#4A6080">'+( esc(l.cat)||'—')+'</td>';
-        o += '<td>'+(inv?'<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:15px;height:15px;border-radius:50%;background:'+(safeColor(inv.color) || '#4A9CC7')+';display:inline-flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;color:#fff">'+ini( esc(inv.nom))+'</span>'+ esc(inv.nom)+'</span>':'<span style="color:#ccc">—</span>')+'</td>';
-        o += '<td style="text-align:right;font-weight:700">'+fE(l.ht)+'</td>';
-        o += '<td style="text-align:right;color:#4A6080">'+fE(l.ht*(1+l.tva/100))+'</td>';
-        o += '<td><div style="display:flex;align-items:center;gap:3px"><div style="width:32px;height:5px;background:#E4ECF3;border-radius:3px;overflow:hidden"><div style="height:100%;background:'+(l.statut==='termine'?'#2D7A4F':'#4A9CC7')+';width:'+(l.av||0)+'%"></div></div><span style="font-size:10px;font-weight:700">'+(l.av||0)+'%</span></div></td>';
-        o += '<td style="font-size:10px;color:'+(isLate?'#C0392B':'#4A6080')+'">'+(l.debut?fD(l.debut):'—')+'<br>'+(l.fin?fD(l.fin):'—')+'</td>';
-        o += '<td>'+statLot( esc(l.statut))+'</td></tr>';
-      });
-      const tHT=lots.reduce((s,l)=>s+l.ht,0), tTTC=lots.reduce((s,l)=>s+l.ht*(1+l.tva/100),0);
-      o += '<tr style="background:#F0F4F8"><td style="padding-left:22px;font-weight:700;color:#1B2D5B" colspan="3">TOTAUX</td>';
-      o += '<td style="text-align:right;font-weight:700;color:#1B2D5B">'+fE(tHT)+'</td>';
-      o += '<td style="text-align:right;font-weight:700;color:#1B2D5B">'+fE(tTTC)+'</td>';
-      o += '<td colspan="3" style="font-size:10px;color:#4A6080">'+lots.filter(l=>l.statut==='termine').length+' terminé(s)</td></tr>';
-      o += '</tbody></table>';
+  if (!await _phxPret()) return;
+  toast('⏳ Préparation du PDF…');
+  const now = new Date();
+  const allLots = state.lots.filter(l => chantiersList.some(c => c.id == l.chantierId));
+  const allFacs = state.factures.filter(f => chantiersList.some(c => c.id == f.chantierId));
+  const gBudget = allLots.reduce((s, l) => s + (l.ht || 0) * (1 + (l.tva || 0) / 100), 0);
+  const gFac = allFacs.reduce((s, f) => s + (f.ht || 0), 0);
+  const gHon = chantiersList.reduce((s, c) => s + (parseFloat(c.honoraires) || 0) + (parseFloat(c.commissions) || 0), 0);
+  const gAv = Math.round(chantiersList.map(c => avLots(state.lots.filter(l => l.chantierId == c.id), true)).reduce((a, b) => a + b, 0) / chantiersList.length);
+  const un = chantiersList.length === 1 ? chantiersList[0] : null;
+  const px = PhenixPDF.create({ titre: 'Synthèse de chantier', sousTitre: (un ? un.nom : chantiersList.length + ' chantiers') + ' · document confidentiel · édité le ' + now.toLocaleDateString('fr-FR'), reference: un && un.ref || '' });
+  if (!un) px.cles([{ etiquette:'Chantiers', valeur:String(chantiersList.length) }, { etiquette:'Budget TTC', valeur:_phxE(gBudget) }, { etiquette:'Facturé HT', valeur:_phxE(gFac) }, { etiquette:'CA MOE HT', valeur:_phxE(gHon) }, { etiquette:'Avancement', valeur: gAv + ' %' }]);
+  const SIT = { a_valider:'En attente', validee:'Validée', payee:'Payée', retard:'En attente', litige:'Litige' };
+  for (let i = 0; i < chantiersList.length; i++) {
+    const c = chantiersList[i];
+    if (i > 0) px.saut();
+    const lots = sortLotsInPlace(state.lots.filter(l => l.chantierId == c.id));
+    const facs = state.factures.filter(f => f.chantierId == c.id);
+    const crs = state.comptes_rendus.filter(r => r.chantierId == c.id);
+    const intervs = state.intervenants.filter(iv => lots.some(l => l.interv == iv.id));
+    const budHT = lots.reduce((s, l) => s + (l.ht || 0), 0), budTTC = lots.reduce((s, l) => s + (l.ht || 0) * (1 + (l.tva || 0) / 100), 0);
+    const facHT = facs.reduce((s, f) => s + (f.ht || 0), 0), payHT = facs.filter(f => f.statut === 'payee').reduce((s, f) => s + (f.ht || 0), 0);
+    const hon = (parseFloat(c.honoraires) || 0) + (parseFloat(c.commissions) || 0);
+    px.section(c.nom || 'Chantier', 50);
+    px.texte(['Statut : **' + (_PHX_STAT_CH[c.statut] || c.statut || '—') + '**', c.client ? 'Maître d’ouvrage : **' + c.client + '**' : '', c.adresse || '', c.ref ? 'Réf. ' + c.ref : '', (c.debut || c.fin) ? 'Du ' + _phxD(c.debut) + ' au ' + _phxD(c.fin) : ''].filter(Boolean).join(' · '), { taille: 8.8 });
+    px.cles([{ etiquette:'Budget TTC', valeur:_phxE(budTTC), detail: lots.length + ' lot(s) · ' + _phxE(budHT) + ' HT' }, { etiquette:'Facturé HT', valeur:_phxE(facHT), detail: (budHT ? Math.round(facHT / budHT * 100) : 0) + ' % du budget' },
+             { etiquette:'Payé HT', valeur:_phxE(payHT), detail: facs.length + ' situation(s)' }, { etiquette:'Honoraires MOE', valeur:_phxE(hon) }]);
+    px.texte('Avancement global : **' + avLots(lots) + ' %** · Type de travaux : **' + (c.type || '—') + '** · Budget travaux HT : **' + _phxE(c.budget || 0) + '** · Reste à facturer : **' + _phxE(budHT - facHT) + '**' + (budHT - facHT < 0 ? ' (DÉPASSEMENT)' : ''), { taille: 8.8 });
+    if (c.notes) px.texteLibre(c.notes, { taille: 8.8 });
+    if (lots.length) { px.section('Lots (' + lots.length + ')', 30); _phxTableauLots(px, lots); }
+    if (intervs.length) {
+      px.section('Intervenants (' + intervs.length + ')', 30);
+      px.tableau({ colonnes: [{ titre:'Entreprise', x:17, w:44, gras:true }, { titre:'Contact', x:63, w:52 }, { titre:'Décennale', x:117, w:40 }, { titre:'Lots', x:170, align:'right' }, { titre:'TTC', x:193, align:'right' }],
+        lignes: intervs.map(iv => {
+          const iLots = lots.filter(l => l.interv == iv.id), ok = iv.assuranceDate && new Date(iv.assuranceDate) > now;
+          return [iv.nom + (iv.metier ? '\n' + iv.metier : ''), [iv.tel, iv.email, iv.siret ? 'SIRET ' + iv.siret : ''].filter(Boolean).join('\n') || '—',
+            iv.assurance ? iv.assurance + '\n' + (ok ? 'Valide' : 'À vérifier / expirée') : 'Non renseignée', String(iLots.length), _phxE(iLots.reduce((s, l) => s + (l.ht || 0) * (1 + (l.tva || 0) / 100), 0))];
+        }) });
     }
-
-    // INTERVENANTS
-    if(intervs.length) {
-      o += '<div class="sec"><h3>👷 Intervenants ('+intervs.length+')</h3></div>';
-      o += '<div style="padding:0 22px">';
-      intervs.forEach(inv => {
-        const iLots = lots.filter(l=>l.interv==inv.id);
-        const iTotal = iLots.reduce((s,l)=>s+l.ht*(1+l.tva/100),0);
-        const assOk = inv.assuranceDate && new Date(inv.assuranceDate)>now;
-        o += '<div class="irow">';
-        o += '<div class="ava" style="background:'+(safeColor(inv.color) || '#4A9CC7')+'">'+ini( esc(inv.nom))+'</div>';
-        o += '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:12px">'+ esc(inv.nom)+'</div>';
-        o += '<div style="font-size:11px;color:#4A9CC7;font-weight:600">'+ esc(inv.metier)+'</div>';
-        o += '<div style="font-size:10px;color:#4A6080;display:flex;gap:10px;flex-wrap:wrap;margin-top:1px">';
-        if( esc(inv.tel)) o += '<span>📞 '+ esc(inv.tel)+'</span>';
-        if( esc(inv.email)) o += '<span>✉️ '+ esc(inv.email)+'</span>';
-        if( esc(inv.siret)) o += '<span>SIRET: '+ esc(inv.siret)+'</span>';
-        o += '</div>';
-        if( esc(inv.assurance)) o += '<div style="margin-top:2px"><span style="background:'+(assOk?'#E3F5EC':'#FDECEB')+';color:'+(assOk?'#2D7A4F':'#C0392B')+';padding:1px 7px;border-radius:10px;font-size:10px;font-weight:700">Décennale: '+ esc(inv.assurance)+(assOk?' ✓':' ⚠')+'</span></div>';
-        if( esc(inv.notes)) o += '<div style="font-size:10px;color:#4A6080;font-style:italic;margin-top:2px">'+ esc(inv.notes)+'</div>';
-        o += '</div>';
-        o += '<div style="text-align:right;flex-shrink:0"><div style="font-weight:700;font-size:11px">'+fE(iTotal)+' TTC</div>';
-        o += '<div style="font-size:10px;color:#4A6080">'+iLots.length+' lot(s)</div>';
-        if( esc(inv.note)) o += '<div style="color:#8A6020;font-weight:700;font-size:11px;margin-top:2px">★ '+ esc(inv.note)+'/10</div>';
-        o += '</div></div>';
-      });
-      o += '</div>';
+    if (facs.length) {
+      px.section('Situations de travaux (' + facs.length + ')', 30);
+      px.tableau({ colonnes: [{ titre:'Date', x:17, w:22 }, { titre:'N°', x:41, w:26, gras:true }, { titre:'Lot', x:69, w:70 }, { titre:'HT', x:163, align:'right' }, { titre:'Statut', x:166, w:29 }],
+        lignes: facs.slice().sort((a, b) => new Date(b.date) - new Date(a.date)).map(f => {
+          const lot = f.lotId ? state.lots.find(l => l.id == f.lotId) : null, age = Math.round((now - new Date(f.date)) / 864e5);
+          return [_phxD(f.date), f.num || '—', (lot ? lot.nom : '—') + (f.notes ? '\n' + f.notes : ''), _phxE(f.ht), (SIT[f.statut] || f.statut || '—') + (f.statut !== 'payee' && age > 30 ? '\ndepuis ' + age + ' j' : '')];
+        }), total: ['', '', 'TOTAL FACTURÉ', _phxE(facHT), ''] });
     }
-
-    // FACTURES
-    if(facs.length) {
-      o += '<div class="sec"><h3>💰 Situations de travaux ('+facs.length+')</h3></div>';
-      o += '<table><thead><tr><th style="padding-left:22px">Date</th><th>N°</th><th>Lot</th><th style="text-align:right">HT</th><th>Statut</th></tr></thead><tbody>';
-      facs.slice().sort((a,b)=>new Date(b.date)-new Date(a.date)).forEach(f => {
-        const lot = f.lotId ? state.lots.find(l=>l.id==f.lotId) : null;
-        const age = Math.round((now-new Date(f.date))/86400000);
-        const sMap = {a_valider:['#E4ECF3','#4A6080','En attente'],validee:['#E8F4FB','#2A5298','Validée'],payee:['#E3F5EC','#2D7A4F','Payée'],retard:['#FDF3DC','#8A6020','En attente'],litige:['#FDECEB','#C0392B','Litige']};
-        const [bg,col,lbl] = sMap[f.statut] || ['#eee','#666',f.statut];
-        o += '<tr><td style="padding-left:22px;white-space:nowrap">'+fD(f.date)+'</td>';
-        o += '<td style="font-weight:700;color:#2A5298">'+( esc(f.num)||'—')+'</td>';
-        o += '<td>'+(lot? esc(lot.nom) :'—')+'</td>';
-        o += '<td style="text-align:right;font-weight:700">'+fE(f.ht)+'</td>';
-        o += '<td><span style="background:'+bg+';color:'+col+';padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700">'+lbl+'</span>'+(f.statut!=='payee'&&age>30?' <span style="color:#C0392B;font-size:10px">'+age+'j</span>':'')+'</td></tr>';
-        if( esc(f.notes)) o += '<tr><td colspan="5" style="padding:0 7px 5px 22px;font-size:10px;color:#4A6080;font-style:italic">💬 '+ esc(f.notes)+'</td></tr>';
-      });
-      o += '</tbody></table>';
+    const datees = lots.filter(l => l.debut && l.fin).sort((a, b) => String(a.debut).localeCompare(String(b.debut)));
+    if (datees.length) {
+      px.section('Planning', 30);
+      px.gantt({ lignes: datees.map(l => {
+        const inv = l.interv ? state.intervenants.find(x => x.id == l.interv) : null, retard = new Date(l.fin) < now && l.statut !== 'termine';
+        return { libelle: l.nom, detail: inv ? inv.nom : (l.entrepriseNom || ''), debut: l.debut, fin: l.fin,
+          couleur: l.statut === 'termine' ? '#2D7A4F' : retard ? '#C0392B' : (inv && safeColor(inv.color)) || '#4A9CC7',
+          texte: l.statut === 'termine' ? 'Terminé' : (retard ? 'EN RETARD · ' : '') + (l.av || 0) + ' %' };
+      }) });
     }
-
-    // GANTT SVG
-    const lotsWithDates = lots.filter(l => l.debut && l.fin);
-    if (lotsWithDates.length) {
-      o += '<div class="sec"><h3>📅 Planning Gantt</h3></div>';
-      o += '<div style="padding:0 22px 14px">';
-      const allD = lotsWithDates.flatMap(l=>[new Date(l.debut),new Date(l.fin)]);
-      let minD2 = new Date(Math.min(...allD)); minD2.setDate(1);
-      let maxD2 = new Date(Math.max(...allD)); maxD2.setMonth(maxD2.getMonth()+1,0);
-      const td2 = Math.max(1,(maxD2-minD2)/86400000);
-      const GW=660, GL=170, GB=GW-GL, ROW_H=24;
-      const GH = 30 + lotsWithDates.length*ROW_H + 14;
-      const months2=[]; let mc2=new Date(minD2);
-      while(mc2<=maxD2){months2.push(new Date(mc2));mc2.setMonth(mc2.getMonth()+1);}
-      let svg2 = '<svg xmlns="http://www.w3.org/2000/svg" width="'+GW+'" height="'+GH+'" style="font-family:sans-serif;display:block;width:100%">';
-      svg2 += '<rect width="'+GW+'" height="'+GH+'" fill="#F8FAFC" rx="6"/>';
-      months2.forEach(m=>{
-        const x=GL+(m-minD2)/86400000/td2*GB;
-        svg2 += '<line x1="'+x+'" y1="0" x2="'+x+'" y2="'+GH+'" stroke="#C8D8E8" stroke-width="1"/>';
-        svg2 += '<text x="'+(x+3)+'" y="13" font-size="9" fill="#4A6080" font-weight="700">'+m.toLocaleString('fr-FR',{month:'short'})+'</text>';
-      });
-      const tx2 = GL+Math.max(0,Math.min(1,(now-minD2)/86400000/td2))*GB;
-      svg2 += '<line x1="'+tx2+'" y1="0" x2="'+tx2+'" y2="'+GH+'" stroke="#4A9CC7" stroke-width="1.5" stroke-dasharray="3,2"/>';
-      lotsWithDates.forEach((l,idx)=>{
-        const y=18+idx*ROW_H;
-        const inv = l.interv ? state.intervenants.find(i=>i.id==l.interv) : null;
-        const bc = l.statut==='termine'?'#2D7A4F':(new Date(l.fin)<now?'#C0392B':((inv&&safeColor(inv.color))||'#4A9CC7'));
-        const sx=GL+Math.max(0,(new Date(l.debut)-minD2)/86400000/td2*GB);
-        const bw=Math.max(3,((new Date(l.fin)-new Date(l.debut))/86400000)/td2*GB);
-        if(idx%2===0) svg2 += '<rect x="0" y="'+y+'" width="'+GW+'" height="'+ROW_H+'" fill="rgba(0,0,0,.018)"/>';
-        const nm2 = l.nom.length>24?l.nom.slice(0,23)+'…':l.nom;
-        svg2 += '<text x="2" y="'+(y+ROW_H-7)+'" font-size="10" fill="#0F1E3D" font-weight="500">'+esc(nm2)+'</text>';
-        svg2 += '<rect x="'+sx.toFixed(1)+'" y="'+(y+4)+'" width="'+bw.toFixed(1)+'" height="'+(ROW_H-8)+'" rx="3" fill="'+bc+'" opacity="0.85"/>';
-        if(bw>28) svg2 += '<text x="'+(sx+3).toFixed(1)+'" y="'+(y+ROW_H-7)+'" font-size="9" fill="#fff" font-weight="700">'+(l.av||0)+'%</text>';
-      });
-      svg2 += '</svg>';
-      o += svg2;
-      o += '<div style="display:flex;gap:12px;font-size:9px;color:#4A6080;margin-top:5px">';
-      o += '<span style="color:#4A9CC7">▬ En cours</span><span style="color:#2D7A4F">▬ Terminé</span><span style="color:#C0392B">▬ En retard</span><span style="color:#4A9CC7">┆ Aujourd\'hui</span>';
-      o += '</div></div>';
-    }
-
-    // COMPTES RENDUS COMPLETS
-    if(crs.length) {
-      o += '<div class="sec"><h3>📝 Comptes rendus ('+crs.length+')</h3></div>';
-      o += '<div style="padding:0 22px">';
-      crs.slice().sort((a,b)=>new Date(b.date)-new Date(a.date)).forEach(cr => {
+    if (crs.length) {
+      px.section('Comptes rendus (' + crs.length + ')', 40);
+      for (const cr of crs.slice().sort((a, b) => new Date(b.date) - new Date(a.date))) {
         const hasRes = cr.reserves && cr.reserves.trim();
-        o += '<div class="cr-block'+(hasRes?' res':'')+'" style="margin-bottom:12px">';
-        o += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">';
-        o += '<div><div style="font-weight:700;font-size:13px;color:#1B2D5B">'+ esc(cr.num)+( esc(cr.meteo)?' '+cr.meteo.split(' ')[0]:'')+'</div>';
-        o += '<div style="font-size:10px;color:#4A6080">'+fD(cr.date)+( esc(cr.auteur)?' · Rédigé par <strong>'+ esc(cr.auteur)+'</strong>':'')+'</div>';
-        if( esc(cr.presents)) o += '<div style="font-size:10px;color:#4A6080;margin-top:2px">👥 '+ esc(cr.presents)+'</div>';
-        o += '</div>';
-        o += '<span style="background:'+(hasRes?'#FDF3DC':'#E3F5EC')+';color:'+(hasRes?'#8A6020':'#2D7A4F')+';padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;flex-shrink:0">'+(hasRes?'⚠ Réserves':'✓ RAS')+'</span></div>';
-        if(cr.avancement && cr.avancement.trim()) {
-          o += '<div style="margin-bottom:6px"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#2A5298;margin-bottom:3px">Avancement</div>';
-          o += '<div style="font-size:11px;line-height:1.6;white-space:pre-wrap;background:#EEF4F9;padding:7px 10px;border-radius:4px;border-left:3px solid #4A9CC7">'+ esc(cr.avancement)+'</div></div>';
-        }
-        if(hasRes) {
-          o += '<div style="margin-bottom:6px"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#8A6020;margin-bottom:3px">⚠ Réserves / Points à lever</div>';
-          o += '<div style="font-size:11px;line-height:1.6;white-space:pre-wrap;background:#FDF3DC;padding:7px 10px;border-radius:4px;border-left:3px solid #F5A623">'+ esc(cr.reserves)+'</div></div>';
-        }
-        if(cr.decisions && cr.decisions.trim()) {
-          o += '<div style="margin-bottom:5px"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#1B2D5B;margin-bottom:3px">Décisions & actions</div>';
-          o += '<div style="font-size:11px;line-height:1.6;white-space:pre-wrap;background:#F8FAFC;padding:7px 10px;border-radius:4px;border:1px solid #E4ECF3">'+ esc(cr.decisions)+'</div></div>';
-        }
-        if( esc(cr.prochaine)) o += '<div style="margin-top:5px;font-size:10px;color:#4A6080">📅 Prochaine réunion : <strong>'+fD( esc(cr.prochaine))+'</strong></div>';
-        if(cr.photos && cr.photos.length) {
-          o += '<div style="margin-top:8px"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#4A6080;margin-bottom:5px">📷 Photos ('+cr.photos.length+')</div>';
-          o += '<div style="display:flex;flex-wrap:wrap;gap:8px">';
-          cr.photos.forEach(function(ph){
-            const src = ph.storageUrl || ph.dataUrl;
-            if(!src || src.startsWith('data:application/pdf')) return;
-            o += '<div style="text-align:center"><img src="'+src+'" style="width:130px;height:100px;object-fit:cover;border-radius:5px;border:1px solid #C8D8E8;display:block">';
-            if( esc(ph.caption)) o += '<div style="font-size:9px;color:#4A6080;margin-top:2px;max-width:130px;word-break:break-word">'+ esc(ph.caption)+'</div>';
-            o += '</div>';
-          });
-          o += '</div></div>';
-        }
-        o += '</div>';
-      });
-      o += '</div>';
+        const photos = (await PhenixPDF.chargerTout((cr.photos || []).map(ph => ph.dataUrl || ph.storageUrl).filter(Boolean).slice(0, 4), 800)).filter(Boolean);
+        const bloc = [];
+        if (cr.avancement && cr.avancement.trim()) bloc.push('AVANCEMENT', cr.avancement.trim(), '');
+        if (hasRes) bloc.push('RÉSERVES / POINTS À LEVER', cr.reserves.trim(), '');
+        if (cr.decisions && cr.decisions.trim()) bloc.push('DÉCISIONS ET ACTIONS', cr.decisions.trim(), '');
+        if (cr.prochaine) bloc.push('Prochaine réunion : ' + _phxD(cr.prochaine));
+        px.carte({ titre: (cr.num || 'CR') + ' — ' + _phxD(cr.date), droite: hasRes ? 'Réserves' : 'RAS',
+          lignes: [cr.auteur ? 'Rédigé par **' + cr.auteur + '**' : '', cr.presents ? 'Présents : ' + cr.presents : ''], texte: bloc.join('\n').trim(), photos, repere: hasRes ? '#F5A623' : null });
+      }
     }
-
-    o += '<div style="height:20px"></div></div>';
-    return o;
   }
-
-  // Global stats
-  const allLots = state.lots.filter(l => chantiersList.some(c=>c.id==l.chantierId));
-  const allFacs = state.factures.filter(f => chantiersList.some(c=>c.id==f.chantierId));
-  const gBudget = allLots.reduce((s,l)=>s+l.ht*(1+l.tva/100),0);
-  const gFac    = allFacs.reduce((s,f)=>s+f.ht,0);
-  const gHon    = chantiersList.reduce((s,c)=>s+(parseFloat(c.honoraires)||0)+(parseFloat(c.commissions)||0),0);
-  const gAv     = chantiersList.length ? Math.round(chantiersList.map(c=>{const cl=state.lots.filter(l=>l.chantierId==c.id);return avLots(cl, true);}).reduce((a,b)=>a+b,0)/chantiersList.length) : 0;
-
-  let body = chantiersList.map((c,i) => buildCh(c, i===0)).join('<div style="height:20px"></div>');
-
-  const fullHtml = `<!DOCTYPE html>
-<html lang="fr"><head>
-<meta charset="UTF-8">
-<title>Synthèse Chantiers — Phénix-Architecture</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,600&display=swap" rel="stylesheet">
-<style>${CSS}
-  .page-break{page-break-before:always;padding-top:20px}
-</style></head><body>
-<div class="wrap">
-<div class="noprint" style="text-align:right;margin-bottom:20px">
-  <button onclick="window.print()" style="background:linear-gradient(135deg,#1B2D5B,#2A5298);color:#fff;border:none;padding:10px 22px;border-radius:8px;font-size:13px;cursor:pointer;font-family:sans-serif">🖨️ Imprimer / Enregistrer en PDF</button>
-</div>
-<div class="cover">
-  <div class="cover-brand">🏛 Phénix-Architecture · Maître d'Œuvre</div>
-  <div class="cover-title">Synthèse ${chantiersList.length>1?'des '+chantiersList.length+' Chantiers':esc(chantiersList[0].nom)}</div>
-  <div class="cover-date">Généré le ${today}</div>
-  <div class="cover-stats">
-    <div class="cstat"><label>Chantiers</label><span>${chantiersList.length}</span></div>
-    <div class="cstat"><label>Budget TTC</label><span>${gBudget>=1e6?(gBudget/1e6).toFixed(1)+' M€':fE(gBudget)}</span></div>
-    <div class="cstat"><label>Facturé HT</label><span>${fE(gFac)}</span></div>
-    <div class="cstat"><label>CA MOE HT</label><span>${fE(gHon)}</span></div>
-    <div class="cstat"><label>Avancement moyen</label><span>${gAv}%</span></div>
-  </div>
-</div>
-${body}
-<div style="border-top:2px solid #E4ECF3;padding-top:14px;display:flex;justify-content:space-between;font-size:10px;color:#8BA5C0;margin-top:16px">
-  <div style="font-size:12px;font-weight:600;color:#1B2D5B">Phénix-Architecture · Maître d'Œuvre</div>
-  <div>Document confidentiel · ${today}</div>
-</div>
-</div></body></html>`;
-
-  const win = window.open('', '_blank', 'width=980,height=800');
-  if (!win) { toast('⚠️ Autorisez les pop-ups pour exporter.'); return; }
-  win.document.write(fullHtml);
-  win.document.close();
-  toast('📄 Synthèse ouverte — Imprimer → Enregistrer en PDF');
+  px.enregistrer('Synthese_' + _phxNom(un ? un.nom : 'chantiers') + '.pdf');
 }
 
 function exportFinancierPDF() {
   const filter = document.getElementById('fin-filter-ch')?.value || activeChantier;
-  if (filter) {
-    const prev = activeChantier;
-    activeChantier = filter;
-    exportSynthesePDF();
-    activeChantier = prev;
-  } else {
-    exportSynthesePDF();
-  }
+  return exportSynthesePDF(filter || null);   // [PDF] 16/11/2026 — chantier passé en paramètre (export asynchrone)
 }
 
 // ── Sauvegarde / Restauration JSON ────────────────────────

@@ -5,6 +5,8 @@
 ══════════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_dossier.html
 ──────────────────────────────────────────────────────────────────────
+ 16/11/2026 — [PDF] Compte rendu de réunion, récapitulatif TVA et synthèse des honoraires : vrais PDF au format de la charte commune
+   phenix_pdf.js (style du dossier de financement), photos et plans annotés inclus, statuts en toutes lettres. Repérer : [PDF].
  13/11/2026 — SYNTHÈSE 3D, MISSIONS : chaque case cochée mémorise aussi son texte et sa fiche dans p.checklistDerniereTache { texte, fiche, le }
    (la mission de la Synthèse affiche « dernière coche : … »). Repérer : _ckTexteDe.
  05/11/2026 (4) — Retrait de « Importer devis signé → nouveau dossier » (page Honoraires) et de la bannière « Vous avez déjà le devis ? » (Nouveau projet) :
@@ -4330,6 +4332,15 @@ function _updateReunionBadge() {
 }
 
 // ── Export PDF ────────────────────────────────────────────────
+// [PDF] 16/11/2026 — sorties PDF de Dossier (compte rendu de réunion, récap TVA, synthèse des honoraires) sur la charte commune phenix_pdf.js
+function _phxPdfD(){
+  const charger = src => new Promise((ok, ko) => { const s = document.createElement('script'); s.src = src; s.onload = () => ok(); s.onerror = () => ko(new Error(src)); document.head.appendChild(s); });
+  return (window.jspdf && window.jspdf.jsPDF ? Promise.resolve() : charger('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'))
+    .then(() => window.PhenixPDF ? null : charger('phenix_pdf.js'));
+}
+async function _phxPretD(){ try { await _phxPdfD(); return true; } catch (e) { toast_d('⚠️ Bibliothèque PDF non chargée (connexion ?)'); return false; } }
+function _phxNomD(s){ return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 50) || 'document'; }
+
 function exportReunionPdf() {
   const num = document.getElementById('reun-num').value;
   const r = (stateDossier.reunions||[]).find(x => x.num===num);
@@ -4380,131 +4391,33 @@ async function exportReunionPdfById(id) {
       }
     }
   }
-  printReunionHtml(r, proj);
-  toast_d('📄 Compte rendu ouvert — Imprimer → PDF');
+  await printReunionHtml(r, proj);   // [PDF] 16/11/2026 — vrai PDF téléchargé
+  toast_d('📄 Compte rendu téléchargé en PDF');
 }
 
-function printReunionHtml(r, proj) {
-  const today = new Date().toLocaleDateString('fr-FR');
-  const dateStr = r.date ? new Date(r.date+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) : '—';
-  const prochStr = r.prochaine ? new Date(r.prochaine+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) : 'À définir';
-
-  function buildPlanHtmlR(plan) {
-    const isPdf = (plan.dataUrl&&plan.dataUrl.startsWith('data:application/pdf')) || (plan.storageUrl&&(plan.name||'').toLowerCase().endsWith('.pdf'));
-    let pages;
-    if (plan.renderedPages&&plan.renderedPages.length) pages = plan.renderedPages;
-    else if (!isPdf) pages = [plan.storageUrl||plan.dataUrl];
-    else pages = plan.storageUrl ? ['__PDF_STORAGE__'] : null;
-
-    let out = `<div style="page-break-before:always;margin-bottom:16px"><div style="font-family:'DM Serif Display',serif;font-size:14px;color:#12233f;border-bottom:2px solid #4fa8f0;padding-bottom:5px;margin-bottom:10px">📐 ${plan.name}</div>`;
-    if (!pages) { out += '<div style="color:#66809e;font-style:italic;padding:10px">PDF non disponible</div>'; }
-    else {
-      pages.forEach((pageImg,pgIdx) => {
-        const pa = (plan.annotations||[]).filter(a=>(a.page||0)===pgIdx);
-        out += `<div style="position:relative;border:1px solid rgba(120,170,220,.18);border-radius:6px;overflow:hidden;margin-bottom:10px">`;
-        if (pages.length>1) out += `<div style="padding:3px 10px;background:rgba(120,170,220,.10);font-size:10px;color:#9fb2c6;font-weight:700">Page ${pgIdx+1}/${pages.length}</div>`;
-        if (pageImg==='__PDF_STORAGE__') out += `<div style="padding:14px;text-align:center"><a href="${plan.storageUrl}" target="_blank" style="color:#2f6fc0;font-weight:600">📄 Voir le plan PDF</a></div>`;
-        else if (pageImg) out += `<img src="${pageImg}" style="width:100%;display:block">`;
-        pa.forEach(a => {
-          const gi = (plan.annotations||[]).indexOf(a);
-          out += `<div style="position:absolute;left:calc(${a.x}%-12px);top:calc(${a.y}%-12px${pages.length>1?'+28px':''});width:24px;height:24px;border-radius:50%;background:${a.color||'#e2564a'};color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3)">${gi+1}</div>`;
-        });
-        out += '</div>';
-      });
-    }
-    if (plan.annotations&&plan.annotations.length) {
-      out += '<div style="background:rgba(16,31,56,.6);border:1px solid rgba(120,170,220,.16);border-radius:5px;padding:10px 12px">';
-      out += '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#2f6fc0;margin-bottom:6px">Légende</div>';
-      plan.annotations.forEach((a,i) => {
-        out += `<div style="display:flex;align-items:flex-start;gap:7px;margin-bottom:4px"><span style="width:18px;height:18px;border-radius:50%;background:${a.color||'#e2564a'};color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</span><span style="font-size:11px">${a.label||'—'}${a.page&&a.page>0?` <em style="color:#66809e">p.${a.page+1}</em>`:''}</span></div>`;
-      });
-      out += '</div>';
-    }
-    out += '</div>';
-    return out;
-  }
-
-  let photosHtml = '';
-  if (r.photos&&r.photos.length) {
-    photosHtml = `<div style="margin-bottom:16px"><div style="font-family:'DM Serif Display',serif;font-size:14px;color:#12233f;border-bottom:2px solid #4fa8f0;padding-bottom:5px;margin-bottom:10px">📷 Photos (${r.photos.length})</div><div style="display:flex;flex-wrap:wrap;gap:10px">`;
-    r.photos.forEach(p => {
-      const src = p.storageUrl||p.dataUrl;
-      if (!src) return;
-      photosHtml += `<div style="text-align:center"><img src="${src}" style="width:160px;height:120px;object-fit:cover;border-radius:6px;border:1px solid rgba(120,170,220,.18);display:block">${p.caption?`<div style="font-size:10px;color:#9fb2c6;margin-top:2px;max-width:160px">${p.caption}</div>`:''}</div>`;
-    });
-    photosHtml += '</div></div>';
-  }
-
-  let plansHtml = '';
-  if (r.plans&&r.plans.length) r.plans.forEach(plan => { plansHtml += buildPlanHtmlR(plan); });
-
-  const fullHtml = `<!DOCTYPE html><html lang="fr"><head>
-<meta charset="UTF-8"><title>${r.num} — ${proj?proj.nom||proj.ref:'Projet'}</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:opsz,wght@9..40,400;9..40,600&display=swap" rel="stylesheet">
-<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'DM Sans',sans-serif;font-size:12px;color:#0F1E3D;background:#fff;line-height:1.55}
-.page{max-width:800px;margin:0 auto;padding:28px 36px}
-.cover{background:linear-gradient(135deg,#0F1E3D,#1B2D5B);border-radius:10px;padding:32px;color:#fff;margin-bottom:22px}
-.cover-brand{font-size:10px;opacity:.6;text-transform:uppercase;letter-spacing:.12em;margin-bottom:8px}
-.cover-title{font-family:'DM Serif Display',serif;font-size:28px;margin-bottom:4px}
-.cover-sub{font-size:12px;opacity:.6;margin-bottom:16px}
-.cover-meta{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding-top:16px;border-top:1px solid rgba(255,255,255,.2)}
-.cover-meta label{font-size:9px;opacity:.55;text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:2px}
-.cover-meta span{font-size:13px;font-weight:700}
-.section{margin-bottom:16px}
-.sec-title{font-family:'DM Serif Display',serif;font-size:15px;color:#1B2D5B;border-bottom:2px solid #4A9CC7;padding-bottom:5px;margin-bottom:10px}
-.sec-body{background:#F8FAFC;border:1px solid #E4ECF3;border-radius:6px;padding:10px 14px;font-size:12px;line-height:1.7;white-space:pre-wrap;min-height:40px}
-.sec-body.reserve{background:#FDF3DC;border-color:#F5A62344;border-left:3px solid #F5A623}
-.presents-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
-.chip{background:#1B2D5B;color:#fff;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:600}
-.next-meeting{background:#1B2D5B;color:#fff;border-radius:8px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;margin:16px 0}
-.footer{border-top:2px solid #E4ECF3;padding-top:12px;display:flex;justify-content:space-between;font-size:10px;color:#8BA5C0;margin-top:16px}
-@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.noprint{display:none!important}}</style>
-</head><body><div class="page">
-<div class="noprint" style="text-align:right;margin-bottom:16px">
-  <button onclick="window.print()" style="background:linear-gradient(135deg,#1B2D5B,#2A5298);color:#fff;border:none;padding:9px 18px;border-radius:8px;font-size:13px;cursor:pointer">🖨️ Imprimer / PDF</button>
-</div>
-<div class="cover">
-  <div class="cover-brand">🏛 Phénix-Architecture · Maître d'Œuvre</div>
-  <div class="cover-title">${r.num}</div>
-  <div class="cover-sub">Compte Rendu de Réunion · ${dateStr}</div>
-  <div class="cover-meta">
-    <div><label>Projet</label><span>${proj?proj.nom||proj.ref:'—'}</span></div>
-    <div><label>Rédigé par</label><span>${r.auteur||'—'}</span></div>
-    <div><label>Prochain RDV</label><span>${prochStr}</span></div>
-  </div>
-</div>
-<div class="section">
-  <div class="sec-title">👥 Participants présents</div>
-  ${r.presents&&r.presents.length
-    ? `<div class="presents-chips">${r.presents.map(p=>`<span class="chip">${p}</span>`).join('')}</div>`
-    : '<div style="color:#8BA5C0;font-style:italic;padding:6px 0">Aucun participant renseigné</div>'}
-</div>
-<div class="section">
-  <div class="sec-title">📋 Avancement du projet</div>
-  <div class="sec-body">${r.avancement&&r.avancement.trim()?r.avancement:'<span style="color:#8BA5C0;font-style:italic">Néant</span>'}</div>
-</div>
-<div class="section">
-  <div class="sec-title">✅ Décisions & Actions</div>
-  <div class="sec-body">${r.decisions&&r.decisions.trim()?r.decisions:'<span style="color:#8BA5C0;font-style:italic">Néant</span>'}</div>
-</div>
-${r.reserves&&r.reserves.trim()?`<div class="section"><div class="sec-title">⚠️ Réserves & Points en suspens</div><div class="sec-body reserve">${r.reserves}</div></div>`:''}
-${photosHtml}
-${plansHtml}
-<div class="next-meeting">
-  <div><div style="font-size:10px;opacity:.7;text-transform:uppercase;letter-spacing:.1em">Prochaine réunion</div><div style="font-family:'DM Serif Display',serif;font-size:18px;color:#7DC6E8">${prochStr}</div></div>
-  <div style="font-size:24px;opacity:.4">📅</div>
-</div>
-<div class="footer">
-  <div style="font-family:'DM Serif Display',serif;color:#1B2D5B;font-size:12px">Phénix-Architecture · Maître d'Œuvre</div>
-  <div>${r.num} · ${proj?proj.nom||proj.ref:'—'} · ${dateStr}</div>
-  <div>Généré le ${today}</div>
-</div>
-</div></body></html>`;
-
-  const win = window.open('','_blank','width=900,height=700');
-  if (!win) { toast_d('⚠️ Autorisez les pop-ups.'); return; }
-  win.document.write(fullHtml);
-  win.document.close();
+async function printReunionHtml(r, proj) {
+  // [PDF] 16/11/2026 — compte rendu de réunion au format de la charte commune (PhenixPDF.compteRendu)
+  if (!await _phxPretD()) return;
+  const longue = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long', year:'numeric' }) : '';
+  const nomProj = proj ? (proj.nom || proj.ref || 'Projet') : 'Projet';
+  const plans = (r.plans || []).map(plan => {
+    const isPdf = (plan.dataUrl && plan.dataUrl.startsWith('data:application/pdf')) || (plan.storageUrl && (plan.name || '').toLowerCase().endsWith('.pdf'));
+    const pages = plan.renderedPages && plan.renderedPages.length ? plan.renderedPages : (!isPdf ? [plan.storageUrl || plan.dataUrl] : []);
+    return { nom: plan.name, pages, lien: isPdf ? plan.storageUrl : '', annotations: plan.annotations || [] };
+  });
+  const sections = [{ titre:'Avancement du projet', texte: r.avancement, vide:'Néant' }, { titre:'Décisions et actions', texte: r.decisions, vide:'Néant' }];
+  if (r.reserves && r.reserves.trim()) sections.push({ titre:'Réserves et points en suspens', texte: r.reserves });
+  await PhenixPDF.compteRendu({
+    titre: 'Compte rendu de réunion', sousTitre: (r.num || '') + ' · ' + (longue(r.date) || '—') + ' · ' + nomProj, reference: proj && proj.ref || '',
+    cadres: [{ titre:'Projet', lignes: ['**' + nomProj + '**'].concat(proj && proj.client ? ['Client : ' + proj.client] : [], proj && proj.adresse ? [proj.adresse] : []) },
+             { titre:'Réunion', lignes: ['Date : **' + (longue(r.date) || '—') + '**', 'Rédigé par : ' + (r.auteur || '—')] }],
+    presents: Array.isArray(r.presents) ? r.presents : String(r.presents || '').split(',').map(x => x.trim()).filter(Boolean),
+    sections,
+    photos: (r.photos || []).map(p => ({ src: p.storageUrl || p.dataUrl, legende: p.caption || '' })),
+    plans,
+    prochaine: r.prochaine ? longue(r.prochaine) : 'À définir',
+    nomFichier: 'CR_reunion_' + _phxNomD((r.num || '') + '_' + nomProj) + '.pdf'
+  });
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -7838,66 +7751,34 @@ async function tvaSupprimerReleve() {
 // pdf.js, déjà utilisé ailleurs dans l'appli, pour un rendu uniforme et
 // fiable à l'impression).
 async function tvaExporterRecap() {
+  // [PDF] 16/11/2026 — récapitulatif TVA pour le comptable au format de la charte commune (vrai PDF)
   const r = tvaGetCurrentReleve();
   if (!r) return;
   const status = document.getElementById('tva-export-status');
-
-  const trs = r.transactions||[];
-  const entrees = trs.filter(t=>t.sens==='entree').sort((a,b)=>new Date(a.date)-new Date(b.date));
-  const sorties = trs.filter(t=>t.sens==='sortie').sort((a,b)=>new Date(a.date)-new Date(b.date));
-  const totalEntrees = entrees.reduce((s,t)=>s+(parseFloat(t.montant)||0),0);
-  const totalSorties = sorties.reduce((s,t)=>s+(parseFloat(t.montant)||0),0);
-
-  const rowHtml = (t) => {
-    const j = stateDossier.tvaJustificatifs[t.id];
-    const statutTxt = j ? '✓ Justifié' : (t.sansJustificatif ? '— Sans justificatif' : '⚠ MANQUANT');
-    const statutColor = j ? '#2D7A4F' : (t.sansJustificatif ? '#8BA5C0' : '#C0392B');
-    const noteTxt = t.note ? ` <span style="color:#8BA5C0;font-style:italic">(${esc(t.note)})</span>` : '';
-    return `<tr>
-      <td style="padding:6px 8px;border-bottom:1px solid #e5e5e5">${fmtDate_d(t.date)}</td>
-      <td style="padding:6px 8px;border-bottom:1px solid #e5e5e5">${esc(t.libelle)||'—'}${noteTxt}</td>
-      <td style="padding:6px 8px;border-bottom:1px solid #e5e5e5;text-align:right;white-space:nowrap">${fmtEurTva(t.montant)}</td>
-      <td style="padding:6px 8px;border-bottom:1px solid #e5e5e5;color:${statutColor};font-weight:600;white-space:nowrap">${statutTxt}</td>
-    </tr>`;
+  if (!await _phxPretD()) return;
+  const trs = r.transactions || [];
+  const entrees = trs.filter(t => t.sens === 'entree').sort((a, b) => new Date(a.date) - new Date(b.date));
+  const sorties = trs.filter(t => t.sens === 'sortie').sort((a, b) => new Date(a.date) - new Date(b.date));
+  const totalEntrees = entrees.reduce((s, t) => s + (parseFloat(t.montant) || 0), 0);
+  const totalSorties = sorties.reduce((s, t) => s + (parseFloat(t.montant) || 0), 0);
+  const statut = t => stateDossier.tvaJustificatifs[t.id] ? 'Justifié' : (t.sansJustificatif ? 'Sans justificatif' : 'MANQUANT');
+  const manquants = trs.filter(t => statut(t) === 'MANQUANT').length;
+  const periode = tvaMoisNom(r.mois) + ' ' + r.annee;
+  const px = PhenixPDF.create({ titre: 'Récapitulatif TVA — ' + periode, sousTitre: 'Transmis au comptable · généré le ' + new Date().toLocaleDateString('fr-FR') });
+  px.cles([{ etiquette:'Total entrées', valeur: fmtEurTva(totalEntrees), detail: entrees.length + ' opération(s)' }, { etiquette:'Total sorties', valeur: fmtEurTva(totalSorties), detail: sorties.length + ' opération(s)' },
+           { etiquette:'Solde', valeur: fmtEurTva(totalEntrees - totalSorties) }, { etiquette:'Justificatifs manquants', valeur: String(manquants) }]);
+  px.texte('Les justificatifs sont fournis séparément (bouton « Télécharger les justificatifs »).', { taille: 8.8 });
+  const table = (titre, liste, total) => {
+    px.section(titre + ' (' + liste.length + ')', 26);
+    if (!liste.length) { px.texte('Aucune opération.'); return; }
+    px.tableau({ colonnes: [{ titre:'Date', x:17, w:30 }, { titre:'Libellé', x:49, w:92 }, { titre:'Montant', x:166, align:'right', gras:true }, { titre:'Justificatif', x:169, w:26 }],
+      lignes: liste.map(t => [fmtDate_d(t.date), (t.libelle || '—') + (t.note ? '\n(' + t.note + ')' : ''), fmtEurTva(t.montant), statut(t)]), total: ['', 'TOTAL', fmtEurTva(total), ''] });
   };
-
-  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>TVA ${tvaMoisNom(r.mois)} ${r.annee}</title>
-  <style>
-    body{font-family:'DM Sans',Arial,sans-serif;color:#0F1E3D;margin:0}
-    .page{padding:30px}
-    h1{font-family:Georgia,serif;font-size:24px;margin:0 0 4px}
-    .sub{color:#4A6080;font-size:13px;margin-bottom:20px}
-    table{width:100%;border-collapse:collapse;margin-bottom:22px;font-size:12.5px}
-    th{text-align:left;padding:6px 8px;border-bottom:2px solid #1B2D5B;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#1B2D5B}
-    .totaux{display:flex;gap:24px;margin-bottom:24px}
-    .totaux div{background:#F0F4F8;border-radius:8px;padding:10px 16px}
-    .totaux .lbl{font-size:10px;text-transform:uppercase;color:#4A6080;letter-spacing:.05em}
-    .totaux .val{font-size:18px;font-weight:700;color:#1B2D5B}
-    @media print{ .no-print{display:none} }
-  </style></head><body>
-  <div class="page">
-    <div class="no-print" style="text-align:right;margin-bottom:12px"><button onclick="window.print()" style="background:linear-gradient(135deg,#1B2D5B,#2A5298);color:#fff;border:none;padding:9px 18px;border-radius:8px;font-size:13px;cursor:pointer">🖨️ Imprimer / Enregistrer en PDF</button></div>
-    <h1>Phénix-Architecture EURL — Déclaration TVA</h1>
-    <div class="sub">${tvaMoisNom(r.mois)} ${r.annee} · Récapitulatif transmis au comptable · Généré le ${new Date().toLocaleDateString('fr-FR')} · Justificatifs fournis séparément (voir « Télécharger les justificatifs »)</div>
-    <div class="totaux">
-      <div><div class="lbl">Total entrées</div><div class="val" style="color:#2D7A4F">${fmtEurTva(totalEntrees)}</div></div>
-      <div><div class="lbl">Total sorties</div><div class="val" style="color:#C0392B">${fmtEurTva(totalSorties)}</div></div>
-      <div><div class="lbl">Solde</div><div class="val">${fmtEurTva(totalEntrees-totalSorties)}</div></div>
-    </div>
-    <h3 style="font-family:Georgia,serif;color:#2D7A4F">Rentrées d'argent (${entrees.length})</h3>
-    <table><thead><tr><th>Date</th><th>Libellé</th><th style="text-align:right">Montant</th><th>Justificatif</th></tr></thead>
-    <tbody>${entrees.map(rowHtml).join('') || '<tr><td colspan="4" style="padding:10px;color:#999">Aucune</td></tr>'}</tbody></table>
-    <h3 style="font-family:Georgia,serif;color:#C0392B">Sorties d'argent (${sorties.length})</h3>
-    <table><thead><tr><th>Date</th><th>Libellé</th><th style="text-align:right">Montant</th><th>Justificatif</th></tr></thead>
-    <tbody>${sorties.map(rowHtml).join('') || '<tr><td colspan="4" style="padding:10px;color:#999">Aucune</td></tr>'}</tbody></table>
-  </div>
-  </body></html>`;
-
-  const win = window.open('', '_blank');
-  win.document.write(html);
-  win.document.close();
-  status.innerHTML = '';
-  toast_d('✅ Document généré dans un nouvel onglet.');
+  table('Rentrées d’argent', entrees, totalEntrees);
+  table('Sorties d’argent', sorties, totalSorties);
+  px.enregistrer('TVA_' + _phxNomD(periode) + '.pdf');
+  if (status) status.innerHTML = '';
+  toast_d('✅ Récapitulatif TVA téléchargé en PDF.');
 }
 
 // ── Téléchargement groupé des justificatifs (fichiers d'origine) ──────
@@ -13932,114 +13813,34 @@ async function handleRestoreFile(file) {
   r.readAsText(file);
 }
 
-function exportDevisHonorairesPDF() {
+async function exportDevisHonorairesPDF() {
   // Document volontairement autonome : il ne s'appuie QUE sur les champs
   // honoraires/commissions saisis sur la fiche projet, jamais sur les
   // factures/charges réelles de la Comptabilité — ce sont des chiffres
   // extrapolés à l'avancement, pas un résultat comptable reconstitué.
-  const projets = (stateDossier.projets||[]).filter(p=>p.statut==='actif' || (parseFloat(p.honoraires)||0)>0);
-  const lignes = projets.map(p=>{
-    const honorairesHT = parseFloat(p.honoraires)||0;
-    const margeChantierHT = parseFloat(p.commissions)||0;
-    const caTotal = honorairesHT + margeChantierHT;
-    return { p, honorairesHT, margeChantierHT, caTotal };
-  }).sort((a,b)=>{
-    const da=a.p.date?new Date(a.p.date).getTime():Infinity;
-    const db=b.p.date?new Date(b.p.date).getTime():Infinity;
-    return da-db;
-  });
-
-  const caTotalGlobal = lignes.reduce((s,l)=>s+l.caTotal,0);
-  const honTotalGlobal = lignes.reduce((s,l)=>s+l.honorairesHT,0);
-  const margeTotalGlobal = lignes.reduce((s,l)=>s+l.margeChantierHT,0);
-  const nbActifs = (stateDossier.projets||[]).filter(p=>p.statut==='actif').length;
-  const dateStr = new Date().toLocaleDateString('fr-FR', {day:'numeric', month:'long', year:'numeric'});
-
-  const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Synthèse Honoraires</title>
-<style>
-*{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
-body{font-family:'Segoe UI',Arial,sans-serif;color:#1E293B;background:#fff;font-size:12.5px}
-.doc-page{max-width:920px;margin:0 auto;padding:26px 30px}
-.header-box{background:#1E3A5F;border-radius:10px;padding:22px 26px;margin-bottom:22px}
-.header-eyebrow{font-size:10.5px;color:#93C5FD;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px}
-.header-title{font-size:25px;font-weight:800;color:#fff;font-family:Georgia,'Times New Roman',serif;margin-bottom:4px}
-.header-sub{font-size:12px;color:#B9CBE0;margin-bottom:18px}
-.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;border-top:1px solid rgba(255,255,255,.15);padding-top:16px}
-.kpi-label{font-size:9.5px;color:#93C5FD;letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px}
-.kpi-value{font-size:19px;font-weight:800;color:#fff;white-space:nowrap}
-.section-title{font-size:14px;font-weight:700;color:#1E3A5F;margin-bottom:10px}
-table{width:100%;border-collapse:collapse}
-thead th{padding:8px 10px;font-size:9.5px;color:#64748B;letter-spacing:.06em;text-transform:uppercase;text-align:left;border-bottom:2px solid #1E3A5F;white-space:nowrap}
-thead th.num{text-align:right}
-tbody td{padding:9px 10px;font-size:12px;border-bottom:1px solid #E2E8F0;vertical-align:middle}
-tbody tr:nth-child(even) td{background:#F8FAFC}
-td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-td.projet{font-weight:700;color:#1E3A5F;white-space:nowrap}
-td.marge{color:#B8860B;font-weight:600}
-td.ca{color:#1E3A5F;font-weight:700}
-.badge-statut{display:inline-block;padding:2px 10px;border-radius:99px;font-size:10.5px;font-weight:600;background:#DCFCE7;color:#166534;white-space:nowrap}
-.warning-box{background:#FEF9E7;border:1px solid #F5D97A;border-radius:8px;padding:12px 16px;margin-top:16px;font-size:11px;color:#7A5C00;line-height:1.6}
-.footer{text-align:center;font-size:10px;color:#94A3B8;margin-top:20px;padding-top:12px;border-top:1px solid #E2E8F0;line-height:1.7}
-.no-print{margin:16px 0;text-align:center}
-.no-print button{background:#1E3A5F;color:white;border:none;padding:8px 18px;border-radius:6px;font-size:12px;cursor:pointer}
-@media print{.no-print{display:none}}
-@page{margin:14mm}
-</style></head><body>
-<div class="doc-page">
-
-  <div class="header-box">
-    <div class="header-eyebrow">🏛 Phénix-Architecture · Maître d'œuvre</div>
-    <div class="header-title">Synthèse Honoraires</div>
-    <div class="header-sub">Chiffre d'affaires par dossier · ${dateStr}</div>
-    <div class="kpi-row">
-      <div><div class="kpi-label">CA total</div><div class="kpi-value">${fmtEur_d(caTotalGlobal)}</div></div>
-      <div><div class="kpi-label">Honoraires HT</div><div class="kpi-value">${fmtEur_d(honTotalGlobal)}</div></div>
-      <div><div class="kpi-label">Marge chantier HT</div><div class="kpi-value">${fmtEur_d(margeTotalGlobal)}</div></div>
-      <div><div class="kpi-label">Dossiers actifs</div><div class="kpi-value">${nbActifs}</div></div>
-    </div>
-  </div>
-
-  <div class="section-title">📁 Dossiers — honoraires &amp; marge chantier</div>
-  <table>
-    <thead><tr>
-      <th>Projet</th><th>Client</th><th>Date d'entrée</th>
-      <th class="num">Honoraires HT</th><th class="num">Marge chantier HT</th><th class="num">CA total</th>
-      <th>Phase</th><th class="num">Avanc.</th><th>Statut</th>
-    </tr></thead>
-    <tbody>
-      ${lignes.map(l=>`<tr>
-        <td class="projet">${esc(l.p.nom)}</td>
-        <td>${esc(l.p.client)||'—'}</td>
-        <td style="white-space:nowrap">${l.p.date?new Date(l.p.date).toLocaleDateString('fr-FR'):'—'}</td>
-        <td class="num">${l.honorairesHT>0?fmtEur_d(l.honorairesHT):'—'}</td>
-        <td class="num marge">${l.margeChantierHT>0?fmtEur_d(l.margeChantierHT):'—'}</td>
-        <td class="num ca">${fmtEur_d(l.caTotal)}</td>
-        <td>${esc(l.p.phase)||'—'}</td>
-        <td class="num">${avancementProjet(l.p)}%</td>
-        <td><span class="badge-statut">${esc(l.p.statut)||'—'}</span></td>
-      </tr>`).join('')}
-    </tbody>
-  </table>
-
-  <div class="warning-box">⚠️ La <strong>marge chantier</strong> indiquée ici est une estimation optimiste, extrapolée à la signature du projet — elle ne reflète pas un résultat comptable réel. Pour une estimation plus réaliste, retenez plutôt <strong>50% de ce montant</strong>.</div>
-
-  <div class="footer">
-    Phénix-Architecture · Maître d'Œuvre<br>
-    Synthèse Honoraires · ${dateStr}<br>
-    Document indicatif — CA hors TVA, à titre de synthèse interne. Chiffres extrapolés, non reliés à la comptabilité réelle.
-  </div>
-
-  <div class="no-print"><button onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF</button></div>
-</div>
-</body></html>`;
-
-  const blob = new Blob([html], {type:'text/html;charset=utf-8'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.target = '_blank'; a.rel = 'noopener';
-  document.body.appendChild(a); a.click();
-  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
-  toast_d('📄 Synthèse ouverte — Imprimer pour enregistrer en PDF');
+  // [PDF] 16/11/2026 — vrai PDF au format de la charte commune
+  if (!await _phxPretD()) return;
+  const projets = (stateDossier.projets || []).filter(p => p.statut === 'actif' || (parseFloat(p.honoraires) || 0) > 0);
+  const lignes = projets.map(p => {
+    const honorairesHT = parseFloat(p.honoraires) || 0, margeChantierHT = parseFloat(p.commissions) || 0;
+    return { p, honorairesHT, margeChantierHT, caTotal: honorairesHT + margeChantierHT };
+  }).sort((a, b) => (a.p.date ? new Date(a.p.date).getTime() : Infinity) - (b.p.date ? new Date(b.p.date).getTime() : Infinity));
+  const caTotalGlobal = lignes.reduce((s, l) => s + l.caTotal, 0);
+  const honTotalGlobal = lignes.reduce((s, l) => s + l.honorairesHT, 0);
+  const margeTotalGlobal = lignes.reduce((s, l) => s + l.margeChantierHT, 0);
+  const nbActifs = (stateDossier.projets || []).filter(p => p.statut === 'actif').length;
+  const dateStr = new Date().toLocaleDateString('fr-FR', { day:'numeric', month:'long', year:'numeric' });
+  const px = PhenixPDF.create({ titre: 'Synthèse des honoraires', sousTitre: 'Chiffre d’affaires par dossier · document interne · ' + dateStr });
+  px.cles([{ etiquette:'CA total HT', valeur: fmtEur_d(caTotalGlobal) }, { etiquette:'Honoraires HT', valeur: fmtEur_d(honTotalGlobal) }, { etiquette:'Marge chantier HT', valeur: fmtEur_d(margeTotalGlobal), detail:'estimation' }, { etiquette:'Dossiers actifs', valeur: String(nbActifs) }]);
+  px.section('Dossiers — honoraires et marge chantier', 30);
+  px.tableau({ colonnes: [{ titre:'Projet', x:17, w:46, gras:true }, { titre:'Entrée', x:65, w:20 }, { titre:'Honoraires', x:113, align:'right' }, { titre:'Marge chantier', x:140, align:'right' }, { titre:'CA total', x:163, align:'right', gras:true }, { titre:'Phase', x:166, w:29 }],
+    lignes: lignes.map(l => [(l.p.nom || '—') + (l.p.client ? '\n' + l.p.client : '') + (l.p.statut && l.p.statut !== 'actif' ? '\n(' + l.p.statut + ')' : ''), l.p.date ? new Date(l.p.date).toLocaleDateString('fr-FR') : '—',
+      l.honorairesHT > 0 ? fmtEur_d(l.honorairesHT) : '—', l.margeChantierHT > 0 ? fmtEur_d(l.margeChantierHT) : '—', fmtEur_d(l.caTotal), (l.p.phase || '—') + ' · ' + avancementProjet(l.p) + ' %']),
+    total: ['TOTAL', '', fmtEur_d(honTotalGlobal), fmtEur_d(margeTotalGlobal), fmtEur_d(caTotalGlobal), ''] });
+  px.texte('**Attention :** la marge chantier indiquée ici est une estimation optimiste, extrapolée à la signature du projet ; elle ne reflète pas un résultat comptable réel. Pour une estimation plus réaliste, retenez plutôt **50 % de ce montant**.', { taille: 8.8 });
+  px.texte('Document indicatif — CA hors TVA, synthèse interne. Chiffres extrapolés, non reliés à la comptabilité réelle.', { taille: 8 });
+  px.enregistrer('Synthese_honoraires_' + new Date().toISOString().slice(0, 10) + '.pdf');
+  toast_d('📄 Synthèse des honoraires téléchargée en PDF');
 }
 
 function exportComptaCSV() {
