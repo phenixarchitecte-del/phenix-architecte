@@ -244,6 +244,81 @@
   };
 
 
+  /* [16/11/2026] Tableau des lots (devis, DPGF, synthèses) : la désignation prend toute la largeur utile,
+     Qté / PU HT / Total serrées à droite. Une colonne de prix manquante (DPGF sans prix) laisse la place à la désignation.
+     cfg = { lots:[{ titre, montant, postes:[{ designation, detail, qte, pu, total }] }], prix:true|false, titres:{designation,qte,pu,total}, reserveFin: mm à garder avec les 2 dernières lignes (ex. 32 pour les totaux) }
+     Bandeau de lot (fond bleu pâle, filet marine, texte gras) jamais seul en bas de page ; lignes jamais coupées ; en-tête répété. */
+  P.tableauLots = function (cfg) {
+    var d = this.doc, self = this, prix = cfg.prix !== false, L = PAGE.marge, R = PAGE.w - PAGE.marge;
+    var T = cfg.titres || {}, pas = 4.1, taille = 8.8;
+    var X = prix ? { qte: 147, pu: 168, total: R - 2 } : { qte: R - 2 };
+    var wDes = (prix ? 147 - 19 - 18 : R - 2 - 19 - 24);   // désignation ≈ 61 % de la largeur (version validée le 16/11/2026)   // désignation : de x=17 jusqu'avant la colonne Qté
+    function entete() {
+      self.ensure(18);
+      d.setFillColor.apply(d, COULEURS.marine); d.rect(L, self.y - 4.6, R - L, 7.2, 'F');
+      self._sans(true, 8.3); d.setTextColor(255, 255, 255);
+      d.text(T.designation || 'Désignation', 17, self.y);
+      d.text(T.qte || 'Qté', X.qte, self.y, { align: 'right' });
+      if (prix) { d.text(T.pu || 'PU HT', X.pu, self.y, { align: 'right' }); d.text(T.total || 'Total HT', X.total, self.y, { align: 'right' }); }
+      self.y += 6.4;
+    }
+    function bandeau(lot, suite) {
+      d.setFillColor.apply(d, COULEURS.total); d.rect(L, self.y - 4.2, R - L, 6.6, 'F');
+      d.setFillColor.apply(d, COULEURS.marine); d.rect(L, self.y - 4.2, 1.2, 6.6, 'F');
+      self._sans(true, 9.2); d.setTextColor.apply(d, COULEURS.titre);
+      var t = d.splitTextToSize(String(lot.titre || '') + (suite ? ' (suite)' : ''), prix ? 140 : 170)[0];
+      d.text(t, 18.5, self.y);
+      if (prix && lot.montant != null && !suite) d.text(String(lot.montant), X.total, self.y, { align: 'right' });
+      self.y += 6;
+    }
+    entete();
+    (cfg.lots || []).forEach(function (lot, li) {
+      var postes = lot.postes || [];
+      // le bandeau du lot part avec au moins ses deux premières lignes
+      var h0 = 7 + Math.min(2, postes.length) * (pas * 2 + 2.2) + (li === cfg.lots.length - 1 && postes.length <= 2 ? (cfg.reserveFin || 0) : 0);
+      if (self.y - 4.6 + h0 > PAGE.bas) { self.nouvellePage(); entete(); }
+      if (li > 0) self.y += 1.2;
+      bandeau(lot, false);
+      postes.forEach(function (p, i) {
+        self._sans(false, taille);
+        var des = d.splitTextToSize(String(p.designation || ''), wDes);
+        var det = p.detail ? (self._sans(false, 7.6), d.splitTextToSize(String(p.detail), wDes)) : [];
+        var h = des.length * pas + det.length * 3.5 + 2.2;
+        // fin du tableau : les deux dernières lignes partent avec ce qui suit (totaux : cfg.reserveFin mm)
+        var dernier = li === cfg.lots.length - 1 && i >= postes.length - 2, res = dernier ? (postes.length - 1 - i) * (pas + 2.2) + (cfg.reserveFin || 0) : 0;
+        if (self.y - 3.6 + h + res > PAGE.bas) { self.nouvellePage(); entete(); bandeau(lot, true); }
+        if (i % 2 === 1) { d.setFillColor.apply(d, COULEURS.zebre); d.rect(L, self.y - 3.5, R - L, h, 'F'); }
+        d.setTextColor.apply(d, COULEURS.encre); self._sans(false, taille);
+        d.text(des, 19, self.y);
+        if (det.length) { self._sans(false, 7.6); d.setTextColor.apply(d, COULEURS.discret); d.text(det, 19, self.y + des.length * pas - 0.6); }
+        d.setTextColor.apply(d, COULEURS.encre); self._sans(false, taille);
+        d.text(String(p.qte == null ? '' : p.qte), X.qte, self.y, { align: 'right' });
+        if (prix) { d.text(String(p.pu == null ? '' : p.pu), X.pu, self.y, { align: 'right' }); self._sans(true, taille); d.text(String(p.total == null ? '' : p.total), X.total, self.y, { align: 'right' }); }
+        self.y += h;
+      });
+    });
+    d.setDrawColor.apply(d, COULEURS.marine); d.setLineWidth(0.4); d.line(L, self.y - 3.2, R, self.y - 3.2);
+    d.setTextColor.apply(d, COULEURS.encre); this._sans(false, 10);
+    this.y += 3;
+  };
+
+  /* Bloc des totaux, aligné à droite, insécable : [{ libelle, valeur, fort }] ; la ligne « fort » est sur fond marine, texte blanc gras. */
+  P.totaux = function (lignes) {
+    var d = this.doc, w = 82, x = PAGE.w - PAGE.marge - w, h = 7.2, self = this;
+    this.y += 2.5; this.ensure(lignes.length * h + 6);
+    var y0 = this.y - 4.6;
+    lignes.forEach(function (l, i) {
+      var y = y0 + i * h;
+      if (l.fort) { d.setFillColor.apply(d, COULEURS.marine); d.rect(x, y, w, h, 'F'); d.setTextColor(255, 255, 255); self._sans(true, 10.5); }
+      else { d.setFillColor.apply(d, i % 2 ? COULEURS.zebre : [255, 255, 255]); d.rect(x, y, w, h, 'F'); d.setTextColor.apply(d, COULEURS.discret); self._sans(false, 9.2); }
+      d.text(String(l.libelle), x + 3.5, y + 4.9);
+      if (!l.fort) { d.setTextColor.apply(d, COULEURS.titre); self._sans(true, 9.5); }
+      d.text(String(l.valeur), x + w - 3.5, y + 4.9, { align: 'right' });
+    });
+    d.setDrawColor.apply(d, COULEURS.filet); d.setLineWidth(0.3); d.rect(x, y0, w, lignes.length * h, 'S');
+    this.y = y0 + lignes.length * h + 8; d.setTextColor.apply(d, COULEURS.encre); this._sans(false, 10);
+  };
+
   /* ═══ Documents contractuels : articles, texte riche, cadres, signatures ═══ */
 
   /* Découpe un texte contenant des **passages en gras** en lignes de largeur w (mm). */
@@ -437,6 +512,7 @@
   };
 
   global.PhenixPDF = {
+    logoPng: LOGO_PNG_B64,
     couleurs: COULEURS,
     societe: SOCIETE,
     page: PAGE,

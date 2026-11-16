@@ -1,4 +1,8 @@
 <!DOCTYPE html>
+<!--
+  HISTORIQUE DES MODIFICATIONS
+  16/11/2026 — [Décennale] Dossier de financement : la décennale de chaque entreprise s'affiche seulement « ✔ Reçue » ou « ✖ Manquante » (plus de contrôle ni de détail de l'attestation ici : ils restent dans l'Annuaire et le Chiffrage). Boutons Demander / Relancer gardés pour une décennale manquante.
+-->
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -692,6 +696,11 @@ function decControles(g) {
   return PhenixDecennale.controler(art.decennaleAtt, { artisan: art, lots: g.lots, finChantier: finChantierISO() });
 }
 function decStatutTexte(g, avecSymbole) {
+  // [Décennale] 16/11/2026 — dans le dossier de financement : seulement reçue ou manquante
+  const sym = (x) => avecSymbole ? x + ' ' : '';
+  return g.artisan && g.artisan.decennaleStatut === 'recue' ? sym('✔') + 'Reçue' : sym('✖') + 'Manquante';
+}
+function decStatutDetail(g, avecSymbole) {
   const art = g.artisan, fr = PhenixMsg.dateFr;
   const sym = (x) => avecSymbole ? x + ' ' : '';
   if (!art || !art.decennaleStatut) return sym('○') + 'Non demandée';
@@ -714,17 +723,13 @@ async function renderDecennales() {
   }
   body.innerHTML = groupes.map((g, i) => {
     const a = g.artisan || {}, tel = PhenixMsg.normTel(a.tel), mail = PhenixMsg.normMail(a.email);
-    const incs = decControles(g), pts = PhenixMsg.pointsCorrection(incs, { dateFin: (g.artisan && g.artisan.decennaleAtt || {}).dateFin });
+    const incs = [], pts = [];   // [Décennale] 16/11/2026 — pas de contrôle de l'attestation dans le dossier de financement
     const contact = (tel || mail)
       ? '📞 ' + (tel ? escH(tel) : '<i>téléphone manquant</i>') + ' · ✉ ' + (mail ? escH(mail) : '<i>mail manquant</i>')
       : 'Coordonnées manquantes :';
     const lis = incs.map(x => '<li class="' + x.niveau + '"><b>' + PhenixDecennale.symbole[x.niveau] + ' ' + PhenixDecennale.libelle[x.niveau] + '</b> ' + escH(x.texte) + '</li>').join('');
     const att = a.decennaleAtt;
-    const detail = (a.decennaleStatut === 'recue' && att)
-      ? '<div class="dec-contact">Attestation lue : ' + escH(att.assureur || 'assureur non lu') + (att.police ? ' · police ' + escH(att.police) : '') +
-        (att.dateDebut || att.dateFin ? ' · du ' + PhenixMsg.dateFr(att.dateDebut) + ' au ' + PhenixMsg.dateFr(att.dateFin) : '') +
-        (att.activites && att.activites.length ? '<br>Activités garanties : ' + escH(att.activites.join(' ; ')) : '') +
-        (a.decennaleUrl ? ' · <a href="' + escH(a.decennaleUrl) + '" target="_blank" rel="noopener" style="color:var(--accent)">Ouvrir le PDF</a>' : '') + '</div>' : '';
+    const detail = (a.decennaleStatut === 'recue' && a.decennaleUrl) ? '<div class="dec-contact"><a href="' + escH(a.decennaleUrl) + '" target="_blank" rel="noopener" style="color:var(--accent)">Ouvrir l’attestation</a></div>' : '';
     return '<div class="dec-row"><div class="dec-top"><div><div class="dec-nom">' + escH(g.nom) + '</div>' +
       '<div class="dec-lots">' + g.lots.map(l => escH((l.num || '') + ' ' + (l.nom || ''))).join(' · ') + '</div>' +
       '<div class="dec-contact">' + contact + '</div></div>' +
@@ -772,7 +777,7 @@ function syncChecklistDecennale(groupes) {
   if (!groupes.length) return;
   if (!currentDossier.checklist) currentDossier.checklist = {};
   const it = currentDossier.checklist.decennale || (currentDossier.checklist.decennale = {});
-  const tousOk = groupes.every(g => g.artisan && g.artisan.decennaleStatut === 'recue' && !PhenixDecennale.resume(decControles(g)).bloquants);
+  const tousOk = groupes.every(g => g.artisan && g.artisan.decennaleStatut === 'recue');
   const uneDemande = groupes.some(g => g.artisan && g.artisan.decennaleStatut);
   let nouveau = it.status || 'manquant';
   if (tousOk) nouveau = 'obtenu'; else if (uneDemande && nouveau === 'manquant') nouveau = 'attente';
