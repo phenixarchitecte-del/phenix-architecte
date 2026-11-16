@@ -50,6 +50,9 @@
     opts = opts || {};
     var jsPDF = global.jspdf.jsPDF;
     this.doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    // [16/11/2026] caractères hors police standard (espaces fines insécables de toLocaleString, flèches, coches) : remplacés, jamais de signes illisibles
+    var dd = this.doc, net = function (t) { return Array.isArray(t) ? t.map(net) : typeof t === 'string' ? t.replace(/[\u202f\u00a0\u2007\u2009]/g, ' ').replace(/[\u2192\u279c\u27a4]/g, '>').replace(/[\u2714\u2713]/g, 'OK').replace(/[\u2716\u2715]/g, 'X').replace(/\u2026/g, '...') : t; };
+    ['text', 'splitTextToSize', 'getTextWidth'].forEach(function (f) { var o = dd[f].bind(dd); dd[f] = function (t) { var a = [].slice.call(arguments); a[0] = net(t); return o.apply(null, a); }; });
     this.titre = opts.titre || '';
     this.sousTitre = opts.sousTitre || '';
     this.reference = opts.reference || '';      // affichée dans le pied de page de chaque page
@@ -249,7 +252,7 @@
      cfg = { lots:[{ titre, montant, postes:[{ designation, detail, qte, pu, total }] }], prix:true|false, titres:{designation,qte,pu,total}, reserveFin: mm à garder avec les 2 dernières lignes (ex. 32 pour les totaux) }
      Bandeau de lot (fond bleu pâle, filet marine, texte gras) jamais seul en bas de page ; lignes jamais coupées ; en-tête répété. */
   P.tableauLots = function (cfg) {
-    var d = this.doc, self = this, prix = cfg.prix !== false, L = PAGE.marge, R = PAGE.w - PAGE.marge;
+    var d = this.doc, self = this, prix = cfg.prix !== false, L = PAGE.marge, R = PAGE.w - PAGE.marge, vide = !!cfg.aRemplir;   // aRemplir : PU / Total en cases pointillées (consultation)
     var T = cfg.titres || {}, pas = 4.1, taille = 8.8;
     var X = prix ? { qte: 147, pu: 168, total: R - 2 } : { qte: R - 2 };
     var wDes = (prix ? 147 - 19 - 18 : R - 2 - 19 - 24);   // désignation ≈ 61 % de la largeur (version validée le 16/11/2026)   // désignation : de x=17 jusqu'avant la colonne Qté
@@ -293,7 +296,11 @@
         if (det.length) { self._sans(false, 7.6); d.setTextColor.apply(d, COULEURS.discret); d.text(det, 19, self.y + des.length * pas - 0.6); }
         d.setTextColor.apply(d, COULEURS.encre); self._sans(false, taille);
         d.text(String(p.qte == null ? '' : p.qte), X.qte, self.y, { align: 'right' });
-        if (prix) { d.text(String(p.pu == null ? '' : p.pu), X.pu, self.y, { align: 'right' }); self._sans(true, taille); d.text(String(p.total == null ? '' : p.total), X.total, self.y, { align: 'right' }); }
+        if (prix && vide) {
+          d.setDrawColor.apply(d, COULEURS.discret); d.setLineWidth(0.2); if (d.setLineDashPattern) d.setLineDashPattern([0.8, 0.8], 0);
+          d.rect(X.pu - 17, self.y - 3.2, 17, 4.6); d.rect(X.total - 21, self.y - 3.2, 21, 4.6);
+          if (d.setLineDashPattern) d.setLineDashPattern([], 0);
+        } else if (prix) { d.text(String(p.pu == null ? '' : p.pu), X.pu, self.y, { align: 'right' }); self._sans(true, taille); d.text(String(p.total == null ? '' : p.total), X.total, self.y, { align: 'right' }); }
         self.y += h;
       });
     });
@@ -317,6 +324,88 @@
     });
     d.setDrawColor.apply(d, COULEURS.filet); d.setLineWidth(0.3); d.rect(x, y0, w, lignes.length * h, 'S');
     this.y = y0 + lignes.length * h + 8; d.setTextColor.apply(d, COULEURS.encre); this._sans(false, 10);
+  };
+
+  /* [16/11/2026] Cadre de réponse à remplir à la main (consultation d'entreprises) : champs sur deux colonnes + zone « cachet et signature ». Insécable. */
+  P.cadreReponse = function (titre, champs, opts) {
+    opts = opts || {};
+    var d = this.doc, L = PAGE.marge, w = PAGE.w - 2 * PAGE.marge, lignes = Math.ceil(champs.length / 2), h = 10 + lignes * 10 + (opts.signature === false ? 2 : 24);
+    this.ensure(h + 4);
+    var y0 = this.y - 4;
+    d.setDrawColor.apply(d, COULEURS.marine); d.setLineWidth(0.4); d.roundedRect(L, y0, w, h, 1.5, 1.5, 'S');
+    this._sans(true, 8); d.setTextColor.apply(d, COULEURS.titre); d.text(String(titre).toUpperCase(), L + 4, y0 + 6);
+    var self = this;
+    champs.forEach(function (c, i) {
+      var col = i % 2, lig = Math.floor(i / 2), x = L + 4 + col * (w / 2), y = y0 + 14 + lig * 10;
+      self._sans(false, 7.6); d.setTextColor.apply(d, COULEURS.discret); d.text(c, x, y);
+      d.setDrawColor.apply(d, COULEURS.filet); d.setLineWidth(0.25); d.line(x, y + 4.2, x + w / 2 - 10, y + 4.2);
+    });
+    if (opts.signature !== false) { this._sans(false, 7.6); d.setTextColor.apply(d, COULEURS.discret); d.text('Cachet et signature :', L + 4, y0 + 14 + lignes * 10 + 2); }
+    this.y = y0 + h + 6; d.setTextColor.apply(d, COULEURS.encre); this._sans(false, 10);
+  };
+
+  /* [16/11/2026] Zone libre encadrée (remarques à écrire à la main), insécable. */
+  P.zoneLibre = function (titre, hauteur) {
+    var d = this.doc, h = hauteur || 28; this.ensure(h + 6);
+    var y0 = this.y - 4; d.setDrawColor.apply(d, COULEURS.filet); d.setLineWidth(0.35); d.roundedRect(PAGE.marge, y0, PAGE.w - 2 * PAGE.marge, h, 1.5, 1.5, 'S');
+    this._sans(true, 7.8); d.setTextColor.apply(d, COULEURS.discret); d.text(String(titre).toUpperCase(), PAGE.marge + 4, y0 + 5.5);
+    this.y = y0 + h + 6; d.setTextColor.apply(d, COULEURS.encre); this._sans(false, 10);
+  };
+
+  /* [16/11/2026] Texte « markdown » léger (## titre, ### sous-titre, - puce, **gras**) : CCTP, annexes, notes. */
+  P.markdown = function (texte) {
+    var self = this, puces = [];
+    function vider() { if (puces.length) { self.puces(puces); puces = []; } }
+    String(texte || '').split('\n').forEach(function (raw) {
+      var l = raw.replace(/\s+$/, ''), m = l.match(/^\s*[-•*]\s+(.*)$/);
+      if (m) { puces.push(m[1]); return; }
+      vider();
+      if (/^###\s+/.test(l)) self.texte('**' + l.replace(/^###\s+/, '').replace(/\*\*/g, '') + '**', { suite: 10, apres: 0.6 });
+      else if (/^##?\s+/.test(l)) self.article(l.replace(/^##?\s+/, '').replace(/\*\*/g, ''));
+      else if (l.trim()) self.texte(l);
+    });
+    vider();
+  };
+
+  /* [16/11/2026] Convertit un fragment HTML simple en PDF à la charte (h1 → section, h2 → article, h3/p → texte, ul/ol → puces,
+     table → tableau : colonnes de chiffres serrées à droite, la première colonne de texte prend le reste). Sert à migrer les anciens gabarits. */
+  P.html = function (source) {
+    var self = this, racine = typeof source === 'string' ? new DOMParser().parseFromString('<div>' + source + '</div>', 'text/html').body.firstChild : source;
+    function riche(el) {
+      var t = '';
+      el.childNodes.forEach(function (n) {
+        if (n.nodeType === 3) t += n.textContent;
+        else if (/^(B|STRONG)$/.test(n.tagName)) t += '**' + n.textContent + '**';
+        else if (n.tagName === 'BR') t += '\n';
+        else t += riche(n);
+      });
+      return t.replace(/[ \t]+/g, ' ');
+    }
+    function tableau(tb) {
+      var lignes = [].slice.call(tb.querySelectorAll('tr')).map(function (tr) { return [].slice.call(tr.children).map(function (td) { return td.textContent.replace(/\s+/g, ' ').trim(); }); }).filter(function (l) { return l.join('').trim(); });
+      if (!lignes.length) return;
+      var tete = tb.querySelector('thead tr') ? lignes.shift() : null, n = Math.max.apply(null, lignes.map(function (l) { return l.length; }).concat(tete ? [tete.length] : []));
+      var chiffre = /^[\d\s.,  €%+\-–]*(u|m²|m2|ml|m³|m|h|j|ens|forf|kg|t)?\.?$/i;
+      var num = []; for (var k = 0; k < n; k++) num[k] = lignes.filter(function (l) { return l[k] && chiffre.test(l[k]); }).length >= lignes.filter(function (l) { return l[k]; }).length * 0.6 && lignes.some(function (l) { return l[k]; });
+      var nNum = num.filter(Boolean).length, nTxt = n - nNum, wNum = 22, wTxt = (PAGE.w - 2 * PAGE.marge - 4 - nNum * wNum) / Math.max(1, nTxt), x = PAGE.marge + 2, cols = [];
+      for (k = 0; k < n; k++) { var w = num[k] ? wNum : wTxt; cols.push(num[k] ? { titre: tete ? tete[k] || '' : '', x: x + w - 2, align: 'right' } : { titre: tete ? tete[k] || '' : '', x: x, w: w - 3 }); x += w; }
+      self.tableau({ colonnes: cols, lignes: lignes });
+    }
+    function parcourir(el) {
+      [].slice.call(el.children).forEach(function (c) {
+        if (c.getAttribute && c.getAttribute('data-pdf') === 'ignorer') return;
+        var t = c.tagName;
+        if (t === 'H1') self.section(c.textContent.trim(), 24);
+        else if (t === 'H2') self.article(c.textContent.trim());
+        else if (t === 'H3' || t === 'H4') self.texte('**' + c.textContent.trim() + '**', { suite: 10, apres: 0.6 });
+        else if (t === 'P') { var r = riche(c).trim(); if (r) self.texte(r); }
+        else if (t === 'UL' || t === 'OL') self.puces([].slice.call(c.querySelectorAll(':scope > li')).map(function (li) { return riche(li).trim(); }));
+        else if (t === 'TABLE') tableau(c);
+        else if (t === 'HR') self.y += 3;
+        else parcourir(c);
+      });
+    }
+    parcourir(racine);
   };
 
   /* ═══ Documents contractuels : articles, texte riche, cadres, signatures ═══ */

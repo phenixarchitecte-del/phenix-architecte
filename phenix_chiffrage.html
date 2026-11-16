@@ -7,6 +7,7 @@
 ══════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_chiffrage.html
 ──────────────────────────────────────────────────────────────────
+ 16/11/2026 — [PDF] DPGF, demande de prix d'un lot, CCTP et contrats d'engagement (ancien gabarit) : vrais PDF à la charte commune.
  16/11/2026 — [PDF] Devis client (détaillé et synthèse) : vrai PDF téléchargé, charte commune phenix_pdf.js (style du dossier de financement) ;
    désignation large, Qté / PU HT / Total serrées, bandeau par lot, totaux à droite, signatures.
  14/11/2026 — [Devis mail] Les devis d'artisans reçus par mail se rangent seuls : la surveillance des mails lit le PDF, reconnaît le
@@ -3309,7 +3310,7 @@ function cctpVersHtml(t){
 }
 
 // ── Export PDF : portée = 'general' | n° d'index de lot | 'tous' ──
-function cctpExportPDF(portee){
+async function cctpExportPDF(portee){
   const ci = state.currentChantier, c = ci === null ? null : state.chantiers[ci];
   if (!c){ showToast('⚠️ Sélectionnez un projet'); return; }
   const lots = c.lots || [];
@@ -3327,47 +3328,16 @@ function cctpExportPDF(portee){
     blocs.push({ titre:'CCTP — ' + (l.num ? l.num + ' — ' : '') + (l.nom||''), texte:l.cctp });
   }
   if (!blocs.length){ showToast('⚠️ Aucun CCTP à exporter'); return; }
-  const titreDoc = portee === 'tous' ? 'Cahier des Clauses Techniques Particulières' : blocs[0].titre;
+  // [PDF] 16/11/2026 — vrai PDF à la charte commune (phenix_pdf.js)
+  const titreDoc = portee === 'tous' ? 'Cahier des clauses techniques particulières' : blocs[0].titre;
+  try { await _centChargerPdf(); } catch(e) {}
+  if (!(window.jspdf && window.PhenixPDF)) { showToast('⚠️ Bibliothèque PDF non chargée (connexion ?)'); return; }
   const d = new Date().toLocaleDateString('fr-FR');
-  const corps = blocs.map((b, i) => '<section class="bloc' + (i ? ' saut' : '') + '"><h1>' + esc_dpgf(b.titre) + '</h1>' + cctpVersHtml(b.texte) + '</section>').join('\n');
-  const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>${esc_dpgf(titreDoc)} — ${esc_dpgf(c.nom||'')}</title>
-<style>
-*{box-sizing:border-box}
-@page{size:A4;margin:0}
-body{font-family:'Helvetica Neue',Arial,sans-serif;color:#1E293B;font-size:11.5px;line-height:1.55;margin:0;background:#fff;print-color-adjust:exact;-webkit-print-color-adjust:exact}
-table.pg{width:100%;border-collapse:collapse}
-table.pg td{padding:0}
-td.sp{height:12mm}
-table.pg td.wrap{padding:0 15mm}
-.header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1E3A5F;padding-bottom:12px;margin-bottom:16px}
-.brand{font-size:20px;font-weight:700;color:#1E3A5F}.brand span{color:#4A9CC7}
-.brand-sub{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#64748B;margin-top:3px}
-.doc{text-align:right}.doc b{display:block;font-size:15px;color:#1E3A5F}.doc small{color:#64748B;font-size:10px}
-.info{background:#F1F5F9;border-radius:6px;padding:10px 14px;margin-bottom:8px;font-size:11px;display:flex;gap:28px;flex-wrap:wrap}
-.info div span{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#64748B}
-h1{font-size:17px;color:#1E3A5F;margin:18px 0 10px;break-after:avoid;page-break-after:avoid}
-h2{font-size:13px;color:#1E3A5F;margin:16px 0 5px;padding-bottom:3px;border-bottom:1px solid #CBD5E1;break-after:avoid;page-break-after:avoid}
-h3{font-size:12px;color:#334155;margin:11px 0 3px;break-after:avoid;page-break-after:avoid}
-p{margin:4px 0;orphans:3;widows:3;text-align:justify}
-ul{margin:4px 0 6px;padding-left:18px}li{margin:2px 0;break-inside:avoid}
-section.saut{break-before:page;page-break-before:always}
-.footer{text-align:center;font-size:9px;color:#94A3B8;border-top:1px solid #E2E8F0;padding-top:8px;margin-top:22px;line-height:1.8;break-inside:avoid}
-.no-print{text-align:right;padding:10px 15mm 0}.no-print button{background:#1E3A5F;color:#fff;border:0;padding:8px 18px;border-radius:6px;font-size:12px;cursor:pointer}
-@media print{.no-print{display:none}}
-</style></head><body>
-<div class="no-print"><button onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF</button></div>
-<table class="pg"><thead><tr><td class="sp"></td></tr></thead><tfoot><tr><td class="sp"></td></tr></tfoot><tbody><tr><td class="wrap">
-<div class="header"><div><div class="brand">Phénix<span>-Architecture</span></div><div class="brand-sub">Maître d'œuvre · Contractant général</div></div>
-<div class="doc"><b>${esc_dpgf(titreDoc)}</b><small>Date : ${d}</small></div></div>
-<div class="info"><div><span>Chantier</span>${esc_dpgf(c.nom||'')}</div>${c.client?'<div><span>Maître d\'ouvrage</span>'+esc_dpgf(c.client)+'</div>':''}${c.adresse?'<div><span>Adresse</span>'+esc_dpgf(c.adresse)+'</div>':''}</div>
-${corps}
-<div class="footer">Phénix-Architecture · SIRET 987 989 316 00011 · 6 lieu-dit l'Étreille, 63780 Saint-Georges-de-Mons<br>contact@phenixarchitecte.fr · 04 73 73 00 59</div>
-</td></tr></tbody></table></body></html>`;
-  const url = URL.createObjectURL(new Blob([html], { type:'text/html;charset=utf-8' }));
-  const a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener';
-  document.body.appendChild(a); a.click();
-  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
-  showToast('CCTP ouvert — Imprimer pour enregistrer en PDF');
+  const px = PhenixPDF.create({ titre: titreDoc, sousTitre: (c.nom || '') + ' · établi le ' + d });
+  px.cadres([{ titre:'Chantier', lignes:['**' + (c.nom || '—') + '**'].concat(c.adresse ? [c.adresse] : []) }, { titre:'Maître d’ouvrage', lignes:[c.client || '—'] }]);
+  blocs.forEach((b, i) => { if (i) px.saut(); if (blocs.length > 1) px.section(b.titre, 24); px.markdown(b.texte); });
+  px.enregistrer(('CCTP_' + (c.nom || 'projet') + (portee === 'tous' ? '' : '_' + blocs[0].titre.replace(/^CCTP — /, ''))).replace(/[^\wÀ-ÿ\-]+/g, '_') + '.pdf');
+  showToast('📄 CCTP enregistré en PDF');
 }
 
 // ── Chantier : carte de synthèse + CCTP général ──────────────
@@ -3673,55 +3643,42 @@ ${ct.annexePostes ? '<div class="annexe"><h2>Annexe 1 — Liste des postes</h2><
 ${ct.annexeCctp && lot.cctp ? '<div class="annexe saut"><h2>Annexe 2 — CCTP du lot</h2>' + cctpVersHtml(lot.cctp) + '</div>' : ''}
 </section>`;
 }
-function contratExportPDF(portee){
+async function contratExportPDF(portee){
   const ci = state.currentChantier, c = ci === null ? null : state.chantiers[ci];
   if (!c){ showToast('⚠️ Sélectionnez un projet'); return; }
   const lots = (c.lots || []).filter((l,i) => portee === 'tous' ? !!l.contrat : i === portee && l.contrat);
   if (!lots.length){ showToast('⚠️ Aucun contrat préparé'); return; }
   const incomplets = lots.filter(l => !l.contrat.entreprise || !ctPeriode(l.contrat));
   if (incomplets.length && !confirm(incomplets.length + ' contrat(s) sans entreprise ou sans semaine de début : les exporter quand même ?')) return;
-  const corps = lots.map(l => _ctSection(c, l)).join('\n');
-  const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Contrat d'engagement — ${esc_dpgf(c.nom || '')}${lots.length === 1 ? ' — ' + esc_dpgf(lots[0].nom || '') : ''}</title>
-<style>
-*{box-sizing:border-box}
-@page{size:A4;margin:0}
-body{font-family:'Helvetica Neue',Arial,sans-serif;color:#1E293B;font-size:11.5px;line-height:1.5;margin:0;background:#fff;print-color-adjust:exact;-webkit-print-color-adjust:exact}
-table.pg{width:100%;border-collapse:collapse}table.pg>thead>tr>td,table.pg>tfoot>tr>td,table.pg>tbody>tr>td{padding:0}
-td.sp{height:12mm}table.pg>tbody>tr>td.wrap{padding:0 15mm}
-.entete{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1E3A5F;padding-bottom:10px;margin-bottom:14px}
-.brand{font-size:20px;font-weight:700;color:#1E3A5F}.brand span{color:#4A9CC7}.brand-sub{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#64748B;margin-top:3px}
-.titre{font-size:20px;font-weight:700;color:#1E3A5F}.sous{font-size:14px;color:#334155;margin:2px 0 12px}
-.cles{display:flex;gap:10px;margin-bottom:12px}
-.cles div{flex:1;background:#F1F5F9;border:1px solid #CBD5E1;border-radius:8px;padding:10px 12px}
-.cles span,.parties span,.chantier span{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#64748B;margin-bottom:2px}
-.cles b{display:block;font-size:15px;color:#1E3A5F}.cles small{display:block;color:#475569;font-size:10.5px;margin-top:2px}
-.parties{display:flex;gap:10px;margin-bottom:8px}.parties div{flex:1;border:1px solid #E2E8F0;border-radius:8px;padding:9px 12px;font-size:11px}.parties b{display:block;font-size:12.5px;color:#1E3A5F;margin-bottom:2px}
-.chantier{border:1px solid #E2E8F0;border-radius:8px;padding:9px 12px;margin-bottom:6px;font-size:11px}.chantier b{display:block;font-size:12.5px;color:#1E3A5F}
-h2{font-size:12.5px;color:#1E3A5F;margin:13px 0 4px;border-bottom:1px solid #CBD5E1;padding-bottom:2px;break-after:avoid;page-break-after:avoid}
-p{margin:4px 0;text-align:justify;orphans:3;widows:3}ul{margin:4px 0;padding-left:18px}li{margin:2px 0}
-.sigs{display:flex;gap:14px;margin-top:18px;break-inside:avoid;page-break-inside:avoid}
-.sigs div{flex:1;border:1px solid #CBD5E1;border-radius:8px;padding:10px 12px;height:105px}.sigs b{display:block;color:#1E3A5F;font-size:11.5px}.sigs small{display:block;margin-top:6px;color:#94A3B8;font-size:9px}
-.annexe{margin-top:16px}.annexe.saut{break-before:page;page-break-before:always}
-table.postes{width:100%;border-collapse:collapse;font-size:10.5px}table.postes th{background:#1E3A5F;color:#fff;text-align:left;padding:5px 7px}
-table.postes td{padding:5px 7px;border-bottom:1px solid #E2E8F0}table.postes tr{break-inside:avoid;page-break-inside:avoid}.r{text-align:right !important;white-space:nowrap}
-table.postes thead{display:table-header-group}
-section.bloc+section.bloc{break-before:page;page-break-before:always}
-.annexe h2+ul,.annexe h3{break-after:avoid}.annexe h3{font-size:11.5px;color:#334155;margin:9px 0 3px}
-.footer{text-align:center;font-size:9px;color:#94A3B8;border-top:1px solid #E2E8F0;padding-top:8px;margin-top:20px;line-height:1.8}
-.no-print{text-align:right;padding:10px 15mm 0}.no-print button{background:#1E3A5F;color:#fff;border:0;padding:8px 18px;border-radius:6px;font-size:12px;cursor:pointer}
-@media print{.no-print{display:none}}
-</style></head><body>
-<div class="no-print"><button onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF</button></div>
-<table class="pg"><thead><tr><td class="sp"></td></tr></thead><tfoot><tr><td class="sp"></td></tr></tfoot><tbody><tr><td class="wrap">
-<div class="entete"><div><div class="brand">Phénix<span>-Architecture</span></div><div class="brand-sub">Maître d'œuvre · Contractant général</div></div><div style="text-align:right;font-size:10px;color:#64748B">Établi le ${new Date().toLocaleDateString('fr-FR')}</div></div>
-${corps}
-<div class="footer">Phénix-Architecture · SIRET 987 989 316 00011 · 6 lieu-dit l'Étreille, 63780 Saint-Georges-de-Mons<br>contact@phenixarchitecte.fr · 04 73 73 00 59</div>
-</td></tr></tbody></table></body></html>`;
-  const url = URL.createObjectURL(new Blob([html], { type:'text/html;charset=utf-8' }));
-  const a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener';
-  document.body.appendChild(a); a.click();
-  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
-  showToast('Contrat ouvert — Imprimer pour enregistrer en PDF');
+  // [PDF] 16/11/2026 — vrai PDF à la charte commune : mêmes textes (repris de _ctSection), mise en page phenix_pdf.js
+  try { await _centChargerPdf(); } catch(e) {}
+  if (!(window.jspdf && window.PhenixPDF)) { showToast('⚠️ Bibliothèque PDF non chargée (connexion ?)'); return; }
+  const px = PhenixPDF.create({ titre: 'Contrat d’engagement', sousTitre: (c.nom || '') + (lots.length === 1 ? ' · ' + (lots[0].num ? lots[0].num + ' — ' : '') + (lots[0].nom || '') : ' · ' + lots.length + ' lots') + ' · établi le ' + new Date().toLocaleDateString('fr-FR') });
+  lots.forEach((l, i) => _ctPdf(px, c, l, i === 0));
+  px.enregistrer(('Contrat_engagement_' + (c.nom || 'projet') + (lots.length === 1 ? '_' + (lots[0].nom || '') : '')).replace(/[^\wÀ-ÿ\-]+/g, '_') + '.pdf');
+  showToast('📄 Contrat enregistré en PDF');
+}
+function _ctPdf(px, c, lot, premier){
+  const ct = lot.contrat, eur = n => Math.round(n).toLocaleString('fr-FR').replace(/[  ]/g,' ') + ' €';
+  const sec = new DOMParser().parseFromString(_ctSection(c, lot), 'text/html').querySelector('section');
+  const txt = el => (el ? el.textContent.replace(/\s+/g, ' ').trim() : '');
+  if (!premier) px.saut();
+  px.section(txt(sec.querySelector('.sous')), 40);
+  px.cles([...sec.querySelectorAll('.cles > div')].map(d => ({ etiquette: txt(d.querySelector('span')), valeur: txt(d.querySelector('b')), detail: txt(d.querySelector('small')) })));
+  const cadre = d => { const t = txt(d.querySelector('span')), b = txt(d.querySelector('b')); d.querySelector('span').remove(); d.querySelector('b').remove();
+    return { titre: t, lignes: ['**' + b + '**'].concat(d.innerHTML.split(/<br\s*\/?>/i).map(x => x.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#39;|&apos;/g, '’').replace(/\s+/g, ' ').trim()).filter(Boolean)) }; };
+  px.cadres([...sec.querySelectorAll('.parties > div')].map(cadre));
+  if (sec.querySelector('.chantier')) px.cadres([cadre(sec.querySelector('.chantier'))]);
+  const corps = document.createElement('div');
+  [...sec.children].forEach(el => { if (/^(H2|P|UL)$/.test(el.tagName)) corps.appendChild(el.cloneNode(true)); });
+  px.html(corps);
+  px.signatures([{ titre: 'Pour l’entreprise', qualite: (ct.entreprise || '') + ' — « Lu et approuvé, bon pour engagement »' }, { titre: 'Pour Phénix-Architecture', qualite: 'Maxime Suchet' }]);
+  if (ct.annexePostes) {
+    const postes = (lot.postes || []).map(x => { const q = parseFloat(x.q) || 0, pu = parseFloat(x.puArtisan) || parseFloat(x.pu) || 0; return { designation: x.n || '', qte: (String(q).replace('.', ',') + ' ' + (x.u || '')).trim(), pu: eur(pu), total: eur(q * pu), _t: q * pu }; });
+    px.saut(); px.section('Annexe 1 — Liste des postes', 30);
+    px.tableauLots({ lots: [{ titre: (lot.num ? lot.num + ' — ' : '') + (lot.nom || ''), montant: eur(postes.reduce((a, p) => a + p._t, 0)), postes }], prix: true });
+  }
+  if (ct.annexeCctp && lot.cctp) { px.saut(); px.section('Annexe 2 — CCTP du lot', 30); px.markdown(lot.cctp); }
 }
 
 async function contratVersPlanning(portee){
@@ -5930,7 +5887,7 @@ function dpgfRemplirLots(){
 }
 function esc_dpgf(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
-function exportDPGF(){
+async function exportDPGF(){
   const quickCi = state.currentChantier;
   const selEl = document.getElementById('dpgf-chantier-select');
   const selCi = selEl ? selEl.value : '';
@@ -5957,92 +5914,24 @@ function exportDPGF(){
   const date = new Date().toLocaleDateString('fr-FR');
   const ref = 'DPGF-' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '-' + (parseInt(ci)+1).toString().padStart(3,'0');
 
-  const lotsHTML = lots.map(lot => {
-    const rows = (lot.postes||[]).map(p => {
-      const q = parseFloat(p.q)||0;
-      return `<tr><td style="padding:6px 8px 6px 22px;font-size:11px;color:#334155">${esc_dpgf(p.n)}</td><td style="text-align:right;padding:6px 8px;font-size:11px;white-space:nowrap">${q} ${esc_dpgf(p.u||'u')}</td><td style="padding:6px 8px;border-left:1px dashed #CBD5E1;width:90px"></td><td style="padding:6px 8px;border-left:1px dashed #CBD5E1;width:100px"></td></tr>`;
-    }).join('');
-    return `<tr><td colspan="4" style="background:#1E3A5F;padding:8px 10px;color:#93C5FD;font-size:11.5px;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact">${esc_dpgf(lot.num?lot.num+' — ':'')}${esc_dpgf(lot.nom)}</td></tr>${rows}`;
-  }).join('');
-
-  const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>DPGF ${ref}</title>
-<style>*{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}body{font-family:'Segoe UI',Arial,sans-serif;color:#1E293B;background:#fff;font-size:13px}
-.devis-page{max-width:800px;margin:0 auto;padding:28px 32px}
-.header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:16px;border-bottom:3px solid #1E3A5F;margin-bottom:20px}
-.brand{font-size:22px;font-weight:800;color:#1E3A5F}.brand span{color:#3B82F6}
-.brand-sub{font-size:9.5px;color:#64748B;letter-spacing:.12em;text-transform:uppercase;margin-top:2px}
-.brand-contact{font-size:10px;color:#64748B;margin-top:6px;line-height:1.7}
-.doc-badge{background:#1E3A5F;color:white;font-size:11px;font-weight:700;padding:4px 12px;border-radius:4px;display:inline-block;margin-bottom:6px}
-.doc-ref{font-size:10.5px;color:#64748B;line-height:1.8;text-align:right}
-.parties{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px;background:#F8FAFC;border-radius:8px;padding:14px}
-.plabel{font-size:9px;font-weight:700;color:#94A3B8;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
-.pname{font-size:13px;font-weight:700;color:#1E3A5F}
-.pdetail{font-size:10.5px;color:#475569;margin-top:2px;line-height:1.6}
-.contexte{background:#EFF6FF;border-left:4px solid #3B82F6;padding:12px 14px;margin-bottom:18px;border-radius:0 6px 6px 0}
-.contexte-lbl{font-size:9px;font-weight:700;color:#3B82F6;letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px}
-.contexte-txt{font-size:11.5px;color:#334155;line-height:1.7;white-space:pre-wrap}
-table{width:100%;border-collapse:collapse;margin-bottom:18px}
-thead tr{background:#1E3A5F}
-thead th{padding:8px 10px;color:#93C5FD;font-size:10px;font-weight:700;letter-spacing:.06em;text-align:left}
-thead th:not(:first-child){text-align:center}
-tbody tr:nth-child(even) td{background:#F8FAFC}
-.reponse{border:1.5px solid #E2E8F0;border-radius:8px;padding:14px 16px;margin-top:10px;margin-bottom:24px;page-break-inside:avoid}
-.reponse-lbl{font-size:9px;font-weight:700;color:#94A3B8;letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px}
-.reponse-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:11px}
-.reponse-field{border-bottom:1px solid #CBD5E1;padding-bottom:16px;color:#94A3B8}
-.footer{text-align:center;font-size:9px;color:#94A3B8;border-top:1px solid #E2E8F0;padding-top:8px;margin-top:10px;line-height:1.8}
-.no-print{margin:16px 0;text-align:center}
-.no-print button{background:#1E3A5F;color:white;border:none;padding:8px 18px;border-radius:6px;font-size:12px;cursor:pointer}
-@media print{.no-print{display:none}@page{size:A4;margin:0}.devis-page{padding:10mm 13mm;max-width:none}tr.sp td,tfoot.sp td{height:9mm;padding:0 !important;border:0 !important;background:#fff !important}}
-</style></head><body>
-<div class="devis-page">
-  <div class="header">
-    <div>
-      <div class="brand">Phénix<span>-Architecture</span></div>
-      <div class="brand-sub">Maître d'œuvre · Contractant général</div>
-      <div class="brand-contact">6 lieu-dit l'Étreille — 63780 Saint-Georges-de-Mons<br>04 73 73 00 59 · contact@phenixarchitecte.fr<br>SIRET 987 989 316 00011</div>
-    </div>
-    <div>
-      <div class="doc-badge">DPGF — CONSULTATION</div>
-      <div class="doc-ref">Réf : ${ref}<br>Date d'envoi : ${date}<br>Réponse attendue sous 15 jours</div>
-    </div>
-  </div>
-  <div class="parties">
-    <div><div class="plabel">Nature du projet</div><div class="pname">${esc_dpgf(c.type)||'—'}</div><div class="pdetail">${c.surface?'Surface : '+c.surface+' m²':''}</div></div>
-    <div><div class="plabel">Maître d'œuvre</div><div class="pname">Phénix-Architecture</div><div class="pdetail">Maxime Suchet · Contractant Général · MOE</div></div>
-  </div>
-  ${contexte ? `<div class="contexte"><div class="contexte-lbl">Contexte et conception du projet</div><div class="contexte-txt">${esc_dpgf(contexte)}</div></div>` : ''}
-  <table>
-    <thead><tr class="sp"><td colspan="4"></td></tr><tr><th>Désignation</th><th>Quantitatif</th><th>PU HT proposé</th><th>Total HT proposé</th></tr></thead><tfoot class="sp"><tr><td colspan="4"></td></tr></tfoot>
-    <tbody>${lotsHTML}</tbody>
-  </table>
-  <div class="reponse">
-    <div class="reponse-lbl">Cadre de réponse de l'entreprise</div>
-    <div class="reponse-grid">
-      <div class="reponse-field">Entreprise / Raison sociale</div>
-      <div class="reponse-field">SIRET</div>
-      <div class="reponse-field">Nom et qualité du signataire</div>
-      <div class="reponse-field">Date</div>
-    </div>
-    <div style="margin-top:16px;font-size:10px;color:#94A3B8">Cachet et signature :</div>
-    <div style="height:60px"></div>
-  </div>
-  <div class="footer">Phénix-Architecture · SIRET 987 989 316 00011 · 6 lieu-dit l'Étreille, 63780 Saint-Georges-de-Mons<br>contact@phenixarchitecte.fr · 04 73 73 00 59 · Document de consultation — quantitatif non contractuel</div>
-  <div class="no-print"><button onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF</button></div>
-</div>
-</body></html>`;
-
-  const blob = new Blob([html], {type:'text/html;charset=utf-8'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.target = '_blank'; a.rel = 'noopener';
-  document.body.appendChild(a); a.click();
-  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
-  showToast('DPGF ouvert — Imprimer pour enregistrer en PDF');
+  // [PDF] 16/11/2026 — vrai PDF à la charte commune : désignation large, PU / Total en cases à remplir par l'entreprise
+  try { await _centChargerPdf(); } catch(e) {}
+  if (!(window.jspdf && window.PhenixPDF)) { showToast('⚠️ Bibliothèque PDF non chargée (connexion ?)'); return; }
+  const px = PhenixPDF.create({ titre: 'DPGF — consultation des entreprises', sousTitre: 'Réf. ' + ref + ' · envoyé le ' + date + ' · réponse attendue sous 15 jours', reference: ref });
+  px.cadres([{ titre:'Nature du projet', lignes:['**' + (c.type || '—') + '**'].concat(c.surface ? ['Surface : ' + c.surface + ' m²'] : []) },
+             { titre:'Maître d’œuvre — contractant général', lignes:['**Phénix-Architecture**', 'Maxime Suchet', '04 73 73 00 59 · contact@phenixarchitecte.fr'] }]);
+  if (contexte) { px.section('Contexte et conception du projet', 16); px.texte(contexte); }
+  px.section('Décomposition du prix global et forfaitaire', 40);
+  px.tableauLots({ lots: lots.map(lot => ({ titre: (lot.num ? lot.num + ' — ' : '') + (lot.nom || ''), postes: (lot.postes || []).map(p => ({ designation: p.n || '', qte: (String(parseFloat(p.q) || 0).replace('.', ',') + ' ' + (p.u || 'u')).trim() })) })),
+    prix: true, aRemplir: true, titres: { pu: 'PU HT', total: 'Total HT' }, reserveFin: 60 });
+  px.cadreReponse('Cadre de réponse de l’entreprise', ['Entreprise / raison sociale', 'SIRET', 'Nom et qualité du signataire', 'Date']);
+  px.texte('Document de consultation : le quantitatif est indicatif et non contractuel. Merci de vérifier les quantités et de nous signaler toute différence.', { taille: 8.5 });
+  px.enregistrer(('DPGF_' + (c.nom || 'projet') + '_' + ref).replace(/[^\wÀ-ÿ\-]+/g, '_') + '.pdf');
+  showToast('📄 DPGF enregistré en PDF');
 }
 
 // ── Export PDF d'un lot pour confirmation par l'artisan (prix ACHAT, pas prix client) ──
-function exportLotPDF(){
+async function exportLotPDF(){
   const ci=state.currentChantier, li=state.currentLot;
   if(ci===null||li===null){alert('Ouvrez d\'abord un lot.');return;}
   const c=state.chantiers[ci];
@@ -6052,90 +5941,23 @@ function exportLotPDF(){
   const ref='LOT-'+new Date().toISOString().slice(0,10).replace(/-/g,'')+'-'+(lot.num||'').replace(/\D/g,'').padStart(2,'0');
   function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
+  // [PDF] 16/11/2026 — demande de prix d'un lot en vrai PDF à la charte commune (PU / Total à remplir par l'entreprise)
   const entNom=lotEntrepriseNom(lot);
-  const cell='text-align:right;padding:6px 10px;font-size:11.5px;border:1px dashed #CBD5E1;background:#fff';
-  const rows=(lot.postes||[]).map(p=>{
-    const q=parseFloat(p.q)||0;
-    return `<tr><td style="padding:6px 10px;font-size:11.5px;color:#334155">${esc(p.n)}</td><td style="text-align:right;padding:6px 10px;font-size:11.5px;white-space:nowrap">${q} ${esc(p.u||'u')}</td><td style="${cell}">&nbsp;</td><td style="${cell}">&nbsp;</td></tr>`;
-  }).join('');
-
-  const html=`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Consultation ${esc(lot.nom)}${entNom?' - '+esc(entNom):''}</title>
-<style>*{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}body{font-family:'Segoe UI',Arial,sans-serif;color:#1E293B;background:#fff;font-size:13px}
-.devis-page{max-width:800px;margin:0 auto;padding:28px 32px}
-.header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:16px;border-bottom:3px solid #1E3A5F;margin-bottom:20px}
-.brand{font-size:22px;font-weight:800;color:#1E3A5F}.brand span{color:#3B82F6}
-.brand-sub{font-size:9.5px;color:#64748B;letter-spacing:.12em;text-transform:uppercase;margin-top:2px}
-.brand-contact{font-size:10px;color:#64748B;margin-top:6px;line-height:1.7}
-.doc-badge{background:#e67e22;color:white;font-size:11px;font-weight:700;padding:4px 12px;border-radius:4px;display:inline-block;margin-bottom:6px}
-.doc-ref{font-size:10.5px;color:#64748B;line-height:1.8;text-align:right}
-.parties{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px;background:#F8FAFC;border-radius:8px;padding:14px}
-.plabel{font-size:9px;font-weight:700;color:#94A3B8;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
-.pname{font-size:13px;font-weight:700;color:#1E3A5F}
-.pdetail{font-size:10.5px;color:#475569;margin-top:2px;line-height:1.6}
-.objet{background:#FEF3E7;border-left:4px solid #e67e22;padding:9px 12px;margin-bottom:16px;border-radius:0 6px 6px 0}
-.objet-lbl{font-size:9px;font-weight:700;color:#e67e22;letter-spacing:.1em;text-transform:uppercase;margin-bottom:2px}
-.objet-val{font-size:13px;font-weight:600;color:#1E3A5F}
-.objet-det{font-size:10.5px;color:#64748B;margin-top:1px}
-table{width:100%;border-collapse:collapse;margin-bottom:16px}
-thead tr{background:#1E3A5F}
-thead th{padding:8px 10px;color:#93C5FD;font-size:10px;font-weight:700;letter-spacing:.06em;text-align:left}
-thead th:not(:first-child){text-align:right}
-tbody tr:nth-child(even) td{background:#F8FAFC}
-.totaux{margin-left:auto;width:260px;border:1.5px solid #E2E8F0;border-radius:8px;overflow:hidden;margin-bottom:20px;break-inside:avoid;page-break-inside:avoid}
-tr{break-inside:avoid;page-break-inside:avoid}
-tr.keep-next{break-after:avoid;page-break-after:avoid}
-tbody.lot{break-inside:avoid;page-break-inside:avoid}
-tbody.lot.last{break-after:avoid;page-break-after:avoid}
-tbody.tot tr.tot-row td{background:#fff !important;border:0;padding:14px 0 0}
-.header,.parties,.objet,.fin-devis,.sig{break-inside:avoid;page-break-inside:avoid}
-.trow{display:flex;justify-content:space-between;padding:7px 12px;font-size:12px}
-.trow.main{background:#e67e22;color:white;font-size:13.5px;font-weight:700}
-.trow .lbl{color:#64748B}.trow .val{font-weight:600;color:#1E3A5F}
-.trow.main .lbl,.trow.main .val{color:white}
-.remarques{border:1.5px dashed #CBD5E1;border-radius:6px;padding:10px 12px;margin-bottom:16px;min-height:60px}
-.remarques-lbl{font-size:9px;font-weight:700;color:#94A3B8;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px}
-.conditions{font-size:9.5px;color:#94A3B8;line-height:1.8;border-top:1px solid #E2E8F0;padding-top:12px;margin-bottom:16px}
-.sigs{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:16px}
-.sig{border:1.5px solid #E2E8F0;border-radius:6px;padding:10px;min-height:72px}
-.sig-lbl{font-size:9px;font-weight:700;color:#94A3B8;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
-.sig-name{font-size:10.5px;color:#475569;margin-bottom:28px}
-.footer{text-align:center;font-size:9px;color:#94A3B8;border-top:1px solid #E2E8F0;padding-top:8px;margin-top:10px;line-height:1.8}
-.no-print{text-align:right;margin-bottom:14px}
-.no-print button{background:#1E3A5F;color:white;border:none;padding:8px 18px;border-radius:6px;font-size:12px;cursor:pointer}
-@media print{.no-print{display:none}body{print-color-adjust:exact;-webkit-print-color-adjust:exact}@page{size:A4;margin:0}.devis-page{padding:10mm 13mm 10mm;max-width:none}tr.sp td,tfoot.sp td{height:9mm;padding:0 !important;border:0 !important;background:#fff !important}tr.sp-top td{height:0}}
-<\/style></head><body><div class="devis-page">
-<div class="no-print"><button onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF</button></div>
-<div class="header">
-  <div><div class="brand">Phénix<span>-Architecture</span></div><div class="brand-sub">Maître d'Œuvre · Contractant Général</div>
-  <div class="brand-contact">6 lieu-dit l'Étreille — 63780 Saint-Georges-de-Mons<br>04 73 73 00 59 · contact@phenixarchitecte.fr<br>SIRET 987 989 316 00011</div></div>
-  <div><div class="doc-badge">DEMANDE DE PRIX</div><div class="doc-ref">Réf : ${ref}<br>Date : ${date}</div></div>
-</div>
-<div class="parties">
-  <div><div class="plabel">Chantier</div><div class="pname">${esc(c.nom)}</div><div class="pdetail">${esc(c.adresse||'')}</div></div>
-  <div><div class="plabel">Entreprise</div>${entNom?`<div class="pname">${esc(entNom)}</div>`:`<div class="pname">________________________</div><div class="pdetail">À compléter par vos soins</div>`}</div>
-</div>
-<div class="objet"><div class="objet-lbl">Lot concerné</div><div class="objet-val">${esc(lot.num?lot.num+' — ':'')}${esc(lot.nom)}</div><div class="objet-det">Merci de vérifier les quantités ci-dessous et de renseigner vos prix unitaires et totaux HT, puis de nous retourner ce document signé.</div></div>
-<table><thead><tr class="sp"><td colspan="4"></td></tr><tr><th style="width:45%">Désignation</th><th style="width:15%;text-align:right">Qté</th><th style="width:15%;text-align:right">PU HT proposé</th><th style="width:25%;text-align:right">Total HT proposé</th></tr></thead><tfoot class="sp"><tr><td colspan="4"></td></tr></tfoot>
-<tbody>${rows}</tbody></table>
-<div class="totaux">
-  <div class="trow main"><span class="lbl">TOTAL HT proposé</span><span class="val">&nbsp;</span></div>
-</div>
-<div class="remarques"><div class="remarques-lbl">Remarques / corrections de l'entreprise</div></div>
-<div class="conditions"><strong>Merci de nous retourner ce document complété et signé</strong>, ou de nous transmettre vos remarques sur les quantités.</div>
-<div class="sigs">
-  <div class="sig"><div class="sig-lbl">Établi par</div><div class="sig-name">Maxime Suchet — Phénix-Architecture</div></div>
-  <div class="sig"><div class="sig-lbl">Entreprise</div><div class="sig-name">Nom, date et signature</div></div>
-</div>
-<div class="footer">Phénix-Architecture · SIRET 987 989 316 00011 · 6 lieu-dit l'Étreille, 63780 Saint-Georges-de-Mons<br>contact@phenixarchitecte.fr · 04 73 73 00 59 · Document confidentiel</div>
-</div><\/body><\/html>`;
-
-  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  a.href=url;a.target='_blank';a.rel='noopener';
-  document.body.appendChild(a);a.click();
-  setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},1000);
-  showToast('Bordereau lot ouvert — Imprimer pour enregistrer en PDF');
+  try { await _centChargerPdf(); } catch(e) {}
+  if (!(window.jspdf && window.PhenixPDF)) { showToast('⚠️ Bibliothèque PDF non chargée (connexion ?)'); return; }
+  const titreLot = (lot.num ? lot.num + ' — ' : '') + (lot.nom || '');
+  const px = PhenixPDF.create({ titre: 'Demande de prix', sousTitre: 'Réf. ' + ref + ' · ' + date + ' · ' + titreLot, reference: ref });
+  px.cadres([{ titre:'Chantier', lignes:['**' + (c.nom || '—') + '**'].concat(c.adresse ? [c.adresse] : []) },
+             { titre:'Entreprise', lignes: entNom ? ['**' + entNom + '**'] : ['________________________', 'À compléter par vos soins'] }]);
+  px.texte('Merci de vérifier les quantités ci-dessous, de renseigner vos prix unitaires et totaux HT, puis de nous retourner ce document signé.');
+  px.section('Lot concerné', 40);
+  px.tableauLots({ lots: [{ titre: titreLot, postes: (lot.postes || []).map(p => ({ designation: p.n || '', qte: (String(parseFloat(p.q) || 0).replace('.', ',') + ' ' + (p.u || 'u')).trim() })) }],
+    prix: true, aRemplir: true, titres: { pu: 'PU HT', total: 'Total HT' }, reserveFin: 20 });
+  px.totaux([{ libelle: 'TOTAL HT proposé', valeur: ' ', fort: true }]);
+  px.zoneLibre('Remarques ou corrections de l’entreprise', 22);
+  px.signatures([{ titre: 'Établi par', qualite: 'Maxime Suchet — Phénix-Architecture' }, { titre: 'L’entreprise', qualite: entNom || '' }]);
+  px.enregistrer(('Demande_de_prix_' + (c.nom || 'projet') + '_' + (lot.nom || 'lot')).replace(/[^\wÀ-ÿ\-]+/g, '_') + '.pdf');
+  showToast('📄 Demande de prix enregistrée en PDF');
 }
 
 function closeModal(id){document.getElementById(id).classList.remove('open');}
