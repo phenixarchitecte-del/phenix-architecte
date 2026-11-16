@@ -5,6 +5,8 @@
    Prérequis de la page hôte : <script type="importmap"> pour « three » (0.160) et « three/addons/ »,
    puis <script type="module" src="phenix_maquette3d.js">. API : init, update, setLook, setStage, setMode,
    focus, goView, views, overview, zoomIn, setActive. La page fournit PXModel.loader (→ ArrayBuffer .glb) et PXModel.cfg.
+   16/11/2026 [Plateau de jeu] option PXModel.setDecor(d) : décor de chantier de nuit comme la Synthèse 3D (parcelle à néons, camionnettes,
+   cônes, barrière, grue, voisins, lampadaires) + PXModel.anchors() (positions à l'écran) + PXModel.onRender. Le Carnet ne l'appelle pas : rien ne change pour lui.
    ═══════════════════════════════════════════════════════════════════════ */
 /* Maquette 3D par projet — charge le .glb exporté d'ArchiCAD (three.js). Même API que PXHouse (maison phare). */
 (async function(){
@@ -34,6 +36,7 @@
   }
   /* [Atelier] vue d'accueil réglée dans l'Atelier ; en portrait (téléphone) on recule pour garder la maison entière */
   function overviewPose(){
+    if(decorReq) return autoPose();
     var hv = (M.cfg && M.cfg.views || []).filter(function(v){ return v.home && v.p && v.tg; })[0];
     if(!hv) return autoPose();
     var p = new THREE.Vector3(hv.p[0], hv.p[1], hv.p[2]), t = new THREE.Vector3(hv.tg[0], hv.tg[1], hv.tg[2]);
@@ -41,7 +44,7 @@
     return { p:p, t:t };
   }
   function autoPose(){
-    var r = Math.max(size.x, size.z, size.y*1.2) || 10, k = (host.clientWidth||600)/(host.clientHeight||420) > .8 ? 1 : 1.55;
+    var r = Math.max(size.x, size.z, size.y*1.2, decorR) || 10, k = (host.clientWidth||600)/(host.clientHeight||420) > .8 ? 1 : 1.55;
     var d = r*1.55*k;
     return { p:new THREE.Vector3(ctr.x + d*.78, size.y*.9 + d*.38, ctr.z + d*.78), t:new THREE.Vector3(ctr.x, size.y*.38, ctr.z) };
   }
@@ -132,6 +135,7 @@
     controls.minDistance = Math.max(2, size.length()*.12); controls.maxDistance = size.length()*3.2;
     var L = scene.getObjectByName('px-sun'); if(L){ var e = Math.max(size.x, size.z)*.9 + 6; L.shadow.camera.left = -e; L.shadow.camera.right = e; L.shadow.camera.top = e; L.shadow.camera.bottom = -e; L.shadow.camera.far = size.length()*4 + 60; L.shadow.camera.updateProjectionMatrix(); L.position.set(ctr.x + size.length()*.8, size.length()*1.1, ctr.z + size.length()*.5); L.target.position.copy(ctr); L.target.updateMatrixWorld(); }
     MAT.ghost.clippingPlanes = [plane]; applyLook();
+    if(decorReq) buildDecor();
     updFl(); applyStates(); dirty = true; kick();
   }
   function autoSpots(named){
@@ -251,7 +255,7 @@
   }
   function resize(){
     if(!host || !renderer) return; var w = host.clientWidth || 600, h = host.clientHeight || 420;
-    renderer.setSize(w, h, false); camera.aspect = w/h; camera.updateProjectionMatrix(); dirty = true; kick();
+    renderer.setSize(w, h, false); camera.aspect = w/h; if(offX) camera.setViewOffset(w, h, -offX, 0, w, h); else camera.clearViewOffset(); camera.updateProjectionMatrix(); dirty = true; kick();
   }
   function frame(now){
     loopOn = false; if(!active) return;
@@ -259,7 +263,7 @@
     if(growAnim){ var tg = Math.min(1, (now-growAnim.t0)/700); growH = growAnim.a + (growAnim.b-growAnim.a)*ease(tg); growPl.constant = growH; busy = true; dirty = true; if(tg >= 1){ growH = growAnim.b >= topH + 1 ? 999 : growAnim.b; growPl.constant = growH; growAnim = null; } }
     if(anim){ var t = Math.min(1, (now-anim.t0)/anim.ms), e = ease(t); camera.position.lerpVectors(anim.p0, anim.p1, e); controls.target.lerpVectors(anim.t0v, anim.t1, e); if(t >= 1) anim = null; busy = true; dirty = true; }
     var moved = controls.update(); if(moved) dirty = true;
-    if(dirty){ renderer.render(scene, camera); placeSpots(); dirty = false; if(moved || busy){ loopOn = true; requestAnimationFrame(frame); } }
+    if(dirty){ renderer.render(scene, camera); placeSpots(); if(M.onRender) try{ M.onRender(); }catch(e){} dirty = false; if(moved || busy){ loopOn = true; requestAnimationFrame(frame); } }
   }
   function pickAt(cx, cy){
     var r = renderer.domElement.getBoundingClientRect();
@@ -328,6 +332,96 @@
   M.goView = function(id){ if(!(M.ready && root)) return; var v = M.views().filter(function(x){ return x.id === id; })[0]; if(v) fly(new THREE.Vector3(v.p[0],v.p[1],v.p[2]), new THREE.Vector3(v.tg[0],v.tg[1],v.tg[2]), 900); };
   M.zoomIn = function(f){ if(!M.ready) return; var d = camera.position.clone().sub(controls.target); d.multiplyScalar(f); camera.position.copy(controls.target).add(d); dirty = true; kick(); };
   /* image de la maquette telle qu'affichée (JPEG), pour les miniatures ; libération du contexte WebGL */
+  /* ═══ [Plateau de jeu] décor de chantier ═══ */
+  var offX = 0, decor = null, decorReq = null, decorPts = {}, decorR = 0, GLOWT = null, decorPosed = false;
+  M.setDecor = function(d){ decorReq = d || null; if(root) { buildDecor(); dirty = true; kick(); } };
+  M.setOffset = function(px){ offX = px || 0; resize(); };   /* [Plateau de jeu] décale la scène quand un panneau couvre un côté */
+  M.anchors = function(){
+    var out = {}; if(!camera || !host) return out; var w = host.clientWidth, h = host.clientHeight;
+    Object.keys(decorPts).forEach(function(k){ v3.copy(decorPts[k]).project(camera); out[k] = [Math.round((v3.x*.5+.5)*w), Math.round((-v3.y*.5+.5)*h), v3.z < 1 && Math.abs(v3.x) < 1.15 && Math.abs(v3.y) < 1.15]; });
+    return out;
+  };
+  function glowTex(){ if(GLOWT) return GLOWT; var c = document.createElement('canvas'); c.width = c.height = 64; var x = c.getContext('2d'), g = x.createRadialGradient(32,32,0,32,32,32);
+    g.addColorStop(0,'rgba(255,255,255,1)'); g.addColorStop(.25,'rgba(255,255,255,.45)'); g.addColorStop(1,'rgba(255,255,255,0)'); x.fillStyle = g; x.fillRect(0,0,64,64); GLOWT = new THREE.CanvasTexture(c); return GLOWT; }
+  function buildDecor(){
+    if(decor){ scene.remove(decor); decor.traverse(function(o){ if(o.geometry) o.geometry.dispose(); }); decor = null; }
+    decorPts = {}; var d = decorReq; if(!d || !root) return;
+    var G = decor = new THREE.Group(); G.name = 'px-decor'; scene.add(G);
+    var MS = function(c, o){ return new THREE.MeshStandardMaterial(Object.assign({ color:c, roughness:.85, metalness:0, flatShading:true }, o||{})); };
+    var EM = function(c, i){ return new THREE.MeshStandardMaterial({ color:c, emissive:c, emissiveIntensity:i == null ? 1.4 : i, roughness:1 }); };
+    var bx = function(w, h, dd, m, x, y, z, par){ var o = new THREE.Mesh(new THREE.BoxGeometry(w, h, dd), m); o.position.set(x, y + h/2, z); (par || G).add(o); return o; };
+    var glow = function(x, y, z, col, sc){ var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map:glowTex(), color:col, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false })); sp.position.set(x, y, z); sp.scale.set(sc, sc, 1); G.add(sp); };
+    /* nuit, lune froide (comme la ville de la Synthèse) ; la maison garde sa couleur claire grâce à un peu d'émission */
+    scene.background = new THREE.Color(0x0b1424);
+    scene.traverse(function(o){ if(o.isHemisphereLight){ o.color.setHex(0x9db8ff); o.groundColor.setHex(0x0b1424); o.intensity = .85; } if(o.isDirectionalLight){ o.color.setHex(0xcfe0ff); o.intensity = 1.5; } });
+    G.add(new THREE.AmbientLight(0x4a5f8f, .5));
+    ['wall','roof','frame','door','gate','allee','charpente','mobilier','dalle','cloison','escalier','vrd'].forEach(function(k){ var m = MAT[k]; if(m && m.emissive){ m.emissive.copy(m.color); m.emissiveIntensity = (k === 'roof') ? .3 : .4; } });
+    /* emprise du bâti → parcelle */
+    var hb = new THREE.Box3(); root.traverse(function(o){ if(o.isMesh && !o.userData.isGrd) hb.expandByObject(o); }); if(hb.isEmpty()) hb.setFromObject(root);
+    var hs = hb.getSize(new THREE.Vector3()), hc = hb.getCenter(new THREE.Vector3());
+    var W = Math.max(hs.x + 16, 26), Dp = Math.max(hs.z + 15, 21), px = hc.x, pz = hc.z + 2.2, x0 = px - W/2, x1 = px + W/2, z0 = pz - Dp/2, z1 = pz + Dp/2;
+    decorR = Math.max(W, Dp) * .92;
+    var sol = new THREE.Mesh(new THREE.PlaneGeometry(W*8, Dp*8), MS(0x111b2c)); sol.rotation.x = -Math.PI/2; sol.position.set(px, -.2, pz); sol.receiveShadow = true; G.add(sol);
+    var slab = bx(W, .17, Dp, MS(0x1f4a47), px, -.2, pz); slab.receiveShadow = true;
+    var neon = EM(0x2dd4bf, 1.0);
+    for(var x = x0; x < x1 - .6; x += 1.3){ bx(.75, .06, .14, neon, x + .5, -.03, z0); bx(.75, .06, .14, neon, x + .5, -.03, z1); }
+    for(var z = z0; z < z1 - .6; z += 1.3){ bx(.14, .06, .75, neon, x0, -.03, z + .5); bx(.14, .06, .75, neon, x1, -.03, z + .5); }
+    /* routes (devant et à droite) */
+    var rd = MS(0x1a2436), dash = EM(0xdbe4f0, .35);
+    bx(W*8, .03, 5, rd, px, -.2, z1 + 3.6); bx(5, .03, Dp*8, rd, x1 + 3.6, -.2, pz);
+    for(var i = -40; i < 40; i++){ bx(1.4, .04, .16, dash, px + i*3, -.18, z1 + 3.6); bx(.16, .04, 1.4, dash, x1 + 3.6, -.18, pz + i*3); }
+    /* voisins (plus sombres, hors projet), arbres, lampadaires : seulement de l'ambiance, rien de cliquable */
+    var roofs = [0x5b3f7a, 0x7a3b55, 0x3d4f6e, 0x6a4a8a, 0x8a3d5c];
+    [[x0 - 9, pz - 4], [x0 - 9, pz + 7], [x1 + 12, pz - 6], [x1 + 12, pz + 6], [px - 8, z0 - 9], [px + 7, z0 - 9], [px - 4, z1 + 12], [px + 10, z1 + 12], [x0 - 9, z1 + 12], [x1 + 12, z0 - 9]].forEach(function(q, k){
+      var w = 6 + (k % 3), dd = 5 + (k % 2), h = 2.8 + (k % 3)*.3; bx(w, h, dd, MS(0x2a3346), q[0], -.2, q[1]);
+      var rf = new THREE.Mesh(new THREE.ConeGeometry(Math.hypot(w, dd)/2*1.02, 1.8, 4), MS(roofs[k % 5])); rf.rotation.y = Math.PI/4; rf.scale.set(w/Math.hypot(w,dd)*1.41, 1, dd/Math.hypot(w,dd)*1.41); rf.position.set(q[0], h - .2 + .9, q[1]); G.add(rf);
+      bx(.8, .7, .05, EM(0xffc27a, 1.1), q[0] - w/4, h*.42, q[1] + dd/2 + .03); glow(q[0] - w/4, h*.42 + .35, q[1] + dd/2 + .4, 0xffb35c, 1.5);
+    });
+    var tree = function(x, z, sc){ bx(.25*sc, 1.2*sc, .25*sc, MS(0x4a3726), x, -.2, z); var t = new THREE.Mesh(new THREE.IcosahedronGeometry(1.1*sc, 0), MS(0x2f7a4a)); t.position.set(x, 1.7*sc, z); t.castShadow = true; G.add(t); };
+    [[x0 + 1.6, z0 + 1.6], [x0 + 4, z0 + 1.2], [x1 - 1.6, z0 + 1.8], [x1 - 1.4, z0 + 4.5], [x1 - 1.8, z1 - 2.5], [x0 + 1.5, z1 - 6]].forEach(function(q){ tree(q[0], q[1], 1); });
+    [[x0 - 4, z1 + 9], [x1 + 8, z0 + 2], [x0 - 5, z0 - 3], [x1 + 7, z1 + 8], [px, z0 - 5]].forEach(function(q){ tree(q[0], q[1], 1.15); });
+    [[x0 + 1, z1 + 1.2], [px, z1 + 1.2], [x1 - 1, z1 + 1.2], [x1 + 1.2, pz - Dp/4], [x1 + 1.2, pz + Dp/4]].forEach(function(q){ bx(.12, 3.2, .12, MS(0x3b4a60), q[0], -.2, q[1]); var b = new THREE.Mesh(new THREE.SphereGeometry(.22, 10, 8), EM(0xffd08a, 3)); b.position.set(q[0], 3.1, q[1]); G.add(b); glow(q[0], 3.1, q[1], 0xffc27a, 2.6); });
+    /* grue (chantier en cours) */
+    if(d.crane){ var cm = MS(0xf2b705, { roughness:.5 }), ch = Math.max(12, hs.y*2.4), cx = x0 + 3, cz = z0 + 3;
+      bx(.5, ch, .5, cm, cx, -.2, cz); bx(Math.min(W*.5, 13), .4, .4, cm, cx + Math.min(W*.5, 13)/2 - 1.5, ch - .2, cz); bx(2.4, .8, .6, MS(0x3b4a60), cx - 2.4, ch - .7, cz);
+      glow(cx, ch + .2, cz, 0xfff1c1, 2.2); decorPts.crane = new THREE.Vector3(cx, ch + 1, cz); }
+    /* camionnettes des artisans (une par lot en cours) et places vides (artisan attendu, sans entreprise) */
+    var rowZ = z1 - 2.7, rx = x0 + 3.2;
+    var van = function(x, z, sel){ var g = new THREE.Group(); g.position.set(x, -.03, z); g.rotation.y = -Math.PI/2; G.add(g);
+      bx(2, 1.9, 3.4, MS(0xf4f6fa, { roughness:.5, emissive:0xf4f6fa, emissiveIntensity:.25 }), 0, .25, -.5, g); bx(2, 1.3, 1.3, MS(0xe3e9f1, { emissive:0xe3e9f1, emissiveIntensity:.2 }), 0, .25, 1.8, g);
+      bx(1.9, .55, .06, MS(0x1e2a3a), 0, .95, 2.47, g); bx(.06, .25, 3.3, EM(0xfcd34d, .9), 1.02, 1.15, -.5, g); bx(.06, .25, 3.3, EM(0xfcd34d, .9), -1.02, 1.15, -.5, g);
+      [[-1, 1.6], [1, 1.6], [-1, -1.6], [1, -1.6]].forEach(function(w){ var c = new THREE.Mesh(new THREE.CylinderGeometry(.34, .34, .25, 14), MS(0x111827)); c.rotation.z = Math.PI/2; c.position.set(w[0], .34, w[1]); g.add(c); });
+      [-.65, .65].forEach(function(hx){ var s2 = new THREE.Mesh(new THREE.SphereGeometry(.12, 8, 6), EM(0xfff3c4, 3)); s2.position.set(hx, .75, 2.48); g.add(s2); });
+      if(sel){ var ring = new THREE.Mesh(new THREE.RingGeometry(2.6, 2.9, 40), new THREE.MeshBasicMaterial({ color:0xfcd34d, side:THREE.DoubleSide })); ring.rotation.x = -Math.PI/2; ring.position.y = .03; g.add(ring); }
+    };
+    (d.vans || []).slice(0, Math.max(1, Math.floor((W - 6) / 5))).forEach(function(v){ van(rx + 2.3, rowZ, d.sel === 'van:' + v.id); decorPts['van:' + v.id] = new THREE.Vector3(rx + 2.3, 2.9, rowZ); rx += 5.2; });
+    var gold = EM(0xfcd34d, 1.6);
+    (d.slots || []).slice(0, 3).forEach(function(v){ if(rx + 4.6 > x1) return; var sx = rx + 2.3;
+      for(var a = -1.6; a < 1.6; a += .6){ bx(.32, .04, .09, gold, sx + a + .15, -.02, rowZ - 1.15); bx(.32, .04, .09, gold, sx + a + .15, -.02, rowZ + 1.15); }
+      for(var b2 = -1.1; b2 < 1.1; b2 += .6){ bx(.09, .04, .32, gold, sx - 1.75, -.02, rowZ + b2 + .15); bx(.09, .04, .32, gold, sx + 1.75, -.02, rowZ + b2 + .15); }
+      decorPts['slot:' + v.id] = new THREE.Vector3(sx, .9, rowZ); rx += 5.2; });
+    /* cônes (réserves), posés au pied de la zone concernée ou sur le toit */
+    var spotOf = function(zid){ var f = null; Object.keys(spots).forEach(function(k){ if(!f && spots[k].z.id === zid) f = spots[k]; }); return f; };
+    var around = 0, footOf = function(zid){
+      var s = zid && spotOf(zid);
+      if(s){ if(zid === 'couverture') return s.p.clone(); var q = s.p.clone().addScaledVector(s.n, .9); q.y = Math.max(0, hb.min.y); return q; }
+      var a = .6 + (around++)*.9; return new THREE.Vector3(hc.x + Math.cos(a)*(hs.x/2 + 1), Math.max(0, hb.min.y), hc.z + Math.sin(a)*(hs.z/2 + 1));
+    };
+    (d.cones || []).forEach(function(cn){ var q = footOf(cn.zone);
+      var c = new THREE.Mesh(new THREE.ConeGeometry(.32, .9, 16), MS(0xff7a1a, { flatShading:false, emissive:0xff6a00, emissiveIntensity:.35 })); c.position.set(q.x, q.y + .45, q.z); G.add(c);
+      var bd = new THREE.Mesh(new THREE.CylinderGeometry(.2, .24, .14, 16), MS(0xffffff)); bd.position.set(q.x, q.y + .5, q.z); G.add(bd);
+      if(d.sel === 'cone:' + cn.id){ var rg = new THREE.Mesh(new THREE.RingGeometry(.8, 1, 32), new THREE.MeshBasicMaterial({ color:0xfcd34d, side:THREE.DoubleSide })); rg.rotation.x = -Math.PI/2; rg.position.set(q.x, q.y + .03, q.z); G.add(rg); }
+      decorPts['cone:' + cn.id] = new THREE.Vector3(q.x, q.y + 1.3, q.z); });
+    /* barrière (blocage) devant la zone en retard */
+    if(d.barrier){ var q = footOf(d.barrier.zone), s3 = d.barrier.zone && spotOf(d.barrier.zone); if(s3 && d.barrier.zone !== 'couverture') q.addScaledVector(s3.n, 1.2); else q.z += 1.5;
+      var post = MS(0x3b4a60); bx(.12, 1, .12, post, q.x - 1.2, q.y, q.z); bx(.12, 1, .12, post, q.x + 1.2, q.y, q.z);
+      for(var k2 = 0; k2 < 6; k2++) bx(.4, .22, .1, k2 % 2 ? MS(0xffffff) : EM(0xef4444, .8), q.x - 1 + k2*.4, q.y + .75, q.z);
+      decorPts.barrier = new THREE.Vector3(q.x, q.y + 1.6, q.z); }
+    decorPts.fl = new THREE.Vector3(x0, 0, z1); decorPts.fr = new THREE.Vector3(x1, 0, z1);
+    var fd = Math.max(W, Dp); scene.fog = new THREE.Fog(0x0b1424, fd*1.8, fd*5);
+    controls.maxDistance = Math.max(controls.maxDistance, fd*2.6);
+    if(!decorPosed){ decorPosed = true; var o = autoPose(); camera.position.copy(o.p); controls.target.copy(o.t); }
+  }
   M.snapshot = function(){ if(!(M.ready && root)) return ''; try{ renderer.render(scene, camera); return renderer.domElement.toDataURL('image/jpeg', .85); }catch(e){ return ''; } };
   M.dispose = function(){ try{ active = false; var gl = renderer.getContext(), ext = gl && gl.getExtension('WEBGL_lose_context'); renderer.dispose(); if(ext) ext.loseContext(); if(host) host.innerHTML = ''; }catch(e){} };
   return M;

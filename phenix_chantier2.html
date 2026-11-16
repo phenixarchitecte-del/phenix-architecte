@@ -20,6 +20,10 @@
    (intervenant créé s'il n'existe pas). Ensuite, à chaque ouverture, la dernière synthèse de Chiffrage est reprise : lots ajoutés, montants mis à jour,
    entreprises rattachées ; l'avancement, les dates réglées à la main et les statuts déjà avancés ne sont jamais touchés. Plus de bouton « Importer depuis Chiffrage ».
    [Récap] Le Récapitulatif commence par les entreprises qui interviennent et le montant de leur lot (montants : agence seulement, pas Kevin).
+ 16/11/2026 — PLATEAU DE JEU (comme la Synthèse 3D) : la maquette du Carnet en plein écran, de nuit, sur sa parcelle à néons (décor ajouté au moteur partagé,
+   option setDecor). Camionnette = artisan en cours, place en pointillés = lot en cours sans entreprise, cône numéroté = réserve ouverte, barrière = lot en retard,
+   grue pendant le gros œuvre. Barre de chiffres et missions façon Synthèse, panneau à droite seulement au clic (mêmes onglets qu'avant), frise des phases qu'on fait
+   glisser pour voir la maison à une autre étape, visite guidée lot par lot (C'est bon / Problème / Pas commencé) qui prépare le compte rendu.
  12/11/2026 — REFONTE DE LA PAGE CHANTIER : une seule page, plus de modes Terrain / Bureau. Maquette 3D du Carnet à gauche (40 % de l'écran, manipulable),
    panneau à droite (60 %) qui change : Récapitulatif, Lots, Planning, Réserves, Plans, Finances, Comptes rendus, Messages. La maquette sert de support : un clic sur un lot de la maquette ouvre
    Lots, un clic sur un lot de la liste cadre la maquette. Ouverture directe depuis la Synthèse 3D (plus de page de garde), « ← Synthèse 3D » pour revenir. Bouton « Dicter le compte rendu » toujours visible.
@@ -47,7 +51,7 @@
      visite trop ancienne), prochaine réunion ; chaque fiche montre la MAQUETTE 3D du Carnet (miniature à l'étape réelle, gardée sur l'appareil) ; un clic sur un point ouvre directement le bon onglet. Bouton « ← Tous les chantiers » pour y revenir.
 -->
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&display=swap" rel="stylesheet">
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <style>
 :root{--bg:#0a1628;--pan:#101f38;--pan2:#16283f;--text:#e5ecf3;--text2:#a9bbd0;--text3:#8fb5da;--accent:#4fa8f0;--green:#4fd18b;--amber:#e6b95c;--red:#e0776c;--line:rgba(120,170,220,.22);--fs:'DM Sans',system-ui,sans-serif;--fd:'DM Serif Display',Georgia,serif}
@@ -135,6 +139,42 @@ h1,h2,h3{margin:0;font-weight:400;font-family:var(--fd)}
 @keyframes pul{50%{opacity:.25}}
 /* BUREAU */
 #bureau{flex:1;min-height:0;overflow:auto;padding:2px 2px 24px}
+/* ═══ Plateau de jeu (style Synthèse 3D : panneaux translucides, or, rouge réservé aux blocages) ═══ */
+#terrain.gx{padding:0;gap:0;position:relative}
+#terrain.gx #stage{flex:1 1 auto;border-radius:0;border:0;background:#0b1424}
+#terrain.gx #stagebar,#terrain.gx #lgd,#terrain.gx #mic{display:none}
+#terrain.gx #panel{display:none;position:absolute;right:16px;top:74px;bottom:16px;width:min(580px,calc(100% - 32px));z-index:30;background:rgba(13,26,45,.92);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:1px solid rgba(252,211,77,.3);border-radius:16px;box-shadow:0 18px 40px rgba(0,0,0,.5)}
+#terrain.gx #panel.open{display:flex}
+#terrain.gx #tiles{padding:96px 340px 200px 340px}
+.gx{--gx-gold:#fcd34d;--gx-gold2:#f5c451;--gx-red:#ef4444;--gx-green:#2fc47a;--gx-sky:#38bdf8;--gx-mut:#9aa6b8;--gx-txt:#f4f6fa;--gx-pan:rgba(13,26,45,.88);--gx-mono:'IBM Plex Mono',ui-monospace,monospace;--gx-sans:'IBM Plex Sans',system-ui,sans-serif;--gx-disp:'Bricolage Grotesque',system-ui,sans-serif}
+.gx-pan{background:var(--gx-pan);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.10);border-radius:16px;box-shadow:0 18px 40px rgba(0,0,0,.45);color:var(--gx-txt);font-family:var(--gx-sans)}
+.gx-mono{font:600 10.5px var(--gx-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--gx-mut)}
+.gx-b{min-height:40px;padding:0 15px;border-radius:999px;border:1px solid rgba(255,255,255,.16);background:rgba(13,26,45,.75);color:var(--gx-txt);font:600 13.5px var(--gx-sans);display:inline-flex;align-items:center;gap:8px;white-space:nowrap;cursor:pointer}
+.gx-b.gold{background:var(--gx-gold);color:#0b1424;border:0}.gx-b.red{background:var(--gx-red);color:#fff;border:0}.gx-b.big{min-height:54px;padding:0 22px;font-size:16px}
+.gx-b[aria-pressed=true]{background:var(--gx-txt);color:#0b1424}
+.gx-b:focus-visible,.gx-lab:focus-visible{outline:3px solid var(--gx-sky);outline-offset:2px}
+#gx-hud{position:absolute;inset:0;pointer-events:none;z-index:9}#gx-hud>*{pointer-events:auto}
+#gx-top{position:absolute;left:16px;top:14px;display:flex;align-items:center;gap:4px;padding:8px 10px;border-radius:18px;max-width:calc(100% - 420px)}
+#gx-top .st{display:flex;flex-direction:column;gap:2px;padding:0 14px;border-left:1px solid rgba(255,255,255,.08)}#gx-top .st b{font:600 14px var(--gx-mono)}#gx-top .st small{font:500 11px var(--gx-mono);color:var(--gx-mut)}
+#gx-tr{position:absolute;right:16px;top:14px;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;max-width:420px}
+#gx-mis{position:absolute;left:16px;top:84px;width:300px;max-height:calc(100% - 300px);overflow:auto;padding:14px}
+.gx-sq{width:26px;height:26px;flex-shrink:0;border-radius:7px;border:1.5px solid currentColor;display:inline-flex;align-items:center;justify-content:center}
+.gx-mi{padding:10px;border-radius:12px;margin-bottom:8px;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.02)}.gx-mi.first{border-color:rgba(252,211,77,.6);background:rgba(252,211,77,.06)}
+#gx-bot{position:absolute;left:332px;right:16px;bottom:16px;display:flex;align-items:flex-end;gap:12px}
+#gx-frise{flex:1;padding:12px 16px 12px}
+.gx-seg{display:flex;border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,.12);position:relative;touch-action:none;cursor:ew-resize}
+.gx-seg>div{height:30px;display:flex;align-items:center;justify-content:center;font:600 11.5px var(--gx-sans);border-right:1px solid rgba(8,17,31,.9);white-space:nowrap;overflow:hidden;color:var(--gx-mut);background:rgba(255,255,255,.04)}
+.gx-seg>div.done{background:rgba(47,196,122,.35);color:var(--gx-txt)}.gx-seg>div.cur{background:rgba(252,211,77,.25);color:var(--gx-txt)}
+.gx-hd{position:absolute;top:50%;width:16px;height:40px;transform:translate(-50%,-50%);border-radius:8px;background:var(--gx-gold);border:3px solid #0b1424;box-shadow:0 0 0 3px rgba(252,211,77,.3);pointer-events:none}
+#gx-lab{position:absolute;inset:0;pointer-events:none;z-index:8;overflow:hidden}
+.gx-lab{position:absolute;left:0;top:0;pointer-events:auto;display:flex;align-items:center;gap:7px;padding:5px 11px 5px 8px;border-radius:999px;background:rgba(13,26,45,.92);border:1px solid rgba(255,255,255,.16);box-shadow:0 6px 18px rgba(0,0,0,.45);white-space:nowrap;font:600 12.5px var(--gx-sans);color:var(--gx-txt);cursor:pointer}
+.gx-lab small{font:500 11px var(--gx-mono);color:var(--gx-mut)}.gx-lab.sel{border-color:rgba(252,211,77,.8)}
+.gx-num{position:absolute;left:0;top:0;pointer-events:auto;width:24px;height:24px;border-radius:12px;background:var(--gx-gold);color:#0b1424;font:700 12px var(--gx-sans);display:flex;align-items:center;justify-content:center;border:2px solid #0b1424;cursor:pointer}
+.gx-ttl{position:absolute;left:0;top:0;font:700 15px var(--gx-disp);letter-spacing:.42em;color:var(--gx-gold2);text-shadow:0 0 12px rgba(245,196,81,.55);white-space:nowrap;pointer-events:none}
+#gx-vis{position:absolute;left:332px;right:16px;bottom:16px;padding:16px 18px;border-color:rgba(252,211,77,.4)}
+#gx-vis .q3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}
+#gx-vis .q3 button{height:72px;border-radius:16px;font:600 17px var(--gx-sans);display:flex;align-items:center;justify-content:center;gap:10px;cursor:pointer}
+@media(max-width:900px){#gx-top{max-width:calc(100% - 32px)}#gx-top .st{display:none}#gx-tr{top:72px}#gx-mis{display:none;top:128px;width:auto;right:16px}#gx-mis.open{display:block}#gx-bot{left:16px;flex-direction:column;align-items:stretch}#gx-vis{left:16px}#gx-vis .q3 button{height:60px;font-size:15px}#terrain.gx #tiles{padding:140px 16px 230px}#terrain.gx #panel{top:auto;height:78%;right:0;left:0;bottom:0;width:auto;border-radius:16px 16px 0 0}}
 #home{flex:1;min-height:0;overflow:auto;padding:16px 18px 40px;display:none}
 .gdg{}@media(max-width:820px){.gdg{grid-template-columns:1fr!important}}
 .parc{display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:18px;background:var(--pan);border:1px solid var(--line)}
@@ -176,6 +216,7 @@ h1,h2,h3{margin:0;font-weight:400;font-family:var(--fd)}
       <div id="stagebar"></div>
       <div id="lgd" aria-label="Légende"></div>
       <button id="mic" type="button"></button>
+      <div id="gx-lab"></div><div id="gx-hud"></div>
     </div>
     <div id="panel"><div id="ptabs"></div><div id="bureau"></div></div>
   </div>
@@ -292,7 +333,7 @@ function phaseIdx(n){ for (var i = 0; i < PHASES.length; i++) if (n >= PHASES[i]
 /* ═══════════ Données ═══════════ */
 var D = { chantiers:[], lots:[], intervenants:[], reserves:[], crs:[], factures:[], plans:[], messages:[] };
 var CLI = { notifs:[], j:{}, on:{} };
-var S = { mode:'terrain', tab:'recap', view:'liste', zoom:'mois', cid:null, lotId:null, role:'', pending:false, online:navigator.onLine, real:false, in3d:'out', maq:null, user:'', screen:'home', hf:'' };
+var S = { mode:'terrain', tab:'recap', view:'liste', zoom:'mois', cid:null, lotId:null, role:'', pending:false, online:navigator.onLine, real:true, in3d:'out', drawer:false, gxSel:'', vis:null, maq:null, user:'', screen:'home', hf:'' };
 function chantier(){ return D.chantiers.filter(function(c){ return c.id == S.cid; })[0] || null; }
 function lotsOf(){ return D.lots.filter(function(l){ return l.chantierId == S.cid; }).sort(function(a, b){ return String(a.nom).localeCompare(String(b.nom), 'fr', {numeric:true}); }); }
 function lotNum(l, i){ var m = /^\s*(?:lot\s*)?(\d+)/i.exec(l.nom || ''); return m ? m[1].padStart(2, '0') : String(i + 1).padStart(2, '0'); }
@@ -351,7 +392,7 @@ function zoneStates(){
 function loadMaquette(){
   var c = chantier();
   if (FB.demo && window.__DEMO_GLB) {   /* essai : maquette de démonstration injectée par le banc d'essai */
-    showTiles(false); var P0 = window.PXModel, go0 = function(){ var P = window.PXModel; P.loader = function(){ return Promise.resolve(window.__DEMO_GLB); }; P.cfg = window.__DEMO_CFG || {}; P.init($('h3-host'), HZ, function(id){ pickZone(id); }); P.update(zoneStates()); P.setActive(true); M3.inited = true; };
+    showTiles(false); var P0 = window.PXModel, go0 = function(){ var P = window.PXModel; P.loader = function(){ return Promise.resolve(window.__DEMO_GLB); }; P.cfg = window.__DEMO_CFG || {}; gxHook(P); P.init($('h3-host'), HZ, function(id){ pickZone(id); }); P.update(zoneStates()); P.setActive(true); M3.inited = true; applyStage(); };
     if (P0) go0(); else window.addEventListener('px3dm-ready', go0, {once:true}); return;
   }
   if (!c || FB.demo || !c.projetId) { px3Free(); M3.why = 'pid'; showTiles(true); return; }
@@ -367,7 +408,7 @@ function loadMaquette(){
         P.loader = maqLoader(c, m);
         P.cfg = m;
         P.onfail = function(){ if (M3.X === P) { px3Free(); M3.why = 'fail'; showTiles(true); } };
-        P.init($('h3-host'), HZ, function(id){ pickZone(id); });
+        gxHook(P); P.init($('h3-host'), HZ, function(id){ pickZone(id); });
         P.update(zoneStates()); P.setActive(true);
         M3.inited = true; applyStage();
       }catch(e){ console.error(e); showTiles(true); }
@@ -386,12 +427,12 @@ function maqLoader(c, m){
 function showTiles(on){ M3.failed = on; $('tiles').style.display = on ? 'grid' : 'none'; $('h3-host').style.display = on ? 'none' : 'block'; renderStageBar(); renderTiles(); }
 function applyStage(){
   var P = PX(); if (!(P && P.ready && M3.inited)) return;
-  try{ P.update(zoneStates()); P.setStage(S.real && !renov(chantier()) ? (chantier() && chantier().etape) || null : null);   /* [Travaux] rénovation : le bâtiment existe déjà, pas de montée depuis le sol */ }catch(e){}
+  gxDecor(); try{ P.update(zoneStates()); P.setStage(S.real && !renov(chantier()) ? (chantier() && chantier().etape) || null : null);   /* [Travaux] rénovation : le bâtiment existe déjà, pas de montée depuis le sol */ }catch(e){}
 }
 var RANK = { issue:3, doing:2, todo:1, done:0 };
 function pickZone(zoneId){   /* plusieurs lots sur une zone : celui qui demande l'attention (réserve > en cours > à venir > terminé) */
   var l = lotsOf().filter(function(x){ return zoneOf(x) === zoneId; }).sort(function(a, b){ return RANK[stOf(b)] - RANK[stOf(a)]; })[0];
-  if (l){ S.lotId = l.id; S.tab = 'lots'; renderTabs(); renderBureau(); renderTiles(); } }
+  if (l){ S.lotId = l.id; S.gxSel = ''; gxOpen('lots'); renderTiles(); } }
 
 /* ═══════════ Écran Terrain ═══════════ */
 function renderTop(){
@@ -421,7 +462,7 @@ function renderTop(){
 function setMode(m){   /* plus de modes : une seule page chantier ; le paramètre est ignoré (compatibilité) */
   S.mode = 'terrain';
   var hm = S.screen === 'home', gd = S.screen === 'garde', off = hm || gd;
-  $('terrain').style.display = !off ? 'flex' : 'none'; $('home').style.display = hm ? 'block' : 'none'; $('garde').style.display = gd ? 'block' : 'none'; if (!gd) gdStop();
+  $('terrain').style.display = !off ? 'flex' : 'none'; $('terrain').classList.toggle('gx', !off); $('top').style.display = off ? '' : 'none'; if (off) { S.drawer = false; S.vis = null; } $('home').style.display = hm ? 'block' : 'none'; $('garde').style.display = gd ? 'block' : 'none'; if (!gd) gdStop();
   try{ if (PX() && PX().ready) PX().setActive(true); }catch(e){}
   renderAll();
 }
@@ -688,7 +729,9 @@ function renderTabs(){
     if (k === 'reserves') return x.rs; if (k === 'atraiter') return x.crPend; if (k === 'messages') return msgUnread();
     if (k === 'finances') return x.flags.filter(function(f){ return f.tab === 'finances'; }).length; return 0; };
   el.innerHTML = tabsOk().map(function(t){ var n = nb(t[0]); return '<button type="button" class="pill" data-tab="' + t[0] + '"' + (S.tab === t[0] ? ' aria-current="page"' : '') + '>' + t[1] + (n ? '<span class="badge">' + n + '</span>' : '') + '</button>'; }).join('');
+  el.innerHTML += '<button type="button" class="pill" id="gx-close" style="margin-left:auto" aria-label="Fermer le panneau">✕ Fermer</button>';
   [].forEach.call(el.querySelectorAll('[data-tab]'), function(b){ b.onclick = function(){ S.tab = b.getAttribute('data-tab'); renderTabs(); renderBureau(); }; });
+  $('gx-close').onclick = gxClose;
 }
 function focusLot(){   /* la maquette sert de support : on cadre le lot choisi */
   try{ var l = D.lots.filter(function(x){ return x.id == S.lotId; })[0], z = l && zoneOf(l); if (z && PX() && PX().ready && M3.inited) PX().focus(z); }catch(e){}
@@ -1514,7 +1557,147 @@ function barDrag(el){
 }
 
 /* ═══════════ Démarrage ═══════════ */
-function renderAll(){ renderTop(); renderTabs(); if (S.screen === 'home') { renderHome(); return; } if (S.screen === 'garde') { renderGarde(); return; } renderStageBar(); renderTiles(); renderBureau(); renderMic(); applyStage(); }
+
+/* ═══════════ Plateau de jeu (16/11/2026) ═══════════
+   La maquette du Carnet est le plateau : on joue dessus, le panneau ne s'ouvre qu'au clic. Même langage visuel que la Synthèse 3D. */
+var GX_ICO = { block:'<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9l6 6M15 9l-6 6"/>', issue:'<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.2v.1"/>', done:'<path d="M5 12.5l4.5 4.5L19 7.5"/>', doing:'<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" stroke="none"/>', todo:'<circle cx="12" cy="12" r="8" stroke-dasharray="3.5 3.5"/>', back:'<path d="M15 5l-7 7 7 7"/>', chev:'<path d="M9 5l7 7-7 7"/>', mic:'<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/>' };
+function gxI(k, col, sz){ return '<svg width="' + (sz || 16) + '" height="' + (sz || 16) + '" viewBox="0 0 24 24" fill="none" stroke="' + (col || 'currentColor') + '" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;color:' + (col || 'currentColor') + '">' + GX_ICO[k] + '</svg>'; }
+/* le métier en clair, pour quelqu'un qui n'y connaît rien */
+function metier(l){
+  var n = norm(l.nom || ''), M = [[/couvert|toit|zinc|tuile/, 'Le couvreur'], [/charpent/, 'Le charpentier'], [/menuis|fenetr|baie/, 'Le menuisier'], [/plomb|sanit/, 'Le plombier'], [/electr/, "L'électricien"], [/chauff|pac|clim|ventil|vmc/, 'Le chauffagiste'],
+    [/platr|plaqu|cloison|isol/, 'Le plaquiste'], [/peint/, 'Le peintre'], [/carrel|faience/, 'Le carreleur'], [/terrass|vrd/, 'Le terrassier'], [/gros|macon|fondation|beton/, 'Le maçon'], [/enduit|facade|ravale/, 'Le façadier'], [/sol|parquet/, 'Le poseur de sols']];
+  for (var i = 0; i < M.length; i++) if (M[i][0].test(n)) return M[i][1];
+  return lotLabel(l);
+}
+function gxReserves(){ var c = chantier(); return c ? D.reserves.filter(function(x){ return x.chantierId == c.id && (x.statut === 'ouverte' || x.statut === 'en_cours'); }) : []; }
+function gxData(){
+  var c = chantier(); if (!c) return null; var ls = lotsOf(), td = today();
+  var doing = ls.filter(function(l){ return stOf(l) === 'doing'; });
+  var vans = doing.filter(function(l){ return entrepriseOf(l); }).map(function(l){ return { id:l.id }; });
+  var slots = ls.filter(function(l){ return !entrepriseOf(l) && (stOf(l) === 'doing' || (stOf(l) === 'todo' && l.debut && l.debut <= td)); }).map(function(l){ return { id:l.id }; });
+  var cones = gxReserves().map(function(r, i){ var l = D.lots.filter(function(x){ return x.id == r.lotId; })[0]; return { id:r.id, n:i + 1, zone:l ? zoneOf(l) : null }; });
+  var late = ls.filter(function(l){ return l.fin && l.fin < td && stOf(l) !== 'done'; })[0];
+  return { vans:vans, slots:slots, cones:cones, barrier:late ? { zone:zoneOf(late), lotId:late.id } : null, crane:!renov(c) && (c.etape || 0) >= 3 && (c.etape || 0) < 20, sel:S.gxSel };
+}
+function gxHook(P){ P.onRender = gxPos; var d = gxData(); if (d && P.setDecor) P.setDecor(d); gxOffset(P); }
+function gxOffset(P){ P = P || PX(); if (!(P && P.setOffset)) return; var o = window.innerWidth > 900 ? (S.drawer ? -260 : 150) : 0; if (P._gxo === o) return; P._gxo = o; try{ P.setOffset(o); }catch(e){} }
+function gxDecor(){ var P = PX(); if (!(P && P.setDecor && S.screen === 'chantier')) return; var d = gxData(); if (d) P.setDecor(d); gxLabels(); }
+/* étiquettes posées sur la maquette (cliquables), recalées à chaque image quand on tourne la maquette */
+function gxLabels(){
+  var el = $('gx-lab'); if (!el) return; var d = gxData(); if (!d || M3.failed) { el.innerHTML = ''; return; }
+  var h = '', lot = function(id){ return D.lots.filter(function(x){ return x.id == id; })[0]; };
+  d.vans.forEach(function(v){ var l = lot(v.id); if (!l) return; h += '<button type="button" class="gx-lab' + (S.gxSel === 'van:' + v.id ? ' sel' : '') + '" data-k="van:' + v.id + '" data-lot="' + v.id + '">' + gxI('done', '#2fc47a', 15) + esc(metier(l)) + ' <small>· ' + esc(entrepriseOf(l)) + ' · ' + (l.av || 0) + ' %</small></button>'; });
+  d.slots.forEach(function(v){ var l = lot(v.id); if (!l) return; h += '<button type="button" class="gx-lab" data-k="slot:' + v.id + '" data-lot="' + v.id + '">' + gxI('issue', '#fcd34d', 15) + esc(metier(l)) + ' <small>· aucune entreprise</small></button>'; });
+  d.cones.forEach(function(cn){ h += '<button type="button" class="gx-num" data-k="cone:' + cn.id + '" data-res="' + cn.id + '" aria-label="Réserve n° ' + cn.n + '">' + cn.n + '</button>'; });
+  if (d.barrier) { var lb = lot(d.barrier.lotId); h += '<button type="button" class="gx-lab" data-k="barrier" data-lot="' + d.barrier.lotId + '" style="border-color:rgba(239,68,68,.7)">' + gxI('block', '#ef4444', 15) + 'En retard : ' + esc(lb ? lotLabel(lb) : '') + '</button>'; }
+  var c = chantier(); h += '<div class="gx-ttl" data-k="ttl">CHANTIER · ' + esc(String(c ? c.nom || '' : '').toUpperCase()) + '</div>';
+  el.innerHTML = h;
+  [].forEach.call(el.querySelectorAll('[data-lot]'), function(b){ b.onclick = function(){ S.lotId = +b.getAttribute('data-lot'); S.gxSel = b.getAttribute('data-k'); gxOpen('lots'); gxDecor(); }; });
+  [].forEach.call(el.querySelectorAll('[data-res]'), function(b){ b.onclick = function(){ S.gxSel = b.getAttribute('data-k'); gxOpen('reserves'); gxDecor(); }; });
+  gxPos();
+}
+function gxPos(){
+  var el = $('gx-lab'), P = PX(); if (!el || !P || !P.anchors) return; var A = P.anchors();
+  [].forEach.call(el.children, function(n){ var k = n.getAttribute('data-k'), a = A[k];
+    if (k === 'ttl') { var fl = A.fl, fr = A.fr; if (!fl || !fr) { n.style.display = 'none'; return; } var ang = Math.atan2(fr[1] - fl[1], fr[0] - fl[0]) * 180 / Math.PI, mx = fl[0] + (fr[0] - fl[0]) * .42, my = fl[1] + (fr[1] - fl[1]) * .42;
+      n.style.display = ''; n.style.transform = 'translate(' + mx + 'px,' + (my + 22) + 'px) translate(-50%,-50%) rotate(' + ang.toFixed(1) + 'deg)'; return; }
+    if (!a || !a[2]) { n.style.display = 'none'; return; }
+    n.style.display = ''; n.style.transform = n.classList.contains('gx-num') ? 'translate(' + a[0] + 'px,' + a[1] + 'px) translate(-50%,-50%)' : 'translate(' + a[0] + 'px,' + a[1] + 'px) translate(-50%,-110%)'; });
+}
+function gxOpen(tab){ if (tab) S.tab = tab; S.drawer = true; $('panel').classList.add('open'); renderTabs(); renderBureau(); gxOffset(); }
+function gxClose(){ S.drawer = false; S.gxSel = ''; $('panel').classList.remove('open'); gxOffset(); gxDecor(); }
+/* missions : les points bloquants du chantier, un seul bouton chacune */
+var GX_ACT = { lots:'Voir les lots', finances:'Voir les situations', reserves:'Voir les réserves', atraiter:'Valider', messages:'Lire', travaux:'Préciser les travaux', planning:'Voir le planning' };
+function gxMissions(x){
+  var staff = S.role !== 'chantier', fl = x.flags.filter(function(f){ return staff || f.tab !== 'finances'; });
+  var h = '<div style="font:600 17px var(--gx-disp)">Missions du chantier</div><div class="gx-mono" style="margin:3px 0 10px">' + fl.length + ' mission' + (fl.length > 1 ? 's' : '') + ' · ' + fl.filter(function(f){ return f.lvl === 2; }).length + ' bloquant</div>';
+  if (!fl.length) h += '<div class="gx-mi">' + gxI('done', '#2fc47a') + ' Rien à signaler sur ce chantier.</div>';
+  fl.slice(0, 4).forEach(function(f, i){
+    var blk = f.lvl === 2, col = blk ? '#ef4444' : '#fcd34d', act = f.tab ? GX_ACT[f.tab] || 'Ouvrir' : (/visite/i.test(f.txt) ? 'Lancer la visite' : 'Renseigner l\'étape');
+    h += '<div class="gx-mi' + (i === 0 ? ' first' : '') + '"><div style="display:flex;gap:10px"><span class="gx-sq" style="color:' + col + '">' + gxI(blk ? 'block' : 'issue', col, 15) + '</span><div><div style="font:600 14px/1.25 var(--gx-sans)">' + esc(f.txt) + '</div><div style="font:500 11.5px var(--gx-sans);color:var(--gx-mut);margin-top:3px">' + (blk ? 'Bloquant' : 'À voir') + '</div></div></div><div style="margin-top:9px"><button type="button" class="gx-b ' + (blk ? 'red' : 'gold') + '" data-mis="' + i + '">' + act + '</button></div></div>';
+  });
+  h += '<button type="button" class="gx-b" id="gx-all">Tout le chantier</button>';
+  return { h:h, fl:fl };
+}
+/* frise des phases : on fait glisser la poignée pour voir la maison à une autre étape */
+function gxFrise(c){
+  var n = c.etape || 0, cur = S.gxPrev || n, h = '<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span class="gx-mono" style="color:var(--gx-txt)">' + (S.gxPrev ? 'Aperçu · étape ' + cur + ' sur 26 · ' + esc(ETAPES[cur - 1] || '') : (n ? 'Aujourd\'hui · étape ' + n + ' sur 26 · ' + esc(ETAPES[n - 1] || '') : 'Étape réelle non renseignée')) + '</span>' + (c.fin ? '<span class="gx-mono" style="color:#2fc47a">Remise des clés · ' + esc(frDate(c.fin)) + '</span>' : '') + '</div>';
+  h += '<div class="gx-seg" id="gx-seg" role="slider" tabindex="0" aria-label="Étape affichée sur la maquette" aria-valuemin="1" aria-valuemax="26" aria-valuenow="' + (cur || 1) + '">' + PHASES.map(function(p){ var w = (p[2] - p[1] + 1) / 26 * 100, done = n > p[2], on = n >= p[1] && n <= p[2]; var t = w < 5 ? '' : w < 10 ? p[0].slice(0, 5) + '.' : p[0]; return '<div class="' + (done ? 'done' : on ? 'cur' : '') + '" style="width:' + w + '%" title="' + esc(p[0]) + '">' + (done && w >= 5 ? '✓ ' : '') + esc(t) + '</div>'; }).join('') + (cur ? '<span class="gx-hd" style="left:' + ((cur - .5) / 26 * 100) + '%"></span>' : '') + '</div>';
+  h += '<div style="font:500 12px var(--gx-sans);color:var(--gx-mut);margin-top:7px">Faites glisser la poignée pour voir la maison à une autre étape · relâchez pour revenir à aujourd\'hui</div>';
+  return h;
+}
+function gxSegBind(c){
+  var sg = $('gx-seg'); if (!sg) return; var drag = false;
+  var at = function(ev){ var r = sg.getBoundingClientRect(); return Math.max(1, Math.min(26, Math.ceil((ev.clientX - r.left) / r.width * 26))); };
+  var show = function(k){ S.gxPrev = k; try{ PX().setStage(k); }catch(e){} var f = $('gx-frise'); if (f) { f.innerHTML = gxFrise(c); gxSegBind(c); } };
+  sg.onpointerdown = function(ev){ drag = true; try{ sg.setPointerCapture(ev.pointerId); }catch(e){} show(at(ev)); };
+  sg.onpointermove = function(ev){ if (drag) { var k = at(ev); if (k !== S.gxPrev) show(k); } };
+  sg.onpointerup = sg.onpointercancel = function(){ drag = false; S.gxPrev = 0; applyStage(); var f = $('gx-frise'); if (f) { f.innerHTML = gxFrise(c); gxSegBind(c); } };
+  sg.onkeydown = function(ev){ if (ev.key === 'ArrowRight' || ev.key === 'ArrowLeft') { ev.preventDefault(); show(Math.max(1, Math.min(26, (S.gxPrev || c.etape || 1) + (ev.key === 'ArrowRight' ? 1 : -1)))); } else if (ev.key === 'Escape') { S.gxPrev = 0; applyStage(); renderGx(); } };
+}
+/* visite guidée : on fait le tour des lots, la maquette se cadre sur chacun ; trois réponses ; le compte rendu se prépare */
+function gxVisitList(){ return lotsOf().filter(function(l){ return stOf(l) !== 'done' && (stOf(l) !== 'todo' || (l.debut && l.debut <= today())); }).sort(function(a, b){ return RANK[stOf(b)] - RANK[stOf(a)]; }); }
+function gxVisitStart(){ var L = gxVisitList(); if (!L.length) L = lotsOf().filter(function(l){ return stOf(l) !== 'done'; }); if (!L.length) { toast('Aucun lot à visiter : tout est terminé.'); return; }
+  needVisit(function(){ S.vis = { i:0, ids:L.map(function(l){ return l.id; }), log:[] }; gxClose(); gxVisitShow(); }); }
+function gxVisitShow(){
+  var v = S.vis; if (!v) return renderGx(); var l = D.lots.filter(function(x){ return x.id == v.ids[v.i]; })[0]; if (!l) return gxVisitNext();
+  S.lotId = l.id; try{ var z = zoneOf(l); if (z && PX().ready && M3.inited) { PX().setMode('out'); PX().focus(z); } }catch(e){}
+  renderGx();
+}
+function gxVisitAnswer(k){
+  var v = S.vis, l = D.lots.filter(function(x){ return x.id == v.ids[v.i]; })[0]; if (!l || !VIS) return;
+  if (k === 'pb') { sheetReserve(l); v.log.push({ id:l.id, k:'pb' }); gxVisitNext(); return; }
+  var t = k === 'ok' ? 'conforme, rien à signaler' : 'pas commencé';
+  VIS.notes = (VIS.notes ? VIS.notes + '\n' : '') + '• ' + lotLabel(l) + ' (' + metier(l) + ') : ' + t; visPut(); v.log.push({ id:l.id, k:k });
+  gxVisitNext();
+}
+function gxVisitNext(){ var v = S.vis; if (!v) return; v.i++; if (v.i >= v.ids.length) return gxVisitEnd(); gxVisitShow(); }
+function gxVisitEnd(){ var v = S.vis; S.vis = null; renderGx(); try{ PX().overview(); }catch(e){} toast('Visite terminée : ' + (v ? v.log.length : 0) + ' lot(s) passés en revue. Le compte rendu est prêt à dicter.'); openDictee(); }
+/* l'interface du plateau */
+function renderGx(){
+  var hud = $('gx-hud'); if (!hud) return;
+  if (S.screen !== 'chantier') { hud.innerHTML = ''; $('gx-lab').innerHTML = ''; return; }
+  var c = chantier(); if (!c) { hud.innerHTML = ''; return; }
+  var x = chStats(c), rv = renov(c), nb = x.flags.filter(function(f){ return f.lvl === 2; }).length, nFl = x.flags.filter(function(f){ return S.role !== 'chantier' || f.tab !== 'finances'; }).length;
+  var h = '<div id="gx-top" class="gx-pan">';
+  h += '<div style="display:flex;align-items:center;gap:10px;padding:0 10px 0 4px"><span class="gx-sq" style="color:#fcd34d;width:30px;height:30px;font:700 13px var(--gx-mono)">' + (rv ? 'R' : (c.etape || '–')) + '</span><div style="display:flex;flex-direction:column">';
+  h += D.chantiers.length > 1 ? '<select id="gx-sel" aria-label="Chantier" style="font:600 16px var(--gx-disp);background:transparent;color:var(--gx-txt);border:0;padding:0;max-width:220px">' + D.chantiers.map(function(y){ return '<option value="' + esc(y.id) + '"' + (y.id == S.cid ? ' selected' : '') + ' style="color:#0b1424">' + esc(y.nom || y.id) + '</option>'; }).join('') + '</select>' : '<span style="font:600 16px var(--gx-disp)">' + esc(c.nom || '') + '</span>';
+  h += '<span style="width:120px;height:4px;border-radius:2px;background:rgba(255,255,255,.1);margin-top:4px"><i style="display:block;width:' + (rv ? x.avg : Math.round((c.etape || 0) / 26 * 100)) + '%;height:100%;border-radius:2px;background:#fcd34d"></i></span></div></div>';
+  h += '<div class="st"><span class="gx-mono">Avancement</span><b>' + (rv ? x.avg + ' %' : Math.round((c.etape || 0) / 26 * 100) + ' %') + ' <small>' + esc(rv ? 'rénovation' : (PHASES[phaseIdx(c.etape)] ? PHASES[phaseIdx(c.etape)][0] : 'étape ?')) + '</small></b></div>';
+  h += '<div class="st"><span class="gx-mono">Lots</span><b>' + x.done + ' <small>/ ' + x.lots + ' terminés</small></b></div>';
+  h += '<div class="st"><span class="gx-mono">Réserves</span><b>' + x.rs + ' <small>ouverte' + (x.rs > 1 ? 's' : '') + '</small></b></div>';
+  h += '<div style="padding:0 4px 0 12px;border-left:1px solid rgba(255,255,255,.08)"><button type="button" class="gx-b gold" id="gx-misb" style="min-height:34px;border-radius:10px">Missions <b style="background:#0b1424;color:#fcd34d;border-radius:9px;padding:0 6px;font-size:11px">' + nFl + '</b>' + (nb ? '<span style="font-size:11px">dont ' + nb + ' ' + gxI('block', '#b91c1c', 13) + '</span>' : '') + '</button></div></div>';
+  h += '<div id="gx-tr"><button type="button" class="gx-b" id="gx-back">' + gxI('back') + (embedded() ? 'Synthèse 3D' : 'Tous les chantiers') + '</button><button type="button" class="gx-b" id="gx-over">Vue d\'ensemble</button>';
+  if (!M3.failed) h += '<span style="display:inline-flex;gap:2px;padding:3px;border-radius:999px;background:rgba(13,26,45,.75);border:1px solid rgba(255,255,255,.16)"><button type="button" class="gx-b" style="min-height:34px;border:0" data-gin="out" aria-pressed="' + (S.in3d !== 'in') + '">Extérieur</button><button type="button" class="gx-b" style="min-height:34px;border:0" data-gin="in" aria-pressed="' + (S.in3d === 'in') + '">Intérieur</button></span>';
+  h += '<span class="gx-b" style="cursor:default;min-height:34px">' + (!S.online ? '⚠ Hors ligne' : S.pending ? '⟳ Envoi…' : gxI('done', '#2fc47a', 14) + 'Synchronisé') + '</span>' + (VIS ? '<span class="gx-b" style="cursor:default;min-height:34px;border-color:rgba(56,189,248,.6)">● Visite · ' + visAge() + '</span>' : '') + (c.dossierUrl ? '<a class="gx-b" href="' + esc(c.dossierUrl) + '" target="_blank" rel="noopener noreferrer" style="text-decoration:none;min-height:34px">Dossier ↗</a>' : '') + '</div>';
+  var mi = gxMissions(x);
+  if (!S.vis) h += '<div id="gx-mis" class="gx-pan' + (S.gxMis ? ' open' : '') + '">' + mi.h + '</div>';
+  if (S.vis) {
+    var v = S.vis, l = D.lots.filter(function(y){ return y.id == v.ids[v.i]; })[0];
+    h += '<div id="gx-vis" class="gx-pan"><div style="display:flex;align-items:center;gap:10px"><span class="gx-mono" style="color:var(--gx-gold2);flex:1">Visite · lot ' + (v.i + 1) + ' sur ' + v.ids.length + ' · ' + esc(l ? metier(l) : '') + '</span><button type="button" class="gx-b" id="gx-vend">Terminer la visite</button></div>';
+    h += '<div style="font:600 21px/1.2 var(--gx-disp);margin-top:6px">Regardez : ' + esc(l ? lotLabel(l) : '') + '. Est-ce que tout va bien ?</div><div style="font:500 13px var(--gx-sans);color:var(--gx-mut);margin-top:4px">' + esc(l ? (entrepriseOf(l) || 'Aucune entreprise') + ' · ' + stHtmlTxt(l) : '') + '</div>';
+    h += '<div class="q3"><button type="button" data-va="ok" style="border:0;background:#2fc47a;color:#0b1424">' + gxI('done', '#0b1424', 22) + 'C\'est bon</button><button type="button" data-va="pb" style="border:0;background:#ef4444;color:#fff">' + gxI('issue', '#fff', 22) + 'Problème</button><button type="button" data-va="nc" style="border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.04);color:#f4f6fa">' + gxI('todo', '#f4f6fa', 22) + 'Pas commencé</button></div>';
+    h += '<div style="font:500 12px var(--gx-sans);color:var(--gx-mut);margin-top:8px">« Problème » ouvre la réserve : photo et description, elle apparaît en cône sur la maquette.</div></div>';
+  } else {
+    h += '<div id="gx-bot">' + (rv ? '<div style="flex:1"></div>' : '<div id="gx-frise" class="gx-pan">' + gxFrise(c) + '</div>') + '<div style="display:flex;flex-direction:column;gap:8px"><button type="button" class="gx-b gold big" id="gx-visit">' + gxI('chev', '#0b1424', 18) + 'Lancer la visite</button><button type="button" class="gx-b big" id="gx-dict">' + gxI('mic', null, 18) + 'Dicter une note</button></div></div>';
+  }
+  hud.innerHTML = h;
+  var on = function(id, f){ var b = $(id); if (b) b.onclick = f; };
+  on('gx-back', embedded() ? goSynthese : goHome);
+  on('gx-over', function(){ try{ PX().setMode('out'); S.in3d = 'out'; PX().overview(); renderGx(); }catch(e){} });
+  on('gx-misb', function(){ if (window.innerWidth <= 900) { S.gxMis = !S.gxMis; renderGx(); } else gxOpen('recap'); });
+  on('gx-all', function(){ gxOpen('recap'); });
+  on('gx-visit', gxVisitStart); on('gx-dict', function(){ needVisit(function(){ openDictee(); }); }); on('gx-vend', gxVisitEnd);
+  var sel = $('gx-sel'); if (sel) sel.onchange = function(){ var y = D.chantiers.filter(function(z){ return String(z.id) === sel.value; })[0]; if (!y) return; S.cid = y.id; lk('px2.cid', String(S.cid)); S.lotId = null; S.gxSel = ''; M3.cid = null; gxClose(); boot2(); };
+  [].forEach.call(hud.querySelectorAll('[data-gin]'), function(b){ b.onclick = function(){ S.in3d = b.getAttribute('data-gin'); try{ PX().setMode(S.in3d); }catch(e){} renderGx(); }; });
+  [].forEach.call(hud.querySelectorAll('[data-mis]'), function(b){ b.onclick = function(){ var f = mi.fl[+b.getAttribute('data-mis')]; if (!f) return; if (f.tab) gxOpen(f.tab); else if (/visite/i.test(f.txt)) gxVisitStart(); else sheetEtape(c.etape || 1); }; });
+  [].forEach.call(hud.querySelectorAll('[data-va]'), function(b){ b.onclick = function(){ gxVisitAnswer(b.getAttribute('data-va')); }; });
+  if (!rv && !S.vis) gxSegBind(c);
+  if (S.drawer) $('panel').classList.add('open'); else $('panel').classList.remove('open');
+  gxLabels();
+}
+function stHtmlTxt(l){ return LOT_ST[stOf(l)][0] + ' · ' + (l.av || 0) + ' %'; }
+function renderAll(){ renderTop(); renderTabs(); if (S.screen === 'home') { renderHome(); return; } if (S.screen === 'garde') { renderGarde(); return; } renderStageBar(); renderTiles(); renderBureau(); renderMic(); applyStage(); renderGx(); }
 function boot2(){
   var c = chantier(); if (!c) { renderAll(); return; }
   syncChiffrage(c);   /* [Chiffrage → Chantier] */
@@ -1542,7 +1725,7 @@ function cliStart(){
   D.chantiers.forEach(function(c){ if (!c.projetId || CLI.on[c.projetId]) return; CLI.on[c.projetId] = 1; FB.listenSub(['phenix_portail', String(c.projetId), 'journal'], function(a){ CLI.j[String(c.projetId)] = a || []; if (S.tab === 'messages' && S.screen === 'chantier') renderBureau(); }); });
 }
 function startData(){
-  var n = 0, any = function(){ ensureChantier(); if (S.screen === 'home') { renderTop(); renderHome(); return; } renderTop(); renderTabs(); renderBureau(); renderTiles(); applyStage(); };
+  var n = 0, any = function(){ ensureChantier(); if (S.screen === 'home') { renderTop(); renderHome(); return; } renderTop(); renderTabs(); renderBureau(); renderTiles(); applyStage(); renderGx(); };
   ['chantiers', 'lots', 'intervenants', 'reserves', 'crs', 'factures', 'plans', 'messages'].forEach(function(k){ FB.listen(k, function(a, pend){ D[k] = a; S.pending = !!pend; if (k === 'chantiers') cliStart(); if (k === 'intervenants' || k === 'lots' || k === 'chantiers') { n |= { chantiers:1, lots:2, intervenants:4 }[k]; if (n === 7 && !S.loaded) { S.loaded = true; ouvrirVoulu(); } } any(); }); });
 }
 var ADMIN_EMAILS = ['contact@phenixarchitecte.fr'];   /* même repli que l'ancien Chantier */
