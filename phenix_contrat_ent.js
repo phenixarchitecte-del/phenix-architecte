@@ -87,7 +87,17 @@
     m.setUTCDate(j4.getUTCDate() - dow + (sem - 1) * 7); return m;
   }
   function fr(d) { return d.toLocaleDateString('fr-FR', { timeZone: 'UTC', day: '2-digit', month: '2-digit', year: 'numeric' }); }
+  // [17/11/2026] dates d'intervention exactes (début / fin saisis dans Chiffrage) ; à défaut, semaine ISO + durée en semaines
+  function semaineIso(d) { var t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())), j = (t.getUTCDay() + 6) % 7; t.setUTCDate(t.getUTCDate() - j + 3); var a = t.getUTCFullYear(), p = new Date(Date.UTC(a, 0, 4)); return { sem: 1 + Math.round(((t - p) / 864e5 - 3 + ((p.getUTCDay() + 6) % 7)) / 7), an: a }; }
+  function joursOuvres(a, b) { var n = 0; for (var d = new Date(a); d <= b; d.setUTCDate(d.getUTCDate() + 1)) { var w = d.getUTCDay(); if (w && w !== 6) n++; } return n; }
   function periodeLot(l) {
+    var mD = /^(\d{4})-(\d{2})-(\d{2})$/.exec(l.debutJour || ''), mF = /^(\d{4})-(\d{2})-(\d{2})$/.exec(l.finJour || '');
+    if (mD && mF) {
+      var a = new Date(Date.UTC(+mD[1], +mD[2] - 1, +mD[3])), b = new Date(Date.UTC(+mF[1], +mF[2] - 1, +mF[3]));
+      if (b < a) b = a;
+      var w = semaineIso(a), jo = joursOuvres(a, b);
+      return { debut: fr(a), fin: fr(b), sem: w.sem, an: w.an, dur: Math.max(0.5, Math.round(jo / 5 * 2) / 2), jours: jo, exact: true, isoDebut: l.debutJour, isoFin: l.finJour };
+    }
     var sem = parseInt(l.semaine, 10), an = parseInt(l.annee, 10), dur = parseFloat(l.duree);
     if (!(sem >= 1 && sem <= 53) || !(an >= 2000)) return null;
     var debut = lundiSemaine(an, sem), fin = new Date(debut);
@@ -144,7 +154,7 @@
     lots.forEach(function (l) {
       var nom = (l.num ? l.num + ' ' : '') + (l.nom || 'lot');
       if (!(parseFloat(l.prixHt) > 0)) add('bloquant', 'Prix engagé manquant pour ' + nom + '.');
-      if (!periodeLot(l)) add('bloquant', 'Semaine de début manquante pour ' + nom + '.');
+      if (!periodeLot(l)) add('bloquant', 'Dates d’intervention manquantes pour ' + nom + '.');
     });
     var pc = parseFloat(cond.retenuePct);
     if (pc > 5) add('bloquant', 'La retenue de garantie ne peut pas dépasser 5 % du marché (loi n° 71-584 du 16 juillet 1971).');
@@ -267,10 +277,10 @@
     px.article('Article 6 — Délais et planification d’intervention');
     px.texte('L’Entreprise s’engage à intervenir sur les périodes ci-dessous, établies d’un commun accord avec Phénix-Architecture, qui coordonne l’ordonnancement des corps d’état. Les dates sont des **engagements** : toute modification se fait par écrit (article 9).', { suite: 24 });
     px.tableau({
-      colonnes: [{ titre: 'Lot', x: 17 }, { titre: 'Désignation', x: 38, w: 62 }, { titre: 'Début (lundi)', x: 126, align: 'right' }, { titre: 'Durée', x: 148, align: 'right' }, { titre: 'Fin (vendredi)', x: 193, align: 'right', gras: true }],
+      colonnes: [{ titre: 'Lot', x: 17 }, { titre: 'Désignation', x: 38, w: 62 }, { titre: 'Début', x: 128, align: 'right' }, { titre: 'Durée', x: 152, align: 'right' }, { titre: 'Fin', x: 193, align: 'right', gras: true }],
       lignes: lots.map(function (l) {
         var p = periodeLot(l);
-        return [l.num || '', l.nom || '', p ? p.debut + ' (S' + p.sem + ')' : '—', p ? p.dur + ' sem.' : '—', p ? p.fin : '—'];
+        return [l.num || '', l.nom || '', p ? p.debut + ' (S' + p.sem + ')' : '—', p ? (p.exact ? p.jours + ' j ouvrés' : p.dur + ' sem.') : '—', p ? p.fin : '—'];
       })
     });
     var pen = parseFloat(cond.penaliteJour) || 0;

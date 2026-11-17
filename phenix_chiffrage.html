@@ -7,6 +7,8 @@
 ══════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_chiffrage.html
 ──────────────────────────────────────────────────────────────────
+ 17/11/2026 — [Dates] Dates d'intervention exactes par lot (début / fin) : bouton « 📅 Dates d'intervention » (tous les lots en une fois),
+   contrat d'engagement du lot et contrats par entreprise en dates au lieu de semaines ; CCTP : calendrier prévisionnel + délais de chaque lot.
  16/11/2026 — [PDF] DPGF, demande de prix d'un lot, CCTP et contrats d'engagement (ancien gabarit) : vrais PDF à la charte commune.
  16/11/2026 — [PDF] Devis client (détaillé et synthèse) : vrai PDF téléchargé, charte commune phenix_pdf.js (style du dossier de financement) ;
    désignation large, Qté / PU HT / Total serrées, bandeau par lot, totaux à droite, signatures.
@@ -715,6 +717,7 @@ if (window.parent !== window) {
             <select id="cent-mode" onchange="centMode(this.value)" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12.5px">
               <option value="">À choisir…</option><option value="cg">Contractant général (sous-traitance)</option><option value="moe">Maître d'œuvre (contrat direct client)</option>
             </select></label>
+          <button class="btn btn-sm btn-primary" onclick="interOuvrir()">📅 Dates d'intervention</button>
           <button class="btn btn-sm btn-primary" onclick="centOuvrirListe()">📄 Contrats par entreprise</button>
           <button class="btn btn-sm btn-primary" onclick="chdOuvrir()"><i class="ti ti-shield-check" aria-hidden="true"></i> Décennales des artisans</button>
           <button class="btn btn-sm btn-outline" onclick="contratVersPlanning('tous')" style="border-color:#1E5FAA;color:#1E5FAA">📅 Tout envoyer vers le Gantt de Chantier</button>
@@ -2016,9 +2019,8 @@ if (window.parent !== window) {
     <div id="ct-achat" style="font-size:12px;color:var(--text3);margin-bottom:6px"></div>
     <div style="font-size:12px;font-weight:700;color:var(--nav);margin:10px 0 4px">② Moment et durée d'intervention</div>
     <div class="form-row">
-      <div class="form-group"><label>Semaine de début (1–53)</label><input type="number" id="ct-semaine" min="1" max="53" step="1" oninput="contratMaj()"></div>
-      <div class="form-group"><label>Année</label><input type="number" id="ct-annee" min="2000" step="1" oninput="contratMaj()"></div>
-      <div class="form-group"><label>Durée (semaines)</label><input type="number" id="ct-duree" min="0.5" step="0.5" oninput="contratMaj()"></div>
+      <div class="form-group"><label>Début d'intervention</label><input type="date" id="ct-debut" oninput="contratMaj()"></div>
+      <div class="form-group"><label>Fin d'intervention</label><input type="date" id="ct-fin" oninput="contratMaj()"></div>
     </div>
     <div id="ct-periode" style="font-size:12.5px;color:var(--text2);margin-bottom:6px;font-weight:600"></div>
     <div class="form-group"><label>Conditions particulières (facultatif)</label><textarea id="ct-obs" rows="3" style="width:100%;box-sizing:border-box;padding:8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:13px;background:var(--surface);color:var(--text)"></textarea></div>
@@ -3321,11 +3323,11 @@ async function cctpExportPDF(portee){
     else if (portee === 'general'){ showToast('⚠️ Le CCTP général n\'est pas encore rédigé'); return; }
   }
   if (portee === 'tous'){
-    lots.forEach(l => { if (l.cctp) blocs.push({ titre:'CCTP — ' + (l.num ? l.num + ' — ' : '') + (l.nom||''), texte:l.cctp }); });
+    lots.forEach((l, i) => { if (l.cctp) blocs.push({ titre:'CCTP — ' + (l.num ? l.num + ' — ' : '') + (l.nom||''), texte:l.cctp, li:i }); });
   } else if (typeof portee === 'number'){
     const l = lots[portee];
     if (!l || !l.cctp){ showToast('⚠️ Ce lot n\'a pas encore de CCTP'); return; }
-    blocs.push({ titre:'CCTP — ' + (l.num ? l.num + ' — ' : '') + (l.nom||''), texte:l.cctp });
+    blocs.push({ titre:'CCTP — ' + (l.num ? l.num + ' — ' : '') + (l.nom||''), texte:l.cctp, li:portee });
   }
   if (!blocs.length){ showToast('⚠️ Aucun CCTP à exporter'); return; }
   // [PDF] 16/11/2026 — vrai PDF à la charte commune (phenix_pdf.js)
@@ -3335,7 +3337,23 @@ async function cctpExportPDF(portee){
   const d = new Date().toLocaleDateString('fr-FR');
   const px = PhenixPDF.create({ titre: titreDoc, sousTitre: (c.nom || '') + ' · établi le ' + d });
   px.cadres([{ titre:'Chantier', lignes:['**' + (c.nom || '—') + '**'].concat(c.adresse ? [c.adresse] : []) }, { titre:'Maître d’ouvrage', lignes:[c.client || '—'] }]);
-  blocs.forEach((b, i) => { if (i) px.saut(); if (blocs.length > 1) px.section(b.titre, 24); px.markdown(b.texte); });
+  // [Dates] 17/11/2026 — calendrier prévisionnel (CCTP complet) et délais d'exécution de chaque lot
+  const datesLot = l => { const it = interLot(l); return it && !it.approx ? ctPeriode({ debutJour:it.debut, finJour:it.fin }) : it ? ctPeriode(l.contrat) : null; };
+  const dates = lots.map((l, i) => ({ l, i, p:datesLot(l) })).filter(x => x.p);
+  if (portee === 'tous' && dates.length){
+    px.section('Calendrier prévisionnel d’intervention', 40);
+    px.tableau({ colonnes:[{ titre:'Lot', x:17, w:70, gras:true }, { titre:'Entreprise', x:89, w:44 }, { titre:'Début', x:153, align:'right' }, { titre:'Fin', x:175, align:'right' }, { titre:'Durée', x:193, align:'right' }],
+      lignes: dates.map(x => [(x.l.num ? x.l.num + ' — ' : '') + (x.l.nom || ''), (x.l.contrat && x.l.contrat.entreprise) || x.l.entreprise || '—', x.p.debut, x.p.fin, x.p.exact ? x.p.jours + ' j' : x.p.dur + ' sem.']) });
+    if (px.gantt) px.gantt({ lignes: dates.slice().sort((a, b) => a.p.isoDebut.localeCompare(b.p.isoDebut)).map(x => ({ libelle:(x.l.num ? x.l.num + ' ' : '') + (x.l.nom || ''), detail:(x.l.contrat && x.l.contrat.entreprise) || x.l.entreprise || '', debut:x.p.isoDebut, fin:x.p.isoFin, couleur:'#4A9CC7' })) });
+    px.texte('Dates prévisionnelles, ajustées par le maître d’œuvre en fonction de l’avancement du chantier ; chaque entreprise s’engage sur ses dates dans son contrat.', { taille: 8.5 });
+  }
+  blocs.forEach((b, i) => {
+    if (i || (portee === 'tous' && dates.length && b.titre !== 'CCTP général')) px.saut();
+    if (blocs.length > 1) px.section(b.titre, 24);
+    const l = b.li != null ? lots[b.li] : null, p = l ? datesLot(l) : null;
+    if (l) px.texte('**Délais d’exécution :** ' + (p ? 'du ' + p.debut + ' au ' + p.fin + ' (semaine ' + p.sem + ', ' + (p.exact ? p.jours + ' jours ouvrés' : p.dur + ' semaine' + (p.dur > 1 ? 's' : '')) + ').' : 'à définir avec le maître d’œuvre.'));
+    px.markdown(b.texte);
+  });
   px.enregistrer(('CCTP_' + (c.nom || 'projet') + (portee === 'tous' ? '' : '_' + blocs[0].titre.replace(/^CCTP — /, ''))).replace(/[^\wÀ-ÿ\-]+/g, '_') + '.pdf');
   showToast('📄 CCTP enregistré en PDF');
 }
@@ -3505,7 +3523,28 @@ function _ctMondayISO(annee, sem){
   const m = new Date(j4); m.setUTCDate(j4.getUTCDate() - dow + (sem - 1) * 7); return m;
 }
 function _ctFr(d){ return d.toLocaleDateString('fr-FR', { timeZone:'UTC', day:'2-digit', month:'2-digit', year:'numeric' }); }
+// [Dates] 17/11/2026 — dates d'intervention exactes par lot : lot.intervention = { debut, fin } (AAAA-MM-JJ), source unique
+// reprise dans le contrat du lot (debutJour / finJour + semaine, année, durée déduites), les contrats par entreprise et le CCTP.
+function _isoSem(iso){ const t = new Date(iso + 'T00:00:00Z'), j = (t.getUTCDay() + 6) % 7; t.setUTCDate(t.getUTCDate() - j + 3); const a = t.getUTCFullYear(), p = new Date(Date.UTC(a, 0, 4)); return { sem: 1 + Math.round(((t - p) / 864e5 - 3 + ((p.getUTCDay() + 6) % 7)) / 7), an: a }; }
+function _joursOuvres(a, b){ let n = 0; for (let d = new Date(a + 'T00:00:00Z'), f = new Date(b + 'T00:00:00Z'); d <= f; d.setUTCDate(d.getUTCDate() + 1)){ const w = d.getUTCDay(); if (w && w !== 6) n++; } return n; }
+const _isoJour = x => /^\d{4}-\d{2}-\d{2}$/.test(x || '');
+function interLot(l){
+  const i = l.intervention || {}; if (_isoJour(i.debut) && _isoJour(i.fin)) return { debut:i.debut, fin:i.fin };
+  const ct = l.contrat || {}; if (_isoJour(ct.debutJour) && _isoJour(ct.finJour)) return { debut:ct.debutJour, fin:ct.finJour };
+  const p = ctPeriode(ct); return p ? { debut:p.isoDebut, fin:p.isoFin, approx:true } : null;
+}
+function interFixer(l, debut, fin){
+  if (!_isoJour(debut)){ delete l.intervention; if (l.contrat){ delete l.contrat.debutJour; delete l.contrat.finJour; } return; }
+  if (!_isoJour(fin) || fin < debut) fin = debut;
+  l.intervention = { debut, fin };
+  if (l.contrat){ const w = _isoSem(debut); Object.assign(l.contrat, { debutJour:debut, finJour:fin, semaine:w.sem, annee:w.an, duree:Math.max(0.5, Math.round(_joursOuvres(debut, fin) / 5 * 2) / 2) }); }
+}
 function ctPeriode(ct){
+  ct = ct || {};
+  if (_isoJour(ct.debutJour) && _isoJour(ct.finJour)){
+    const fin = ct.finJour < ct.debutJour ? ct.debutJour : ct.finJour, a = new Date(ct.debutJour + 'T00:00:00Z'), b = new Date(fin + 'T00:00:00Z'), w = _isoSem(ct.debutJour), jo = _joursOuvres(ct.debutJour, fin);
+    return { debut:_ctFr(a), fin:_ctFr(b), isoDebut:ct.debutJour, isoFin:fin, sem:w.sem, an:w.an, dur:Math.max(0.5, Math.round(jo / 5 * 2) / 2), jours:jo, exact:true };
+  }
   const sem = parseInt(ct.semaine, 10), an = parseInt(ct.annee, 10), dur = parseFloat(ct.duree);
   if (!(sem >= 1 && sem <= 53) || !(an >= 2000)) return null;
   const debut = _ctMondayISO(an, sem);
@@ -3525,7 +3564,7 @@ function contratOuvrir(li, apresValidation){
   v('ct-entreprise', ct.entreprise || lot.entreprise || '');
   v('ct-contact', ct.contact || ''); v('ct-siret', ct.siret || '');
   v('ct-prix', ct.prix !== undefined ? ct.prix : Math.round(ctTotalAchat(lot) * 100) / 100);
-  v('ct-semaine', ct.semaine || ''); v('ct-annee', ct.annee || an); v('ct-duree', ct.duree || 1);
+  const it = interLot(lot); v('ct-debut', it ? it.debut : ''); v('ct-fin', it ? it.fin : '');   // [Dates]
   v('ct-obs', ct.obs || ''); v('ct-statut', ct.statut || 'a_signer'); v('ct-date-sign', ct.dateSignature || '');
   document.getElementById('ct-annexe-postes').checked = ct.annexePostes !== false;
   document.getElementById('ct-annexe-cctp').checked = !!ct.annexeCctp;
@@ -3539,16 +3578,15 @@ function contratMaj(){
   const c = state.chantiers[state.currentChantier], lot = c && c.lots[_ctLi]; if (!lot) return;
   const achat = ctTotalAchat(lot);
   document.getElementById('ct-achat').textContent = 'Total des postes du lot (prix achat artisan) : ' + fmt(achat) + ' € HT';
-  const p = ctPeriode({ semaine:document.getElementById('ct-semaine').value, annee:document.getElementById('ct-annee').value, duree:document.getElementById('ct-duree').value });
-  document.getElementById('ct-periode').textContent = p ? ('Du lundi ' + p.debut + ' au vendredi ' + p.fin + ' (semaine ' + p.sem + (p.dur > 1 ? ' → durée ' + p.dur + ' semaines' : '') + ')') : 'Indiquez la semaine de début (1 à 53) et l\'année';
+  const p = ctPeriode({ debutJour:document.getElementById('ct-debut').value, finJour:document.getElementById('ct-fin').value || document.getElementById('ct-debut').value });
+  document.getElementById('ct-periode').textContent = p ? ('Du ' + p.debut + ' au ' + p.fin + ' · semaine ' + p.sem + ' · ' + p.jours + ' jour' + (p.jours > 1 ? 's' : '') + ' ouvré' + (p.jours > 1 ? 's' : '')) : 'Indiquez les dates de début et de fin d\'intervention';
   document.getElementById('ct-date-sign-ligne').style.display = document.getElementById('ct-statut').value === 'signe' ? '' : 'none';
 }
 function contratLire(){
   const g = id => document.getElementById(id).value;
   return {
     entreprise:g('ct-entreprise').trim(), contact:g('ct-contact').trim(), siret:g('ct-siret').trim(),
-    prix:parseFloat(g('ct-prix')) || 0, semaine:parseInt(g('ct-semaine'), 10) || '', annee:parseInt(g('ct-annee'), 10) || '',
-    duree:parseFloat(g('ct-duree')) || 1, obs:g('ct-obs').trim(),
+    prix:parseFloat(g('ct-prix')) || 0, debutJour:g('ct-debut'), finJour:g('ct-fin') || g('ct-debut'), obs:g('ct-obs').trim(),
     annexePostes:document.getElementById('ct-annexe-postes').checked, annexeCctp:document.getElementById('ct-annexe-cctp').checked,
     statut:g('ct-statut'), dateSignature:g('ct-date-sign')
   };
@@ -3561,6 +3599,7 @@ function contratEnregistrer(silencieux){
   const c = state.chantiers[state.currentChantier], lot = c && c.lots[_ctLi]; if (!lot) return false;
   const ct = contratLire();
   lot.contrat = ct;
+  interFixer(lot, ct.debutJour, ct.finJour);   // [Dates] dates partagées avec le planning, les contrats par entreprise et le CCTP
   if (ct.entreprise && !lot.entreprise) lot.entreprise = ct.entreprise;
   saveState(); renderLotsTableOrCards(); _contratRenderChantier();
   if (state.currentLot !== null){ const tw = document.getElementById('lots-table-wrap'); if (tw) tw.style.display = 'none'; contratLotRefresh(); }
@@ -3568,11 +3607,46 @@ function contratEnregistrer(silencieux){
   return true;
 }
 function contratFermer(){ closeModal('modal-contrat'); }
+
+// [Dates] 17/11/2026 — saisie des dates d'intervention de tous les lots en une fois (reprises dans les contrats et le CCTP)
+function interOuvrir(){
+  const c = state.chantiers[state.currentChantier]; if (!c){ showToast('⚠️ Sélectionnez un projet'); return; }
+  let m = document.getElementById('modal-inter');
+  if (!m){ m = document.createElement('div'); m.className = 'modal-overlay'; m.id = 'modal-inter'; document.body.appendChild(m); }
+  const lots = c.lots || [];
+  const lignes = lots.map((l, i) => { const it = interLot(l) || {};
+    return '<tr data-li="' + i + '"><td style="padding:6px 8px 6px 0"><b>' + _centEsc((l.num ? l.num + ' — ' : '') + (l.nom || 'Lot')) + '</b><div style="font-size:11.5px;color:var(--text3)">' + _centEsc((l.contrat && l.contrat.entreprise) || l.entreprise || 'Entreprise à choisir') + (l.statut === 'Valide' ? ' · ✔ validé' : '') + '</div></td>' +
+      '<td style="padding:4px"><input type="date" class="inter-debut" aria-label="Début" value="' + (it.debut || '') + '" oninput="interMaj(this)" style="width:140px"></td>' +
+      '<td style="padding:4px"><input type="date" class="inter-fin" aria-label="Fin" value="' + (it.fin || '') + '" oninput="interMaj(this)" style="width:140px"></td>' +
+      '<td class="inter-info" style="padding:4px;font-size:12px;color:var(--text2);white-space:nowrap"></td></tr>'; }).join('');
+  m.innerHTML = '<div class="modal" style="max-width:760px;width:94%;max-height:92vh;overflow-y:auto"><div class="modal-title">📅 Dates d\'intervention — ' + _centEsc(c.nom || '') + '</div>' +
+    '<div style="font-size:12.5px;color:var(--text2);margin-bottom:8px">Une date de début et une date de fin par lot. Elles sont reprises dans les contrats d\'engagement (par lot et par entreprise), dans le CCTP (calendrier et délais de chaque lot) et dans le planning envoyé à Chantier.</div>' +
+    (lots.length ? '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><tr style="text-align:left;color:var(--text3);font-size:12px"><th>Lot</th><th>Début</th><th>Fin</th><th>Durée</th></tr>' + lignes + '</table></div>' : '<p>Aucun lot pour ce projet.</p>') +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px"><button class="btn btn-outline" onclick="closeModal(\'modal-inter\')">Annuler</button><button class="btn btn-primary" onclick="interEnregistrer()">Enregistrer les dates</button></div></div>';
+  m.querySelectorAll('tr[data-li]').forEach(tr => interMaj(tr.querySelector('.inter-debut')));
+  m.classList.add('open');
+}
+function interMaj(el){
+  const tr = el && el.closest('tr'); if (!tr) return;
+  const d = tr.querySelector('.inter-debut'), f = tr.querySelector('.inter-fin');
+  if (el === d && d.value && (!f.value || f.value < d.value)) f.value = d.value;
+  const p = ctPeriode({ debutJour:d.value, finJour:f.value || d.value });
+  tr.querySelector('.inter-info').textContent = p ? 'S' + p.sem + ' · ' + p.jours + ' j ouvré' + (p.jours > 1 ? 's' : '') + (f.value && f.value < d.value ? ' ⚠ fin avant début' : '') : '—';
+}
+function interEnregistrer(){
+  const c = state.chantiers[state.currentChantier], m = document.getElementById('modal-inter'); if (!c || !m) return;
+  let n = 0;
+  m.querySelectorAll('tr[data-li]').forEach(tr => { const l = c.lots[+tr.dataset.li]; if (!l) return;
+    const d = tr.querySelector('.inter-debut').value, f = tr.querySelector('.inter-fin').value;
+    interFixer(l, d, f); if (d) n++; });
+  saveState(); renderLotsTableOrCards(); _contratRenderChantier(); if (state.currentLot !== null) contratLotRefresh();
+  closeModal('modal-inter'); showToast('✓ Dates enregistrées pour ' + n + ' lot' + (n > 1 ? 's' : ''));
+}
 function contratEnregistrerFermer(){ if (contratEnregistrer()) contratFermer(); }
 function contratExporterDepuisModal(){
   const ct = contratLire();
   if (!ct.entreprise){ showToast('⚠️ Indiquez l\'entreprise'); return; }
-  if (!ctPeriode(ct)){ showToast('⚠️ Indiquez la semaine de début et l\'année'); return; }
+  if (!ctPeriode(ct)){ showToast('⚠️ Indiquez les dates d\'intervention'); return; }
   contratEnregistrer(true); contratExportPDF(_ctLi);
 }
 function contratLotRefresh(){
@@ -3607,8 +3681,8 @@ function _ctSection(c, lot){
   return `<section class="bloc"><div class="titre">Contrat d'engagement</div><div class="sous">${esc_dpgf(titreLot)}</div>
 <div class="cles">
   <div><span>Prix engagé</span><b>${fmt(ct.prix || 0)} € HT</b></div>
-  <div><span>Début d'intervention</span><b>Semaine ${p.sem}${p.an ? ' / ' + p.an : ''}</b><small>Lundi ${p.debut}</small></div>
-  <div><span>Durée d'intervention</span><b>${dureeTxt}</b><small>Fin prévue : ${p.fin}</small></div>
+  <div><span>Début d'intervention</span><b>${p.exact ? p.debut : 'Semaine ' + p.sem + (p.an ? ' / ' + p.an : '')}</b><small>${p.exact ? 'Semaine ' + p.sem : 'Lundi ' + p.debut}</small></div>
+  <div><span>Durée d'intervention</span><b>${p.exact ? p.jours + ' jours ouvrés' : dureeTxt}</b><small>Fin prévue : ${p.fin}</small></div>
 </div>
 <div class="parties">
   <div><span>Le maître d'œuvre, contractant général</span><b>Phénix-Architecture</b>6 lieu-dit l'Étreille, 63780 Saint-Georges-de-Mons<br>SIRET 987 989 316 00011<br>Représenté par Maxime Suchet</div>
@@ -3629,7 +3703,7 @@ function _ctSection(c, lot){
 <p>Dès qu'elle en constate une, l'entreprise : (1) suspend la partie de travaux concernée, (2) en informe sans délai Phénix-Architecture par écrit, photographies à l'appui, (3) remet un chiffrage de la prestation supplémentaire et précise son incidence éventuelle sur la durée d'intervention.</p>
 <p>Aucune prestation supplémentaire ne peut être exécutée ni facturée sans <b>avenant écrit</b>, signé des parties avant son exécution, précisant la nature des travaux, leur prix et leur incidence sur le délai (article 1793 du Code civil). Seules les mesures strictement nécessaires à la sécurité des personnes et à la conservation des ouvrages peuvent être prises sans attendre l'avenant, après information immédiate de Phénix-Architecture. Les avenants sont discutés dans l'esprit de l'article 1.</p>
 <h2>Article 5 — Période d'intervention</h2>
-<p>L'entreprise s'engage à intervenir à compter de la <b>semaine ${p.sem}${p.an ? ' de l\'année ' + p.an : ''}</b> (lundi ${p.debut}), pour une durée de <b>${dureeTxt}</b>, soit une fin d'intervention prévue le vendredi ${p.fin}. Ces dates sont calées dans le planning général du chantier : tout risque de retard ou de décalage doit être signalé sans délai à Phénix-Architecture, dans le cadre de l'article 1.</p>
+<p>${p.exact ? `L'entreprise s'engage à intervenir du <b>${p.debut}</b> au <b>${p.fin}</b> (semaine ${p.sem}), soit <b>${p.jours} jours ouvrés</b>.` : `L'entreprise s'engage à intervenir à compter de la <b>semaine ${p.sem}${p.an ? ' de l\'année ' + p.an : ''}</b> (lundi ${p.debut}), pour une durée de <b>${dureeTxt}</b>, soit une fin d'intervention prévue le vendredi ${p.fin}.`} Ces dates sont calées dans le planning général du chantier : tout risque de retard ou de décalage doit être signalé sans délai à Phénix-Architecture, dans le cadre de l'article 1.</p>
 <h2>Article 6 — Obligations de l'entreprise</h2>
 <ul><li>Fournir, avant son intervention, ses attestations d'assurance en cours de validité (responsabilité civile et décennale pour les travaux concernés).</li>
 <li>Respecter les règles d'hygiène et de sécurité du chantier, protéger les existants et laisser son emplacement propre en fin d'intervention.</li>
@@ -8533,7 +8607,8 @@ function centDonnees(c, g){
     assurance:{ recue: !!att, assureur: att && att.assureur || '', police: att && att.police || '', validite: att && att.dateFin ? PhenixMsg.dateFr(att.dateFin) : '', bloquants: bloq },
     pieces: ce.pieces || {}, annexePostes: ce.annexePostes !== false,
     lots: g.lots.map(x => { const l = x.lot, ct = l.contrat || {};
-      return { num:l.num, nom:l.nom, prixHt:centPrixLot(l), tva:numOr(l.tva, 20), semaine:ct.semaine, annee:ct.annee, duree:ct.duree || 1,
+      const it = interLot(l) || {};
+      return { num:l.num, nom:l.nom, prixHt:centPrixLot(l), tva:numOr(l.tva, 20), semaine:ct.semaine, annee:ct.annee, duree:ct.duree || 1, debutJour:it.debut || '', finJour:it.fin || '',
         postes:(l.postes || []).map(p => ({ n:p.n, q:parseFloat(p.q) || 0, u:p.u, pu:parseFloat(p.puArtisan) || parseFloat(p.pu) || 0 })) }; })
   };
 }
@@ -8589,13 +8664,12 @@ function centEditer(key){
     '<div class="form-row">' + inp('adresse', 'Adresse du siège *', d.entreprise.adresse) + '</div>' +
     '<div class="form-row">' + inp('representant', 'Représentant (nom) *', d.entreprise.representant) + inp('qualite', 'Qualité (gérant, président…) *', d.entreprise.qualite) + '</div>' +
     '<div class="form-row">' + inp('tel', 'Téléphone', d.entreprise.tel) + inp('email', 'E-mail', d.entreprise.email) + '</div>';
-  h += '<div style="font-size:12px;font-weight:700;color:var(--nav);margin:10px 0 4px">② Lots confiés, prix et périodes (un seul contrat)</div><div style="overflow-x:auto"><table style="width:100%;font-size:12.5px;border-collapse:collapse"><tr style="text-align:left;color:var(--text3)"><th>Lot</th><th>Prix engagé HT (€)</th><th>TVA</th><th>Semaine</th><th>Année</th><th>Durée (sem.)</th></tr>';
+  h += '<div style="font-size:12px;font-weight:700;color:var(--nav);margin:10px 0 4px">② Lots confiés, prix et périodes (un seul contrat)</div><div style="overflow-x:auto"><table style="width:100%;font-size:12.5px;border-collapse:collapse"><tr style="text-align:left;color:var(--text3)"><th>Lot</th><th>Prix engagé HT (€)</th><th>TVA</th><th>Début</th><th>Fin</th></tr>';
   g.lots.forEach((x, k) => { const L = d.lots[k];
     h += '<tr data-li="' + x.li + '"><td style="padding:3px 6px 3px 0">' + _centEsc((x.lot.num ? x.lot.num + ' ' : '') + (x.lot.nom || '')) + '</td>' +
       '<td><input type="number" step="0.01" min="0" class="cent-prix" value="' + L.prixHt + '" style="width:110px"></td><td>' + L.tva + ' %</td>' +
-      '<td><input type="number" min="1" max="53" class="cent-sem" value="' + _centEsc(L.semaine || '') + '" style="width:70px"></td>' +
-      '<td><input type="number" min="2000" class="cent-an" value="' + _centEsc(L.annee || new Date().getFullYear()) + '" style="width:80px"></td>' +
-      '<td><input type="number" min="0.5" step="0.5" class="cent-dur" value="' + _centEsc(L.duree || 1) + '" style="width:70px"></td></tr>'; });
+      '<td><input type="date" class="cent-debut" value="' + _centEsc(L.debutJour || '') + '" style="width:140px"></td>' +
+      '<td><input type="date" class="cent-fin" value="' + _centEsc(L.finJour || '') + '" style="width:140px"></td></tr>'; });
   h += '</table></div><div style="font-size:11.5px;color:var(--text3);margin-top:4px">Le prix par défaut est le total des postes au prix artisan. La TVA est facturée par lot (taux du lot dans Chiffrage).</div>';
   h += '<div style="font-size:12px;font-weight:700;color:var(--nav);margin:10px 0 4px">③ Conditions</div><div class="form-row">' + inp('acompte', 'Acompte (% du HT, 0 = aucun)', d.conditions.acomptePct, 'number', 'min="0" max="100" step="1"') +
     inp('delai', 'Délai de paiement (jours, 60 max)', d.conditions.delaiPaiement, 'number', 'min="1" max="60"') + inp('retenue', 'Retenue de garantie (% , 5 max)', d.conditions.retenuePct, 'number', 'min="0" max="5" step="0.5"') +
@@ -8627,21 +8701,22 @@ function centLireFormulaire(){
   };
   const lots = [];
   document.querySelectorAll('#cent-ed-corps tr[data-li]').forEach(tr => { lots.push({ li:parseInt(tr.dataset.li, 10),
-    prix:parseFloat(tr.querySelector('.cent-prix').value) || 0, semaine:parseInt(tr.querySelector('.cent-sem').value, 10) || '', annee:parseInt(tr.querySelector('.cent-an').value, 10) || '', duree:parseFloat(tr.querySelector('.cent-dur').value) || 1 }); });
+    prix:parseFloat(tr.querySelector('.cent-prix').value) || 0, debutJour:tr.querySelector('.cent-debut').value, finJour:tr.querySelector('.cent-fin').value || tr.querySelector('.cent-debut').value }); });
   return { c:c, g:g, ce:ce, maj:maj, lots:lots };
 }
 function centAppliquer(f){
   Object.assign(f.ce, f.maj);
-  f.lots.forEach(x => { const l = f.c.lots[x.li]; l.contrat = Object.assign({ statut:'a_signer', entreprise:f.maj.nom }, l.contrat || {}, { prix:x.prix, semaine:x.semaine, annee:x.annee, duree:x.duree });
+  f.lots.forEach(x => { const l = f.c.lots[x.li]; l.contrat = Object.assign({ statut:'a_signer', entreprise:f.maj.nom }, l.contrat || {}, { prix:x.prix });
+    interFixer(l, x.debutJour, x.finJour);   // [Dates]
     if (!l.contrat.entreprise) l.contrat.entreprise = f.maj.nom; });
 }
 function centRenderControles(){
   const f = centLireFormulaire(); if (!f) return;
   const c = f.c; // contrôle temporaire : l'état est restauré juste après, rien n'est enregistré
-  const backup = { ce:Object.assign({}, f.ce), lots:f.lots.map(x => ({ li:x.li, ct:c.lots[x.li].contrat })) };
+  const backup = { ce:Object.assign({}, f.ce), lots:f.lots.map(x => ({ li:x.li, ct:c.lots[x.li].contrat, it:c.lots[x.li].intervention })) };
   centAppliquer(f);
   let ctrl = []; try { ctrl = PhenixContratEnt.controler(centDonnees(c, centGroupes(c).find(x => x.key === _centKey))); } catch(e){}
-  Object.keys(f.ce).forEach(k => delete f.ce[k]); Object.assign(f.ce, backup.ce); backup.lots.forEach(b => { c.lots[b.li].contrat = b.ct; });
+  Object.keys(f.ce).forEach(k => delete f.ce[k]); Object.assign(f.ce, backup.ce); backup.lots.forEach(b => { c.lots[b.li].contrat = b.ct; if (b.it) c.lots[b.li].intervention = b.it; else delete c.lots[b.li].intervention; });
   if (!c.modeIntervention) ctrl.unshift({ niveau:'bloquant', texte:'Choisissez d\'abord le mode d\'intervention du chantier (contractant général ou maître d\'œuvre).' });
   const el = document.getElementById('cent-ctrl'); if (!el) return;
   el.innerHTML = ctrl.length ? '<div style="border:1px solid var(--border);border-radius:8px;padding:8px 12px;background:var(--surface2);font-size:12.5px"><b>À compléter avant signature</b>' + ctrl.map(x => '<div>' + (x.niveau === 'bloquant' ? '⛔ <b>Bloquant</b> : ' : '⚠ À vérifier : ') + _centEsc(x.texte) + '</div>').join('') + '</div>' :
