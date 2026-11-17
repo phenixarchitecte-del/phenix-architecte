@@ -5,6 +5,7 @@
 ══════════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_shell.html
 ──────────────────────────────────────────────────────────────────────
+ 17/11/2026 — [Contrat] Chiffrage peut ouvrir le module Contrat sur le dossier (bouton « Contrat client », avant les décennales).
  17/11/2026 — [Bureaux] Équipe, droits et fonctions des collaborateurs réglés dans la Synthèse 3D › Bureaux (fiche phenix_users) :
    la case « Synthèse 3D » de la fiche ajoute ou retire le module. Repérer : [Bureaux 17/11/2026].
    15/11/2026 (2) — [Calendly] Rendez-vous pris sur Calendly : notification « 📅 Nouveau rendez-vous » (ou annulé / déplacé) dans la cloche et les Échanges ; la fiche montre date, adresse, téléphone, mail, canal (« Comment nous avez-vous connu ? » ou lien marqué), dossier reconnu, informations manquantes avec un message pour les demander (SMS / mail). Canal et dossier modifiables. « Remettre à traiter » réparé.
@@ -1572,7 +1573,7 @@ window.addEventListener('message', (ev) => {
     return;
   }
   // Dossier ou Chantier demande à basculer vers un autre module
-  if ((msg.source === 'phenix-dossier' || msg.source === 'phenix-chantier') && msg.action === 'open-module' && MODULES[msg.module]) {
+  if ((msg.source === 'phenix-dossier' || msg.source === 'phenix-chantier' || msg.source === 'phenix-chiffrage') && msg.action === 'open-module' && MODULES[msg.module]) {   // [Contrat 17/11/2026] Chiffrage ouvre le contrat client
     const navEl = document.querySelector('.shell-nav-item[data-module="' + msg.module + '"]');
     // [Portail] un ordre peut accompagner l'ouverture (ex. nouveau devis demandé depuis Dossier)
     const ord = (msg.order && msg.order.source === 'phenix-shell') ? msg.order : undefined;

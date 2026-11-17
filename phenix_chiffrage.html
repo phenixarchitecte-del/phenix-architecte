@@ -7,6 +7,7 @@
 ══════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_chiffrage.html
 ──────────────────────────────────────────────────────────────────
+ 17/11/2026 — [Contrat] Bouton « ✍️ Contrat client » juste avant « Décennales des artisans » : le contrat client se signe au démarrage du chantier.
  17/11/2026 — [Décennales] Fenêtre « Décennales des artisans » : même reconnaissance que Financement (décennale de l'Annuaire sans statut, noms proches, SIRET).
  17/11/2026 — [Dates] Colonne « Dates » dans la liste des lots (entre Désignation et HT, et sur la carte mobile) ; clic = saisie des dates.
  17/11/2026 — [Dates] Dates d'intervention exactes par lot (début / fin) : bouton « 📅 Dates d'intervention » (tous les lots en une fois),
@@ -721,6 +722,7 @@ if (window.parent !== window) {
             </select></label>
           <button class="btn btn-sm btn-primary" onclick="interOuvrir()">📅 Dates d'intervention</button>
           <button class="btn btn-sm btn-primary" onclick="centOuvrirListe()">📄 Contrats par entreprise</button>
+          <button class="btn btn-sm btn-primary" onclick="contratClientOuvrir()" title="Contrat de maîtrise d'œuvre ou de contractant général, signé par le client au démarrage du chantier">✍️ Contrat client</button>
           <button class="btn btn-sm btn-primary" onclick="chdOuvrir()"><i class="ti ti-shield-check" aria-hidden="true"></i> Décennales des artisans</button>
           <button class="btn btn-sm btn-outline" onclick="contratVersPlanning('tous')" style="border-color:#1E5FAA;color:#1E5FAA">📅 Tout envoyer vers le Gantt de Chantier</button>
           <button class="btn btn-sm btn-outline" onclick="contratExportPDF('tous')"><i class="ti ti-file-export" aria-hidden="true"></i>Tous les contrats (PDF)</button>
@@ -3610,6 +3612,18 @@ function contratEnregistrer(silencieux){
   return true;
 }
 function contratFermer(){ closeModal('modal-contrat'); }
+
+// [Contrat 17/11/2026] le contrat client (MOE / CG) se signe au démarrage du chantier : ouverture du module Contrat sur le dossier
+function contratClientOuvrir(){
+  const c = state.chantiers[state.currentChantier]; if (!c){ showToast('⚠️ Sélectionnez un projet'); return; }
+  if (!c.projetId){ showToast('⚠️ Ce chiffrage n\'est rattaché à aucun dossier : rattachez-le d\'abord pour préparer le contrat client.'); return; }
+  const projet = { projetId:String(c.projetId), nom:c.nom || '', client:c.client || '', adresse:c.adresse || '', type:c.modeIntervention === 'cg' ? 'cg' : '' };
+  if (window.parent && window.parent !== window){
+    try { window.parent.postMessage({ source:'phenix-chiffrage', action:'open-module', module:'contrat', order:{ source:'phenix-shell', action:'ouvrir-contrat', projet } }, '*'); return; } catch(e) {}
+  }
+  try { localStorage.setItem('phenix-open-in-contrat', JSON.stringify(projet)); } catch(e) {}
+  window.open('phenix_contrat.html', '_blank');
+}
 
 // [Dates] 17/11/2026 — saisie des dates d'intervention de tous les lots en une fois (reprises dans les contrats et le CCTP)
 function interOuvrir(){
