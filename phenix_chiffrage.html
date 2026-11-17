@@ -7,6 +7,8 @@
 ══════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_chiffrage.html
 ──────────────────────────────────────────────────────────────────
+ 17/11/2026 — [Décennales] Fenêtre « Décennales des artisans » : même reconnaissance que Financement (décennale de l'Annuaire sans statut, noms proches, SIRET).
+ 17/11/2026 — [Dates] Colonne « Dates » dans la liste des lots (entre Désignation et HT, et sur la carte mobile) ; clic = saisie des dates.
  17/11/2026 — [Dates] Dates d'intervention exactes par lot (début / fin) : bouton « 📅 Dates d'intervention » (tous les lots en une fois),
    contrat d'engagement du lot et contrats par entreprise en dates au lieu de semaines ; CCTP : calendrier prévisionnel + délais de chaque lot.
  16/11/2026 — [PDF] DPGF, demande de prix d'un lot, CCTP et contrats d'engagement (ancien gabarit) : vrais PDF à la charte commune.
@@ -778,6 +780,7 @@ if (window.parent !== window) {
               <th style="width:36px;text-align:center" title="Inclure ce lot dans les totaux"><i class="ti ti-eye" aria-hidden="true"></i></th>
               <th style="width:70px">LOT</th>
               <th>Désignation</th>
+              <th style="width:120px" title="Dates d'intervention (bouton « 📅 Dates d'intervention »)">Dates</th>
               <th style="width:110px">HT</th>
               <th style="width:110px">TTC</th>
               <th style="width:90px">Statut</th>
@@ -3626,6 +3629,14 @@ function interOuvrir(){
   m.querySelectorAll('tr[data-li]').forEach(tr => interMaj(tr.querySelector('.inter-debut')));
   m.classList.add('open');
 }
+// [Dates] dates d'intervention affichées dans la ligne du lot (clic → saisie de toutes les dates)
+function lotDatesHtml(lot){
+  const it = interLot(lot), p = it ? ctPeriode({ debutJour:it.debut, finJour:it.fin }) : null;
+  if (!p) return '<button type="button" class="btn btn-sm btn-outline" style="font-size:11px;padding:2px 8px" onclick="event.stopPropagation();event.preventDefault();interOuvrir()" title="Saisir les dates d\'intervention">📅 À dater</button>';
+  const c = d => d.slice(0, 6) + d.slice(8);   // 11/01/27
+  return '<button type="button" onclick="event.stopPropagation();event.preventDefault();interOuvrir()" title="Modifier les dates d\'intervention" style="all:unset;cursor:pointer;display:block;font-size:12.5px;line-height:1.35;color:var(--text)">📅 ' + c(p.debut) + (p.isoFin !== p.isoDebut ? ' → ' + c(p.fin) : '') +
+    '<span style="display:block;font-size:11px;color:var(--text3)">S' + p.sem + ' · ' + p.jours + ' j ouvré' + (p.jours > 1 ? 's' : '') + (it.approx ? ' · à préciser' : '') + '</span></button>';
+}
 function interMaj(el){
   const tr = el && el.closest('tr'); if (!tr) return;
   const d = tr.querySelector('.inter-debut'), f = tr.querySelector('.inter-fin');
@@ -4301,7 +4312,7 @@ function renderLotsTable(){
   const q=(document.getElementById('lot-search').value||'').toLowerCase();
   const filtered=q?lots.filter(l=>l.nom.toLowerCase().includes(q)||l.num.toLowerCase().includes(q)):lots;
   const tb=document.getElementById('lots-tbody');
-  if(!filtered.length){tb.innerHTML='<tr><td colspan="7" style="padding:24px;text-align:center;color:var(--text3)">Aucun lot — cliquez sur « Nouveau lot »</td></tr>';updateStats(lots);return;}
+  if(!filtered.length){tb.innerHTML='<tr><td colspan="8" style="padding:24px;text-align:center;color:var(--text3)">Aucun lot — cliquez sur « Nouveau lot »</td></tr>';updateStats(lots);return;}
   tb.innerHTML='';
   filtered.forEach((lot,ri)=>{
     const li=lots.indexOf(lot);
@@ -4325,6 +4336,7 @@ function renderLotsTable(){
       <td style="text-align:center"><input type="checkbox" ${exclu?'':'checked'} title="Décocher pour exclure ce lot des totaux (comparaison entre artisans, par exemple)" onchange="toggleLotExclusion(${li},!this.checked)"></td>
       <td class="lot-num" style="${styleBarre}">${lot.num||''}</td>
       <td style="${styleBarre}"><div class="lot-name">${lot.nom}${lot.cctp?' <span title="CCTP rédigé" style="font-size:9px;font-weight:700;color:#2E7D4F;border:1px solid #2E7D4F;border-radius:8px;padding:0 5px;vertical-align:middle">CCTP</span>':''}${lot.contrat?' <span title="Contrat d\'engagement" style="font-size:9px;font-weight:700;color:#1E5FAA;border:1px solid #1E5FAA;border-radius:8px;padding:0 5px;vertical-align:middle">'+(lot.contrat.statut==='signe'?'Contrat signé':'Contrat')+'</span>':''}</div>${lotEntrepriseHtml(lot)}<div style="font-size:10px;color:var(--text3)">Achat artisan : ${fmt(travArtisan)} € HT</div></td>
+      <td style="${styleBarre}">${lotDatesHtml(lot)}</td>
       <td class="ht-val" style="${styleBarre}">${fmt(ht)} €<br>${margeBadgeHtml(margePct)}</td>
       <td class="ttc-val" style="${styleBarre}">${fmt(ttc)} €</td>
       <td><span class="status-badge ${sc}">${lot.statut||'Chiffrage'}</span>${exclu?'<div style="font-size:10px;color:var(--danger);margin-top:3px;font-weight:600">Exclu du total</div>':''}</td>
@@ -6100,6 +6112,7 @@ function renderLotsMobileCards(){
             <div style="font-size:16px;font-weight:600;color:var(--text);margin-top:2px;${styleBarreMobile}">${lot.nom}</div>
             ${exclu?'<div style="font-size:11px;color:var(--danger);font-weight:600;margin-top:2px">Exclu du total</div>':''}
             ${lotEntrepriseHtml(lot)}
+            <div style="margin-top:3px">${lotDatesHtml(lot)}</div>
           </div>
         </label>
         <span class="status-badge ${sc}" style="font-size:10px">${lot.statut||'Chiffrage'}</span>
@@ -8591,7 +8604,7 @@ function centDonnees(c, g){
   const ce = (c.contratsEnt || {})[g.key] || {};
   const a = (typeof annTrouve === 'function' && annTrouve(g.nom, ce.siret)) || {};
   const reprAnn = a.nom && a.nom !== a.entreprise && a.nom !== g.nom ? a.nom : '';
-  const att = a.decennaleStatut === 'recue' && a.decennaleAtt ? a.decennaleAtt : null;
+  const att = decRecueAnn(a) && a.decennaleAtt ? a.decennaleAtt : null;
   let bloq = '';
   if (att && window.PhenixDecennale){
     try { bloq = PhenixDecennale.controler(att, { artisan:{ entreprise:g.nom, siret:ce.siret || a.siret || '' }, lots:g.lots.map(x => x.lot) }).filter(i => i.niveau === 'bloquant').map(i => i.texte).join(' ; '); } catch(e){}
@@ -8767,13 +8780,13 @@ function chdFin(){
   return m;
 }
 function chdControles(g){
-  const a = g.artisan; if (!a || a.decennaleStatut !== 'recue' || !a.decennaleAtt) return [];
+  const a = g.artisan; if (!decRecueAnn(a) || !a.decennaleAtt) return [];
   return PhenixDecennale.controler(a.decennaleAtt, { artisan:a, lots:g.lots, finChantier:chdFin() });
 }
 function chdStatutTexte(g){
   const a = g.artisan, fr = PhenixMsg.dateFr;
-  if (!a || !a.decennaleStatut) return '○ Non demandée';
-  if (a.decennaleStatut === 'demandee') return '➤ Demandée le ' + fr(a.decennaleDemandeLe) + (a.decennaleRelances ? ' (relancée ' + a.decennaleRelances + ' fois)' : '');
+  if (!a || (!a.decennaleStatut && !decRecueAnn(a))) return '○ Non demandée';
+  if (a.decennaleStatut === 'demandee' && !decRecueAnn(a)) return '➤ Demandée le ' + fr(a.decennaleDemandeLe) + (a.decennaleRelances ? ' (relancée ' + a.decennaleRelances + ' fois)' : '');
   const r = PhenixDecennale.resume(chdControles(g)), corr = a.decennaleCorrectionLe ? ' · correction demandée le ' + fr(a.decennaleCorrectionLe) : '';
   if (r.bloquants) return '✖ Reçue — incohérence bloquante' + corr;
   if (r.attention) return '⚠ Reçue — ' + r.attention + ' point' + (r.attention > 1 ? 's' : '') + ' à vérifier' + corr;
@@ -8797,7 +8810,7 @@ function chdRender(){
     const saisie = (!tel || !mail) ? '<div class="dec-contact"><input id="chd-tel-' + i + '" placeholder="Téléphone" value="' + _centEsc(tel) + '" aria-label="Téléphone de ' + _centEsc(g.nom) + '"><input id="chd-mail-' + i + '" placeholder="Mail" value="' + _centEsc(mail) + '" aria-label="Mail de ' + _centEsc(g.nom) + '"><button class="btn btn-sm btn-outline" onclick="chdEnregistrerContact(' + i + ')">Enregistrer</button></div>' : '';
     const lis = incs.map(x => '<li class="' + x.niveau + '"><b>' + PhenixDecennale.symbole[x.niveau] + ' ' + PhenixDecennale.libelle[x.niveau] + '</b> ' + _centEsc(x.texte) + '</li>').join('');
     const att = a.decennaleAtt;
-    const detail = (a.decennaleStatut === 'recue' && att) ? '<div class="dec-contact">Attestation lue : ' + _centEsc(att.assureur || 'assureur non lu') + (att.police ? ' · police ' + _centEsc(att.police) : '') + (att.dateDebut || att.dateFin ? ' · du ' + PhenixMsg.dateFr(att.dateDebut) + ' au ' + PhenixMsg.dateFr(att.dateFin) : '') + (att.activites && att.activites.length ? '<br>Activités garanties : ' + _centEsc(att.activites.join(' ; ')) : '') + (a.decennaleUrl ? ' · <a href="' + _centEsc(a.decennaleUrl) + '" target="_blank" rel="noopener" style="color:var(--accent)">Ouvrir le PDF</a>' : '') + '</div>' : '';
+    const detail = (decRecueAnn(a) && att) ? '<div class="dec-contact">Attestation lue : ' + _centEsc(att.assureur || 'assureur non lu') + (att.police ? ' · police ' + _centEsc(att.police) : '') + (att.dateDebut || att.dateFin ? ' · du ' + PhenixMsg.dateFr(att.dateDebut) + ' au ' + PhenixMsg.dateFr(att.dateFin) : '') + (att.activites && att.activites.length ? '<br>Activités garanties : ' + _centEsc(att.activites.join(' ; ')) : '') + (a.decennaleUrl ? ' · <a href="' + _centEsc(a.decennaleUrl) + '" target="_blank" rel="noopener" style="color:var(--accent)">Ouvrir le PDF</a>' : '') + '</div>' : '';
     return '<div class="dec-row"><div class="dec-top"><div><div class="dec-nom">' + _centEsc(g.nom) + '</div><div class="dec-lots">' + g.lots.map(l => _centEsc((l.num || '') + ' ' + (l.nom || ''))).join(' · ') + '</div><div class="dec-contact">' + contact + '</div>' + saisie + '</div>' +
       '<div class="dec-statut" role="status">' + _centEsc(chdStatutTexte(g)) + '</div></div>' + detail + (lis ? '<ul class="dec-inc">' + lis + '</ul>' : '') +
       '<div class="dec-actions"><button class="btn btn-sm btn-outline" onclick="chdAction(' + i + ',\'mail\')"' + (mail ? '' : ' disabled title="Mail manquant"') + '><i class="ti ti-mail" aria-hidden="true"></i> ' + (a.decennaleStatut === 'demandee' ? 'Relancer par mail' : 'Demander par mail') + '</button>' +
@@ -8862,7 +8875,7 @@ async function chdCorriger(i, type){
 function chdAFaire(inclureAujourdhui){
   return _chdG.map((g, i) => ({ g:g, i:i })).filter(x => {
     const a = x.g.artisan;
-    if (a && a.decennaleStatut === 'recue' && !PhenixDecennale.resume(chdControles(x.g)).bloquants) return false;
+    if (decRecueAnn(a) && !PhenixDecennale.resume(chdControles(x.g)).bloquants) return false;
     if (!inclureAujourdhui && a && a.decennaleStatut === 'demandee' && a.decennaleDemandeLe === _chdAuj()) return false;
     return true;
   });
@@ -8939,9 +8952,18 @@ function chdDeposer(i){
 /* [Artisan unique] suggestions d'entreprises depuis l'Annuaire des artisans (phenix_artisans) */
 var _annLoaded=false, _annList=[];
 const _annN=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\b(sarl|eurl|sas|sasu|sa|ei|entreprise|ets|ste|societe)\b/g,'').replace(/[^a-z0-9]/g,'');
+// [Décennales 17/11/2026] même rapprochement que Financement : SIRET, nom exact, puis nom contenu (un seul candidat) ; fiche avec décennale en priorité
+function decRecueAnn(a){ return !!(a && (a.decennaleStatut==='recue' || a.decennaleAtt || a.decennaleUrl)); }
 function annTrouve(nom,siret){
-  const n=_annN(nom), sr=String(siret||'').replace(/\D/g,'');
-  return _annList.find(a=>(sr.length>=9 && String(a.siret||'').replace(/\D/g,'')===sr) || (n && (_annN(a.entreprise)===n || _annN(a.nom)===n))) || null;
+  const n=_annN(nom), sr=String(siret||'').replace(/\D/g,''), L=_annList||[], pref=l=>l.find(decRecueAnn)||l[0]||null;
+  if(sr.length>=9){ const r=L.filter(a=>String(a.siret||'').replace(/\D/g,'')===sr); if(r.length) return pref(r); }
+  if(!n) return null;
+  const ex=L.filter(a=>_annN(a.entreprise)===n || _annN(a.nom)===n); if(ex.length) return pref(ex);
+  if(n.length<5) return null;
+  const mots=x=>String(x||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\b(sarl|eurl|sas|sasu|sa|ei|entreprise|ets|ste|societe)\b/g,' ').split(/[^a-z0-9]+/).filter(w=>w.length>=3);
+  const mn=mots(nom), memes=x=>{ const mx=mots(x); if(!mx.length||!mn.length) return false; const [c,l]=mx.length<=mn.length?[mx,mn]:[mn,mx]; return c.every(w=>l.includes(w)); };
+  const pr=L.filter(a=>[a.entreprise,a.nom].some(x=>{ const m=_annN(x); return (m.length>=5 && (m.includes(n)||n.includes(m))) || memes(x); }));
+  return pr.length===1 || (pr.length>1 && pr.filter(decRecueAnn).length===1) ? pref(pr) : null;
 }
 function annAlerteMaj(){}
 /* Import d'un devis : si l'entreprise a déjà une fiche dans l'Annuaire, ses coordonnées remplissent les champs vides de la fenêtre d'import ;

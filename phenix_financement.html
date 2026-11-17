@@ -2,6 +2,9 @@
 <!--
   HISTORIQUE DES MODIFICATIONS
   16/11/2026 — [Décennale] Dossier de financement : la décennale de chaque entreprise s'affiche seulement « ✔ Reçue » ou « ✖ Manquante » (plus de contrôle ni de détail de l'attestation ici : ils restent dans l'Annuaire et le Chiffrage). Boutons Demander / Relancer gardés pour une décennale manquante.
+ 17/11/2026 — [Décennales] Une décennale déposée dans l'Annuaire est reconnue même sans statut « reçue » (attestation lue ou fichier),
+   et le rapprochement lot ↔ fiche Annuaire accepte le SIRET des contrats et les noms proches (« Phénix » ↔ « Phénix-Architecture EURL »).
+   Bouton « ⊘ pas de décennale » par lot (réglage du dossier, decNonRequises) : l'entreprise passe « Non requise » si aucun de ses lots n'en demande.
 -->
 <html lang="fr">
 <head>
@@ -661,10 +664,29 @@ async function ensureArtisans(force) {
   _artisans = (window._fbFin && window._fbFin.getArtisans) ? await window._fbFin.getArtisans() : [];
   return _artisans;
 }
+// [Décennales 17/11/2026] rapprochement Annuaire plus tolérant : SIRET des lots, nom exact, puis nom contenu dans l'autre
+// (« Phénix » ↔ « Phénix-Architecture EURL ») si un seul artisan correspond ; une fiche AVEC décennale passe avant une fiche sans.
+// [Décennales 17/11/2026] lots sans décennale nécessaire (ex. fournitures, nettoyage) : réglage propre au dossier de financement
+function decCleLot(l) { return _nnDec((l.num || '') + '|' + (l.nom || '')); }
+function decNonRequis(l) { return !!(currentDossier && currentDossier.decNonRequises && currentDossier.decNonRequises[decCleLot(l)]); }
+function decBasculerLot(i, k) {
+  const g = _decGroupes[i], l = g && g.lots[k]; if (!l || !currentDossier) return;
+  const m = currentDossier.decNonRequises = Object.assign({}, currentDossier.decNonRequises), c = decCleLot(l);
+  if (m[c]) delete m[c]; else m[c] = true;
+  scheduleAutosave(); renderDecennales();
+}
+function decRecue(a) { return !!(a && (a.decennaleStatut === 'recue' || a.decennaleAtt || a.decennaleUrl)); }
 function trouverArtisan(nom, siret) {
-  const n = _nnDec(nom), sr = String(siret || '').replace(/\D/g, '');
-  return (_artisans || []).find(a => (sr.length >= 9 && String(a.siret || '').replace(/\D/g, '') === sr) ||
-    (n && (_nnDec(a.entreprise) === n || _nnDec(a.nom) === n))) || null;
+  const n = _nnDec(nom), sr = String(siret || '').replace(/\D/g, ''), L = _artisans || [];
+  const prefere = (liste) => liste.find(decRecue) || liste[0] || null;
+  if (sr.length >= 9) { const r = L.filter(a => String(a.siret || '').replace(/\D/g, '') === sr); if (r.length) return prefere(r); }
+  if (!n) return null;
+  const exacts = L.filter(a => _nnDec(a.entreprise) === n || _nnDec(a.nom) === n); if (exacts.length) return prefere(exacts);
+  if (n.length < 5) return null;
+  const mots = (x) => String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\b(sarl|eurl|sas|sasu|sa|ei|entreprise|ets|ste|societe)\b/g, ' ').split(/[^a-z0-9]+/).filter(w => w.length >= 3);
+  const mn = mots(nom), memesMots = (x) => { const mx = mots(x); if (!mx.length || !mn.length) return false; const [c, l] = mx.length <= mn.length ? [mx, mn] : [mn, mx]; return c.every(w => l.includes(w)); };   // « Dupuy Maçonnerie » = « Maçonnerie Dupuy »
+  const proches = L.filter(a => [a.entreprise, a.nom].some(x => { const m = _nnDec(x); return (m.length >= 5 && (m.includes(n) || n.includes(m))) || memesMots(x); }));
+  return proches.length === 1 || (proches.length > 1 && proches.filter(decRecue).length === 1) ? prefere(proches) : null;
 }
 function entrepriseDuLot(l) { return String((l && (l.entreprise || (l.contrat && l.contrat.entreprise))) || '').trim(); }
 
@@ -676,10 +698,11 @@ function groupesArtisans() {
     const nom = entrepriseDuLot(l);
     if (!nom) { sansEntreprise++; return; }
     const k = _nnDec(nom);
-    if (!map[k]) { map[k] = { nom, lots: [], artisan: null }; ordre.push(k); }
+    if (!map[k]) { map[k] = { nom, lots: [], artisan: null, siret: '' }; ordre.push(k); }
     map[k].lots.push(l);
+    if (!map[k].siret) map[k].siret = String((l.contrat && l.contrat.siret) || l.siret || '');
   });
-  const groupes = ordre.map(k => { const g = map[k]; g.artisan = trouverArtisan(g.nom); return g; });
+  const groupes = ordre.map(k => { const g = map[k]; g.artisan = trouverArtisan(g.nom, g.siret); g.requis = g.lots.some(l => !decNonRequis(l)); return g; });
   groupes.sansEntreprise = sansEntreprise;
   return groupes;
 }
@@ -692,19 +715,20 @@ function finChantierISO() {
   return dt.toISOString().slice(0, 10);
 }
 function decControles(g) {
-  const art = g.artisan; if (!art || art.decennaleStatut !== 'recue' || !art.decennaleAtt) return [];
+  const art = g.artisan; if (!decRecue(art) || !art.decennaleAtt) return [];
   return PhenixDecennale.controler(art.decennaleAtt, { artisan: art, lots: g.lots, finChantier: finChantierISO() });
 }
 function decStatutTexte(g, avecSymbole) {
   // [Décennale] 16/11/2026 — dans le dossier de financement : seulement reçue ou manquante
   const sym = (x) => avecSymbole ? x + ' ' : '';
-  return g.artisan && g.artisan.decennaleStatut === 'recue' ? sym('✔') + 'Reçue' : sym('✖') + 'Manquante';
+  if (g.requis === false) return sym('⊘') + 'Non requise';
+  return decRecue(g.artisan) ? sym('✔') + 'Reçue' : sym('✖') + 'Manquante';
 }
 function decStatutDetail(g, avecSymbole) {
   const art = g.artisan, fr = PhenixMsg.dateFr;
   const sym = (x) => avecSymbole ? x + ' ' : '';
-  if (!art || !art.decennaleStatut) return sym('○') + 'Non demandée';
-  if (art.decennaleStatut === 'demandee') return sym('➤') + 'Demandée le ' + fr(art.decennaleDemandeLe) + (art.decennaleRelances ? ' (relancée ' + art.decennaleRelances + ' fois)' : '');
+  if (!art || (!art.decennaleStatut && !decRecue(art))) return sym('○') + 'Non demandée';
+  if (art.decennaleStatut === 'demandee' && !decRecue(art)) return sym('➤') + 'Demandée le ' + fr(art.decennaleDemandeLe) + (art.decennaleRelances ? ' (relancée ' + art.decennaleRelances + ' fois)' : '');
   const r = PhenixDecennale.resume(decControles(g));
   const corr = art.decennaleCorrectionLe ? ' · correction demandée le ' + fr(art.decennaleCorrectionLe) : '';
   if (r.bloquants) return sym('✖') + 'Reçue — incohérence bloquante' + corr;
@@ -729,15 +753,16 @@ async function renderDecennales() {
       : 'Coordonnées manquantes :';
     const lis = incs.map(x => '<li class="' + x.niveau + '"><b>' + PhenixDecennale.symbole[x.niveau] + ' ' + PhenixDecennale.libelle[x.niveau] + '</b> ' + escH(x.texte) + '</li>').join('');
     const att = a.decennaleAtt;
-    const detail = (a.decennaleStatut === 'recue' && a.decennaleUrl) ? '<div class="dec-contact"><a href="' + escH(a.decennaleUrl) + '" target="_blank" rel="noopener" style="color:var(--accent)">Ouvrir l’attestation</a></div>' : '';
+    const detail = (decRecue(a) && a.decennaleUrl) ? '<div class="dec-contact"><a href="' + escH(a.decennaleUrl) + '" target="_blank" rel="noopener" style="color:var(--accent)">Ouvrir l’attestation</a></div>' : '';
     return '<div class="dec-row"><div class="dec-top"><div><div class="dec-nom">' + escH(g.nom) + '</div>' +
-      '<div class="dec-lots">' + g.lots.map(l => escH((l.num || '') + ' ' + (l.nom || ''))).join(' · ') + '</div>' +
-      '<div class="dec-contact">' + contact + '</div></div>' +
+      '<div class="dec-lots">' + g.lots.map((l, k) => { const nr = decNonRequis(l); return '<span style="display:inline-flex;align-items:center;gap:4px;margin-right:8px;' + (nr ? 'text-decoration:line-through;opacity:.7' : '') + '">' + escH((l.num || '') + ' ' + (l.nom || '')) + '</span>' +
+        '<button type="button" class="btn btn-sm btn-outline" style="font-size:11px;padding:1px 7px;margin-right:10px" aria-pressed="' + nr + '" onclick="decBasculerLot(' + i + ',' + k + ')" title="' + (nr ? 'Remettre la décennale comme nécessaire pour ce lot' : 'Ce lot ne demande pas de décennale') + '">' + (nr ? '↺ décennale nécessaire' : '⊘ pas de décennale') + '</button>'; }).join('') + '</div>' +
+      '<div class="dec-contact">' + contact + '</div>' + (g.artisan || g.requis === false ? '' : '<div class="dec-contact" style="color:var(--warn,#c77d00)">⚠ Aucune fiche trouvée dans l’Annuaire sous ce nom : vérifiez que le nom de l’entreprise dans le lot correspond à celui de la fiche (ou renseignez son SIRET).</div>') + '</div>' +
       '<div class="dec-statut" role="status">' + escH(decStatutTexte(g, true)) + '</div></div>' + detail +
       (lis ? '<ul class="dec-inc">' + lis + '</ul>' : '') +
       // [Décennale] 13/11/2026 — retour des boutons dans Financement (entreprises nouvelles qui n'ont pas transmis leur décennale) : demander, relancer, écrire pour corriger
-      ((a.decennaleStatut === 'recue' && !pts.length) ? '' : '<div class="dec-actions" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">' +
-        (a.decennaleStatut !== 'recue' ? '<button type="button" class="btn btn-sm btn-outline" onclick="decDemanderFin(' + i + ',\'mail\')"' + (mail ? '' : ' disabled title="Mail manquant dans l’Annuaire"') + '>✉ ' + (a.decennaleStatut === 'demandee' ? 'Relancer' : 'Demander') + ' par mail</button>' +
+      (((decRecue(a) && !pts.length) || g.requis === false) ? '' : '<div class="dec-actions" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">' +
+        (!decRecue(a) ? '<button type="button" class="btn btn-sm btn-outline" onclick="decDemanderFin(' + i + ',\'mail\')"' + (mail ? '' : ' disabled title="Mail manquant dans l’Annuaire"') + '>✉ ' + (a.decennaleStatut === 'demandee' ? 'Relancer' : 'Demander') + ' par mail</button>' +
           '<button type="button" class="btn btn-sm btn-outline" onclick="decDemanderFin(' + i + ',\'sms\')"' + (tel ? '' : ' disabled title="Téléphone manquant dans l’Annuaire"') + '>💬 ' + (a.decennaleStatut === 'demandee' ? 'Relancer' : 'Demander') + ' par SMS</button>' : '') +
         (pts.length ? '<button type="button" class="btn btn-sm btn-outline" onclick="decCorrigerFin(' + i + ')"' + (mail ? '' : ' disabled title="Mail manquant dans l’Annuaire"') + '>✉ Écrire pour corriger (' + pts.length + ' point' + (pts.length > 1 ? 's' : '') + ')</button>' : '') + '</div>') +
       '</div>';
@@ -777,7 +802,7 @@ function syncChecklistDecennale(groupes) {
   if (!groupes.length) return;
   if (!currentDossier.checklist) currentDossier.checklist = {};
   const it = currentDossier.checklist.decennale || (currentDossier.checklist.decennale = {});
-  const tousOk = groupes.every(g => g.artisan && g.artisan.decennaleStatut === 'recue');
+  const tousOk = groupes.every(g => g.requis === false || decRecue(g.artisan));
   const uneDemande = groupes.some(g => g.artisan && g.artisan.decennaleStatut);
   let nouveau = it.status || 'manquant';
   if (tousOk) nouveau = 'obtenu'; else if (uneDemande && nouveau === 'manquant') nouveau = 'attente';
