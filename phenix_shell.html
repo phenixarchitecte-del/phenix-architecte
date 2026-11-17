@@ -5,6 +5,8 @@
 ══════════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_shell.html
 ──────────────────────────────────────────────────────────────────────
+ 17/11/2026 — [Bureaux] Équipe, droits et fonctions des collaborateurs réglés dans la Synthèse 3D › Bureaux (fiche phenix_users) :
+   la case « Synthèse 3D » de la fiche ajoute ou retire le module. Repérer : [Bureaux 17/11/2026].
    15/11/2026 (2) — [Calendly] Rendez-vous pris sur Calendly : notification « 📅 Nouveau rendez-vous » (ou annulé / déplacé) dans la cloche et les Échanges ; la fiche montre date, adresse, téléphone, mail, canal (« Comment nous avez-vous connu ? » ou lien marqué), dossier reconnu, informations manquantes avec un message pour les demander (SMS / mail). Canal et dossier modifiables. « Remettre à traiter » réparé.
    15/11/2026 — [Échanges] Contacts importés : le nom du répertoire remplace « Numéro inconnu 06… » (nom, résumé, notification) ; fichiers .vcf en UTF-16 lus.
    15/11/2026 — [Devis mail] Devis d'artisan reçu par mail : la notification propose le dossier (lu sur le mail et le devis), modifiable ; « ✓ Ranger dans ce dossier » le range dans le chiffrage (phenix_chiffrage_import.valide), « Ne pas ranger » l'écarte. Rien n'est rangé sans ce clic.
@@ -1361,6 +1363,9 @@ window.appliquerRestrictionsShell = function(email, fiche) {
   // [Synthèse 3D · v65] Cassandra (rôle « equipe ») : la Synthèse en plus de ses tâches, districts Avant-projet et Déclarations actifs.
   // Les autres comptes « equipe » restent sur leurs seules tâches (un nouveau salarié n'a accès qu'aux tâches).
   if (modules && COMPTES_SYNTHESE_ETUDES.map(x => x.toLowerCase()).indexOf(e) >= 0 && modules.indexOf('synthese') < 0) modules.push('synthese');
+  // [Bureaux 17/11/2026] la case « Accès à la Synthèse 3D » réglée dans les Bureaux (fiche phenix_users) l'emporte sur les listes ci-dessus
+  if (modules && fiche && fiche.synthese === true && modules.indexOf('synthese') < 0 && (role === 'equipe' || role === 'chantier')) modules.push('synthese');
+  if (modules && fiche && fiche.synthese === false) modules = modules.filter(m => m !== 'synthese');
   window._phenixRestreint = !!modules;
   window._phenixTachesSeules = tachesSeules;
   if (!modules) { _cacherChantier(); return false; }

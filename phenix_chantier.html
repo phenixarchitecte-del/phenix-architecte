@@ -5,6 +5,8 @@
 ══════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_chantier.html
 ──────────────────────────────────────────────────────────────────
+ 17/11/2026 — [Bureaux] « Équipe & accès » devient « Accès externes » (clients et artisans). Les collaborateurs (profil, droits,
+   districts, chantiers) se règlent dans la Synthèse 3D › Bureaux ; leurs lignes restent visibles ici, sans modification.
  16/11/2026 — [PDF] Toutes les sorties PDF (réserves, fiche mission, lots, planning, compte rendu, synthèse, financier) passent
    par la charte commune phenix_pdf.js (style du dossier de financement) : vrais PDF téléchargés, photos et plans annotés inclus,
    statuts en toutes lettres. Repérer : [PDF].
@@ -1651,12 +1653,8 @@ if (window.parent !== window) {
         <div class="form-group"><label>Nom affiché</label><input id="usr-nom" placeholder="Prénom Nom"></div>
         <div class="form-group"><label>Rôle</label>
           <select id="usr-role" onchange="usrRoleChanged()">
-            <option value="chantier">Suivi de chantier (externe, chantiers choisis)</option>
-            <option value="equipe">Équipe agence — ses tâches uniquement (ex. alternante)</option>
-            <option value="admin">Administrateur</option>
             <option value="client">Client (carnet de projet uniquement)</option>
             <option value="artisan">Artisan (accès mobile : pointage, plans, photos)</option>
-            <option value="assistante">Assistante administrative (devis et tâches uniquement)</option>
           </select></div>
         <div class="form-group" style="grid-column:1/-1;display:none" id="usr-interv-wrap"><label>Entreprise (intervenant) de cet artisan</label><select id="usr-interv"></select></div>
         <div class="form-group" style="grid-column:1/-1" id="usr-chantiers-wrap"><label>Chantiers accessibles</label>
@@ -1707,7 +1705,7 @@ if (window.parent !== window) {
     <div id="nav-more" style="display:none;padding-left:10px">
     <div class="nav-item" onclick="show('financier',this)"><i class="ti ti-report-money"></i> Suivi Financier</div>
     <div class="nav-item" onclick="show('activite',this)"><i class="ti ti-history"></i> Journal d'activité</div>
-    <div class="nav-item admin-only" onclick="show('equipe',this)"><i class="ti ti-user-shield"></i> Équipe &amp; accès</div>
+    <div class="nav-item admin-only" onclick="show('equipe',this)"><i class="ti ti-user-shield"></i> Accès externes</div>
     </div>
 
     <div class="nav-section">Historique</div>
@@ -2049,16 +2047,18 @@ if (window.parent !== window) {
       <!-- ═══ ÉQUIPE & ACCÈS (administrateur) ═══ -->
       <div class="page" id="page-equipe">
         <div class="page-header">
-          <div><div class="page-title">Équipe &amp; accès</div><div class="page-subtitle">Qui peut ouvrir ce logiciel, et sur quels chantiers</div><div class="page-title-line"></div></div>
+          <div><div class="page-title">Accès externes</div><div class="page-subtitle">Clients (carnet de projet) et artisans (accès mobile)</div><div class="page-title-line"></div></div>
           <button class="btn btn-primary" onclick="openModalUser()"><i class="ti ti-user-plus"></i> Ajouter une personne</button>
         </div>
         <div class="card" id="eq-alert" style="display:none;border-left:4px solid var(--amber);margin-bottom:1rem">
           <div style="font-size:13px;line-height:1.6"><strong>⚠️ Sécurité à finaliser.</strong> Renseignez votre e-mail de connexion dans la constante <code>ADMIN_EMAILS</code> (en haut du script) et dans <code>firestore.rules</code>, puis publiez les règles. <strong>Ne créez pas de compte pour une personne externe avant.</strong></div>
         </div>
+        <!-- [Bureaux] 17/11/2026 — les collaborateurs (conducteur, études, assistante, administrateur) se règlent dans la Synthèse 3D › Bureaux -->
+        <div class="card" style="margin-bottom:1rem;border-left:4px solid var(--accent)"><div style="font-size:13px;line-height:1.6"><strong>👥 Collaborateurs :</strong> équipe, droits et fonctions se règlent désormais dans la <strong>Synthèse 3D › hôtel de ville › Bureaux</strong> (clic sur le bureau de la personne). Cette page ne gère plus que les clients et les artisans.</div></div>
         <div class="card" style="margin-bottom:1rem">
-          <div class="card-title" style="margin-bottom:6px">Ajouter un intervenant externe — 3 étapes</div>
+          <div class="card-title" style="margin-bottom:6px">Ajouter un accès externe — 3 étapes</div>
           <div style="font-size:13px;line-height:1.7;color:var(--text2)">
-            <strong>1.</strong> Cliquez « Ajouter une personne », saisissez son e-mail, choisissez le rôle <em>Suivi de chantier</em> et cochez ses chantiers.<br>
+            <strong>1.</strong> Cliquez « Ajouter une personne », saisissez son e-mail, choisissez <em>Client</em> ou <em>Artisan</em> et cochez ses chantiers.<br>
             <strong>2.</strong> Dans la console Firebase → Authentication → Ajouter un utilisateur : créez le compte avec <u>le même e-mail</u> et un mot de passe.<br>
             <strong>3.</strong> Transmettez-lui l'adresse <strong>chantier.phenix-architecte.fr</strong> (pas le logiciel complet) et son mot de passe.
           </div>
@@ -3077,7 +3077,7 @@ function _renderEquipeTable() {
     return '<tr><td style="padding-left:16px;font-weight:600">' + esc( esc(u.nom) || '—') + '</td><td style="font-size:12px">' + esc(u._id) + '</td>' +
       '<td>' + esc(ROLE_LABELS[u.role] || u.role) + '</td><td style="font-size:12px;max-width:260px">' + esc(names) + '</td>' +
       '<td>' + (u.actif === false ? '<span class="badge badge-red">Suspendu</span>' : '<span class="badge badge-green">Actif</span>') + '</td>' +
-      '<td><button class="btn btn-sm btn-icon" title="Modifier" onclick="openModalUser(\'' + esc(u._id).replace(/'/g, '') + '\')"><i class="ti ti-pencil"></i></button></td></tr>';
+      '<td>' + ((u.role === 'client' || u.role === 'artisan') ? '<button class="btn btn-sm btn-icon" title="Modifier" onclick="openModalUser(\'' + esc(u._id).replace(/'/g, '') + '\')"><i class="ti ti-pencil"></i></button>' : '<span style="font-size:11px;color:var(--text3)" title="Synthèse 3D › Bureaux">réglé dans les Bureaux</span>') + '</td></tr>';
   }).join('');
 }
 function usrRoleChanged() {
@@ -3095,7 +3095,7 @@ function openModalUser(emailId) {
   document.getElementById('usr-email').disabled = !!u;
   document.getElementById('usr-interv').innerHTML = '<option value="">— choisir —</option>' + state.intervenants.map(i => '<option value="' + esc(i.id) + '"' + (u && String(u.intervenantId) === String(i.id) ? ' selected' : '') + '>' + esc(i.nom) + (i.metier ? ' · ' + esc(i.metier) : '') + '</option>').join('');
   document.getElementById('usr-nom').value = u ? (u.nom || '') : '';
-  document.getElementById('usr-role').value = u ? u.role : 'chantier';
+  document.getElementById('usr-role').value = u ? u.role : 'client';
   document.getElementById('usr-actif').checked = u ? u.actif !== false : true;
   document.getElementById('usr-del-btn').style.display = u ? '' : 'none';
   document.getElementById('usr-del-btn').innerHTML = u && u.actif === false ? '<i class="ti ti-trash"></i> Supprimer la fiche' : '<i class="ti ti-player-pause"></i> Suspendre l\'accès';
@@ -3172,7 +3172,7 @@ function show(id, el) {
   if (pageEl) pageEl.classList.add('active');
   if (el) el.classList.add('active');
   if (el && el.closest && el.closest('#nav-more')) toggleNavMore(true);   // [Menu] la page ouverte reste visible dans le menu
-  const titles = { carnet:'Carnet client', dashboard:'Tableau de bord', plans:'Plans & pastilles', messages:'Messages', chantiers:'Chantiers', lots:'Lots', intervenants:'Intervenants', planning:'Planning Gantt', financier:'Suivi Financier', comptes_rendus:'Comptes Rendus de Chantier', reserves:'Réserves & actions', activite:'Journal d\'activité', equipe:'Équipe & accès', comptabilite:'Comptabilité' };
+  const titles = { carnet:'Carnet client', dashboard:'Tableau de bord', plans:'Plans & pastilles', messages:'Messages', chantiers:'Chantiers', lots:'Lots', intervenants:'Intervenants', planning:'Planning Gantt', financier:'Suivi Financier', comptes_rendus:'Comptes Rendus de Chantier', reserves:'Réserves & actions', activite:'Journal d\'activité', equipe:'Accès externes', comptabilite:'Comptabilité' };
   const titleEl = document.getElementById('topbarTitle');
   if (titleEl) titleEl.textContent = titles[id] || '';
   if (id === 'carnet') openCarnetClient();
