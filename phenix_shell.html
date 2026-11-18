@@ -5,6 +5,9 @@
 ══════════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_shell.html
 ──────────────────────────────────────────────────────────────────────
+ 18/11/2026 — [Échanges] Réponse proposée sous chaque SMS ou mail à traiter : texte modifiable, « 💬 Envoyer par SMS » (appli Messages du téléphone)
+   ou « ✉️ Répondre dans Outlook » (mailto, objet « Re : … »), « ↻ Autre proposition » / « ✍️ Proposer une réponse » (IA via le proxy). Répondu → traité.
+   Repérer : [Réponse 18/11/2026].
  17/11/2026 — [Contrat] Chiffrage peut ouvrir le module Contrat sur le dossier (bouton « Contrat client », avant les décennales).
  17/11/2026 — [Bureaux] Équipe, droits et fonctions des collaborateurs réglés dans la Synthèse 3D › Bureaux (fiche phenix_users) :
    la case « Synthèse 3D » de la fiche ajoute ou retire le module. Repérer : [Bureaux 17/11/2026].
@@ -156,6 +159,12 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 #echBack .ec .es{font-size:12px;color:#6b7a99;font-weight:600}
 #echBack .chip{display:inline-block;border:1.5px solid #8a96b4;border-radius:99px;padding:1px 8px;font-size:11.5px;font-weight:700;color:#44506a;background:#fff}
 #echBack .chip.u{border-color:#c0262b;color:#8f1d20}#echBack .chip.r{border-color:#b26a00;color:#7a4a00}#echBack .chip.ok{border-color:#2e7d32;color:#1b5e20}
+/* [Réponse 18/11/2026] réponse proposée dans la liste des échanges */
+#echBack .vbtn{border:1.5px solid #1b2d5b;background:#fff;color:#1b2d5b;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer;font-size:13px;min-height:36px}
+#echBack .vbtn.p{background:#1b2d5b;color:#fff}#echBack .vbtn:disabled{opacity:.55;cursor:wait}
+#echBack .erp{margin-top:8px;border:1.5px dashed #8a96b4;border-radius:8px;padding:8px 10px;background:#f7f9fc;cursor:default}
+#echBack .erp .erl{font-size:12px;font-weight:700;color:#44506a;margin-bottom:4px}
+#echBack .erp textarea{width:100%;box-sizing:border-box;border:1.5px solid #cfd6e4;border-radius:8px;padding:7px 9px;font:inherit;font-size:13.5px;color:#1b2d5b;background:#fff;resize:vertical}
 #valBack{position:fixed;inset:0;background:rgba(15,25,55,.55);display:none;align-items:flex-start;justify-content:center;z-index:2000;overflow:auto;padding:24px 12px}
 #valBack.open{display:flex}
 #valBox{background:#fff;color:#1b2d5b;border-radius:14px;width:min(560px,100%);box-shadow:0 20px 60px rgba(0,0,0,.35);font-size:13.5px;line-height:1.45}
@@ -588,6 +597,66 @@ function _echEtatTexte(x) {
 window.ouvrirEchanges = function() { document.getElementById('echBack').classList.add('open'); renderEchanges(true); };
 window.fermerEchanges = function() { document.getElementById('echBack').classList.remove('open'); };
 window.echFiltre = function(k, v) { ECH.f[k] = v; renderEchanges(false); };
+// [Réponse 18/11/2026] Réponse proposée par l'IA, affichée sous le message, dans le canal du message (SMS ou mail).
+// Rien ne part tout seul : le bouton ouvre l'appli Messages ou Outlook avec le texte, Maxime relit et envoie.
+const _repIdx = x => (x.actions || []).findIndex(a => a && a.type === 'reponse' && a.texte);
+function _blocReponse(x) {
+  if ((x.source !== 'sms' && x.source !== 'mail') || x.reponduLe || !_estATraiter(x)) return '';
+  const i = _repIdx(x), id = _ncEsc(x._id), sms = x.source === 'sms';
+  if (i < 0) return x.reponseAttendue ? '<div class="ea" onclick="event.stopPropagation()"><button type="button" class="vbtn" id="erb_' + id + '" onclick="event.stopPropagation();echAutreReponse(\'' + id + '\')">✍️ Proposer une réponse</button></div>' : '';
+  return '<div class="erp" onclick="event.stopPropagation()" onkeydown="event.stopPropagation()"><div class="erl">↩ Réponse proposée · ' + (sms ? '💬 SMS' : '✉️ mail') + ' (modifiable)</div>' +
+    '<textarea id="er_' + id + '" rows="' + (sms ? 3 : 5) + '" aria-label="Texte de la réponse">' + _ncEsc(x.actions[i].texte) + '</textarea>' +
+    '<div class="ea"><button type="button" class="vbtn p" onclick="echEnvoyerReponse(\'' + id + '\')">' + (sms ? '💬 Envoyer par SMS' : '✉️ Répondre dans Outlook') + '</button>' +
+    '<button type="button" class="vbtn" id="erb_' + id + '" onclick="echAutreReponse(\'' + id + '\')">↻ Autre proposition</button></div></div>';
+}
+// Ouvre l'appli SMS (numéro + texte) ou la messagerie (adresse, « Re : objet », texte). Renvoie false si le contact manque.
+function _ouvrirReponseCanal(x, texte) {
+  let url = '';
+  if (x.source === 'sms') { const n = String(x.de || '').replace(/\D/g, '').replace(/^0/, '33'); if (!n) { toast('⚠️ Numéro introuvable'); return false; } url = 'sms:+' + n + (/iPhone|iPad/i.test(navigator.userAgent) ? '?&body=' : '?body=') + encodeURIComponent(texte.replace(/\n/g, '\r\n')); }
+  else { if (!x.de || !String(x.de).includes('@')) { toast('⚠️ Adresse mail introuvable'); return false; } url = 'mailto:' + x.de + '?subject=' + encodeURIComponent('Re: ' + String(x.objet || '').replace(/^re:\s*/i, '')) + '&body=' + encodeURIComponent(texte.replace(/\n/g, '\r\n')); }
+  const a = document.createElement('a'); a.href = url; a.style.display = 'none'; document.body.appendChild(a); a.click(); setTimeout(() => a.remove(), 500);
+  if (x.source === 'sms') { try { navigator.clipboard && navigator.clipboard.writeText(texte).catch(() => {}); } catch (e) {} }
+  return true;
+}
+window.echEnvoyerReponse = async function(id) {
+  const x = _echTrouve(id); if (!x) return; const ta = document.getElementById('er_' + id), texte = String(ta ? ta.value : '').trim();
+  if (!texte) { toast('Le texte est vide'); return; }
+  if (!_ouvrirReponseCanal(x, texte)) return;
+  const i = _repIdx(x), faites = new Set([...(x.faites || []), i]);
+  const reste = (x.actions || []).some((a, k) => a && a.type !== 'reponse' && !faites.has(k));   // d'autres actions à faire : le message reste « à traiter »
+  const patch = { reponduLe: new Date().toISOString(), faites: arrayUnion(i) }; if (!reste) patch.statut = 'lu';
+  if (await _echMaj(x._id, patch)) toast(x.source === 'sms' ? '✓ SMS prêt dans Messages — appuyez sur Envoyer' : '✓ Réponse ouverte dans Outlook — relisez et envoyez');
+};
+function _texteProxy(brut) {
+  try { const d = JSON.parse(brut); if (d.error) throw new Error(d.error.message || 'Erreur IA'); return (d.content || []).map(b => b.text || '').join(''); }
+  catch (e) { if (e && e.message && brut.indexOf('data:') < 0) throw e; }
+  let t = ''; brut.split('\n').forEach(l => { l = l.trim(); if (l.indexOf('data:') !== 0) return; const j = l.slice(5).trim(); if (!j || j === '[DONE]') return;
+    try { const ev = JSON.parse(j); if (ev.type === 'content_block_delta' && ev.delta && typeof ev.delta.text === 'string') t += ev.delta.text; } catch (e2) {} });
+  return t;
+}
+window.echAutreReponse = async function(id) {
+  const x = _echTrouve(id); if (!x) return; const b = document.getElementById('erb_' + id); if (b) { b.disabled = true; b.textContent = '… rédaction en cours'; }
+  const sms = x.source === 'sms', i = _repIdx(x), avant = i >= 0 ? x.actions[i].texte : '';
+  const ta = document.getElementById('er_' + id), actuel = ta ? ta.value : avant;
+  const jours = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'], d = new Date(), Q = '"""';
+  const contenu = 'Date du jour : ' + jours[d.getDay()] + ' ' + _jour(d) + '\nCanal : ' + (sms ? 'SMS' : 'mail') + '\nExpéditeur : ' + _nomExp(x) + ' (' + (x.expediteurType === 'client' ? 'client' : x.expediteurType === 'artisan' ? 'artisan' : 'contact') + ')' +
+    (x.projetNom ? '\nDossier : ' + x.projetNom : '') + (x.objet && !sms ? '\nObjet : ' + x.objet : '') + '\nRésumé : ' + _txtRep(x, x.resume || '') + '\n\nMessage reçu :\n' + Q + '\n' + String(x.extrait || x.objet || '') + '\n' + Q +
+    (actuel ? '\n\nProposition précédente (ne la reprends pas telle quelle : autre formulation ou autre approche) :\n' + Q + '\n' + actuel + '\n' + Q : '');
+  try {
+    const res = await fetch('https://phenix-proxy.phenixarchitecte.workers.dev', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 600, metadata: { user_id: 'echanges-reponse' },
+      system: 'Tu rédiges la réponse de Maxime Suchet, maître d’œuvre et contractant général (Phénix-Architecture), à un message reçu d’un artisan ou d’un client. Esprit Phénix : bienveillance, aide, simplicité. ' +
+        'Français, vouvoiement, ton chaleureux, simple et direct. ' + (sms ? 'SMS : 1 à 3 phrases courtes, moins de 300 caractères, commence par « Bonjour » (avec M./Mme + nom si connu). ' : 'Mail : commence par « Bonjour » (M./Mme + nom si connu), quelques phrases courtes, une idée par paragraphe. ') +
+        'JAMAIS de « Cordialement », de formule de fin ni de signature. N’invente aucun fait, date, heure, montant ni engagement absent du message ; si une information manque, pose la question ou dis que tu reviens vers la personne. Réponds UNIQUEMENT par le texte de la réponse, sans guillemets ni commentaire.',
+      messages: [{ role: 'user', content: contenu }] }) });
+    const brut = await res.text(); if (!res.ok) throw new Error('HTTP ' + res.status);
+    const texte = _texteProxy(brut).trim().replace(/^["«]\s*|\s*["»]$/g, '').replace(/\s*(Cordialement|Bien cordialement|Bien à vous)[\s\S]*$/i, '').trim().slice(0, 900);
+    if (!texte) throw new Error('réponse vide');
+    const actions = (x.actions || []).slice(), rep = { type: 'reponse', canal: sms ? 'sms' : 'mail', titre: 'Répondre', detail: '', texte };
+    if (i >= 0) actions[i] = Object.assign({}, actions[i], rep); else actions.push(rep);
+    if (ta) ta.value = ta.defaultValue;   // la nouvelle proposition remplace le texte affiché
+    if (await _echMaj(x._id, { actions })) toast('✓ Nouvelle proposition');
+  } catch (e) { toast('⚠️ Proposition impossible (' + String(e && e.message || e).slice(0, 60) + ')'); if (b) { b.disabled = false; b.textContent = i >= 0 ? '↻ Autre proposition' : '✍️ Proposer une réponse'; } }
+};
 function renderEchanges(refaireFiltres) {
   const back = document.getElementById('echBack'); if (!back || !back.classList.contains('open')) return;
   const f = ECH.f, fz = document.getElementById('echFiltres');
@@ -603,14 +672,17 @@ function renderEchanges(refaireFiltres) {
   l = l.filter(x => (!f.canal || x.source === f.canal) && (!f.qui || (f.qui === 'inconnu' ? _inconnuEff(x) : (x.expediteurType || 'artisan') === f.qui)) &&
     (!q || [x.artisanNom, x.deNom, _nomRep(x), x.projetNom, x.resume, x.extrait, x.objet, x.titre].join(' ').toLowerCase().includes(q)));
   l.sort((a, b) => ((_estATraiter(b) ? 1 : 0) - (_estATraiter(a) ? 1 : 0)) || ((b.urgence === 'haute' ? 1 : 0) - (a.urgence === 'haute' ? 1 : 0)) || String(b.recuLe || b.creeLe).localeCompare(String(a.recuLe || a.creeLe)));
+  const _gardes = {}; document.querySelectorAll('#echListe textarea[id^="er_"]').forEach(t => { if (t.value !== t.defaultValue) _gardes[t.id] = t.value; });   // [Réponse 18/11/2026] un texte en cours de modification survit au rafraîchissement
   document.getElementById('echListe').innerHTML = l.length ? l.slice(0, 150).map(x =>
     '<div class="ec" tabindex="0" role="button" onclick="ouvrirValidation(\'' + _ncEsc(x._id) + '\')" onkeydown="if(event.key===\'Enter\')ouvrirValidation(\'' + _ncEsc(x._id) + '\')">' +
     '<div class="et"><span>' + (x.source === 'sms' ? '💬' : x.source === 'calendly' ? '📅' : '✉️') + ' ' + _ncEsc(_nomExp(x)) + '</span><span class="es">' + (x.expediteurType === 'client' ? 'client' : _inconnuEff(x) ? '? expéditeur inconnu' : x.expediteurType === 'inconnu' ? 'contact' : 'artisan') + (x.projetNom ? ' · dossier ' + _ncEsc(x.projetNom) : '') + ' · ' + _ncEsc(_dateCourte(x.recuLe || x.creeLe)) + '</span></div>' +
     '<div>' + (CLASSE_LIB[x.classe] ? '<b>' + _ncEsc(CLASSE_LIB[x.classe]) + '</b> — ' : '') + _ncEsc(_txtRep(x, x.resume || x.titre || x.objet || '')) + '</div>' +
     '<div style="margin-top:4px">' + _echEtatTexte(x) + ((x.actions || []).length ? ' <span class="es">' + (x.actions || []).length + ' action' + (x.actions.length > 1 ? 's' : '') + ' proposée' + (x.actions.length > 1 ? 's' : '') + (x.faites && x.faites.length ? ' · ' + x.faites.length + ' faite' + (x.faites.length > 1 ? 's' : '') : '') + '</span>' : '') + '</div>' +
+    _blocReponse(x) +
     '<div class="ea" onclick="event.stopPropagation()">' + (_estATraiter(x) ? '<button type="button" class="vbtn p" onclick="event.stopPropagation();echLu(\'' + _ncEsc(x._id) + '\')">✓ Lu</button>' : '') +
     (_inconnuEff(x) && x.de ? '<button type="button" class="vbtn" onclick="event.stopPropagation();echIgnorer(\'' + _ncEsc(x._id) + '\')">🚫 Ne plus notifier ' + _ncEsc(x.source === 'sms' ? 'ce numéro' : 'cette adresse') + '</button>' : '') + '</div></div>').join('')
     : '<div class="nc-e">Rien à afficher avec ces filtres.</div>';
+  Object.keys(_gardes).forEach(k => { const t = document.getElementById(k); if (t) t.value = _gardes[k]; });
 }
 
 // ─── Évacuer vite : « Lu » en un clic, « Tout marquer lu », numéros ou adresses à ne plus notifier ───
@@ -936,11 +1008,7 @@ window.noterRdv = async function(i, mode) {
 // Réponse : ouvre la messagerie (mail) ou l'appli SMS avec le texte ; rien ne part sans l'envoi de Maxime
 window.repondre = async function(i) {
   const x = _echTrouve(_valId); if (!x) return; const texte = String(document.getElementById('vr' + i).value || '').trim(); if (!texte) { toast('Le texte est vide'); return; }
-  let url = '';
-  if (x.source === 'sms') { const n = String(x.de || '').replace(/\D/g, '').replace(/^0/, '33'); if (!n) { toast('⚠️ Numéro introuvable'); return; } url = 'sms:+' + n + (/iPhone|iPad/i.test(navigator.userAgent) ? '?&body=' : '?body=') + encodeURIComponent(texte.replace(/\n/g, '\r\n')); }
-  else { if (!x.de || !String(x.de).includes('@')) { toast('⚠️ Adresse mail introuvable'); return; } url = 'mailto:' + x.de + '?subject=' + encodeURIComponent('Re: ' + String(x.objet || '').replace(/^re:\s*/i, '')) + '&body=' + encodeURIComponent(texte.replace(/\n/g, '\r\n')); }
-  const a = document.createElement('a'); a.href = url; a.style.display = 'none'; document.body.appendChild(a); a.click(); setTimeout(() => a.remove(), 500);
-  if (x.source === 'sms') { try { navigator.clipboard && navigator.clipboard.writeText(texte); } catch (e) {} }
+  if (!_ouvrirReponseCanal(x, texte)) return;   // [Réponse 18/11/2026] même ouverture que depuis la liste
   await _echMaj(x._id, { reponduLe: new Date().toISOString(), faites: arrayUnion(i) }); toast('✓ Brouillon ouvert — relisez et envoyez'); setTimeout(() => ouvrirValidation(x._id), 250);
 };
 // Tâche, rappel, mission, note de dossier
