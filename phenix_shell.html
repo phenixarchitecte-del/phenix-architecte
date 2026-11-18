@@ -5,6 +5,7 @@
 ══════════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_shell.html
 ──────────────────────────────────────────────────────────────────────
+ 18/11/2026 (2) — [Tâches] La Synthèse 3D peut ouvrir la page Tâches de Dossier (mission « tâche en attente », onglet 'taches' → goto-page).
  18/11/2026 — [Échanges] Réponse proposée sous chaque SMS ou mail à traiter : texte modifiable, « 💬 Envoyer par SMS » (appli Messages du téléphone)
    ou « ✉️ Répondre dans Outlook » (mailto, objet « Re : … »), « ↻ Autre proposition » / « ✍️ Proposer une réponse » (IA via le proxy). Répondu → traité.
    Repérer : [Réponse 18/11/2026].
@@ -1625,7 +1626,8 @@ window.addEventListener('message', (ev) => {
     // Facturation, marge, pièces du permis : tout est dans la fiche du dossier (module Dossier)
     if (!m || m === 'dossier' || m === 'permis' || !MODULES[m]) {
       const el = document.querySelector('.shell-nav-item[data-module="dossier"]');
-      const ord = { source:'phenix-shell', action:'open-projet', id: pid, onglet: msg.onglet || null, groupe: msg.groupe || null };
+      // [Tâches 18/11/2026] mission « tâche en attente » de la Synthèse : la page Tâches de Dossier
+      const ord = msg.onglet === 'taches' ? { source:'phenix-shell', action:'goto-page', page:'taches' } : { source:'phenix-shell', action:'open-projet', id: pid, onglet: msg.onglet || null, groupe: msg.groupe || null };
       const deja = shellCurrentModule === 'dossier' && shellCurrentFrame;
       shellOpenModule('dossier', el, ord);
       if (deja) { try { shellCurrentFrame.contentWindow.postMessage(ord, '*'); } catch(e) {} shellPendingOrder = null; }
