@@ -5,6 +5,10 @@
 ══════════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_dossier.html
 ──────────────────────────────────────────────────────────────────────
+ 18/11/2026 (2) — [Menu] Ménage : onglets « Phases & suivi » et « Agenda » retirés du menu (pages conservées dans le code, plus accessibles).
+ 18/11/2026 — [Liens] Devis signé depuis « Devis en cours » : rattaché au dossier existant (lien choisi à la saisie, sinon même e-mail / téléphone,
+   sinon même nom de famille, un seul dossier ouvert) au lieu de créer un doublon ; notification « devis rattaché — à vérifier ».
+   Un contrat brouillon existant sans devis reçoit le devis (numéro, date, montant, lignes). Repérer : [Liens 18/11/2026].
  17/11/2026 — [Contrat] Le contrat client se signe au démarrage du chantier : ses 4 tâches passent de F2 (devis) à F11 « Contrat client »,
    juste avant les décennales ; les cases déjà cochées suivent (CK_DEPLACEES). Repérer : [Contrat 17/11/2026].
  16/11/2026 — [PDF] Compte rendu de réunion, récapitulatif TVA et synthèse des honoraires : vrais PDF au format de la charte commune
@@ -2243,11 +2247,9 @@ if (window.parent !== window) {
     <div class="nav-section">Projets</div>
     <div class="nav-item active" onclick="show_d('dashboard',this)"><i class="ti ti-layout-dashboard"></i> Tableau de bord</div>
     <div class="nav-item" onclick="show_d('projets',this)"><i class="ti ti-building"></i> Projets <span class="nav-badge" id="navBadgeProjets">0</span></div>
-    <div class="nav-item" onclick="show_d('phases',this)"><i class="ti ti-list-check"></i> Phases &amp; suivi</div>
     <div class="nav-item" onclick="show_d('checklist',this)"><i class="ti ti-checklist"></i> Checklist projet</div>
     <div class="nav-item" onclick="show_d('reunions',this)"><i class="ti ti-file-description"></i> Comptes Rendus <span class="nav-badge" id="navBadgeReunions">0</span></div>
     <div class="nav-item" onclick="show_d('taches',this)"><i class="ti ti-checkbox"></i> Tâches <span class="nav-badge" id="navBadgeTaches">0</span></div>
-    <div class="nav-item" onclick="show_d('calendrier',this)"><i class="ti ti-calendar-week"></i> Agenda</div>
     <div class="nav-section">Gestion</div>
     <div class="nav-item" onclick="show_d('devis',this)"><i class="ti ti-file-invoice"></i> Honoraires</div>
     <div class="nav-item" onclick="show_d('facturation',this)"><i class="ti ti-receipt-2"></i> Facturation <span class="nav-badge" id="navBadgeFactures">0</span></div>
@@ -12564,6 +12566,22 @@ async function convertirDevisSignes(list) {
     finally { _convDevisEnCours.delete(id); }
   }
 }
+// [Liens 18/11/2026] Dossier existant d'un devis : lien choisi à la saisie (projetId), sinon même e-mail ou téléphone,
+// sinon même nom de famille (un seul dossier ouvert). Renvoie { p, par } ou null.
+function _sansAccent(t) { return String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+function _motsNom(t) { return _sansAccent(String(t || '').replace(/\([^)]*\)/g, ' ')).split(/[^a-z]+/).filter(w => w.length >= 3 && !/^(sci|sarl|sas|sasu|eurl|societe|ste|famille|monsieur|madame|mme|mr|les|des|et)$/.test(w)); }
+function _telNorm(t) { let d = String(t || '').replace(/[^\d+]/g, ''); if (d.indexOf('+33') === 0) d = '0' + d.slice(3); return d.length >= 9 ? d.slice(-9) : ''; }
+function dossierPourDevis(dec, projets) {
+  const ouverts = (projets || []).filter(p => p && !/clotur|archiv|abandon|annul/i.test(String(p.statut || '')));
+  if (dec && dec.projetId) { const p = (projets || []).find(x => String(x.id) === String(dec.projetId)); if (p) return { p, par: 'lien' }; }
+  const em = String(dec && dec.email || '').trim().toLowerCase(), tl = _telNorm(dec && dec.tel);
+  const parContact = ouverts.filter(p => (em && String(p.email || '').trim().toLowerCase() === em) || (tl && _telNorm(p.tel) === tl));
+  if (parContact.length === 1) return { p: parContact[0], par: em && String(parContact[0].email || '').trim().toLowerCase() === em ? 'e-mail' : 'téléphone' };
+  if (parContact.length > 1) return null;
+  const mots = _motsNom(dec && dec.client); if (!mots.length) return null;
+  const parNom = ouverts.filter(p => { const m = new Set(_motsNom((p.nom || '') + ' ' + (p.client || ''))); return m.has(mots[0]); });
+  return parNom.length === 1 ? { p: parNom[0], par: 'nom' } : null;
+}
 async function convertirDevisSigneAuto(dec) {
   const fb = window._fb;
   const ref_ = () => fb.doc(fb.db, 'phenix_devis_en_cours', String(dec.id));
@@ -12575,6 +12593,9 @@ async function convertirDevisSigneAuto(dec) {
   const num = dec.numero || '';
   const today = new Date().toISOString().split('T')[0];
   const client = String(dec.client || '').trim() || 'Client sans nom';
+  // [Liens 18/11/2026] le client a déjà un dossier : le devis y est ajouté, pas de doublon
+  const lie = dossierPourDevis(dec, stateDossier.projets);
+  if (lie) { await rattacherDevisSigne(dec, lie, { lignes, ht, tva, num, today, client, ref_ }); return; }
   const id = stateDossier.nextId++;
   const year = new Date().getFullYear();
   const p = {
@@ -12615,6 +12636,41 @@ async function convertirDevisSigneAuto(dec) {
     });
   } catch (e) { console.warn('Notification de création impossible :', e); }
 }
+// [Liens 18/11/2026] Devis signé ajouté au dossier existant (facturation « accepté »), contrat complété, notification à vérifier.
+async function rattacherDevisSigne(dec, lie, o) {
+  const fb = window._fb, p = lie.p, id = p.id;
+  const devisCree = {
+    id: 'fact-' + Date.now(), type: 'devis', numero: o.num || autoNumero('devis'), projetId: id, phase: p.phase || 'ESQ',
+    objet: dec.objet || 'Devis', dateEmission: dec.dateEmission || dec.dateEnvoi || o.today, dateEcheance: '', datePaiement: '',
+    montantHt: o.ht, tva: o.tva, montantPaye: 0, lignes: o.lignes, montantTvaDevis: 0, montantTtcDevis: 0, statut: 'accepte',
+    notes: 'Devis signé « ' + o.client + ' » rattaché à ce dossier (' + (lie.par === 'lien' ? 'lien choisi à la saisie' : 'même ' + lie.par) + ').',
+  };
+  if (!devisCree.lignes.length) delete devisCree.lignes;
+  stateDossier.factures.push(devisCree);
+  await saveFactureDb(devisCree);
+  // fiche du dossier : contact et honoraires complétés seulement s'ils manquent (rien n'est écrasé)
+  const avant = JSON.stringify(p);
+  if (!p.email && dec.email) p.email = dec.email;
+  if (!p.tel && dec.tel) p.tel = dec.tel;
+  if (!p.adresse && dec.adresse) p.adresse = dec.adresse;
+  if (!parseFloat(p.honoraires) && o.ht) p.honoraires = String(o.ht);
+  p.historique = (p.historique || []).concat([createHistEntry('modification', [], 'Devis ' + (o.num || '') + ' signé rattaché au dossier', p)]);
+  if (JSON.stringify(p) !== avant) await saveProjet(p);
+  await fb.setDoc(o.ref_(), { projetCree: true, projetId: id, rattache: lie.par, convertiLe: new Date().toISOString() }, { merge: true });
+  try { if (window.phenixJournal) window.phenixJournal('dossier', 'modifie', 'projet', p.nom || p.client || '', { detail: 'devis ' + (o.num || '') + ' signé rattaché' }); } catch (e) {}
+  try { refreshAllViews(); } catch (e) {}
+  toast_d('✅ Devis signé rattaché au dossier « ' + (p.nom || p.client) + ' » — à vérifier.');
+  window._dernierContratPayload = null;
+  await declencherContratDepuisDevis(p, devisCree, { ouvrir: false });
+  try {
+    await fb.setDoc(fb.doc(fb.db, 'phenix_notifs', 'dossier-' + String(id) + '-' + Date.now()), {
+      type: 'dossier-cree', client: p.client || p.nom || o.client,
+      vers: 'signé — devis ' + (o.num || '') + ' « ' + o.client + ' » rattaché à ce dossier (' + (lie.par === 'lien' ? 'lien choisi' : 'même ' + lie.par) + '), à vérifier',
+      par: 'Phénix', date: new Date().toISOString(), lu: false, projetId: String(id),
+      projet: window._dernierContratPayload || { projetId: String(id), client: p.client || '', nom: p.nom || '', adresse: p.adresse || '' },
+    });
+  } catch (e) { console.warn('Notification de rattachement impossible :', e); }
+}
 // ══ [Contrat 20/10/2026] DEVIS SIGNÉ → CONTRAT ═══════════════════════
 // Dès qu'un devis est signé, un contrat « brouillon » est préparé dans phenix_contrats (MOE par défaut,
 // phases déduites de la mission, honoraires et n° de devis repris) et Phénix Contrat s'ouvre dessus.
@@ -12642,14 +12698,22 @@ async function declencherContratDepuisDevis(p, dev, opts) {
     if (typeof getCurrentUserRole === 'function' && getCurrentUserRole() !== 'admin') return false;
     const fb = window._fb, pid = String(p.id);
     let existe = false, brouillonOk = false;
+    const ht = parseFloat(dev && dev.montantHt) || parseFloat(p.honoraires) || 0;
+    const devis = { numero: String((dev && dev.numero) || ''), date: String((dev && (dev.dateEmission || dev.dateAcceptation)) || ''), montantHt: ht };
+    if (dev && Array.isArray(dev.lignes) && dev.lignes.length) devis.lignes = dev.lignes.map(l => ({ libelle: String((l && (l.libelle || l.designation)) || ''), montantHt: parseFloat(l && l.montantHt) || 0 }));
     try {
       for (const t of ['moe', 'cg']) {
         const sn = await fb.getDoc(fb.doc(fb.db, 'phenix_contrats', pid + '_' + t));
-        if (sn.exists()) existe = true;   // un contrat existe déjà : on ne l'écrase jamais (mais on l'ouvre)
+        if (sn.exists()) {
+          existe = true;   // un contrat existe déjà : on ne l'écrase jamais (mais on l'ouvre)
+          // [Liens 18/11/2026] brouillon sans devis : on lui donne celui qui vient d'être signé (rien d'autre n'est touché)
+          const c = sn.data() || {};
+          if ((c.statut || 'brouillon') === 'brouillon' && !(c.devis && c.devis.numero) && devis.numero) {
+            try { await fb.setDoc(fb.doc(fb.db, 'phenix_contrats', pid + '_' + t), { devis, updatedAt: new Date().toISOString() }, { merge: true }); } catch (e2) { console.warn('Contrat : devis non ajouté', e2); }
+          }
+        }
       }
     } catch (e) { console.warn('Contrat : lecture impossible', e); toast_d('⚠️ Contrats illisibles (règles Firestore : phenix_contrats ?) — ouverture sans brouillon.'); }
-    const ht = parseFloat(dev && dev.montantHt) || parseFloat(p.honoraires) || 0;
-    const devis = { numero: String((dev && dev.numero) || ''), date: String((dev && (dev.dateEmission || dev.dateAcceptation)) || ''), montantHt: ht };
     const projet = { projetId: pid, nom: p.nom || '', client: p.client || '', adresse: p.adresse || '', surface: p.surface || '', ref: p.ref || '', email: p.email || '', tel: p.tel || '', type: p.type || '' };
     const now = new Date().toISOString();
     if (!existe) {

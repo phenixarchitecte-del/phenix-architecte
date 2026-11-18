@@ -9,6 +9,8 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 <title>Phénix-Architecture · Mon espace</title>
 <!--
+ 18/11/2026 — [Liens] Devis en cours : champ « Dossier existant » (avenant, extension, client déjà suivi). Le dossier au même nom est proposé
+   en tête (« même nom »). À la signature, Dossier ajoute le devis à ce dossier au lieu d'en créer un nouveau. Repérer : [Liens 18/11/2026].
  04/11/2026 — ONGLET « CHECKLIST » pour l'alternante (compte « tâches seulement », ?taches=1). Elle choisit un projet, voit les fiches
    du livret de process (F1 à F11…) et coche les tâches réalisées. Elle ne lit JAMAIS phenix_projets (finances) :
    • lecture : phenix_projets_assistante (copie filtrée) → cases déjà cochées + modèle de checklist (doc _checklist_modele, publié par Dossier) ;
@@ -1723,8 +1725,8 @@ function openDevisForm(id){
   if (id) { for (var i=0;i<DEVIS.length;i++) if (String(DEVIS[i].id) === String(id)) ex = DEVIS[i]; if (!ex) return; }
   sheetState = { kind:'devis', id: ex ? String(ex.id) : '', busy:false, status:'',
     d: ex ? { client:ex.client||'', tel:ex.tel||'', email:ex.email||'', adresse:ex.adresse||'', objet:ex.objet||'', numero:ex.numero||'',
-              montantHt: ex.montantHt || '', tva: (ex.tva === undefined || ex.tva === '' ? 20 : ex.tva), dateEnvoi: normDate(ex.dateEnvoi) || normDate(ex.dateEmission) || todayISO(), lignes: ex.lignes || [] }
-        : { client:'', tel:'', email:'', adresse:'', objet:'', numero:'', montantHt:'', tva:20, dateEnvoi: todayISO(), lignes:[] } };
+              montantHt: ex.montantHt || '', tva: (ex.tva === undefined || ex.tva === '' ? 20 : ex.tva), dateEnvoi: normDate(ex.dateEnvoi) || normDate(ex.dateEmission) || todayISO(), lignes: ex.lignes || [], projetId: ex.projetId ? String(ex.projetId) : '' }
+        : { client:'', tel:'', email:'', adresse:'', objet:'', numero:'', montantHt:'', tva:20, dateEnvoi: todayISO(), lignes:[], projetId:'' } };
   renderDevisForm();
 }
 function lireDevisForm(){
@@ -1732,6 +1734,7 @@ function lireDevisForm(){
   var d = sheetState.d;
   d.client = $('d-client').value; d.tel = $('d-tel').value; d.email = $('d-email').value; d.adresse = $('d-adresse').value;
   d.objet = $('d-objet').value; d.numero = $('d-numero').value; d.montantHt = $('d-ht').value; d.tva = $('d-tva').value; d.dateEnvoi = $('d-date').value;
+  if ($('d-projet')) d.projetId = $('d-projet').value;   // [Liens 18/11/2026]
 }
 function renderDevisForm(){
   var s = sheetState; if (!s) return; var d = s.d;
@@ -1745,8 +1748,23 @@ function renderDevisForm(){
   h += f('d-objet', 'Objet du devis', d.objet, 'placeholder="Ex. : Mission de maîtrise d\'œuvre — extension"');
   h += '<div class="row" style="margin-top:0;align-items:flex-start"><div style="flex:1;min-width:130px">' + f('d-numero','N° du devis', d.numero) + '</div><div style="flex:1;min-width:130px">' + f('d-ht','Montant HT (€) *', d.montantHt, 'inputmode="decimal" type="number" step="0.01" min="0"') + '</div><div style="width:80px">' + f('d-tva','TVA %', d.tva, 'inputmode="decimal" type="number" step="0.1" min="0"') + '</div></div>';
   h += '<div class="fgroup"><span class="lbl">Date d\'envoi du devis *</span><input class="field" type="date" id="d-date" value="' + esc(d.dateEnvoi) + '"></div>';
+  h += champDossierDevis(d);   // [Liens 18/11/2026]
   h += '<div class="row"><button class="btn ghost" data-act="closesheet">Annuler</button><button class="btn primary" data-act="d-save">Enregistrer</button></div>';
   openSheet(h);
+}
+// [Liens 18/11/2026] « Dossier existant » : le devis d'un client déjà suivi (extension, avenant) est rattaché à son dossier à la signature.
+function _sansAccentE(t){ return String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+function _motsNomE(t){ return _sansAccentE(String(t || '').replace(/\([^)]*\)/g, ' ')).split(/[^a-z]+/).filter(function(w){ return w.length >= 3 && !/^(sci|sarl|sas|sasu|eurl|societe|ste|famille|monsieur|madame|mme|les|des)$/.test(w); }); }
+function champDossierDevis(d){
+  var m0 = _motsNomE(d.client)[0] || '';
+  var ps = PROJETS.filter(function(p){ return p && !/clotur|archiv|abandon|annul/i.test(String(p.statut || '')); }).slice().sort(function(a,b){ return String(a.nom||a.client||'').localeCompare(String(b.nom||b.client||''), 'fr'); });
+  var meme = function(p){ return m0 && _motsNomE((p.nom || '') + ' ' + (p.client || '')).indexOf(m0) >= 0; };
+  ps.sort(function(a,b){ return (meme(b) ? 1 : 0) - (meme(a) ? 1 : 0); });
+  var opts = '<option value="">— Nouveau client : un dossier sera créé à la signature —</option>' + ps.map(function(p){ var id = String(p.id);
+    return '<option value="' + esc(id) + '"' + (String(d.projetId || '') === id ? ' selected' : '') + '>' + esc((meme(p) ? '★ même nom · ' : '') + (p.nom || p.client || ('Dossier ' + id)) + (p.client && p.client !== p.nom ? ' — ' + p.client : '')) + '</option>'; }).join('');
+  var nb = ps.filter(meme).length;
+  return '<div class="fgroup"><span class="lbl">Dossier existant (extension, avenant, client déjà suivi)</span><select class="field" id="d-projet">' + opts + '</select>' +
+    '<div class="note" style="margin-top:6px">' + (d.projetId ? '🔗 À la signature, le devis sera ajouté à ce dossier (pas de nouveau dossier).' : nb ? '⚠ ' + nb + ' dossier' + (nb > 1 ? 's' : '') + ' au même nom (★) : choisissez-le si c\'est le même client, pour éviter un doublon.' : 'Laissez vide pour un nouveau client.') + '</div></div>';
 }
 function nettoyerEmail(v){
   var m = String(v == null ? '' : v).toLowerCase().match(/[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}/);
@@ -1849,6 +1867,7 @@ async function enregistrerDevis(){
   var doc = { id:id, client:client, tel:(d.tel||'').trim(), email:(d.email||'').trim(), adresse:(d.adresse||'').trim(), objet:(d.objet||'').trim(), numero:numero,
               montantHt:ht, tva:tva, dateEnvoi:date, dateEmission:date };
   if (d.lignes && d.lignes.length) doc.lignes = d.lignes;
+  doc.projetId = d.projetId ? String(d.projetId) : '';   // [Liens 18/11/2026] dossier existant (vide = nouveau client)
   if (!sheetState.id) { doc.statut = 'en_cours'; doc.relanceNb = 0; doc.relanceHisto = []; doc.createdAt = new Date().toISOString(); doc.createdBy = ME; }
   doc = JSON.parse(JSON.stringify(doc));
   try {
