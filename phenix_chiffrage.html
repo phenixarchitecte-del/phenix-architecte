@@ -7,6 +7,8 @@
 ══════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_chiffrage.html
 ──────────────────────────────────────────────────────────────────
+ 19/11/2026 — [HEIC] Photos iPhone .heic / .heif acceptées (plan, plan + analyse IA, dossiers rénovation et neuf, glisser-déposer) : converties
+   en JPEG dans le navigateur (heic2any chargé à la demande). Repérer : [HEIC 19/11/2026].
  17/11/2026 — [Contrat] Bouton « ✍️ Contrat client » juste avant « Décennales des artisans » : le contrat client se signe au démarrage du chantier.
  17/11/2026 — [Décennales] Fenêtre « Décennales des artisans » : même reconnaissance que Financement (décennale de l'Annuaire sans statut, noms proches, SIRET).
  17/11/2026 — [Dates] Colonne « Dates » dans la liste des lots (entre Désignation et HT, et sur la carte mobile) ; clic = saisie des dates.
@@ -9035,6 +9037,34 @@ async function annLoad(){
     document.getElementById('ann-names').innerHTML=snap.docs.map(d=>d.data()).map(a=>(a.entreprise||a.nom||'').trim()).filter(n=>n&&!seen[n.toLowerCase()]&&(seen[n.toLowerCase()]=1)).sort().map(n=>'<option value="'+n.replace(/&/g,'&amp;').replace(/"/g,'&quot;')+'">').join('');
   }catch(e){_annLoaded=false;}
 }
+
+// ══ [HEIC 19/11/2026] Photos iPhone (.heic / .heif) acceptées partout où Chiffrage prend une image (plan, plan + analyse IA,
+// dossier rénovation, dossier neuf, glisser-déposer compris) : converties en JPEG dans le navigateur (heic2any, chargé à la demande).
+let _phxHeicLib = null;
+function _phxChargerHeic() {
+  if (window.heic2any) return Promise.resolve(window.heic2any);
+  if (_phxHeicLib) return _phxHeicLib;
+  _phxHeicLib = new Promise((ok, ko) => { const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js';
+    sc.onload = () => ok(window.heic2any); sc.onerror = () => { _phxHeicLib = null; ko(new Error('convertisseur HEIC indisponible (réseau)')); }; document.head.appendChild(sc); });
+  return _phxHeicLib;
+}
+const _phxEstHeic = f => f && (/\.(heic|heif)$/i.test(f.name || '') || /image\/hei[cf]/i.test(f.type || ''));
+async function phxHeicEnJpeg(f) {
+  if (!_phxEstHeic(f)) return f;
+  try { showToast('Conversion de la photo HEIC en JPEG…'); } catch (e) {}
+  const h = await _phxChargerHeic();
+  const r = await h({ blob: f, toType: 'image/jpeg', quality: 0.88 }); const b = Array.isArray(r) ? r[0] : r;
+  return new File([b], String(f.name || 'photo.heic').replace(/\.(heic|heif)$/i, '') + '.jpg', { type: 'image/jpeg', lastModified: Date.now() });
+}
+async function phxHeicListe(files) { const out = []; for (const f of Array.from(files || [])) { try { out.push(await phxHeicEnJpeg(f)); } catch (e) { try { showToast('⚠️ ' + f.name + ' : ' + (e.message || 'conversion impossible')); } catch (e2) {} } } return out; }
+(function () {
+  const un = n => { const o = window[n]; if (typeof o !== 'function') return; window[n] = async function (f, ...r) { try { f = await phxHeicEnJpeg(f); } catch (e) { try { showToast('⚠️ Photo HEIC : ' + (e.message || 'conversion impossible')); } catch (e2) {} return; } return o.call(this, f, ...r); }; };
+  const plusieurs = n => { const o = window[n]; if (typeof o !== 'function') return; window[n] = async function (files, ...r) { const l = Array.from(files || []); if (!l.some(_phxEstHeic)) return o.call(this, files, ...r); return o.call(this, await phxHeicListe(l), ...r); }; };
+  ['loadPlanFile', 'loadPlanEtAnalyser'].forEach(un); ['renoHandleDossier', 'neufHandleDossier'].forEach(plusieurs);
+  // les boutons de choix de fichier acceptent aussi .heic / .heif
+  const ajouter = () => ['plan-file-input', 'plan-file-ia-input', 'reno-pdf-input', 'neuf-pdf-input'].forEach(id => { const el = document.getElementById(id); if (el && !/heic/.test(el.accept)) el.accept += ',.heic,.heif,image/heic,image/heif'; });
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ajouter); else ajouter();
+})();
 </script>
 <script type="module">
 /* [Garde d'accès] un compte client ou artisan, ou une fiche désactivée, ne peut pas utiliser ce module interne même en l'ouvrant directement.
