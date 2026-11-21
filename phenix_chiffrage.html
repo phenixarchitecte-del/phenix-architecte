@@ -7,6 +7,7 @@
 ══════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_chiffrage.html
 ──────────────────────────────────────────────────────────────────
+ 21/11/2026 — [HEIC] L'image du projet (vignette de la liste des chantiers) accepte aussi les photos .heic / .heif.
  19/11/2026 — [HEIC] Photos iPhone .heic / .heif acceptées (plan, plan + analyse IA, dossiers rénovation et neuf, glisser-déposer) : converties
    en JPEG dans le navigateur (heic2any chargé à la demande). Repérer : [HEIC 19/11/2026].
  17/11/2026 — [Contrat] Bouton « ✍️ Contrat client » juste avant « Décennales des artisans » : le contrat client se signe au démarrage du chantier.
@@ -3936,7 +3937,7 @@ function vigReduire(file,max,q){
 }
 function vigChoisir(i){
   const c=state.chantiers[i]; if(!c)return;
-  const inp=document.createElement('input'); inp.type='file'; inp.accept='image/*';
+  const inp=document.createElement('input'); inp.type='file'; inp.accept='image/*,.heic,.heif'; // [HEIC 21/11/2026]
   inp.onchange=async()=>{
     const f=inp.files&&inp.files[0]; if(!f)return;
     if(!window.pxVignette){showToast('Connexion nécessaire pour enregistrer une image');return;}
@@ -9061,6 +9062,9 @@ async function phxHeicListe(files) { const out = []; for (const f of Array.from(
   const un = n => { const o = window[n]; if (typeof o !== 'function') return; window[n] = async function (f, ...r) { try { f = await phxHeicEnJpeg(f); } catch (e) { try { showToast('⚠️ Photo HEIC : ' + (e.message || 'conversion impossible')); } catch (e2) {} return; } return o.call(this, f, ...r); }; };
   const plusieurs = n => { const o = window[n]; if (typeof o !== 'function') return; window[n] = async function (files, ...r) { const l = Array.from(files || []); if (!l.some(_phxEstHeic)) return o.call(this, files, ...r); return o.call(this, await phxHeicListe(l), ...r); }; };
   ['loadPlanFile', 'loadPlanEtAnalyser'].forEach(un); ['renoHandleDossier', 'neufHandleDossier'].forEach(plusieurs);
+  // [HEIC 21/11/2026] image du projet (vignette) : la photo est convertie une seule fois, puis réduite comme un JPEG
+  const _vigJpeg = new WeakMap();
+  if (typeof window.vigReduire === 'function') { const o = window.vigReduire; window.vigReduire = async function (f, ...r) { if (_phxEstHeic(f)) { if (!_vigJpeg.has(f)) _vigJpeg.set(f, phxHeicEnJpeg(f)); f = await _vigJpeg.get(f); } return o.call(this, f, ...r); }; }
   // les boutons de choix de fichier acceptent aussi .heic / .heif
   const ajouter = () => ['plan-file-input', 'plan-file-ia-input', 'reno-pdf-input', 'neuf-pdf-input'].forEach(id => { const el = document.getElementById(id); if (el && !/heic/.test(el.accept)) el.accept += ',.heic,.heif,image/heic,image/heif'; });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ajouter); else ajouter();
