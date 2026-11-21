@@ -7,9 +7,10 @@
 ══════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_chiffrage.html
 ──────────────────────────────────────────────────────────────────
+ 21/11/2026 — [HEIC] Convertisseur remplacé par heic-to : les photos des iPhone récents étaient refusées (« ERR_LIBHEIF format not supported »).
  21/11/2026 — [HEIC] L'image du projet (vignette de la liste des chantiers) accepte aussi les photos .heic / .heif.
  19/11/2026 — [HEIC] Photos iPhone .heic / .heif acceptées (plan, plan + analyse IA, dossiers rénovation et neuf, glisser-déposer) : converties
-   en JPEG dans le navigateur (heic2any chargé à la demande). Repérer : [HEIC 19/11/2026].
+   en JPEG dans le navigateur (convertisseur chargé à la demande). Repérer : [HEIC 19/11/2026].
  17/11/2026 — [Contrat] Bouton « ✍️ Contrat client » juste avant « Décennales des artisans » : le contrat client se signe au démarrage du chantier.
  17/11/2026 — [Décennales] Fenêtre « Décennales des artisans » : même reconnaissance que Financement (décennale de l'Annuaire sans statut, noms proches, SIRET).
  17/11/2026 — [Dates] Colonne « Dates » dans la liste des lots (entre Désignation et HT, et sur la carte mobile) ; clic = saisie des dates.
@@ -9041,12 +9042,15 @@ async function annLoad(){
 
 // ══ [HEIC 19/11/2026] Photos iPhone (.heic / .heif) acceptées partout où Chiffrage prend une image (plan, plan + analyse IA,
 // dossier rénovation, dossier neuf, glisser-déposer compris) : converties en JPEG dans le navigateur (heic2any, chargé à la demande).
+// [HEIC 21/11/2026] heic2any (libheif trop ancien) refusait les photos des iPhone récents (« ERR_LIBHEIF format not supported ») :
+// remplacé par heic-to (libheif récent), chargé à la demande depuis jsDelivr.
 let _phxHeicLib = null;
 function _phxChargerHeic() {
-  if (window.heic2any) return Promise.resolve(window.heic2any);
+  if (window.HeicTo) return Promise.resolve(window.HeicTo);
   if (_phxHeicLib) return _phxHeicLib;
-  _phxHeicLib = new Promise((ok, ko) => { const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js';
-    sc.onload = () => ok(window.heic2any); sc.onerror = () => { _phxHeicLib = null; ko(new Error('convertisseur HEIC indisponible (réseau)')); }; document.head.appendChild(sc); });
+  _phxHeicLib = new Promise((ok, ko) => { const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/heic-to@1.6.7/dist/iife/heic-to.js';
+    sc.onload = () => window.HeicTo ? ok(window.HeicTo) : (_phxHeicLib = null, ko(new Error('convertisseur HEIC indisponible')));
+    sc.onerror = () => { _phxHeicLib = null; ko(new Error('convertisseur HEIC indisponible (réseau)')); }; document.head.appendChild(sc); });
   return _phxHeicLib;
 }
 const _phxEstHeic = f => f && (/\.(heic|heif)$/i.test(f.name || '') || /image\/hei[cf]/i.test(f.type || ''));
@@ -9054,7 +9058,9 @@ async function phxHeicEnJpeg(f) {
   if (!_phxEstHeic(f)) return f;
   try { showToast('Conversion de la photo HEIC en JPEG…'); } catch (e) {}
   const h = await _phxChargerHeic();
-  const r = await h({ blob: f, toType: 'image/jpeg', quality: 0.88 }); const b = Array.isArray(r) ? r[0] : r;
+  let b;
+  try { b = await h({ blob: f, type: 'image/jpeg', quality: 0.88 }); }
+  catch (e) { throw new Error(typeof e === 'string' ? e : (e && e.message) || 'conversion impossible'); }
   return new File([b], String(f.name || 'photo.heic').replace(/\.(heic|heif)$/i, '') + '.jpg', { type: 'image/jpeg', lastModified: Date.now() });
 }
 async function phxHeicListe(files) { const out = []; for (const f of Array.from(files || [])) { try { out.push(await phxHeicEnJpeg(f)); } catch (e) { try { showToast('⚠️ ' + f.name + ' : ' + (e.message || 'conversion impossible')); } catch (e2) {} } } return out; }

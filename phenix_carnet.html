@@ -3,6 +3,8 @@
 <title>Phénix-Architecture · Carnet de projet</title>
 <!--
  HISTORIQUE DES MODIFICATIONS — phenix_carnet.html (version 3D)
+ 21/11/2026 — CALAGE RDC : à la conversion (Atelier, dépôt en lot), la maquette se cale sur la maison et non plus sur le terrain : centrage sur la maison,
+   hauteur 0 = dessus de la dalle du RDC (à défaut le bas de la maison). Un terrain en pente ne soulève plus la maison. Repérer : [Calage RDC].
  13/11/2026 — DÉPÔT EN LOT : Fiche projet › Maquette 3D › « Déposer toutes les maquettes (lot) » : on choisit le dossier 1_CLIENTS, chaque export .obj est rattaché
    au dossier par son numéro, converti et classé automatiquement (Atelier) puis enregistré dans son carnet, masqué au client sauf case cochée.
    Une maquette déjà en ligne n'est jamais remplacée sans case. Repérer : [Dépôt en lot].
@@ -4395,6 +4397,16 @@ window.dispatchEvent(new Event('fb-ready'));
     var up = upPref === 'y' || upPref === 'z' ? upPref : (rg[2] <= rg[1] ? 'z' : 'y');
     var big = Math.max(rg[0], rg[1], rg[2]), unit = big > 2000 ? .001 : big > 200 ? .01 : 1;
     /* (X,Y,Z) ArchiCAD → (x, z, -y) three.js : rotation pure, pas de miroir */
+    /* [Calage RDC] 21/11/2026 — la maquette se cale sur la MAISON, pas sur le terrain : le terrain (souvent en pente, plus grand que la maison)
+       ne compte ni pour le centrage ni pour la hauteur. Hauteur 0 = dessus de la dalle du RDC (calque ou matière « dalle / plancher / floor / slab »
+       le plus bas) ; à défaut, le point le plus bas de la maison. Le terrain garde sa position réelle par rapport à la maison. */
+    var V = up === 'z' ? 2 : 1, hm = [1e30,1e30,1e30], hx = [-1e30,-1e30,-1e30], dalle = null;
+    P.groups.forEach(function(g){
+      if(!includeFn(g) || g.auto === 'terr') return; var ix = g.idx, gmn = 1e30, gmx = -1e30;
+      for(var i = 0; i < ix.length; i++){ var b = ix[i]*3; for(var a = 0; a < 3; a++){ var w = pos[b+a]; if(w < hm[a]) hm[a] = w; if(w > hx[a]) hx[a] = w; } var wv = pos[b+V]; if(wv < gmn) gmn = wv; if(wv > gmx) gmx = wv; }
+      if(ix.length && (g.auto === 'dalle' || /dalle|plancher|floor|slab/i.test((g.layer || '') + ' ' + (g.mat || ''))) && (!dalle || gmn < dalle.mn - 1e-6 || (Math.abs(gmn - dalle.mn) < 1e-6 && gmx > dalle.mx))) dalle = { mn:gmn, mx:gmx };
+    });
+    if(hm[0] <= hx[0]){ mn = hm; mx = hx; if(dalle && dalle.mx - dalle.mn < (mx[V] - mn[V]) * .5) mn = mn.slice(), mn[V] = dalle.mx; }
     var cx = (mn[0]+mx[0])/2, cy = (mn[1]+mx[1])/2, cz = (mn[2]+mx[2])/2;
     var xf = up === 'z' ? { up:'z', unit:unit, ox:cx, oy:cy, oz:mn[2] } : { up:'y', unit:unit, ox:cx, oy:mn[1], oz:cz };
     return xf;
