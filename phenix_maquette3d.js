@@ -5,6 +5,11 @@
    Prérequis de la page hôte : <script type="importmap"> pour « three » (0.160) et « three/addons/ »,
    puis <script type="module" src="phenix_maquette3d.js">. API : init, update, setLook, setStage, setMode,
    focus, goView, views, overview, zoomIn, setActive. La page fournit PXModel.loader (→ ArrayBuffer .glb) et PXModel.cfg.
+   22/11/2026 [Visite chantier] PXModel.stagesUtiles() : étapes qui changent quelque chose sur la maquette ; ce qui n'est pas encore construit
+   reste visible en fantôme ; l'étape 26 (extérieurs) revient en vue dehors.
+   22/11/2026 [Fluidité] tablettes : netteté plafonnée par un budget de pixels et abaissée d'elle-même si ça saccade ; ombres recalculées
+   seulement quand la maquette change (pas à chaque image pendant qu'on la tourne).
+   22/11/2026 [Poché] en coupe (vue intérieure, murs qui montent pendant la visite du chantier), les éléments coupés apparaissent en noir.
    16/11/2026 [Plateau de jeu] option PXModel.setDecor(d) : décor de chantier de nuit comme la Synthèse 3D (parcelle à néons, camionnettes,
    cônes, barrière, grue, voisins, lampadaires) + PXModel.anchors() (positions à l'écran) + PXModel.onRender. Le Carnet ne l'appelle pas : rien ne change pour lui.
    ═══════════════════════════════════════════════════════════════════════ */
@@ -29,7 +34,32 @@
   var KEYS = [ ['couverture',/toit|couv|charp|comble/i], ['menuiseries',/menuis|fenetr|fenêtr|baie|vitr/i], ['porte',/porte/i], ['volets',/volet/i], ['plancher',/dalle|plancher|soubass/i], ['cloture',/cloture|clôture/i], ['portail',/portail/i], ['allee',/allee|allée/i], ['murs',/mur|fa[cç]ade|bardage|enduit/i] ];
   var RE_GLASS = /vitr|verre|glass|fenetre_v/i, RE_GROUND = /terrain|^sol$|jardin|voirie|site/i, RE_TERR = /grave|herbe|gazon|pelouse/i, RE_ROOF = /toit|couv|charp|comble/i;
 
+  /* [Fluidité 22/11/2026] tablettes (Surface Pro, écran très dense) : la netteté est plafonnée par un budget de pixels, et baisse d'elle-même
+     si les images mettent trop de temps à venir pendant qu'on tourne la maquette (elle ne remonte qu'au rechargement). */
+  var Q = 1, fts = [];
+  function prFor(w, h){
+    var dpr = window.devicePixelRatio || 1, coarse = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
+    var budget = (coarse ? 1.6e6 : 2.4e6) * Q;
+    return Math.max(.75, Math.min(dpr, 2, Math.sqrt(budget / Math.max(1, w*h))));
+  }
+  function mesure(dt){
+    if(!(dt > 0 && dt < 500)) return; fts.push(dt); if(fts.length < 24) return;
+    var m = fts.slice().sort(function(a,b){ return a-b; })[12]; fts = [];
+    if(m > 30 && Q > .35){ Q *= .7; var w = host.clientWidth || 600, h = host.clientHeight || 420; renderer.setPixelRatio(prFor(w, h)); renderer.setSize(w, h, false);
+      if(Q < .5 && renderer.shadowMap.type !== THREE.BasicShadowMap){ renderer.shadowMap.type = THREE.BasicShadowMap; renderer.shadowMap.needsUpdate = true; scene.traverse(function(o){ if(o.material) o.material.needsUpdate = true; }); } }
+  }
+  function ombres(){ if(renderer) renderer.shadowMap.needsUpdate = true; }
   function kick(){ if(loopOn || !active) return; loopOn = true; requestAnimationFrame(frame); }
+  /* [Poché 22/11/2026] en coupe, l'épaisseur des éléments coupés (murs, dalles, cloisons, menuiseries…) apparaît en NOIR, comme sur un plan :
+     on voit l'intérieur d'un volume fermé par ses faces arrière, que l'on peint en noir tant que la coupe est active (uPoche = 1). */
+  var POCHE = { value:0 }, POCHE_CATS = { wall:1, dalle:1, cloison:1, escalier:1, frame:1, door:1, gate:1, charpente:1 };
+  function poche(mat){
+    if(!mat || mat.userData.poche) return; mat.userData.poche = true; mat.side = THREE.DoubleSide;
+    var prev = mat.onBeforeCompile;
+    mat.onBeforeCompile = function(sh, r){ if(prev) prev(sh, r); sh.uniforms.uPoche = POCHE;
+      sh.fragmentShader = 'uniform float uPoche;\n' + sh.fragmentShader.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n  if(uPoche > .5 && !gl_FrontFacing) gl_FragColor = vec4(.035, .04, .05, 1.);'); };
+    mat.customProgramCacheKey = function(){ return 'px-poche'; }; mat.needsUpdate = true;
+  }
   function ease(t){ return t<.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2; }
   function fly(pos, tgt, ms){
     anim = { t0:performance.now(), ms:ms||800, p0:camera.position.clone(), t0v:controls.target.clone(), p1:pos, t1:tgt }; dirty = true; kick();
@@ -114,6 +144,8 @@
     /* matériaux découpables */
     var seen = [];
     root.traverse(function(o){ if(o.isMesh && seen.indexOf(o.material) < 0){ seen.push(o.material); o.material.clippingPlanes = (o.material === MAT.wall) ? [plane, growPl] : [plane]; o.material.clipShadows = true; } });
+    root.traverse(function(o){ if(o.isMesh && POCHE_CATS[o.userData.cat] && o.material !== MAT.ghost && !o.material.transparent) poche(o.material); });   /* [Poché] */
+    meshes.forEach(function(o){ o.userData.mat0 = o.material; });   /* [Visite chantier] matière d'origine, rendue après le « fantôme » */
     /* pastilles : celles du projet, sinon automatiques d'après les noms de calques */
     var list = (cfg.spots && cfg.spots.length) ? cfg.spots : autoSpots(named);
     var layer = host.querySelector('.h3-layer');
@@ -136,7 +168,7 @@
     var L = scene.getObjectByName('px-sun'); if(L){ var e = Math.max(size.x, size.z)*.9 + 6; L.shadow.camera.left = -e; L.shadow.camera.right = e; L.shadow.camera.top = e; L.shadow.camera.bottom = -e; L.shadow.camera.far = size.length()*4 + 60; L.shadow.camera.updateProjectionMatrix(); L.position.set(ctr.x + size.length()*.8, size.length()*1.1, ctr.z + size.length()*.5); L.target.position.copy(ctr); L.target.updateMatrixWorld(); }
     MAT.ghost.clippingPlanes = [plane]; applyLook();
     if(decorReq) buildDecor();
-    updFl(); applyStates(); dirty = true; kick();
+    updFl(); applyStates(); ombres(); dirty = true; kick();
   }
   function autoSpots(named){
     var out = [];
@@ -224,6 +256,8 @@
   function applyCut(){
     var inside = (mode === 'in'), st = stage, keep = !!(M.cfg && M.cfg.keepMaterials);
     plane.constant = inside ? cuts[Math.min(floorI, cuts.length-1)] : 999;
+    POCHE.value = (inside || (st != null && st < 9)) ? 1 : 0;   /* [Poché] coupe active : épaisseurs coupées en noir */
+    ombres();
     meshes.forEach(function(o){
       var c = o.userData.cat, v = true, mat = null;
       if(st != null){ /* [Atelier] étape d'apparition par catégorie (réglable dans l'Atelier) */
@@ -231,9 +265,12 @@
         if(c === 'terr' || c === 'ground' || need <= 0) v = true;
         else if(c === 'roof'){ v = st >= Math.min(need, stOf('charpente')); mat = st >= need ? MAT.roof : MAT.ghost; }
         else v = st >= need;
-      } else if(c === 'roof') mat = MAT.roof;
+        /* [Visite chantier 22/11/2026] ce qui n'est pas encore construit reste visible en « fantôme » : on voit toujours la maison à venir */
+        if(!v && c !== 'mobilier' && c !== 'roof' && !inside){ v = true; mat = MAT.ghost; }
+        else if(c !== 'roof') mat = o.userData.mat0 || null;
+      } else mat = (c === 'roof' && !keep) ? MAT.roof : (o.userData.mat0 || null);
       if(c === 'roof' && inside) v = false;
-      o.visible = v; if(mat && !keep) o.material = mat;
+      o.visible = v; if(mat && (!keep || mat === MAT.ghost || mat === o.userData.mat0)) o.material = mat;
     });
     dirty = true; kick();
   }
@@ -255,15 +292,17 @@
   }
   function resize(){
     if(!host || !renderer) return; var w = host.clientWidth || 600, h = host.clientHeight || 420;
-    renderer.setSize(w, h, false); camera.aspect = w/h; if(offX) camera.setViewOffset(w, h, -offX, 0, w, h); else camera.clearViewOffset(); camera.updateProjectionMatrix(); dirty = true; kick();
+    renderer.setPixelRatio(prFor(w, h)); renderer.setSize(w, h, false); camera.aspect = w/h; if(offX) camera.setViewOffset(w, h, -offX, 0, w, h); else camera.clearViewOffset(); camera.updateProjectionMatrix(); dirty = true; kick();
   }
   function frame(now){
     loopOn = false; if(!active) return;
     var busy = false;
-    if(growAnim){ var tg = Math.min(1, (now-growAnim.t0)/700); growH = growAnim.a + (growAnim.b-growAnim.a)*ease(tg); growPl.constant = growH; busy = true; dirty = true; if(tg >= 1){ growH = growAnim.b >= topH + 1 ? 999 : growAnim.b; growPl.constant = growH; growAnim = null; } }
+    if(M._lastT && (loopOn === false)) mesure(now - M._lastT); M._lastT = now;
+    if(growAnim){ ombres(); var tg = Math.min(1, (now-growAnim.t0)/700); growH = growAnim.a + (growAnim.b-growAnim.a)*ease(tg); growPl.constant = growH; busy = true; dirty = true; if(tg >= 1){ growH = growAnim.b >= topH + 1 ? 999 : growAnim.b; growPl.constant = growH; growAnim = null; } }
     if(anim){ var t = Math.min(1, (now-anim.t0)/anim.ms), e = ease(t); camera.position.lerpVectors(anim.p0, anim.p1, e); controls.target.lerpVectors(anim.t0v, anim.t1, e); if(t >= 1) anim = null; busy = true; dirty = true; }
     var moved = controls.update(); if(moved) dirty = true;
-    if(dirty){ renderer.render(scene, camera); placeSpots(); if(M.onRender) try{ M.onRender(); }catch(e){} dirty = false; if(moved || busy){ loopOn = true; requestAnimationFrame(frame); } }
+    if(dirty){ renderer.render(scene, camera); placeSpots(); if(M.onRender) try{ M.onRender(); }catch(e){} dirty = false; if(moved || busy){ loopOn = true; requestAnimationFrame(frame); } else M._lastT = 0; }
+    else M._lastT = 0;
   }
   function pickAt(cx, cy){
     var r = renderer.domElement.getBoundingClientRect();
@@ -277,9 +316,9 @@
     if(M.ready) return; host = el; zones = zs; onPick = pick;
     try{ renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false, powerPreference:'high-performance' }); }
     catch(e){ try{ renderer = new THREE.WebGLRenderer({ antialias:false, alpha:false }); } catch(e2){ if(!M.quiet) window.dispatchEvent(new Event('px3d-fail')); if(M.onfail) M.onfail(e2); return; } }
-    var small = Math.min(window.innerWidth, window.innerHeight) < 700;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, small ? 1.5 : 2));
+    renderer.setPixelRatio(prFor(host.clientWidth || 600, host.clientHeight || 420));
     renderer.localClippingEnabled = true; renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = true;   /* [Fluidité] ombres recalculées seulement quand la maquette change, pas à chaque image */
     renderer.setClearColor(0x0a1628, 1);
     var cv = renderer.domElement; cv.className = 'h3-cv'; cv.setAttribute('aria-label','Maquette 3D de votre projet'); cv.setAttribute('role','img'); host.appendChild(cv);
     var layer = document.createElement('div'); layer.className = 'h3-layer'; host.appendChild(layer);
@@ -315,11 +354,19 @@
     var a = growH >= 999 ? topH + 5 : growH, b = tgt >= 999 ? topH + 5 : tgt;
     growAnim = { a:a, b:b, t0:performance.now() }; if(prev == null){ growH = a; growPl.constant = a; }
     forceId = null;
-    var wantIn = stage != null && stage >= 16;
+    var wantIn = stage != null && stage >= 16 && stage < 26;   /* [Visite chantier] 26 = extérieurs : vue dehors */
     if(wantIn && mode !== 'in'){ stageIn = true; setMode('in'); }
     else if(!wantIn && stageIn){ stageIn = false; setMode('out'); }
     else if(prev == null && stage != null && mode === 'out'){ var o = overviewPose(); fly(o.p, o.t, 800); }
     applyCut(); dirty = true; kick();
+  };
+  /* [Visite chantier 22/11/2026] étapes qui changent quelque chose sur CETTE maquette (les autres sont sautées par la visite du Carnet) */
+  M.stagesUtiles = function(){
+    if(!(M.ready && root)) return null; var set = { 1:1 }, has = {};
+    meshes.forEach(function(o){ has[o.userData.cat] = 1; });
+    Object.keys(has).forEach(function(c){ if(c === 'terr' || c === 'ground' || c === 'hide') return; var n = stOf(c); if(n > 0) set[n] = 1; });
+    if(has.wall){ set[7] = 1; set[9] = 1; delete set[6]; delete set[8]; }
+    return Object.keys(set).map(Number).sort(function(a, b){ return a - b; });
   };
   M.setSun = function(){}; M.vent = function(){ if(M.ready) setMode('in'); };
   M.setActive = function(on){ active = !!on; if(on){ resize(); dirty = true; kick(); } };

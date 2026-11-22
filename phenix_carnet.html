@@ -3,6 +3,11 @@
 <title>Phénix-Architecture · Carnet de projet</title>
 <!--
  HISTORIQUE DES MODIFICATIONS — phenix_carnet.html (version 3D)
+ 22/11/2026 — VISITE DU CHANTIER sur les vraies maquettes : seules les étapes qui changent quelque chose sur la maquette sont parcourues
+   (« Étape 3 sur 9 ») ; ce qui n'est pas encore construit reste en fantôme ; extérieurs (allée, clôture, portail) à la dernière étape,
+   vue dehors. Repérer : [Visite chantier].
+ 22/11/2026 — POCHÉ : en coupe (vue intérieure du carnet, Atelier « Coupe intérieure », murs qui montent pendant la visite du chantier),
+   l'épaisseur des murs, dalles, cloisons et menuiseries coupés apparaît en noir, comme sur un plan. Repérer : [Poché].
  22/11/2026 — CALAGE RDC (3) : redéposer une maquette (lot avec « Remplacer », ou PXAtelier._recaler) garde son classement de calques et son
    affichage client. Repérer : [Calage RDC].
  22/11/2026 — CALAGE RDC (2) : la dalle du RDC est détectée par la géométrie (grande surface horizontale la plus basse de la maison, son dessus),
@@ -2122,8 +2127,8 @@ CATS.push(
 var PXCATS=[
  ['wall','Murs et façades',6,0xf4f6fa],['glass','Vitrages',15,0x9fb9d6],['frame','Menuiseries et volets',15,0x9fb2c6],['door','Portes',15,0xb9c6da],
  ['charpente','Charpente',10,0xd9cbb5],['roof','Couverture',14,0xdfe5ee],['dalle','Dalles et planchers',5,0xf4f6fa],['cloison','Cloisons et doublages',18,0xf4f6fa],
- ['escalier','Escalier',22,0xf4f6fa],['terr','Terrain et abords',0,0x2a3e5d],['vrd','Clôture et réseaux',22,0xf4f6fa],['gate','Portail',22,0xb9c6da],
- ['allee','Allée et terrasse',22,0xc6cedc],['mobilier','Mobilier et sanitaires',25,0xc9d2de],['hide','Masqué (retiré)',-1,0x888888],['ground','Sol',0,0x2a3e5d,1]
+ ['escalier','Escalier',22,0xf4f6fa],['terr','Terrain et abords',0,0x2a3e5d],['vrd','Clôture et réseaux',26,0xf4f6fa],['gate','Portail',26,0xb9c6da],
+ ['allee','Allée et terrasse',26,0xc6cedc],['mobilier','Mobilier et sanitaires',25,0xc9d2de],['hide','Masqué (retiré)',-1,0x888888],['ground','Sol',0,0x2a3e5d,1]
 ];
 window.PXCATS=PXCATS;
 var HZ=[
@@ -2418,12 +2423,19 @@ function houseHtml(){
    '<div class="h3-menu" id="h3-menu" hidden role="dialog" aria-label="Menu"><button class="h3-menubtn h3-menux" data-act="hmenu" data-id="close">Fermer</button>'+
    '<div class="h3-menuin"><div class="h3-mbar" id="h3-mbar"></div><div id="h3-side"></div></div></div></div>';
 }
+/* [Visite chantier 22/11/2026] avec une vraie maquette, la visite ne passe que par les étapes qui changent quelque chose (PXModel.stagesUtiles) */
+function stSteps(){var mx=stageMax(),P=window.PXHouse,L=null;try{if(P&&P.isModel&&P.ready&&P.stagesUtiles)L=P.stagesUtiles()}catch(e){}
+  if(L&&L.length){L=L.filter(function(n){return n>=1&&n<=mx});if(REAL.etape&&REAL.etape<=mx&&L.indexOf(REAL.etape)<0)L.push(REAL.etape);L.sort(function(a,b){return a-b});if(L.length)return L}
+  var a=[];for(var i=1;i<=mx;i++)a.push(i);return a}
+function stIdx(n){var L=stSteps(),i=L.indexOf(n);if(i<0){i=0;L.forEach(function(v,k){if(v<=n)i=k})}return i}
+function stMove(d){var L=stSteps(),i=HS.stage==null?-1:stIdx(HS.stage);i=Math.max(0,Math.min(L.length-1,i+d));houseSetStage(L[i])}
+function stEye(){var L=stSteps();return 'Étape '+(stIdx(HS.stage)+1)+' sur '+L.length}
 function houseStageHtml(){
   if(HS.stage==null)return '';
   return '<div class="h3-st"><div class="h3-sth"><span class="eyebrow" id="h3-eye">Étape '+HS.stage+' sur '+ST.length+'</span><button class="btn" data-act="hstage" data-id="off">'+(REAL.etape?'✕ Maison terminée':'✕ Quitter')+'</button></div>'+
    (REAL.etape?'<div class="eyebrow" style="margin:2px 0 4px;color:'+(HS.stage===REAL.etape?'var(--ok)':'var(--muted)')+'">'+(HS.stage===REAL.etape?'● État actuel du chantier · '+esc(REAL.etapeNom):'Vous revoyez le passé · aujourd’hui : étape '+REAL.etape)+'</div>':'')+
    '<div id="h3-cap">'+houseCap()+'</div>'+
-   '<input id="h3-range" type="range" min="1" max="'+stageMax()+'" step="1" value="'+HS.stage+'" aria-label="Étape de construction">'+
+   '<input id="h3-range" type="range" min="1" max="'+stSteps().length+'" step="1" value="'+(stIdx(HS.stage)+1)+'" aria-label="Étape de construction">'+
    '<div class="h3-stn"><button class="btn" data-act="hstage" data-id="prev">← Précédente</button><button class="btn" id="h3-play" data-act="hstage" data-id="play">'+(HS.timer?'⏸ Pause':'▶ Lecture')+'</button><button class="btn solid" data-act="hstage" data-id="next">Suivante →</button></div>'+
    (REAL.etape?'<div class="h3-stn" style="margin-top:6px"><button class="btn" data-act="tab" data-id="plans">Mes plans'+(plcNb()?' ●'+plcNb():'')+'</button><button class="btn" data-act="hguide" data-id="open">Mes choix</button></div>':'')+'</div>';
 }
@@ -2450,16 +2462,16 @@ function houseSetStage(n){
   if(window.PXHouse&&window.PXHouse.ready)window.PXHouse.setStage(HS.stage);
   if(HS.stage==null){houseStop();houseSyncStage();return}
   var c=$('h3-cap');
-  if(c){c.innerHTML=houseCap();var e=$('h3-eye');if(e)e.textContent='Étape '+HS.stage+' sur '+ST.length;var r=$('h3-range');if(r)r.value=HS.stage}
+  if(c){c.innerHTML=houseCap();var e=$('h3-eye');if(e)e.textContent=stEye();var r=$('h3-range');if(r){r.max=stSteps().length;r.value=stIdx(HS.stage)+1}}
   else houseSyncStage();
 }
 function housePlay(){
   houseStop();
-  if(HS.stage==null||HS.stage>=stageMax())houseSetStage(1);
+  var L0=stSteps();if(HS.stage==null||stIdx(HS.stage)>=L0.length-1)houseSetStage(L0[0]);
   HS.timer=setInterval(function(){
-    if(HS.stage>=stageMax()){houseStop();return}
-    houseSetStage(HS.stage+1);
-  },1500);
+    var L=stSteps();if(stIdx(HS.stage)>=L.length-1){houseStop();return}
+    stMove(1);
+  },2200);
   var p=$('h3-play');if(p)p.textContent='⏸ Pause';
 }
 function houseSide(){
@@ -2734,8 +2746,8 @@ function houseAct(a,el){
     if(id==='on'&&REAL.etape){houseStop();houseSetStage(REAL.etape);houseSyncStage();return true}
     if(id==='on'){houseSetStage(1);houseSyncStage();housePlay();setTimeout(function(){try{$('h3-host').parentNode.scrollIntoView({behavior:'smooth',block:'start'})}catch(e){}},60);return true}
     if(id==='off'){houseSetStage(null);return true}
-    if(id==='prev'){houseStop();houseSetStage((HS.stage||1)-1);return true}
-    if(id==='next'){houseStop();houseSetStage((HS.stage||0)+1);return true}
+    if(id==='prev'){houseStop();stMove(-1);return true}
+    if(id==='next'){houseStop();stMove(1);return true}
     if(id==='play'){if(HS.timer)houseStop();else housePlay();return true}
     return true}
   if(a==='hroom'){HS.mode='in';if(HS.stage!=null)houseSetStage(null);houseStop();if(window.PXHouse&&window.PXHouse.ready)window.PXHouse.room(id);return true}
@@ -2743,7 +2755,7 @@ function houseAct(a,el){
   return false;
 }
 
-document.addEventListener('input',function(e){var t=e.target;if(t&&t.id==='h3-range')houseSetStage(parseInt(t.value,10))});
+document.addEventListener('input',function(e){var t=e.target;if(t&&t.id==='h3-range'){var L=stSteps();houseSetStage(L[Math.max(0,Math.min(L.length-1,parseInt(t.value,10)-1))])}});
 
 /* ---------------- Synthèse ---------------- */
 function renderSynth(res){
@@ -4535,8 +4547,13 @@ window.dispatchEvent(new Event('fb-ready'));
     var col = (A.cfg && A.cfg.colors && A.cfg.colors[c] != null) ? A.cfg.colors[c] : (CD[c] ? CD[c][3] : 0xf4f6fa);
     var m = new THREE.MeshStandardMaterial({ color:col, roughness:.88, metalness:0, side:THREE.DoubleSide });
     if(c === 'glass'){ m.transparent = true; m.opacity = .38; m.depthWrite = false; m.roughness = .15; }
+    else if({ wall:1, dalle:1, cloison:1, escalier:1, frame:1, door:1, gate:1, charpente:1 }[c]){   /* [Poché 22/11/2026] coupe : épaisseurs coupées en noir */
+      m.onBeforeCompile = function(sh){ sh.uniforms.uPoche = POCHE_A; sh.fragmentShader = 'uniform float uPoche;\n' + sh.fragmentShader.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n  if(uPoche > .5 && !gl_FrontFacing) gl_FragColor = vec4(.035, .04, .05, 1.);'); };
+      m.customProgramCacheKey = function(){ return 'atl-poche'; };
+    }
     MATS[c] = m; return m;
   }
+  var POCHE_A = { value:0 };
   function vInit(host){
     if(V.ok){ host.appendChild(V.r.domElement); host.appendChild(V.layer); V.host = host; vResize(); return; }
     V.host = host;
@@ -4580,6 +4597,7 @@ window.dispatchEvent(new Event('fb-ready'));
       m.visible = v; m.material = (A.sel === g.key) ? V.hi : mat;
       m.material.clippingPlanes = [V.cut];
     });
+    POCHE_A.value = V.cut.constant < 900 ? 1 : 0;   /* [Poché] */
     vDirty();
   }
   function vGhost(){ if(!V.ghost) V.ghost = new THREE.MeshStandardMaterial({ color:0xdde3ec, transparent:true, opacity:.25, depthWrite:false, side:THREE.DoubleSide }); return V.ghost; }
@@ -5241,7 +5259,7 @@ window.dispatchEvent(new Event('fb-ready'));
 })();
 </script>
 
-<script type="module" src="phenix_maquette3d.js"></script>
+<script type="module" src="phenix_maquette3d.js?v=20261122"></script>
 
 
 </body></html>
