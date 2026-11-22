@@ -5,6 +5,7 @@
    Prérequis de la page hôte : <script type="importmap"> pour « three » (0.160) et « three/addons/ »,
    puis <script type="module" src="phenix_maquette3d.js">. API : init, update, setLook, setStage, setMode,
    focus, goView, views, overview, zoomIn, setActive. La page fournit PXModel.loader (→ ArrayBuffer .glb) et PXModel.cfg.
+   22/11/2026 [Existant/Projet] statut de rénovation par élément (userData.reno ou réglage de l'Atelier) ; M.hasReno(), M.setReno('existant'|'projet').
    22/11/2026 [Visite chantier] PXModel.stagesUtiles() : étapes qui changent quelque chose sur la maquette ; ce qui n'est pas encore construit
    reste visible en fantôme ; l'étape 26 (extérieurs) revient en vue dehors.
    22/11/2026 [Fluidité] tablettes : netteté plafonnée par un budget de pixels et abaissée d'elle-même si ça saccade ; ombres recalculées
@@ -28,7 +29,7 @@
   var M = { ready:false, isModel:true, rooms:[], loader:null, cfg:null };
   var host, renderer, scene, camera, controls, root, spots = {}, zones = [], onPick = function(){}, flb = null, ldr = null;
   var mode = 'out', active = false, dirty = true, loopOn = false, anim = null, forceId = null, floorI = 0, states = {};
-  var MAT = {}, meshes = [], stage = null, growH = 999, growPl = new THREE.Plane(new THREE.Vector3(0,-1,0), 999), baseH = .3, topH = 6, growAnim = null, stageIn = false;
+  var renoMode = 'projet', MAT = {}, meshes = [], stage = null, growH = 999, growPl = new THREE.Plane(new THREE.Vector3(0,-1,0), 999), baseH = .3, topH = 6, growAnim = null, stageIn = false;
   var roofNodes = [], plane = new THREE.Plane(new THREE.Vector3(0,-1,0), 999), cuts = [1.4], box = new THREE.Box3(), ctr = new THREE.Vector3(), size = new THREE.Vector3();
   var v3 = new THREE.Vector3(), cd = new THREE.Vector3(), mp = new THREE.Vector3(), mn = new THREE.Vector3(), ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
   var KEYS = [ ['couverture',/toit|couv|charp|comble/i], ['menuiseries',/menuis|fenetr|fenêtr|baie|vitr/i], ['porte',/porte/i], ['volets',/volet/i], ['plancher',/dalle|plancher|soubass/i], ['cloture',/cloture|clôture/i], ['portail',/portail/i], ['allee',/allee|allée/i], ['murs',/mur|fa[cç]ade|bardage|enduit/i] ];
@@ -111,7 +112,7 @@
         cat = isGlass ? 'glass' : isGrd ? 'ground' : isRoof ? 'roof' : /portail/i.test(path) ? 'gate' : /porte|door/i.test(path) ? 'door' : /allee|allée/i.test(path) ? 'allee' : /volet|menuis|cadre|fenetr|fenêtr|baie/i.test(path) ? 'frame' : /dalle|plancher|soubass/i.test(path) ? 'dalle' : /cloison|doublage/i.test(path) ? 'cloison' : /cloture|clôture/i.test(path) ? 'vrd' : 'wall';
         isTerr = !isGrd && (cfg.terrRe ? new RegExp(cfg.terrRe,'i') : RE_TERR).test(path); if(isTerr) cat = 'terr';
       }
-      o.userData.cat = cat; meshes.push(o);
+      o.userData.cat = cat; o.userData.reno = (ov && ov.reno != null) ? (ov.reno === 'exist' ? '' : ov.reno) : (ud.reno || ''); meshes.push(o);   /* [Existant/Projet] */
       if(!keep) o.material = MAT[cat] || (cat==='terr' ? mGrd : mWall);
       else { o.material = o.material.clone(); }
       o.castShadow = !isGrd && !isTerr && !isGlass; o.receiveShadow = !isGlass;
@@ -270,6 +271,7 @@
         else if(c !== 'roof') mat = o.userData.mat0 || null;
       } else mat = (c === 'roof' && !keep) ? MAT.roof : (o.userData.mat0 || null);
       if(c === 'roof' && inside) v = false;
+      var rn = o.userData.reno; if((renoMode === 'existant' && rn === 'neuf') || (renoMode !== 'existant' && rn === 'demol')) v = false;   /* [Existant/Projet] */
       o.visible = v; if(mat && (!keep || mat === MAT.ghost || mat === o.userData.mat0)) o.material = mat;
     });
     dirty = true; kick();
@@ -368,6 +370,10 @@
     if(has.wall){ set[7] = 1; set[9] = 1; delete set[6]; delete set[8]; }
     return Object.keys(set).map(Number).sort(function(a, b){ return a - b; });
   };
+  /* [Existant/Projet 22/11/2026] maquette de rénovation : « existant » montre ce qui sera démoli et cache le nouveau ; « projet » l'inverse */
+  M.hasReno = function(){ return meshes.some(function(o){ return o.userData.reno === 'neuf' || o.userData.reno === 'demol'; }); };
+  M.setReno = function(m){ renoMode = m === 'existant' ? 'existant' : 'projet'; if(M.ready && root) applyCut(); };
+  M.getReno = function(){ return renoMode; };
   M.setSun = function(){}; M.vent = function(){ if(M.ready) setMode('in'); };
   M.setActive = function(on){ active = !!on; if(on){ resize(); dirty = true; kick(); } };
   M.update = function(s){ states = s || {}; if(M.ready) applyStates(); };

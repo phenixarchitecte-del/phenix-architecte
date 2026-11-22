@@ -3,6 +3,9 @@
 <title>Phénix-Architecture · Carnet de projet</title>
 <!--
  HISTORIQUE DES MODIFICATIONS — phenix_carnet.html (version 3D)
+ 22/11/2026 — EXISTANT / PROJET : chaque élément de la maquette porte un statut (existant conservé, nouveau, à démolir), lu dans le nom
+   du calque ou de la matière (« projet / nouveau / neuf », « démol ») et réglable dans l'Atelier (onglet Calques). Bouton « Existant | Projet »
+   sur la maquette du carnet et dans l'Atelier : l'existant montre ce qui sera démoli, le projet montre le nouveau. Repérer : [Existant/Projet].
  22/11/2026 — VISITE DU CHANTIER sur les vraies maquettes : seules les étapes qui changent quelque chose sur la maquette sont parcourues
    (« Étape 3 sur 9 ») ; ce qui n'est pas encore construit reste en fantôme ; extérieurs (allée, clôture, portail) à la dernière étape,
    vue dehors. Repérer : [Visite chantier].
@@ -309,6 +312,7 @@ body.atl-open{overflow:hidden}
 .atl-ln{border:0!important;background:none!important;text-align:left;padding:3px!important;display:flex;flex-direction:column;min-width:0}
 .atl-ln small{color:var(--muted);font-size:11px}
 .atl-lr select{width:100%;font-size:12px}
+.atl-lr select[data-atl-reno]{grid-column:2 / -1;max-width:260px}   /* [Existant/Projet] statut sur une 2e ligne : reste lisible sur téléphone */
 .atl-sr,.atl-vr{display:flex;gap:6px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)}
 .atl-sn{flex:1;display:flex;flex-direction:column;min-width:0}
 .atl-sn small{color:var(--muted);font-size:12px}
@@ -1545,7 +1549,7 @@ function cfgAct(a,el){
   if(a==='opt'&&!pub())return true;
   if(a==='opt'){var cid=el.getAttribute('data-cat'),c=catById(cid);if(isImposed(c)||allowed(c).indexOf(id)<0)return true;askChange(c,c.multi||!isSel(c,id),function(){var chg=!!S.conf[cid]&&!S.owner;if(c.multi)togSel(c,id);else setSel(c,id);S.conf[cid]=true;saveLocal();var oo=findOpt(c,id);afterChoice(c,c.t+' : '+oo.n+(c.thick?' '+isoThick()+' mm':'')+' ('+(pctTxt(catDelta(c))||'sans écart')+' sur le budget par rapport à la proposition).',chg);renderAll()});return true}
   if(a==='thick'){S.thick.isol=parseInt(id,10);afterChoice(catById('isolant'),'Isolant : épaisseur '+S.thick.isol+' mm.');renderAll();return true}
-  if(a==='hcat'||a==='house'||a==='hmode'||a==='hfocus'||a==='hstage'||a==='hcut'||a==='hroom'||a==='hmenu'||a==='hguide')return houseAct(a,el);
+  if(a==='hcat'||a==='house'||a==='hmode'||a==='hfocus'||a==='hreno'||a==='hstage'||a==='hcut'||a==='hroom'||a==='hmenu'||a==='hguide')return houseAct(a,el);
   if(a==='send'){sendChoix();return true}
   if(a==='dl'){dlChoix();return true}
   if(a==='copy'){copyChoix();return true}
@@ -2499,7 +2503,7 @@ function houseBar(){
   if(!HS.hintDone)h+='<div class="h3-hint" id="h3-hint">Glissez · pincez · touchez un point</div>';
   var rs=(window.PXHouse&&window.PXHouse.rooms)||[];
   if(HS.stage==null&&(m==='in'||HS.room)&&rs.length)h+='<div class="h3-row h3-rooms">'+rs.map(function(r){return '<button class="btn'+(HS.room===r.id?' on':'')+'" data-act="hroom" data-id="'+r.id+'">'+r.t+'</button>'}).join('')+'</div>';
-  h+='<div class="h3-row"><button class="btn'+(m==='out'?' on':'')+'" data-act="hmode" data-id="out">Extérieur</button><button class="btn'+(m==='in'?' on':'')+'" data-act="hmode" data-id="in">Intérieur</button><button class="btn" data-act="hfocus" data-id="">Vue d’ensemble</button><button class="btn" data-act="hstage" data-id="on">'+(REAL.etape?'Chantier aujourd’hui':'Construction')+'</button>'+(plcNb()||PLC.length?'<button class="btn" data-act="tab" data-id="plans">Mes plans'+(plcNb()?' ●'+plcNb():'')+'</button>':'')+'</div>';
+  h+='<div class="h3-row"><button class="btn'+(m==='out'?' on':'')+'" data-act="hmode" data-id="out">Extérieur</button><button class="btn'+(m==='in'?' on':'')+'" data-act="hmode" data-id="in">Intérieur</button><button class="btn" data-act="hfocus" data-id="">Vue d’ensemble</button>'+(function(){var P=window.PXHouse;try{if(!(P&&P.isModel&&P.ready&&P.hasReno&&P.hasReno()))return ''}catch(e){return ''}var ex=HS.reno==='existant';return '<button class="btn'+(ex?' on':'')+'" data-act="hreno" data-id="existant" aria-pressed="'+ex+'">'+(ex?'✓ ':'')+'Existant</button><button class="btn'+(!ex?' on':'')+'" data-act="hreno" data-id="projet" aria-pressed="'+(!ex)+'">'+(!ex?'✓ ':'')+'Projet</button>'})()+'<button class="btn" data-act="hstage" data-id="on">'+(REAL.etape?'Chantier aujourd’hui':'Construction')+'</button>'+(plcNb()||PLC.length?'<button class="btn" data-act="tab" data-id="plans">Mes plans'+(plcNb()?' ●'+plcNb():'')+'</button>':'')+'</div>';
   b.innerHTML=h;
 }
 var GFIRST=['plancher','murs','charpente','couverture','isoltoit','isolant'];
@@ -2751,6 +2755,7 @@ function houseAct(a,el){
     if(id==='play'){if(HS.timer)houseStop();else housePlay();return true}
     return true}
   if(a==='hroom'){HS.mode='in';if(HS.stage!=null)houseSetStage(null);houseStop();if(window.PXHouse&&window.PXHouse.ready)window.PXHouse.room(id);return true}
+  if(a==='hreno'){HS.reno=id==='existant'?'existant':'projet';try{window.PXHouse.setReno(HS.reno)}catch(e){}houseBar();return true}   /* [Existant/Projet] */
   if(a==='hfocus'){if(window.PXHouse&&window.PXHouse.ready)window.PXHouse.overview();return true}
   return false;
 }
@@ -4335,6 +4340,16 @@ window.dispatchEvent(new Event('fb-ready'));
   function stName(n){ var st = PXC.ST || []; return n <= 0 ? 'Toujours visible' : (n + ' · ' + ((st[n-1] && st[n-1].t) || ('Étape ' + n))); }
 
   /* Classement automatique d'après le calque ArchiCAD et la matière */
+  /* [Existant/Projet 22/11/2026] statut de rénovation lu dans le nom du calque ou de la matière (ex. matière de remplacement « 0-mur_projet »,
+     « 0-mur_existant », « 0-mur_demolir ») : 'neuf' = nouveau, 'demol' = à démolir, '' = conservé (existant). Réglable à la main dans l'Atelier. */
+  function autoReno(layer, mtl){
+    var t = nrm((layer || '') + ' ' + (mtl || ''));
+    if(/demol/.test(t)) return 'demol';
+    if(/(^|[^a-z])(projet|nouveau|nouvelle|neuf|neuve|new|cree|creation)([^a-z]|$)/.test(t)) return 'neuf';
+    return '';
+  }
+  function renoOf(g){ var o = A.cfg && A.cfg.layers && A.cfg.layers[g.key]; if(o && o.reno != null) return o.reno === 'exist' ? '' : o.reno; return g.autoReno || ''; }
+  function hasRenoA(){ return A.groups.some(function(g){ var r = renoOf(g); return r === 'neuf' || r === 'demol'; }); }
   function autoCat(layer, mtl){
     var L = nrm(layer), m = nrm(mtl);
     if(/air_-_vide|vide_d.air|headroom|shadow_material|gdlm5_opaque/.test(m)) return 'hide';
@@ -4492,7 +4507,7 @@ window.dispatchEvent(new Event('fb-ready'));
     setMsg('Construction de la maquette…'); await tick();
     A.groups = P.groups.filter(function(g){ return g.tris > 0; }).map(function(g){
       var geo = buildGeom(P, g, A.xf);
-      return { key:g.key, layer:g.layer, mat:g.mat, auto:g.auto, tris:g.tris, geo:geo, kd:g.kd, d:g.d };
+      return { key:g.key, layer:g.layer, mat:g.mat, auto:g.auto, autoReno:autoReno(g.layer, g.mat), tris:g.tris, geo:geo, kd:g.kd, d:g.d };
     });
     A.byKey = {}; A.groups.forEach(function(g){ A.byKey[g.key] = g; });
     A.undo = []; A.redo = []; A.stage = null;
@@ -4525,7 +4540,7 @@ window.dispatchEvent(new Event('fb-ready'));
         var ud = o.userData || {}, key = ud.layer || skey(o.name || ('objet ' + i)), mat = ud.mat || (o.material && o.material.name) || '—';
         var geo = o.geometry.clone(); geo.applyMatrix4(o.matrixWorld); geo.computeBoundingBox();
         var col = o.material && o.material.color ? [o.material.color.r, o.material.color.g, o.material.color.b] : [.8,.8,.8];
-        return { key:key, layer:ud.layer ? String(ud.layer).split(' | ')[0] : (o.name || key), mat:mat, auto:ud.cat || autoCat(o.name || '', mat), tris:(geo.index ? geo.index.count : geo.attributes.position.count)/3, geo:geo, kd:col, d:(o.material && o.material.opacity) || 1 };
+        return { key:key, layer:ud.layer ? String(ud.layer).split(' | ')[0] : (o.name || key), mat:mat, auto:ud.cat || autoCat(o.name || '', mat), autoReno:ud.reno != null ? ud.reno : autoReno(ud.layer || o.name || '', mat), tris:(geo.index ? geo.index.count : geo.attributes.position.count)/3, geo:geo, kd:col, d:(o.material && o.material.opacity) || 1 };
       });
       var seen = {}; A.groups.forEach(function(g){ if(seen[g.key]){ g.key = g.key + ' #' + (seen[g.key]++); } else seen[g.key] = 1; });
       A.byKey = {}; A.groups.forEach(function(g){ A.byKey[g.key] = g; });
@@ -4590,6 +4605,7 @@ window.dispatchEvent(new Event('fb-ready'));
     A.groups.forEach(function(g){
       var m = g.mesh; if(!m) return; var c = curCat(g), v = !isHidden(g);
       if(v && A.src && !included(g)) v = false;
+      if(v){ var rn = renoOf(g); if((A.reno === 'existant' && rn === 'neuf') || (A.reno !== 'existant' && rn === 'demol')) v = false; }   /* [Existant/Projet] */
       var mat = catMat(c);
       if(v && st != null){ var need = stageOf(c);
         if(c === 'roof'){ v = st >= gh; if(st < need) mat = vGhost(); }
@@ -4858,7 +4874,7 @@ window.dispatchEvent(new Event('fb-ready'));
       if(A.src && (!included(g) || isHidden(g))) return; /* depuis l'OBJ : ce qui est masqué ne part pas dans le fichier */
       var k = g.mat + '|' + g.kd.join(','), mt = mats[k];
       if(!mt){ mt = mats[k] = new THREE.MeshStandardMaterial({ name:g.mat, color:new THREE.Color(g.kd[0], g.kd[1], g.kd[2]), roughness:.85, metalness:0 }); if(g.d < .99){ mt.transparent = true; mt.opacity = g.d; } }
-      var m = new THREE.Mesh(g.geo, mt); m.name = g.key; m.userData = { layer:g.key, mat:g.mat, cat:g.auto }; sc.add(m);
+      var m = new THREE.Mesh(g.geo, mt); m.name = g.key; m.userData = { layer:g.key, mat:g.mat, cat:g.auto, reno:renoOf(g) }; sc.add(m);
     });
     return await new Promise(function(ok, ko){ new GLTFExporter().parse(sc, ok, ko, { binary:true }); });
   }
@@ -4933,6 +4949,7 @@ window.dispatchEvent(new Event('fb-ready'));
     if(!A.groups.length) return '';
     return '<button type="button" data-atl="cam" data-id="home">Vue d’ensemble</button><button type="button" data-atl="cam" data-id="aerien">Dessus</button>' +
       '<button type="button" data-atl="cut"' + (V.cut && V.cut.constant < 900 ? ' class="on"' : '') + '>Coupe intérieure</button>' +
+      (hasRenoA() ? '<button type="button" data-atl="reno" aria-pressed="' + (A.reno === 'existant') + '"' + (A.reno === 'existant' ? ' class="on"' : '') + '>' + (A.reno === 'existant' ? '◧ Existant' : '◨ Projet') + '</button>' : '') +
       '<label class="atl-st"><span>' + (A.stage == null ? 'Maison finie' : e(stName(A.stage))) + '</span><input type="range" min="0" max="26" step="1" value="' + (A.stage == null ? 26 : A.stage) + '" data-atl-stage="1" aria-label="Aperçu par étape de chantier"></label>';
   }
   function paneFile(){
@@ -4964,7 +4981,8 @@ window.dispatchEvent(new Event('fb-ready'));
           gs.map(function(g){ var c = curCat(g), hid = isHidden(g), out = A.src && !included(g);
             return '<div class="atl-lr' + (A.sel === g.key ? ' sel' : '') + (hid || out ? ' off' : '') + '" data-row="' + e(g.key) + '"><button type="button" class="atl-eye" data-atl="eye" data-id="' + e(g.key) + '" aria-label="' + (hid ? 'Afficher' : 'Masquer') + '" title="' + (hid ? 'Afficher' : 'Masquer') + '">' + (hid ? '◌' : '●') + '</button>' +
               '<button type="button" class="atl-ln" data-atl="sel" data-id="' + e(g.key) + '">' + e(g.mat.replace(/_/g,' ')) + '<small>' + nf(g.tris) + ' tri.' + (out && !hid ? ' · retiré du fichier' : '') + '</small></button>' +
-              '<select data-atl-cat="' + e(g.key) + '" aria-label="Catégorie">' + opts(c) + '</select></div>'; }).join('') + '</div>';
+              '<select data-atl-cat="' + e(g.key) + '" aria-label="Catégorie">' + opts(c) + '</select>' +
+              '<select data-atl-reno="' + e(g.key) + '" aria-label="Existant ou projet" title="Existant ou projet">' + [['exist','Existant conservé'],['neuf','Nouveau (projet)'],['demol','À démolir']].map(function(x){ var r = renoOf(g) || 'exist'; return '<option value="' + x[0] + '"' + (x[0] === r ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select></div>'; }).join('') + '</div>';
       }).join('');
   }
   function paneSpots(){
@@ -5047,6 +5065,7 @@ window.dispatchEvent(new Event('fb-ready'));
     if(a === 'undo'){ undo(); return; } if(a === 'redo'){ redo(); return; }
     if(a === 'save'){ save(); return; }
     if(a === 'cam'){ if(id === 'home') vHome(); else { var o = vPose(id); V.cam.position.copy(o.p); V.ctl.target.copy(o.t); vDirty(); } return; }
+    if(a === 'reno'){ A.reno = A.reno === 'existant' ? 'projet' : 'existant'; vApply(); render(); return; }   /* [Existant/Projet] */
     if(a === 'cut'){ if(V.cut.constant < 900) V.cut.constant = 999; else { var c = cutsOf(); V.cut.constant = c[0]; } vApply(); render(); return; }
     if(a === 'sel'){ A.sel = A.sel === id ? null : id; vApply(); render(); if(A.sel && A.byKey[id]){ var bb = A.byKey[id].geo.boundingBox, cc = bb.getCenter(new THREE.Vector3()); V.ctl.target.copy(cc); vDirty(); } return; }
     if(a === 'eye'){ push(); var L = layerOv(id); if(isHidden(A.byKey[id])){ delete L.hide; if(L.cat === 'hide' || (!L.cat && A.byKey[id].auto === 'hide')) L.cat = 'wall'; } else L.hide = true; after(''); return; }
@@ -5067,6 +5086,7 @@ window.dispatchEvent(new Event('fb-ready'));
   function onChange(ev){
     var t = ev.target; if(!t.closest || !t.closest('#atl')) return;
     if(t.getAttribute('data-atl-file')){ if(t.files && t.files.length) handleFiles(t.files); return; }
+    var rk = t.getAttribute('data-atl-reno'); if(rk){ push(); layerOv(rk).reno = t.value; after(''); return; }   /* [Existant/Projet] */
     var ck = t.getAttribute('data-atl-cat'); if(ck){ push(); layerOv(ck).cat = t.value; if(t.value !== 'hide') delete layerOv(ck).hide; after(''); return; }
     var lc = t.getAttribute('data-atl-lcat'); if(lc && t.value){ push(); var cv = t.value; A.groups.forEach(function(g){ if(g.layer === lc){ layerOv(g.key).cat = cv; if(cv !== 'hide') delete layerOv(g.key).hide; } }); after('Calque « ' + lc + ' » → ' + catLabel(cv) + '.'); return; }
     var sg = t.getAttribute('data-atl-stg'); if(sg){ push(); A.cfg.stages[sg] = +t.value; after(catLabel(sg) + ' → ' + stName(+t.value) + '.'); return; }
