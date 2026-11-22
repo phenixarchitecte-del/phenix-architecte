@@ -5,6 +5,7 @@
    Prérequis de la page hôte : <script type="importmap"> pour « three » (0.160) et « three/addons/ »,
    puis <script type="module" src="phenix_maquette3d.js">. API : init, update, setLook, setStage, setMode,
    focus, goView, views, overview, zoomIn, setActive. La page fournit PXModel.loader (→ ArrayBuffer .glb) et PXModel.cfg.
+   22/11/2026 [Fluidité] maquette importée : morceaux fusionnés par catégorie et statut (une dizaine de dessins au lieu de centaines).
    22/11/2026 [Existant/Projet] statut de rénovation par élément (userData.reno ou réglage de l'Atelier) ; M.hasReno(), M.setReno('existant'|'projet').
    22/11/2026 [Visite chantier] PXModel.stagesUtiles() : étapes qui changent quelque chose sur la maquette ; ce qui n'est pas encore construit
    reste visible en fantôme ; l'étape 26 (extérieurs) revient en vue dehors.
@@ -133,6 +134,34 @@
     drop.forEach(function(o){ if(o.parent) o.parent.remove(o); }); root.updateMatrixWorld(true);
     box.setFromObject(root); box.getCenter(ctr); box.getSize(size);
     /* hauteur du bâti hors terrain/toiture, pour le nombre de niveaux */
+    /* [Fluidité 22/11/2026] une maquette ArchiCAD arrive en 100 à 400 morceaux (un par calque × matière) : autant d'appels de dessin, doublés
+       par les ombres. On fusionne les morceaux de même catégorie et même statut (existant / projet) : une dizaine de dessins au lieu de centaines. */
+    if(cfg.baked && !keep){
+      var grp = {}, ordre = [], inv = new THREE.Matrix4().copy(root.matrixWorld).invert(), m4 = new THREE.Matrix4(), n3 = new THREE.Matrix3(), vv = new THREE.Vector3();
+      meshes.forEach(function(o){ var k = o.userData.cat + '|' + (o.userData.reno || '') + '|' + (o.userData.isRoof ? 1 : 0); if(!grp[k]){ grp[k] = []; ordre.push(k); } grp[k].push(o); });
+      var neuf = [];
+      ordre.forEach(function(k){
+        var L = grp[k]; if(L.length < 2){ neuf.push(L[0]); return; }
+        var nv = 0, ni = 0; L.forEach(function(o){ var g = o.geometry; nv += g.attributes.position.count; ni += g.index ? g.index.count : g.attributes.position.count; });
+        var P = new Float32Array(nv*3), N = new Float32Array(nv*3), I = nv > 65535 ? new Uint32Array(ni) : new Uint16Array(ni), base = 0, pi = 0, ii = 0;
+        L.forEach(function(o){
+          var g = o.geometry, pa = g.attributes.position, na = g.attributes.normal; o.updateMatrixWorld(true); m4.multiplyMatrices(inv, o.matrixWorld); n3.getNormalMatrix(m4);
+          for(var i = 0; i < pa.count; i++){ vv.fromBufferAttribute(pa, i).applyMatrix4(m4); P[pi] = vv.x; P[pi+1] = vv.y; P[pi+2] = vv.z;
+            if(na){ vv.fromBufferAttribute(na, i).applyMatrix3(n3).normalize(); N[pi] = vv.x; N[pi+1] = vv.y; N[pi+2] = vv.z; } else N[pi+1] = 1; pi += 3; }
+          if(g.index){ var ia = g.index.array; for(var j = 0; j < ia.length; j++) I[ii++] = ia[j] + base; } else for(var j2 = 0; j2 < pa.count; j2++) I[ii++] = j2 + base;
+          base += pa.count;
+        });
+        var G = new THREE.BufferGeometry(); G.setAttribute('position', new THREE.BufferAttribute(P, 3)); G.setAttribute('normal', new THREE.BufferAttribute(N, 3)); G.setIndex(new THREE.BufferAttribute(I, 1));
+        G.computeBoundingBox(); G.computeBoundingSphere();
+        var o0 = L[0], mm = new THREE.Mesh(G, o0.material); mm.name = 'fusion|' + k; mm.userData = Object.assign({}, o0.userData, { layer:'fusion|' + k });
+        mm.castShadow = o0.castShadow; mm.receiveShadow = o0.receiveShadow; root.add(mm);
+        L.forEach(function(o){ if(o.parent) o.parent.remove(o); try{ o.geometry.dispose(); }catch(x){} });
+        neuf.push(mm);
+      });
+      meshes = neuf; roofNodes = meshes.filter(function(o){ return o.userData.isRoof; });
+      named = {}; meshes.forEach(function(o){ var z = CZ[o.userData.cat]; if(z) (named[z] = named[z] || []).push(o); });
+      root.updateMatrixWorld(true);
+    }
     var bb = new THREE.Box3(), has = false;
     root.traverse(function(o){ if(o.isMesh && !o.userData.isGrd && !o.userData.isRoof && !(o.material && o.material.transparent)){ bb.expandByObject(o); has = true; } });
     var bf = new THREE.Box3(); root.traverse(function(o){ if(o.isMesh && !o.userData.isGrd) bf.expandByObject(o); });
