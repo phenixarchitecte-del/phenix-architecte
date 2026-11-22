@@ -3,6 +3,10 @@
 <title>Phénix-Architecture · Carnet de projet</title>
 <!--
  HISTORIQUE DES MODIFICATIONS — phenix_carnet.html (version 3D)
+ 22/11/2026 — CALAGE RDC (3) : redéposer une maquette (lot avec « Remplacer », ou PXAtelier._recaler) garde son classement de calques et son
+   affichage client. Repérer : [Calage RDC].
+ 22/11/2026 — CALAGE RDC (2) : la dalle du RDC est détectée par la géométrie (grande surface horizontale la plus basse de la maison, son dessus),
+   sans dépendre des noms de calques ; abords, toiture, charpente et mobilier exclus. Repérer : [Calage RDC].
  21/11/2026 — CALAGE RDC : à la conversion (Atelier, dépôt en lot), la maquette se cale sur la maison et non plus sur le terrain : centrage sur la maison,
    hauteur 0 = dessus de la dalle du RDC (à défaut le bas de la maison). Un terrain en pente ne soulève plus la maison. Repérer : [Calage RDC].
  13/11/2026 — DÉPÔT EN LOT : Fiche projet › Maquette 3D › « Déposer toutes les maquettes (lot) » : on choisit le dossier 1_CLIENTS, chaque export .obj est rattaché
@@ -4322,6 +4326,7 @@ window.dispatchEvent(new Event('fb-ready'));
   function autoCat(layer, mtl){
     var L = nrm(layer), m = nrm(mtl);
     if(/air_-_vide|vide_d.air|headroom|shadow_material|gdlm5_opaque/.test(m)) return 'hide';
+    if(/(^|[^a-z])zones?([^a-z]|$)/.test(L)) return 'hide';   /* [Calage RDC] zones ArchiCAD (volumes des pièces) : jamais affichées */
     if(/lumin|eclair|lampe|plafonnier/.test(L) || /lampbulb|illuminat/.test(m)) return 'hide';
     if(/isolation|laine_de/.test(m) && !/isol/.test(L)) return 'hide';
     if(/mobil|meubl|pmr|sanit|equip|cuisine|deco|objet|object|appareil/.test(L)) return 'mobilier';
@@ -4397,16 +4402,44 @@ window.dispatchEvent(new Event('fb-ready'));
     var up = upPref === 'y' || upPref === 'z' ? upPref : (rg[2] <= rg[1] ? 'z' : 'y');
     var big = Math.max(rg[0], rg[1], rg[2]), unit = big > 2000 ? .001 : big > 200 ? .01 : 1;
     /* (X,Y,Z) ArchiCAD → (x, z, -y) three.js : rotation pure, pas de miroir */
-    /* [Calage RDC] 21/11/2026 — la maquette se cale sur la MAISON, pas sur le terrain : le terrain (souvent en pente, plus grand que la maison)
-       ne compte ni pour le centrage ni pour la hauteur. Hauteur 0 = dessus de la dalle du RDC (calque ou matière « dalle / plancher / floor / slab »
-       le plus bas) ; à défaut, le point le plus bas de la maison. Le terrain garde sa position réelle par rapport à la maison. */
-    var V = up === 'z' ? 2 : 1, hm = [1e30,1e30,1e30], hx = [-1e30,-1e30,-1e30], dalle = null;
+    /* [Calage RDC] 21-22/11/2026 — la maquette se cale sur la MAISON, pas sur le terrain, et la hauteur 0 = DESSUS DE LA DALLE DU RDC.
+       Le terrain, les abords (allée, terrasse, clôture, portail), la toiture, la charpente et le mobilier ne comptent ni pour le centrage ni pour la hauteur.
+       Détection de la dalle par la géométrie (indépendante des noms de calques) : on mesure, tous les 2 cm de hauteur, la surface des faces horizontales
+       de la maison (les calques « dalle / plancher / floor / slab » comptent triple). Dans le bas de la maison (60 % de sa hauteur), la dalle du RDC est le plus bas niveau
+       couvrant au moins 80 % de la plus grande surface (un sous-sol partiel, des fondations sont plus petits) ; on prend son dessus (le plus haut niveau notable
+       à moins de 60 cm au-dessus : sous-face, isolant, chape, carrelage).
+       À défaut : dessus du calque « dalle » le plus bas, puis bas de la maison. Le terrain garde sa position réelle par rapport à la maison. */
+    var V = up === 'z' ? 2 : 1, hm = [1e30,1e30,1e30], hx = [-1e30,-1e30,-1e30], dalle = null, bins = {}, BIN = .02 / unit;
+    var HORS = { terr:1, allee:1, vrd:1, gate:1, roof:1, charpente:1, mobilier:1, hide:1 };
     P.groups.forEach(function(g){
-      if(!includeFn(g) || g.auto === 'terr') return; var ix = g.idx, gmn = 1e30, gmx = -1e30;
+      var cat = (typeof catOf === 'function') ? catOf(g) : g.auto;
+      if(!includeFn(g) || HORS[cat]) return; var ix = g.idx, gmn = 1e30, gmx = -1e30;
+      var nomme = cat === 'dalle' || /dalle|plancher|floor|slab/i.test((g.layer || '') + ' ' + (g.mat || ''));
       for(var i = 0; i < ix.length; i++){ var b = ix[i]*3; for(var a = 0; a < 3; a++){ var w = pos[b+a]; if(w < hm[a]) hm[a] = w; if(w > hx[a]) hx[a] = w; } var wv = pos[b+V]; if(wv < gmn) gmn = wv; if(wv > gmx) gmx = wv; }
-      if(ix.length && (g.auto === 'dalle' || /dalle|plancher|floor|slab/i.test((g.layer || '') + ' ' + (g.mat || ''))) && (!dalle || gmn < dalle.mn - 1e-6 || (Math.abs(gmn - dalle.mn) < 1e-6 && gmx > dalle.mx))) dalle = { mn:gmn, mx:gmx };
+      for(var t = 0; t + 2 < ix.length; t += 3){
+        var p0 = ix[t]*3, p1 = ix[t+1]*3, p2 = ix[t+2]*3;
+        var ux = pos[p1]-pos[p0], uy = pos[p1+1]-pos[p0+1], uz = pos[p1+2]-pos[p0+2], vx = pos[p2]-pos[p0], vy = pos[p2+1]-pos[p0+1], vz = pos[p2+2]-pos[p0+2];
+        var nx = uy*vz - uz*vy, ny = uz*vx - ux*vz, nz = ux*vy - uy*vx, nl = Math.sqrt(nx*nx + ny*ny + nz*nz); if(!nl) continue;
+        var nv = Math.abs(V === 2 ? nz : ny) / nl; if(nv < .97) continue;
+        var h = (pos[p0+V] + pos[p1+V] + pos[p2+V]) / 3, k = Math.round(h / BIN);
+        bins[k] = (bins[k] || 0) + nl / 2 * (nomme ? 3 : 1);
+      }
+      if(ix.length && nomme && (!dalle || gmn < dalle.mn - 1e-6 || (Math.abs(gmn - dalle.mn) < 1e-6 && gmx > dalle.mx))) dalle = { mn:gmn, mx:gmx };
     });
-    if(hm[0] <= hx[0]){ mn = hm; mx = hx; if(dalle && dalle.mx - dalle.mn < (mx[V] - mn[V]) * .5) mn = mn.slice(), mn[V] = dalle.mx; }
+    var rdc = null, ks = Object.keys(bins).map(Number).sort(function(a, b){ return a - b; });
+    if(ks.length){
+      var lv = []; ks.forEach(function(k){ var l = lv[lv.length - 1]; if(l && k - l.k1 <= 1){ l.k1 = k; l.a += bins[k]; if(bins[k] > l.amax){ l.amax = bins[k]; l.k = k; } } else lv.push({ k0:k, k1:k, k:k, a:bins[k], amax:bins[k] }); });
+      /* on ne regarde que le bas de la maison (60 % de sa hauteur) : les planchers d'étage ne comptent pas. Le RDC couvre presque toute l'emprise :
+         son niveau fait au moins 80 % de la plus grande surface du bas (un sous-sol partiel ou des fondations sont plus petits). */
+      var lim = hm[V] + (hx[V] - hm[V]) * .6, bas_ = lv.filter(function(l){ return l.k * BIN <= lim; }); if(!bas_.length) bas_ = lv;
+      var ref = Math.max.apply(null, bas_.map(function(l){ return l.a; })), seeds = bas_.filter(function(l){ return l.a >= ref * .8; });
+      if(seeds.length){ var bas = seeds[0].k * BIN, haut = bas; bas_.forEach(function(l){ var hh = l.k * BIN; if(l.a >= ref * .25 && hh >= bas && hh - bas <= .6 / unit + 1e-9) haut = Math.max(haut, hh); }); rdc = haut; }
+    }
+    if(hm[0] <= hx[0]){
+      mn = hm; mx = hx; mn = mn.slice();
+      if(rdc != null) mn[V] = rdc;
+      else if(dalle && dalle.mx - dalle.mn < (mx[V] - mn[V]) * .5) mn[V] = dalle.mx;
+    }
     var cx = (mn[0]+mx[0])/2, cy = (mn[1]+mx[1])/2, cz = (mn[2]+mx[2])/2;
     var xf = up === 'z' ? { up:'z', unit:unit, ox:cx, oy:cy, oz:mn[2] } : { up:'y', unit:unit, ox:cx, oy:mn[1], oz:cz };
     return xf;
@@ -4433,16 +4466,17 @@ window.dispatchEvent(new Event('fb-ready'));
   }
 
   /* ---------- groupes (un groupe = un calque × une matière) ---------- */
+  function catOf(g){ return curCat(g); }   /* [Calage RDC] catégorie réelle (réglage manuel compris) */
   function included(g){ var c = curCat(g); return c !== 'hide' && !(c === 'mobilier' && !A.keepMob); }
   function curCat(g){ var o = A.cfg && A.cfg.layers && A.cfg.layers[g.key]; return (o && o.cat) || g.auto; }
   function isHidden(g){ var o = A.cfg && A.cfg.layers && A.cfg.layers[g.key]; return curCat(g) === 'hide' || !!(o && o.hide); }
 
-  async function fromObj(objTxt, mtlTxt, name){
+  async function fromObj(objTxt, mtlTxt, name, garde){   /* [Calage RDC] garde : réglages de calques d'une maquette déjà en ligne, conservés */
     await libs(); setMsg('Lecture du fichier OBJ…'); await tick();
     var P = parseObj(objTxt), M = parseMtl(mtlTxt);
     var tot = 0; P.groups.forEach(function(g){ g.auto = autoCat(g.layer, g.mat); g.tris = g.idx.length/3; tot += g.tris; var mm = M[g.mat]; g.kd = mm ? mm.kd : [.8,.8,.8]; g.d = mm ? mm.d : 1; });
-    A.prepared = null; A.cfg = baseCfg(true); A.legacy = false; A.src = { P:P, name:name, tris:tot }; A.glb = null; A.name = name.replace(/\.obj$/i,'') + '.glb';
-    A.xf = makeXf(P, function(g){ return g.auto !== 'hide' && g.auto !== 'mobilier'; }, A.up);
+    A.prepared = null; A.cfg = baseCfg(true); if(garde && garde.layers) A.cfg.layers = clone(garde.layers); if(garde && garde.stages) A.cfg.stages = clone(garde.stages); if(garde && garde.colors) A.cfg.colors = clone(garde.colors); A.legacy = false; A.src = { P:P, name:name, tris:tot }; A.glb = null; A.name = name.replace(/\.obj$/i,'') + '.glb';
+    A.xf = makeXf(P, function(g){ var c = catOf(g); return c !== 'hide' && c !== 'mobilier'; }, A.up);
     setMsg('Construction de la maquette…'); await tick();
     A.groups = P.groups.filter(function(g){ return g.tris > 0; }).map(function(g){
       var geo = buildGeom(P, g, A.xf);
@@ -5155,22 +5189,12 @@ window.dispatchEvent(new Event('fb-ready'));
       var it = todo[i]; it.st = '➤ En cours…'; lotRender();
       try{
         if(it.size > LOT.cap * 1048576){ it.st = '⚠ Trop lourd (' + mo(it.size) + ') : à alléger depuis ArchiCAD (sans meubles)'; continue; }
-        var c = (S.chList || []).filter(function(x){ return x.id === it.pid; })[0] || {};
-        S.cid = String(it.pid); S.db = window._fb.mkDb(S.cid);
-        var snap = await S.db.doc('projet/fiche').get();
-        S.fiche = PXC.mergeFiche(snap.exists ? snap.data() : null, { nom:c.nom || 'Projet', dossier:c.ref || '', clients:c.client || '', terrain:c.adresse || '', fictif:false, plansOk:false, publie:false });
-        S.dirty = false; var mq = S.fiche.maquette || {};
-        if((mq.n || mq.url) && !LOT.replace){ it.st = '○ Une maquette est déjà en ligne : conservée'; continue; }
-        it.st = '➤ Lecture du fichier…'; lotRender();
+        it.st = '➤ Lecture et conversion…'; lotRender();
         var objTxt = await it.file.text(), mtlTxt = it.mtl ? await (await it.mtl.getFile()).text() : '';
-        A.groups = []; A.src = null; A.glbOnly = null; A.prepared = null; A.byKey = {}; A.up = 'auto'; A.keepMob = false; A.busy = false;
-        it.st = '➤ Conversion et classement…'; lotRender();
-        await fromObj(objTxt, mtlTxt, it.name);
-        if(!A.groups.length) throw new Error('aucun volume lu dans le fichier');
-        if(!(A.cfg.views || []).length){ viewFrom('home', 'Vue d’ensemble', true); viewFrom('aerien', 'Vue aérienne'); }
-        var tri = A.est ? A.est.tris : 0; A.dirty = true; it.st = '➤ Enregistrement…'; lotRender();
-        var ok = await save({ lot:true, on:LOT.show });
-        it.st = ok ? '✓ Déposée (' + mo(A.glb ? A.glb.byteLength : 0) + ', ' + nf(tri) + ' triangles' + (LOT.show ? ', visible du client' : ', masquée au client') + ')' : '✖ Enregistrement impossible (droits ou connexion)';
+        var r = await deposer1(it.pid, objTxt, mtlTxt, it.name, { replace:LOT.replace, show:LOT.show });
+        if(r.st === 'garde'){ it.st = '○ Une maquette est déjà en ligne : conservée'; continue; }
+        var ok = r.st === 'ok';
+        it.st = ok ? '✓ Déposée (' + mo(r.size) + ', ' + nf(r.tri) + ' triangles' + (r.on ? ', visible du client' : ', masquée au client') + ')' : '✖ Enregistrement impossible (droits ou connexion)';
         if(ok) done++;
       }catch(x){ it.st = '✖ ' + (x && x.message || x); }
       finally{ try{ A.groups.forEach(function(g){ if(g.geo) g.geo.dispose(); }); }catch(y){} A.groups = []; A.src = null; A.glb = null; A.dirty = false; A.busy = false; }
@@ -5180,8 +5204,40 @@ window.dispatchEvent(new Event('fb-ready'));
     try{ if(keep) PXC.openProject(keep); }catch(x){}
     LOT.busy = false; LOT.msg = done + ' maquette(s) déposée(s) sur ' + todo.length + ' demandée(s).' + (LOT.show ? '' : ' Elles sont masquées au client : cochez « Afficher la maquette du projet au client » dans chaque Fiche projet.'); lotRender();
   }
+  /* [Calage RDC] 22/11/2026 — déposer (ou redéposer) l'OBJ d'un dossier : la maquette déjà en ligne garde son classement de calques et son affichage client. */
+  async function deposer1(pid, objTxt, mtlTxt, name, o){
+    o = o || {}; var c = (S.chList || []).filter(function(x){ return String(x.id) === String(pid); })[0] || {};
+    S.cid = String(pid); S.db = window._fb.mkDb(S.cid);
+    var snap = await S.db.doc('projet/fiche').get();
+    S.fiche = PXC.mergeFiche(snap.exists ? snap.data() : null, { nom:c.nom || 'Projet', dossier:c.ref || '', clients:c.client || '', terrain:c.adresse || '', fictif:false, plansOk:false, publie:false });
+    S.dirty = false; var mq = S.fiche.maquette || {}, deja = !!(mq.n || mq.url);
+    if(deja && !o.replace) return { st:'garde' };
+    A.groups = []; A.src = null; A.glbOnly = null; A.prepared = null; A.byKey = {}; A.up = 'auto'; A.keepMob = !!(deja && mq.keepMob); A.busy = false;
+    await fromObj(objTxt, mtlTxt, name, deja ? mq : null);
+    if(!A.groups.length) throw new Error('aucun volume lu dans le fichier');
+    if(!(A.cfg.views || []).length){ viewFrom('home', 'Vue d’ensemble', true); viewFrom('aerien', 'Vue aérienne'); }
+    var tri = A.est ? A.est.tris : 0, vis = deja ? mq.on !== false : !!o.show; A.dirty = true;
+    var ok = await save({ lot:true, on:vis });
+    var r = { st:ok ? 'ok' : 'echec', tri:tri, size:A.glb ? A.glb.byteLength : 0, on:vis, rdc:A.xf ? A.xf : null };
+    try{ A.groups.forEach(function(g){ if(g.geo) g.geo.dispose(); }); }catch(y){} A.groups = []; A.src = null; A.glb = null; A.dirty = false; A.busy = false;
+    return r;
+  }
+  async function recaler(liste, suivi){   /* liste : [{ pid, obj:File|texte, mtl:File|texte, name }] — usage : redéposer toutes les maquettes en ligne */
+    var keep = S.cid, out = []; try{ await open(); }catch(x){}
+    for(var i = 0; i < liste.length; i++){
+      var it = liste[i];
+      try{
+        var ot = typeof it.obj === 'string' ? it.obj : await it.obj.text(), mt = !it.mtl ? '' : typeof it.mtl === 'string' ? it.mtl : await it.mtl.text();
+        var r = await deposer1(it.pid, ot, mt, it.name, { replace:true }); r.pid = it.pid; out.push(r);
+      }catch(x){ out.push({ pid:it.pid, st:'erreur', err:String(x && x.message || x) }); }
+      if(suivi) try{ suivi(out[out.length - 1], i + 1, liste.length); }catch(y){}
+    }
+    A.on = false; A.dirty = false; var ad = document.getElementById('atl'); if(ad) ad.hidden = true; document.body.classList.remove('atl-open');
+    try{ if(keep) PXC.openProject(keep); }catch(x){}
+    return out;
+  }
   function lotOpen(){ syncS(); if(!S || !S.owner) return; lotDlg(); lotRender(); }
-  window.PXAtelier = { lot:lotOpen, open:open, close:close, _A:A, _metrics:function(){ return metrics(); }, _apply:applyOps, _autoCat:autoCat, _export:exportGlb, _fromObj:fromObj, _send:sendPrompt };
+  window.PXAtelier = { lot:lotOpen, open:open, close:close, _A:A, _metrics:function(){ return metrics(); }, _apply:applyOps, _autoCat:autoCat, _export:exportGlb, _fromObj:fromObj, _send:sendPrompt, _recaler:recaler };
 })();
 </script>
 
