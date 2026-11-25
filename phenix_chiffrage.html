@@ -7,6 +7,10 @@
 ══════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_chiffrage.html
 ──────────────────────────────────────────────────────────────────
+ 25/11/2026 — [Offres reçues] Plus aucun devis rangé tout seul : un devis reçu par mail arrive dans « Offres reçues » seulement après
+   « 📥 Intégrer à Chiffrage » dans la cloche, et se range un par un (dossier au choix pour chacun, même s'ils viennent du même mail
+   ou du même artisan). Offres repérées par leur identifiant (un clic ne peut plus toucher une autre offre). Dossier sans projet de
+   chiffrage : choix « ➕ Nouveau projet ». Repérer : [Offres reçues].
  21/11/2026 — [HEIC] Convertisseur remplacé par heic-to : les photos des iPhone récents étaient refusées (« ERR_LIBHEIF format not supported »).
  21/11/2026 — [HEIC] L'image du projet (vignette de la liste des chantiers) accepte aussi les photos .heic / .heif.
  19/11/2026 — [HEIC] Photos iPhone .heic / .heif acceptées (plan, plan + analyse IA, dossiers rénovation et neuf, glisser-déposer) : converties
@@ -2838,7 +2842,9 @@ async function chargerOffresArtisansEnAttente(){
 function _appliquerOffresArtisans(snap, notifier){
   const avant = new Set(offresArtisansEnAttente.map(o=>o._id));
   offresArtisansEnAttente = [];
-  snap.forEach(d => offresArtisansEnAttente.push({ _id: d.id, ...d.data() }));
+  // [Offres reçues 25/11/2026] Un devis reçu par mail n'apparaît ici qu'après « 📥 Intégrer à Chiffrage » dans la cloche (accepte ;
+  // valide = ancien repère) et jamais s'il a été écarté. Les offres des Appels d'offres arrivent directement.
+  snap.forEach(d => { const o = { _id: d.id, ...d.data() }; if (o.source !== 'mail' || ((o.accepte || o.valide) && !o.ecarte)) offresArtisansEnAttente.push(o); });
   const nouvelles = offresArtisansEnAttente.filter(o=>!avant.has(o._id));
   const btn = document.getElementById('btn-offres-artisans');
   const badge = document.getElementById('offres-artisans-badge');
@@ -2860,6 +2866,7 @@ function _appliquerOffresArtisans(snap, notifier){
 // Jamais d'écrasement : un devis = un nouveau lot.
 let _rangementMail = false;
 async function _rangerDevisMail(){
+  return;   // [Offres reçues 25/11/2026] plus de rangement automatique : chaque devis se range un par un depuis « Offres reçues » (demande de Maxime)
   if (_rangementMail || !window._chiffrageCharge) return;
   const aRanger = offresArtisansEnAttente.filter(o => o.source === 'mail' && o.valide && o.projetId);
   if (!aRanger.length) return;
@@ -2963,6 +2970,7 @@ function renderOffresArtisansList(){
     return;
   }
   const optionsChantiers = state.chantiers.map((c,ci) => `<option value="${ci}">${esc_dpgf(c.nom||'Sans nom')}</option>`).join('');
+  const _oidCss = o => String(o._id).replace(/[^\w-]/g,'_');
   list.innerHTML = offresArtisansEnAttente.map((o,oi) => {
     // Pré-sélection du dossier si un projetId correspond déjà à un chantier existant
     const ciMatch = state.chantiers.findIndex(c => String(c.projetId||'') === String(o.projetId||'') && o.projetId);
@@ -2983,19 +2991,20 @@ function renderOffresArtisansList(){
       <div style="font-size:12px;color:var(--text2);margin:4px 0">${nbLignesChiffrees} ligne(s) chiffrée(s)${(o.artisan?.tel||(annTrouve(o.artisan?.nom)||{}).tel)?' · 📞 '+esc_dpgf(o.artisan?.tel||annTrouve(o.artisan?.nom).tel):''}${(annTrouve(o.artisan?.nom)?' · ✓ fiche Annuaire existante':' · fiche créée à l’import du lot')}${o.disponibilite?' · 📅 dispo. '+esc_dpgf(o.disponibilite):''}</div>
       ${o.commentaireGeneral ? `<div style="font-size:12px;color:var(--text2);font-style:italic;margin-bottom:6px">"${esc_dpgf(o.commentaireGeneral)}"</div>` : ''}
       <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
-        <select id="offre-dest-${oi}" style="flex:1;min-width:180px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+        <select id="offre-dest-${_oidCss(o)}" aria-label="Dossier de destination" style="flex:1;min-width:180px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
           <option value="">— Choisir le dossier —</option>
+          ${o.projetId && ciMatch < 0 ? `<option value="new" selected>➕ Nouveau projet « ${esc_dpgf(o.chantierTitre||'dossier')} »</option>` : ''}
           ${optionsChantiers}
         </select>
-        <button class="btn btn-primary btn-sm" style="background:#2E7D4F;border-color:#2E7D4F" onclick="creerLotDepuisOffreArtisan(${oi})">+ Créer un lot</button>
-        <button class="btn btn-outline btn-sm" onclick="ignorerOffreArtisan(${oi})" title="Supprimer cette offre sans créer de lot">Ignorer</button>
+        <button class="btn btn-primary btn-sm" style="background:#2E7D4F;border-color:#2E7D4F" onclick="creerLotDepuisOffreArtisan('${esc_dpgf(o._id)}')">+ Créer un lot</button>
+        <button class="btn btn-outline btn-sm" onclick="ignorerOffreArtisan('${esc_dpgf(o._id)}')" title="Supprimer cette offre sans créer de lot">Ignorer</button>
       </div>
     </div>`;
   }).join('');
   if (state.chantiers.some((c,ci) => offresArtisansEnAttente.some(o => String(o.projetId||'')===String(c.projetId||'') && o.projetId))){
     offresArtisansEnAttente.forEach((o,oi) => {
       const ciMatch = state.chantiers.findIndex(c => String(c.projetId||'') === String(o.projetId||'') && o.projetId);
-      if (ciMatch >= 0){ const sel=document.getElementById('offre-dest-'+oi); if(sel) sel.value=ciMatch; }
+      if (ciMatch >= 0){ const sel=document.getElementById('offre-dest-'+_oidCss(o)); if(sel) sel.value=ciMatch; }
     });
   }
 }
@@ -3047,11 +3056,18 @@ function _lotDepuisOffre(o, chantier){
   return { lot, libelle: _lnum + ' — ' + (_lnom ? _lnom + ' — ' : '') + _ent, nbFrais: _nbFrais };
 }
 
-async function creerLotDepuisOffreArtisan(oi){
-  const o = offresArtisansEnAttente[oi];
+function _offreParCle(k){ return typeof k === 'number' ? k : offresArtisansEnAttente.findIndex(o => o._id === k); }
+async function creerLotDepuisOffreArtisan(cle){
+  const oi = _offreParCle(cle), o = offresArtisansEnAttente[oi];
   if (!o) return;
-  const sel = document.getElementById('offre-dest-'+oi);
-  const ci = sel ? parseInt(sel.value, 10) : NaN;
+  const sel = document.getElementById('offre-dest-'+String(o._id).replace(/[^\w-]/g,'_'));
+  let ci = sel ? parseInt(sel.value, 10) : NaN;
+  if (sel && sel.value === 'new' && o.projetId){   // le dossier n'a pas encore de projet de chiffrage : on le crée depuis la fiche du dossier
+    let pr = {}; try { const { db, doc, getDoc } = await _phenixFbRefs(); const ps = await getDoc(doc(db, 'phenix_projets', String(o.projetId))); if (ps.exists()) pr = ps.data() || {}; } catch(e){}
+    state.chantiers.push({ nom: pr.nom || o.chantierTitre || pr.client || 'Dossier', client: pr.client || '', adresse: pr.adresse || pr.adresseProjet || '', type: pr.typeProjet || pr.type || '', surface: pr.surface || '',
+      projetId: String(o.projetId), lots: [], statut: 'En cours', date: new Date().toISOString().split('T')[0], notes: 'Créé à la réception d’un devis par mail' });
+    ci = state.chantiers.length - 1;
+  }
   if (isNaN(ci) || !state.chantiers[ci]){ showToast('⚠️ Choisissez un dossier de destination'); return; }
   const chantier = state.chantiers[ci];
   const r = _lotDepuisOffre(o, chantier);
@@ -3063,7 +3079,7 @@ async function creerLotDepuisOffreArtisan(oi){
     await deleteDoc(doc(db, 'phenix_chiffrage_import', o._id));
   } catch(e){ console.warn('suppression offre traitée:', e); }
 
-  offresArtisansEnAttente.splice(oi, 1);
+  { const k = offresArtisansEnAttente.indexOf(o); if (k >= 0) offresArtisansEnAttente.splice(k, 1); }
   saveState(); renderChantierGrid(); renderChantierSelects();
   renderOffresArtisansList();
   _majBadgeOffres();
@@ -3072,8 +3088,8 @@ async function creerLotDepuisOffreArtisan(oi){
 }
 window.creerLotDepuisOffreArtisan = creerLotDepuisOffreArtisan;
 
-async function ignorerOffreArtisan(oi){
-  const o = offresArtisansEnAttente[oi];
+async function ignorerOffreArtisan(cle){
+  const oi = _offreParCle(cle), o = offresArtisansEnAttente[oi];
   if (!o) return;
   if (!confirm('Ignorer l\'offre de ' + (o.artisan?.nom||'cet artisan') + ' sans créer de lot ? Cette action est définitive.')) return;
   try {

@@ -5,6 +5,8 @@
 ══════════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_shell.html
 ──────────────────────────────────────────────────────────────────────
+ 25/11/2026 (2) — [Offres reçues] Devis reçu par mail : la cloche propose « 📥 Intégrer à Chiffrage » (le devis va dans Offres reçues,
+   où il se range un par un) ou « Ne pas intégrer » (il n'apparaît pas dans Chiffrage, retour possible). Plus aucun lot créé tout seul.
  25/11/2026 — [Fiche artisan] Message d'un expéditeur inconnu : bouton « ➕ Créer une fiche artisan » (préremplie d'après la signature :
    entreprise, téléphone, ville, SIRET, métier deviné ; tout modifiable). Le mail est relu ensuite si ses PDF n'ont pas été lus.
  18/11/2026 (2) — [Tâches] La Synthèse 3D peut ouvrir la page Tâches de Dossier (mission « tâche en attente », onglet 'taches' → goto-page).
@@ -1159,12 +1161,14 @@ function _blocChiffrage(x) {
     t = '<b>📄 Devis de ' + ent + mt + '</b>' +
       '<div style="margin-top:4px">' + (c.projetId ? 'Dossier proposé : <b>« ' + _ncEsc(c.projetNom || '') + ' »</b>' + (c.sur ? ' (reconnu sur le mail et sur le devis)' : ' (à confirmer)') : 'Aucun dossier reconnu : choisissez-le.') + '</div>' +
       (c.raison && !(!c.projetId && /^Dossier non reconnu/.test(c.raison)) ? '<div style="margin-top:4px">⚠ ' + _ncEsc(c.raison) + '</div>' : '') +
-      '<label style="margin-top:8px">Ranger dans le chiffrage du dossier</label><select id="vchDos">' + opts + '</select>' +
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="vbtn p" onclick="rangerDevisChiffrage()">✓ Ranger dans ce dossier</button><button class="vbtn" onclick="refuserDevisChiffrage()">Ne pas ranger</button></div>' +
-      '<div style="margin-top:6px;font-size:12px;opacity:.85">Le devis devient un nouveau lot du chiffrage (rien n’est écrasé), marqué « Reçu par mail — à vérifier » : relisez les lignes et réglez la marge.</div>';
+      '<label style="margin-top:8px">Dossier proposé pour ce devis</label><select id="vchDos">' + opts + '</select>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="vbtn p" onclick="rangerDevisChiffrage()">📥 Intégrer à Chiffrage</button><button class="vbtn" onclick="refuserDevisChiffrage()">Ne pas intégrer</button></div>' +
+      '<div style="margin-top:6px;font-size:12px;opacity:.85">Le devis part dans Chiffrage › « Offres reçues », où vous le rangez vous-même dans un lot (un devis à la fois, dossier modifiable). Rien n’est créé tout seul.</div>';
   }
+  else if (c.statut === 'offre') t = '📥 Intégré à Chiffrage › « Offres reçues »' + (c.projetNom ? ', dossier proposé « ' + _ncEsc(c.projetNom) + ' »' : '') + mt + '. Rangez-le dans un lot depuis Chiffrage.' +
+    '<div style="margin-top:8px"><button class="vbtn" onclick="ouvrirChiffrage()">Ouvrir Chiffrage</button></div>';
   else if (c.statut === 'valide') t = '✔ Rangé dans le chiffrage de « ' + _ncEsc(c.projetNom || '') + ' »' + mt + '. Le lot apparaît dans Chiffrage, marqué « Reçu par mail — à vérifier ».';
-  else if (c.statut === 'refuse') t = 'Devis non rangé (à votre demande). Il reste dans Chiffrage › « Offres reçues » si vous changez d’avis.';
+  else if (c.statut === 'refuse') t = 'Devis non intégré (à votre demande) : il n’apparaît pas dans Chiffrage.' + (c.importId ? '<div style="margin-top:8px"><button class="vbtn" onclick="reprendreDevisChiffrage()">Finalement, l’intégrer</button></div>' : '');
   else if (c.statut === 'pas_un_devis') t = 'ℹ La pièce jointe n’est pas un devis (lu par l’IA) : rien n’a été proposé pour le chiffrage.';
   else if (c.statut === 'illisible') t = '⚠ Le PDF n’a pas pu être lu : glissez-le dans « Importer un devis artisan (IA) » de Chiffrage.';
   return '<div style="font-size:13px">' + t + '</div>' + (pcs ? '<div style="margin-top:4px;font-size:12.5px">Pièce(s) : ' + pcs + '</div>' : '');
@@ -1177,21 +1181,26 @@ window.rangerDevisChiffrage = async function() {
   try {
     const ref = doc(db, 'phenix_chiffrage_import', c.importId), cur = await getDoc(ref);
     if (!cur.exists()) { toast('Ce devis a déjà été traité dans Chiffrage'); }
-    else await updateDoc(ref, { projetId: pid, chantierTitre: nom, valide: true, valideLe: new Date().toISOString() });
-    await updateDoc(doc(db, 'phenix_entrants', x._id), { 'chiffrage.statut': 'valide', 'chiffrage.projetId': pid, 'chiffrage.projetNom': nom, projetId: pid, projetNom: nom, statut: 'lu', resultat: 'devis_range',
-      titre: 'Devis de ' + (c.entreprise || x.artisanNom || x.deNom || 'l’artisan') + ' rangé dans le chiffrage de ' + nom });
-    toast('✓ Devis rangé dans le chiffrage de ' + nom + ' : le lot apparaît dans Chiffrage');
+    else await updateDoc(ref, { projetId: pid, chantierTitre: nom, accepte: true, accepteLe: new Date().toISOString(), ecarte: false });   // [Offres reçues 25/11/2026] plus de valide : aucun lot créé seul
+    await updateDoc(doc(db, 'phenix_entrants', x._id), { 'chiffrage.statut': 'offre', 'chiffrage.projetId': pid, 'chiffrage.projetNom': nom, projetId: pid, projetNom: nom, statut: 'lu', resultat: 'devis_integre',
+      titre: 'Devis de ' + (c.entreprise || x.artisanNom || x.deNom || 'l’artisan') + ' intégré à Chiffrage (Offres reçues) — dossier proposé ' + nom });
+    toast('📥 Devis intégré : rangez-le depuis Chiffrage › Offres reçues');
     fermerValidation();
   } catch (e) { toast('⚠️ Rangement impossible : ' + (e && e.code || e)); }
 };
 window.refuserDevisChiffrage = async function() {
-  const x = _echTrouve(_valId); if (!x) return;
-  if (await _echMaj(x._id, { 'chiffrage.statut': 'refuse', statut: 'lu', resultat: 'devis_non_range' })) { toast('Devis non rangé'); fermerValidation(); }
+  const x = _echTrouve(_valId); if (!x) return; const c = x.chiffrage || {};
+  if (c.importId) { try { const ref = doc(db, 'phenix_chiffrage_import', c.importId); if ((await getDoc(ref)).exists()) await updateDoc(ref, { ecarte: true, accepte: false }); } catch (e) {} }
+  if (await _echMaj(x._id, { 'chiffrage.statut': 'refuse', statut: 'lu', resultat: 'devis_non_integre' })) { toast('Devis non intégré'); fermerValidation(); }
+};
+window.reprendreDevisChiffrage = async function() {   // [Offres reçues 25/11/2026] revenir sur « Ne pas intégrer »
+  const x = _echTrouve(_valId); if (!x) return; const id = x._id;
+  if (await _echMaj(id, { 'chiffrage.statut': 'propose', statut: 'nouveau' })) setTimeout(() => ouvrirValidation(id), 250);
 };
 window.validerRouvrir = async function() { const id = _valId; if (id && await _echMaj(id, { statut: 'nouveau' })) fermerValidation(); };
 window.validerFait = async function(i) { const id = _valId; if (id && await _echMaj(id, { faites: arrayUnion(i) })) setTimeout(() => ouvrirValidation(id), 250); };
 window.validerOuvrirDossier = function() { const x = _echTrouve(_valId); if (!x || !x.projetId) return; fermerValidation(); fermerEchanges(); shellOpenModule('dossier', document.querySelector('.shell-nav-item[data-module="dossier"]'), { source: 'phenix-shell', action: 'open-projet', id: x.projetId }); };
-window.ouvrirChiffrage = async function(i) { const id = _valId; if (id) await _echMaj(id, { faites: arrayUnion(i) }); fermerValidation(); fermerEchanges(); shellOpenModule('chiffrage', document.querySelector('.shell-nav-item[data-module="chiffrage"]')); };
+window.ouvrirChiffrage = async function(i) { const id = _valId; if (id && i != null) await _echMaj(id, { faites: arrayUnion(i) }); fermerValidation(); fermerEchanges(); shellOpenModule('chiffrage', document.querySelector('.shell-nav-item[data-module="chiffrage"]')); };
 
 // Rendez-vous : fichier .ics (s'ouvre dans Outlook et propose d'ajouter l'événement) ou Outlook en ligne (formulaire prérempli)
 const _icsEsc = t => String(t || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
