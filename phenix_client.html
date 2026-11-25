@@ -13,6 +13,9 @@
  PHÉNIX — ESPACE CLIENT (phenix_client.html)
 ──────────────────────────────────────────────────────────────────────
  HISTORIQUE DES MODIFICATIONS
+ 25/11/2026 — [Espace client] Le côté Phénix quitte cette page : tout se gère dans Phénix Dossier (fiche projet › onglet « Espace client »),
+   avec le statut qui change tout seul à chaque case de checklist liée à une étape. Ici ne restent que la vue du client et l'aperçu
+   (?apercu=<id du projet>, compte Phénix). Les liens [texte](https://…) des statuts s'affichent comme de vrais liens.
  24/11/2026 — [Espace client] Création, charte « avec caractère » (skill phenix-charte-espace-client).
    CÔTÉ CLIENT (téléphone d'abord, s'adapte à la tablette et à l'ordinateur) :
    • Connexion par LIEN MAGIQUE : le client tape son e-mail, reçoit un lien, il est connecté sans mot de passe.
@@ -135,11 +138,9 @@ const ADMIN = 'contact@phenixarchitecte.fr';
 const TEL = '04 73 73 00 59', TEL_LIEN = 'tel:0473730059';
 const COL_ACCES = 'phenix_client_acces', COL_DOS = 'phenix_client_dossiers';
 
-// Bibliothèque des statuts (doc « Espace client Phénix — Bibliothèque des statuts », 23/11/2026)
-// [code, indexPhase, titre, texte, délai habituel, de votre côté, appeler avant de publier]
 const PHASES = ['Relevé et études', 'Avant-projet et choix', 'Chiffrage', 'Déclaration administrative', 'Préparation de chantier', 'Chantier', 'Réception'];
 const PHASES_LONG = ['Relevé et études préliminaires', 'Avant-projet et choix', 'Chiffrage et consultation des artisans', 'Déclaration administrative', 'Préparation de chantier', 'Chantier', 'Réception et après'];
-const STATUTS = [["R1", 0, "Relevé effectué", "Nous sommes venus mesurer votre bâtiment le [date]. Cotes, photos et éléments particuliers sont enregistrés dans votre dossier. C'est la base de tout le projet : plus elle est précise, moins il y aura de surprises ensuite.", "—", "rien à faire", 0], ["R2", 0, "Remise au propre du relevé", "Nous redessinons votre bâtiment à l'échelle dans notre logiciel de conception, mur par mur, à partir des mesures prises sur place. Ce travail minutieux garantit que chaque proposition tiendra dans la réalité de votre maison.", "3 à 5 jours ouvrés", "rien à faire", 0], ["R3", 0, "Analyse réglementaire", "Avant de dessiner la moindre idée, nous lisons le règlement d'urbanisme de votre commune (le PLU) : distances à respecter avec la rue et les voisins, hauteur maximale, couleurs et matériaux autorisés, gestion des eaux de pluie. Ces règles sont reportées sur vos plans pour que chaque proposition soit réalisable.", "2 à 3 jours", "rien à faire", 0], ["R4", 0, "Conception en cours", "Nous cherchons les meilleures possibilités pour votre projet. Il nous arrive d'explorer des pistes différentes de votre idée de départ : c'est voulu, pour comparer et ne rien laisser passer. C'est l'étape la plus longue des études, parce qu'une bonne idée demande du temps de réflexion.", "1 à 2 semaines", "rien à faire, mais une envie ou une photo d'inspiration nous aide toujours", 0], ["R5", 0, "Modélisation 3D et visuels", "Votre projet prend forme en trois dimensions. Nous préparons des images pour vous aider à vous projeter dans les volumes, la lumière et les matières.", "3 à 5 jours", "rien à faire", 0], ["R6", 0, "Plan préliminaire prêt", "Votre plan préliminaire et ses visuels sont prêts. Nous vous contactons pour fixer un rendez-vous de présentation. Comme prévu dans votre devis, cette remise s'accompagne du premier règlement, 30 % de la mission d'avant-projet. Les plans vous sont remis une fois ce règlement effectué.", "—", "choisir une date de rendez-vous", 0], ["A1", 1, "Rendez-vous de présentation fixé", "Rendez-vous le [date] pour découvrir votre plan préliminaire. D'ici là, notez ce qui vous vient : vos envies, vos questions, vos doutes. Tout est utile pour la suite.", "—", "être présent au rendez-vous", 0], ["A2", 1, "Vos retours sont pris en compte (version 2 en cours)", "Nous reprenons le plan à partir des notes prises ensemble pendant le rendez-vous. Chaque remarque est traitée, même la plus petite. Ce n'est pas un simple trait à modifier : il faut redessiner les plans, mettre à jour la maquette 3D et refaire les images, pour que tout reste cohérent. C'est ce qui explique le délai, et ce travail est reconduit autant de fois que nécessaire pour aboutir à un plan qui vous ressemble.", "2 à 3 semaines (15 jours minimum)", "rien à faire", 0], ["A2bis", 1, "Version [n] à présenter", "La version [n] de votre plan est prête. Nous vous la présentons pour que vous vérifiiez ensemble ce qui a changé depuis la version précédente. Il est fréquent de passer par deux ou trois versions avant le plan définitif : c'est le signe d'un projet qui se précise, pas d'un problème.", "—", "choisir une date de présentation, puis nous donner vos retours", 0], ["A2ter", 1, "Vos retours sur la version [n] sont pris en compte", "Nous reprenons le plan, la maquette 3D et les images à partir de vos nouveaux retours. Cette boucle se répète jusqu'à ce que le plan vous convienne entièrement.", "2 à 3 semaines (15 jours minimum)", "rien à faire", 0], ["A3", 1, "Plan définitif à valider", "Votre plan définitif est prêt. Comme prévu dans votre devis, sa remise s'accompagne du deuxième règlement de la mission d'avant-projet, 60 %. Une fois validé, il devient la référence pour le chiffrage et les démarches administratives. Prenez le temps de le regarder : si quelque chose vous gêne, c'est le bon moment pour le dire.", "—", "valider le plan ou nous faire part de vos remarques", 0], ["A4", 1, "Plan définitif validé", "Merci pour votre validation. Votre projet passe maintenant à l'étape des choix de matières et du chiffrage.", "—", "rien à faire", 0], ["A5", 1, "Vos choix de matières", "Votre carnet de projet est ouvert. Vous pouvez y choisir vos matières et vos finitions tranquillement, depuis chez vous, et comparer les options autant que vous voulez. Chaque choix nous permet de chiffrer votre projet au plus juste.", "à votre rythme", "remplir le carnet ; un appel suffit si vous hésitez", 0], ["A6", 1, "Vos choix sont reçus", "Nous avons bien reçu vos choix. Nous les vérifions un par un et lançons le chiffrage sur cette base. Vous pouvez toujours changer d'avis : il suffira de l'acter ensemble.", "—", "rien à faire", 0], ["C1", 2, "Chiffrage en préparation", "Nous découpons votre projet en lots (maçonnerie, électricité, plomberie…) et décrivons précisément chaque intervention. Cette description sert de base aux artisans pour établir leur prix : plus elle est claire, plus les devis seront justes.", "environ 1 semaine", "rien à faire", 0], ["C2", 2, "Consultation des artisans en cours", "Nous avons transmis votre projet aux artisans pour qu'ils établissent leurs devis. Cette étape peut sembler longue : les bons artisans ont des carnets chargés et prennent le temps de chiffrer sérieusement. Quand c'est possible, nous avançons en parallèle sur les autres étapes de votre dossier.", "2 à 6 semaines", "rien à faire", 0], ["C3", 2, "Devis reçus : [x] sur [y] lots", "Nous avons reçu [x] devis sur les [y] lots de votre projet. Nous relançons les artisans pour les lots restants.", "selon les lots restants", "rien à faire", 0], ["C4", 2, "Nouvelle consultation pour un lot", "Pour le lot [lot], les premiers artisans consultés n'ont pas pu donner suite. Nous consultons d'autres entreprises. Cela arrive régulièrement et ne change rien à la qualité de votre projet.", "1 à 3 semaines de plus pour ce lot", "rien à faire", 0], ["C5", 2, "Analyse des devis", "Nous comparons les devis reçus ligne par ligne : rien ne doit manquer, et chaque prestation doit correspondre à vos choix. C'est ce travail qui vous évite les mauvaises surprises une fois le chantier lancé.", "3 à 5 jours", "rien à faire", 0], ["C6", 2, "Vérification finale du chiffrage", "Votre chiffrage est complet. Nous le relisons une dernière fois, lot par lot, avant de vous le présenter.", "2 à 3 jours", "rien à faire", 0], ["C7", 2, "Chiffrage prêt", "Votre chiffrage est prêt. Nous vous contactons pour un rendez-vous où nous détaillerons chaque lot : ce qui est inclus et ce qui ne l'est pas. Ce rendez-vous clôt la mission d'avant-projet et s'accompagne du règlement de son solde, 10 % (troisième et dernier règlement), comme prévu dans votre devis.", "—", "choisir une date de rendez-vous", 0], ["C8", 2, "Chiffrage validé", "Merci pour votre confiance. Votre projet entre dans la phase des démarches administratives et de la préparation du chantier.", "—", "rien à faire", 0], ["D1", 3, "Choix de la démarche", "Nous déterminons l'autorisation nécessaire pour votre projet (déclaration préalable ou permis de construire) et la liste exacte des pièces à fournir.", "1 à 2 jours", "rien à faire", 0], ["D2", 3, "Montage du dossier", "Nous préparons les pièces de votre dossier : plans, coupes, façades, notice descriptive, photos. L'administration exige une présentation très précise. Nous y apportons un soin particulier, car un dossier clair est instruit plus sereinement.", "1 à 2 semaines", "rien à faire", 0], ["D3", 3, "Insertion dans le paysage", "Nous réalisons une image qui montre votre projet dans son environnement réel, à partir d'une photo du site. C'est l'une des pièces les plus regardées par la mairie.", "2 à 3 jours", "rien à faire", 0], ["D3bis", 3, "Présentation de votre dossier", "Votre dossier de déclaration est constitué. Nous vous le présentons pour que vous puissiez vérifier chaque pièce : plans, façades, couleurs, matériaux. Comme prévu dans votre devis, cette remise s'accompagne du premier règlement de la mission, 30 %. Le dossier vous est remis une fois ce règlement effectué.", "—", "choisir une date de présentation et effectuer le premier règlement", 0], ["D3ter", 3, "Vos retours sur le dossier sont pris en compte (version [n])", "Nous reprenons le dossier à partir de vos remarques : couleurs, matériaux, ajustements de façade. Chaque modification oblige à mettre à jour plusieurs pièces du dossier pour qu'elles restent cohérentes entre elles. Cette boucle se répète jusqu'à votre validation.", "15 jours", "rien à faire", 0], ["D3quater", 3, "Dossier validé, en attente du deuxième règlement", "Merci d'avoir validé votre dossier. Pour pouvoir le déposer en mairie, le deuxième règlement de la mission, 60 %, est nécessaire, comme prévu dans votre devis. Dès sa réception, nous passons à la signature et au dépôt.", "—", "effectuer le deuxième règlement", 0], ["D4", 3, "Dossier prêt à signer", "Votre dossier est complet. En tant que demandeur, vous devez signer le formulaire avant son dépôt en mairie. Nous vous indiquons exactement où signer.", "—", "signer le formulaire", 0], ["D5", 3, "Dossier déposé", "Votre dossier a été déposé le [date]. La mairie dispose d'un mois pour vérifier qu'il est complet ; sans demande de sa part, l'instruction suit son cours.", "1 mois pour la vérification", "rien à faire", 0], ["D6", 3, "Instruction en cours", "Le service d'urbanisme étudie votre dossier. Le délai légal est en général d'un mois pour une déclaration préalable et de deux mois pour un permis de maison individuelle, un peu plus si le projet est proche d'un monument historique. Nous ne pouvons pas accélérer cette décision : pendant ce temps, nous avançons sur d'autres dossiers et, quand c'est possible, sur la préparation du vôtre.", "Réponse attendue vers le [date]", "rien à faire", 0], ["D7", 3, "Précisions demandées par la mairie (demande n°[n])", "La mairie nous demande des précisions ou des pièces supplémentaires sur votre dossier. C'est très courant et cela ne signifie pas un refus. Nous préparons les compléments. Selon la nature de la demande, le délai de réponse peut être prolongé : nous vous indiquons la nouvelle date attendue dès que nous la connaissons. Il arrive que la mairie revienne plusieurs fois avec de nouvelles questions : chaque demande est traitée dans ce même statut, numérotée.", "1 à 2 semaines pour les préparer", "rien à faire, sauf demande de notre part", 0], ["D8", 3, "Compléments transmis (demande n°[n])", "Nous avons transmis les compléments à la mairie le [date]. L'instruction se poursuit ; si la mairie a de nouvelles questions, nous reviendrons vers vous avec une nouvelle demande numérotée.", "Réponse attendue vers le [date]", "rien à faire", 0], ["D9", 3, "Projet autorisé", "Bonne nouvelle : votre projet est autorisé ! Comme prévu dans votre devis, cette acceptation déclenche le dernier règlement de la mission, les 10 % restants. Prochaine étape : afficher le panneau sur votre terrain.", "—", "effectuer le dernier règlement et installer le panneau, nous vous expliquons comment", 0], ["D10", 3, "Affichage et délai de recours", "Le panneau doit rester visible depuis la rue pendant deux mois. Pendant ce délai, des tiers peuvent contester l'autorisation : c'est une période normale, qui sécurise votre projet une fois écoulée. Pensez à photographier le panneau en début, milieu et fin d'affichage : le délai ne court que si l'affichage est complet et sans interruption, ces photos servent donc de preuve. Pour comprendre : [la fiche officielle sur l'affichage de l'autorisation](https://www.service-public.gouv.fr/particuliers/vosdroits/F1988) et [le texte exact du panneau sur Légifrance](https://www.legifrance.gouv.fr/codes/id/LEGISCTA000006175623).", "Fin du délai : le [date]", "laisser le panneau en place et le photographier", 0], ["D11", 3, "Projet refusé en l'état", "La mairie a refusé le dossier tel qu'il a été déposé. Nous analysons les motifs pour vous proposer la meilleure suite : ajuster le projet et déposer à nouveau, ou échanger avec le service d'urbanisme. Nous en parlons ensemble avant toute décision.", "proposition sous 1 semaine", "rien à faire, nous vous appelons", 1], ["P1", 4, "Réception des attestations d'assurance : [x] sur [y]", "Avant de signer quoi que ce soit, nous collectons l'attestation d'assurance décennale de chaque artisan. C'est elle qui garantit que ses travaux sont couverts pendant dix ans : sans elle, aucun artisan ne commence. Nous en avons reçu [x] sur [y] et nous relançons les autres. Cette étape est souvent longue, parce que chaque artisan doit la demander à son assureur.", "3 semaines", "rien à faire", 0], ["P2", 4, "Engagement des artisans", "Nous faisons signer à chaque artisan son contrat d'engagement, qui fixe le montant de ses travaux et sa période d'intervention. C'est ce qui permet de bâtir un planning fiable. Comme prévu dans votre contrat, la signature de ces engagements et du contrat de travaux avec Phénix déclenche le premier règlement de la mission de travaux de Phénix, 30 %.", "1 à 3 semaines", "signer le contrat de travaux et effectuer le premier règlement", 0], ["P3", 4, "Rédaction du CCTP", "Nous rédigeons le CCTP, le Cahier des Clauses Techniques Particulières. C'est le document qui décrit, lot par lot, chaque intervention prévue et les règles de l'art à respecter. Chaque artisan le signe pour son lot. C'est le seul document qui a une vraie valeur juridique et qui protège tout le monde : vous, les artisans et Phénix. Vous le retrouverez dans vos documents ; prenez le temps de le parcourir.", "1 semaine", "le lire et nous poser vos questions", 0], ["P4", 4, "Plans de consultation des entreprises (DCE)", "Nous préparons les plans du DCE, le Dossier de Consultation des Entreprises : un jeu de plans par corps de métier (maçonnerie, électricité, plomberie, menuiseries…). Ils servent à chaque artisan à bien visualiser son intervention, en complément du CCTP. Il y a beaucoup à dessiner : les plans électriques, les plans des fluides (plomberie et chauffage), le plan de cloisonnement, le plan des ouvertures pour le maçon, et bien d'autres. Chaque plan doit être précis, car c'est lui que l'artisan aura sous les yeux sur le chantier. Vous les retrouverez aussi dans vos documents.", "3 semaines", "rien à faire", 0], ["P5", 4, "Planning de chantier", "Nous organisons l'ordre et les dates d'intervention de chaque artisan. Le planning s'affichera dans votre espace dès qu'il sera calé.", "quelques jours", "rien à faire", 0], ["P6", 4, "Formalités légales du chantier", "Avant le premier jour, nous mettons en place ce que la loi impose : le panneau d'affichage du chantier, la gestion des déchets et la prévention entre les entreprises qui interviennent ensemble. Ce sont des obligations qui protègent le chantier, les ouvriers et vous.", "1 semaine", "rien à faire", 0], ["P7", 4, "Préparation de l'accès au chantier", "Nous vérifions avec vous les derniers points pratiques : accès au terrain, eau et électricité de chantier, place pour la benne.", "quelques jours", "préparer les points de la liste", 0], ["P8", 4, "Démarrage fixé", "Votre chantier démarre le [date]. Nous vous envoyons la liste des points à prévoir d'ici là : accès au terrain, eau et électricité de chantier, place pour la benne.", "—", "préparer les points de la liste", 0], ["T1", 5, "Chantier démarré", "Votre chantier a commencé le [date] ! Les premiers artisans s'installent. Nous publierons ici des photos au fil des étapes.", "—", "rien à faire", 0], ["T2", 5, "Démolition et curage", "Nous retirons ce qui doit l'être : cloisons, revêtements, anciens réseaux. C'est l'étape où le bâtiment révèle ce qu'il cache ; si nous découvrons quelque chose d'imprévu, nous vous en parlons tout de suite.", "1 à 2 semaines (fin prévue : [date])", "rien à faire", 0], ["T2bis", 5, "Relève après curage et adaptation des plans — Rénovation uniquement", "Une fois les cloisons et les revêtements retirés, nous refaisons un relève : le bâtiment montre maintenant son état réel, souvent différent de ce que l'on pouvait voir avant. Nous adaptons ensuite les plans à ce que nous découvrons. Le chantier est volontairement mis en pause le temps de ce travail, pour que la suite soit juste et sans mauvaise surprise.", "quelques jours à 1 semaine", "rien à faire, nous vous prévenons si les plans changent", 0], ["T3", 5, "Terrassement et réseaux", "Nous préparons le terrain : implantation de la maison, creusement, passage des réseaux (eau, électricité, évacuations) jusqu'à la rue.", "1 à 2 semaines (fin prévue : [date])", "rien à faire", 0], ["T4", 5, "Fondations", "Nous coulons les fondations, la base invisible qui porte toute la maison. Les aciers sont placés avant le béton ; nous les photographions pour que vous en gardiez la trace. Une fois le béton coulé, il faut attendre au moins trois semaines avant de construire dessus : le béton atteint sa pleine résistance en 28 jours. Pendant ce temps, le chantier paraît immobile, mais c'est ce temps qui garantit la solidité de toute la maison. Le coulage lui-même dépend de la météo : nous évitons les jours de très forte chaleur, de gel ou de grosse pluie, ce qui peut décaler la date de quelques jours.", "2 semaines, plus 3 semaines minimum de prise du béton (fin prévue : [date])", "rien à faire", 0], ["T5", 5, "Dalle", "Avant de couler la dalle, nous posons un treillis d'acier relié aux murs pour que l'ensemble travaille d'un seul bloc. Le béton a ensuite besoin de temps : au moins trois semaines avant de pouvoir monter les murs dessus, et 28 jours pour atteindre sa pleine résistance. Aller plus vite risquerait de fissurer la dalle. Comme pour les fondations, nous choisissons un jour de coulage sans forte chaleur, sans gel et sans grosse pluie.", "1 semaine, plus 3 semaines minimum de prise (fin prévue : [date])", "rien à faire", 0], ["T6", 5, "Murs", "Les murs montent : votre maison prend sa hauteur et vous pouvez déjà deviner les pièces et les ouvertures.", "8 à 20 semaines avec le soubassement et la dalle, selon la taille du projet (fin prévue : [date])", "rien à faire", 0], ["T7", 5, "Charpente et couverture", "La charpente est posée, puis la toiture. Cette étape dépend beaucoup de la météo : on ne couvre pas une maison sous la pluie ou dans le vent fort.", "2 à 4 semaines, selon la météo (fin prévue : [date])", "rien à faire", 0], ["T8", 5, "Menuiseries extérieures", "Fenêtres et portes sont posées. Votre maison est maintenant « hors d'eau, hors d'air » : protégée de la pluie et du vent, elle peut accueillir les travaux intérieurs.", "1 à 3 semaines (fin prévue : [date])", "rien à faire", 0], ["T9", 5, "Réseaux intérieurs", "Électricité, plomberie et chauffage passent dans les murs et les sols. Avant de fermer les cloisons, nous photographions chaque gaine et chaque tuyau : vous retrouverez ces photos dans vos documents, utiles pour toute intervention future.", "6 à 12 semaines avec l'électricité, la plomberie et le chauffage (fin prévue : [date])", "rien à faire", 0], ["T10", 5, "Isolation et plâtrerie", "L'isolation est posée, puis les cloisons et les plafonds. Les pièces prennent leur forme définitive. Le début du cloisonnement marque la moitié du chantier : comme prévu dans votre contrat, c'est le moment du deuxième règlement de la mission de travaux de Phénix, 40 %.", "5 à 10 semaines, selon la complexité des plans et la surface (fin prévue : [date])", "rien à faire", 0], ["T11", 5, "Chapes et sols", "Nous coulons les chapes, la couche qui recevra vos revêtements de sol, puis nous posons ces revêtements une fois les chapes sèches.", "1 semaine pour couler (fin prévue : [date]), puis le temps de séchage de l'étape suivante", "rien à faire", 0], ["T12", 5, "Temps de séchage", "Rien ne semble bouger sur le chantier, et c'est normal : la chape ou les enduits doivent sécher plusieurs semaines avant l'étape suivante. Pour une chape traditionnelle, on compte environ une semaine de séchage par centimètre d'épaisseur jusqu'à 4 cm, puis deux semaines par centimètre en plus. Une chape de 6 cm demande ainsi au moins 8 semaines avant la pose des revêtements de sol. Une chape liquide sèche plus vite, mais le délai se compte quand même en semaines. Aller plus vite abîmerait vos sols et vos murs. Ce temps d'attente fait partie de la qualité de votre maison.", "Reprise prévue : [date]", "rien à faire", 0], ["T13", 5, "Peinture et revêtements muraux", "Peintures, faïences et revêtements muraux sont posés. Votre intérieur prend ses couleurs.", "2 à 3 semaines (fin prévue : [date])", "rien à faire", 0], ["T14", 5, "Cuisine, salle de bains et équipements", "Cuisine, sanitaires, appareillages électriques et chauffage sont installés et raccordés. C'est la dernière ligne droite à l'intérieur.", "2 à 3 semaines (fin prévue : [date])", "rien à faire", 0], ["T15", 5, "Extérieurs et finitions", "Allée, portail, abords et dernières finitions. Nous préparons ensuite le tour complet des travaux avant la réception.", "2 à 3 semaines pour le ravalement, jusqu'à 3 semaines pour les abords (fin prévue : [date])", "rien à faire", 0], ["F1", 6, "Tour des travaux avant réception", "Nous faisons le tour complet des travaux pour repérer les dernières finitions à reprendre avant la réception officielle.", "quelques jours", "rien à faire", 0], ["F2", 6, "Réception fixée", "La réception de vos travaux aura lieu le [date]. Nous visiterons ensemble chaque pièce ; les éventuels défauts seront notés comme « réserves », que les artisans devront corriger. La réception déclenche le dernier règlement de la mission de travaux de Phénix, 30 %, une fois les règlements de situation à jour.", "—", "être présent à la réception", 0], ["F3", 6, "Levée des réserves", "Les artisans reviennent corriger les points notés à la réception. Nous suivons chaque réserve jusqu'à sa levée et vous tenons informé ici.", "3 semaines · Réserves levées : [x] sur [y]", "donner accès aux artisans aux dates prévues", 0], ["F4", 6, "Dossier de votre maison remis", "Nous vous remettons le dossier de votre maison : plans définitifs, notices des équipements, attestations d'assurance des artisans, photos des réseaux avant fermeture. Gardez-le précieusement, il vous servira pour tout entretien ou toute revente.", "—", "le télécharger et le conserver", 0], ["F5", 6, "Projet livré", "Votre projet est terminé. Merci de nous avoir fait confiance tout au long de cette aventure. Vos travaux sont couverts par la garantie de parfait achèvement (1 an), la garantie de bon fonctionnement (2 ans) et la garantie décennale (10 ans). Au moindre souci, écrivez-nous ici.", "—", "profiter de votre maison", 0], ["X1", 6, "Projet en pause : urgence", "Votre projet est momentanément en pause : nous traitons une urgence sur un autre chantier. Votre dossier reprend le [date]. Merci pour votre patience ; nous savons qu'attendre n'est jamais agréable.", "Reprise prévue : [date]", "rien à faire", 0], ["X2", 6, "Congés de l'équipe", "L'équipe Phénix est en congés du [date] au [date]. Votre dossier reprend dès notre retour, là où nous l'avons laissé.", "Reprise prévue : [date]", "rien à faire", 0], ["X3", 6, "En attente de votre décision", "Nous avons besoin de votre avis sur [sujet] pour avancer. Prenez le temps qu'il faut ; si vous hésitez, un simple appel suffit pour en parler ensemble.", "—", "nous donner votre décision sur [sujet]", 0], ["X4", 6, "En attente d'un document", "Il nous manque [document] pour continuer. Dès réception, votre dossier reprend immédiatement. Si vous ne savez pas où le trouver, dites-le-nous : nous vous aidons volontiers.", "—", "nous transmettre [document]", 0], ["X5", 6, "En attente de règlement", "Comme prévu dans votre devis, l'étape suivante démarre à réception du règlement de [étape]. Si quelque chose vous bloque, parlons-en simplement : il y a toujours une solution.", "—", "effectuer le règlement", 0], ["X6", 6, "En attente d'un intervenant extérieur", "Nous attendons le retour de [géomètre / bureau d'études / gestionnaire de réseau / banque]. Ce délai ne dépend pas de nous, mais nous les relançons régulièrement et vous tenons informé dès que nous avons une réponse.", "Réponse attendue vers le [date]", "rien à faire", 0], ["X7", 6, "Intempéries", "La météo empêche de travailler correctement : forte chaleur, gel, pluie abondante ou vent fort. Le béton se coule idéalement entre 5 et 30 °C. Au-dessus de 30 °C, il sèche trop vite et fissure ; sous 5 °C, il durcit mal, et le gel peut l'abîmer définitivement. Sous une pluie forte, l'eau en trop affaiblit sa résistance. Une toiture ne se pose pas non plus sous la pluie ou dans le vent. Nous attendons une fenêtre favorable et ajustons le planning : quelques jours de retard maintenant évitent des défauts pour des dizaines d'années. Pour comprendre : [la fiche technique d'Infociments sur le bétonnage par temps chaud et par temps froid](https://www.infociments.fr/sites/default/files/article/fichier/CT-G11.77-82.pdf).", "Reprise dès que la météo le permet", "rien à faire", 0], ["X8", 6, "Retard de livraison de matériaux", "Le fournisseur a décalé la livraison de [matériau] au [date]. Nous réorganisons l'ordre des interventions pour limiter l'impact sur votre chantier.", "Livraison prévue : [date]", "rien à faire", 0], ["X9", 6, "Intervention décalée", "L'intervention du lot [lot] est décalée au [date]. Nous ajustons la suite du chantier en conséquence pour garder le cap sur la date de fin.", "Nouvelle date : [date]", "rien à faire", 0], ["X10", 6, "Découverte en cours de travaux", "En ouvrant [murs / sols / toiture], nous avons découvert [élément]. C'est fréquent en rénovation. Nous étudions la meilleure solution et vous la présentons avant toute décision.", "Proposition sous [x] jours", "rien à faire pour l'instant", 1], ["X10bis", 6, "Règlement de situation à effectuer ([x] sur [y])", "Pendant le chantier, chaque lot est réglé en trois temps, 30 %, 40 % puis 30 %, selon son propre planning et non un calendrier fixe : 30 % avant son intervention (c'est ce qui lui permet notamment de commander ses fournitures), 40 % à mi-parcours de son intervention, puis 30 % à la fin, une fois ses travaux terminés et ses réserves levées. Un règlement vous est demandé pour le lot [lot], dont l'intervention a atteint cette étape. Vous avez réglé [x] situations sur [y] prévues. Tous les règlements passent par Phénix, qui s'occupe de la redistribution.", "—", "effectuer le règlement indiqué", 0], ["X11", 6, "Étude de votre modification", "Nous étudions la modification que vous avez demandée : ses effets sur les plans, le prix et le planning. Nous vous la présentons pour accord avant de l'intégrer.", "3 à 7 jours", "rien à faire", 0], ["X12", 6, "Projet arrêté à votre demande", "Comme convenu ensemble, votre projet est mis en suspens. Toutes vos données restent conservées ici : nous reprendrons exactement où nous en étions, quand vous le souhaiterez.", "à votre convenance", "nous prévenir quand vous souhaitez reprendre", 0]];
+// La bibliothèque des statuts est dans Phénix Dossier (fiche projet › Espace client) : cette page ne fait que lire.
 const CATS = ['Plans', '3D', 'Visuels', 'Photos', 'Contrats'];
 
 // ── état ──
@@ -159,6 +160,8 @@ const dateLongue = iso => { if (!iso) return ''; const d = new Date(String(iso).
 const recent = iso => iso && (Date.now() - new Date(String(iso).slice(0, 10) + 'T12:00:00').getTime()) < 8 * 864e5;
 const toast = msg => { const t = document.getElementById('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => { t.hidden = true; }, 3800); };
 const villeDe = adr => { const m = String(adr || '').match(/\b\d{5}\s+(.+)$/); return m ? m[1].trim() : ''; };
+// Liens écrits [texte](https://…) dans les statuts : affichés comme de vrais liens
+const liens = t => esc(t).replace(/\[([^\]]+)\]\((https:\/\/[^\s)]+)\)/g, (m, a, u) => `<a href="${u}" target="_blank" rel="noopener">${a}</a>`);
 const nid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 function journal(action, objet, libelle) {
   try { const u = auth.currentUser; if (!u) return; const now = new Date();
@@ -250,7 +253,7 @@ onAuthStateChanged(auth, async user => {
   const email = String(user.email || '').toLowerCase();
   let staff = email === ADMIN;
   if (!staff) { try { const u = await getDoc(doc(db, 'phenix_users', email)); const r = u.exists() ? String(u.data().role || '') : ''; staff = r === 'admin'; } catch (e) {} }
-  if (staff) { S.role = 'phenix'; demarrerPhenix(); return; }
+  if (staff) { S.role = 'phenix'; demarrerApercu(); return; }
   S.role = 'client';
   try {
     const a = await getDoc(doc(db, COL_ACCES, email));
@@ -331,7 +334,7 @@ function htmlAvancement(d) {
         ${d.client && !d.pause ? `<div style="margin-top:8px;font-size:12px;color:var(--t3)">De votre côté : ${esc(d.client)}</div>` : ''}
         ${action}
       </div>
-      ${d.texte ? `<details class="pq" style="margin-top:30px"><summary>${IC.chev}Pourquoi cela prend-il ce temps ?</summary><p class="voile" style="padding:8px 10px;margin-left:-10px">${esc(d.texte)}</p></details>` : ''}
+      ${d.texte ? `<details class="pq" style="margin-top:30px"><summary>${IC.chev}Pourquoi cela prend-il ce temps ?</summary><p class="voile" style="padding:8px 10px;margin-left:-10px">${liens(d.texte)}</p></details>` : ''}
     </section>
     ${htmlParcours(d)}
     <p class="meta" style="margin-top:30px">Mis à jour ${esc(dateFr(d.majAt) ? dateFr(d.majAt).toLowerCase() : '')} · <button class="btn-discret" id="dec" style="font-size:11px;min-height:30px">Se déconnecter</button></p>
@@ -375,223 +378,34 @@ function htmlNav(d) {
 function brancherClient(d) {
   document.querySelectorAll('[data-ong]').forEach(b => b.onclick = () => { S.onglet = b.dataset.ong; S.apercu ? rendreApercu() : rendreClient(); });
   document.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { S.cat = b.dataset.cat; S.apercu ? rendreApercu() : rendreClient(); });
-  const dec = document.getElementById('dec'); if (dec) dec.onclick = () => S.apercu ? (S.apercu = false, rendrePhenix()) : signOut(auth);
+  const dec = document.getElementById('dec'); if (dec) dec.onclick = () => S.apercu ? window.close() : signOut(auth);
 }
 
-// ═════════ CÔTÉ PHÉNIX ═════════
-function demarrerPhenix() {
-  unsubs.push(onSnapshot(collection(db, 'phenix_projets_assistante'), s => {
-    const l = []; s.forEach(x => { if (x.id.charAt(0) === '_') return; const v = x.data(); v.id = v.id != null ? v.id : x.id; l.push(v); });
-    l.sort((a, b) => String(a.nom || '').localeCompare(String(b.nom || ''), 'fr')); S.projets = l; if (!S.apercu) rendrePhenix();
-  }, e => { console.warn(e); toast('Liste des dossiers indisponible.'); }));
-  unsubs.push(onSnapshot(collection(db, COL_DOS), s => { const m = {}; s.forEach(x => m[x.id] = x.data()); S.dossiers = m; if (!S.apercu && !S.brouillon) rendrePhenix(); },
-    e => { console.warn(e); toast('Règles Firestore de l’espace client à installer.'); }));
-  rendrePhenix();
-}
-let unsubAcc = null;
-function choisirProjet(id) {
-  S.sel = id; S.brouillon = null; S.codeSel = null; S.phaseSel = null; S.accesProjet = [];
-  if (unsubAcc) { unsubAcc(); unsubAcc = null; }
-  if (id != null) unsubAcc = onSnapshot(query(collection(db, COL_ACCES), where('projetId', '==', String(id))), s => { const l = []; s.forEach(x => l.push(x.data())); S.accesProjet = l; rendrePhenix(); }, () => {});
-  rendrePhenix();
-}
-const projetSel = () => S.projets.find(p => String(p.id) === String(S.sel));
-function base(p) {
-  return S.dossiers[String(p.id)] || { projetId: String(p.id), clientNom: p.client || '', ville: villeDe(p.adresse), phase: 0, titre: '', texte: '', delai: '', client: '', documents: [], fil: [], carnetUrl: '', carnetValide: false, visiteUrl: '' };
-}
-async function sauver(p, patch, msgOk) {
-  const d = Object.assign({}, base(p), patch, { projetId: String(p.id), majAt: new Date().toISOString(), majPar: String(auth.currentUser.email || '').toLowerCase() });
-  try { await setDoc(doc(db, COL_DOS, String(p.id)), d); toast(msgOk || 'Enregistré'); journal('maj', String(p.id), msgOk || 'Espace client'); return true; }
-  catch (e) { console.warn(e); toast('Enregistrement refusé : vérifiez les règles Firestore.'); return false; }
-}
-function rendrePhenix() {
-  if (S.apercu) return;
-  $app().className = 'large';
-  const p = projetSel();
-  $app().innerHTML = `<main class="page" style="padding-bottom:60px">
-    <div class="rangee" style="justify-content:space-between"><div><div class="marque">PHÉNIX</div><div class="sous">Espace client · côté Phénix</div></div>
-      <button class="btn-discret" id="dec">Se déconnecter</button></div>
-    ${p ? htmlEditeur(p) : htmlListe()}</main>`;
-  brancherPhenix(p);
-}
-function htmlListe() {
-  const q = S.recherche.trim().toLowerCase();
-  const l = S.projets.filter(p => !q || [p.nom, p.client, p.ref, p.adresse].join(' ').toLowerCase().includes(q));
-  return `<h1 class="h1" style="margin-top:34px;font-size:38px">Dossiers</h1>
-    <p style="font-size:12px;color:var(--t4);margin:6px 0 0">Choisissez un dossier pour ouvrir l’accès du client, publier un statut ou ajouter un document.</p>
-    <input class="champ" id="rech" placeholder="Rechercher un dossier, un client, une commune" value="${esc(S.recherche)}" style="margin-top:22px" aria-label="Rechercher">
-    <div class="liste" style="margin-top:18px;padding:0">${l.length ? l.map(p => { const d = S.dossiers[String(p.id)];
-      return `<button class="dossier" data-pid="${esc(p.id)}"><span><span style="display:block;font-size:14px;font-weight:400">${esc(p.nom || p.client || 'Sans nom')}</span>
-        <span style="display:block;font-size:11px;color:var(--t4)">${esc(p.client || '')}${villeDe(p.adresse) ? ' · ' + esc(villeDe(p.adresse)) : ''}</span></span>
-        <span style="font-size:11px;color:${d ? 'var(--or2)' : 'var(--t5)'};text-align:right">${d ? '✓ espace ouvert<br><span style="color:var(--t5)">' + esc(d.code ? d.code + ' · ' : '') + esc(PHASES[d.phase || 0]) + '</span>' : 'pas encore ouvert'}</span></button>`; }).join('')
-      : '<p style="padding:16px;font-size:12px;color:var(--t4)">Aucun dossier. La liste vient de Phénix Dossier (copie sans montant) : ouvrez Dossier une fois pour la remplir.</p>'}</div>`;
-}
-function htmlEditeur(p) {
-  const d = base(p), ouvert = !!S.dossiers[String(p.id)];
-  const br = S.brouillon || { code: d.code || '', phase: d.phase || 0, titre: d.titre || '', texte: d.texte || '', delai: d.delai || '', client: d.client || '', echeance: d.echeance || '', pause: !!d.pause, reprise: d.reprise || '', appele: false };
-  S.brouillon = br;
-  const ph = S.phaseSel != null ? S.phaseSel : br.phase;
-  const st = STATUTS.find(x => x[0] === br.code);
-  const crochets = /\[[^\]]+\]/.test(br.titre + ' ' + br.texte + ' ' + br.delai);
-  const aDate = /\[date\]/.test(br.titre + ' ' + br.texte + ' ' + br.delai);
-  const acces = S.accesProjet.map(a => `<div class="rangee" style="justify-content:space-between;padding:6px 0;border-bottom:.5px solid var(--line)"><span style="font-size:13px">${esc(a.email)}</span><button class="btn-discret" data-retirer="${esc(a.email)}" style="font-size:12px">Retirer l’accès</button></div>`).join('');
-  const docs = (d.documents || []).map((x, i) => `<div class="rangee" style="justify-content:space-between;padding:6px 0;border-bottom:.5px solid var(--line)"><span style="font-size:13px">${esc(x.cat)} · ${esc(x.titre)} <span class="meta">${esc(dateFr(x.date))}</span></span><button class="btn-discret" data-supdoc="${i}" style="font-size:12px">Retirer</button></div>`).join('');
-  const fil = (d.fil || []).slice(-4).reverse().map(x => `<div class="meta" style="padding:3px 0">${esc(dateFr(x.date))} · ${esc(x.titre)}</div>`).join('');
-  return `<button class="btn-discret" id="retour" style="margin-top:14px;padding:0">‹ Tous les dossiers</button>
-    <h1 class="h1" style="margin-top:8px;font-size:36px">${esc(p.nom || p.client)}</h1>
-    <p style="margin:6px 0 0;font-size:12px;color:var(--t4)">${esc(p.client || '')}${p.adresse ? ' · ' + esc(p.adresse) : ''}${ouvert ? ' · <span style="color:var(--or2)">✓ espace ouvert</span>' : ' · pas encore ouvert'}</p>
-    <div class="rangee" style="margin-top:14px"><button class="btn-ligne" id="apercu">Voir comme le client</button></div>
-
-    <section class="carte"><h3>Accès du client</h3>
-      <p style="margin:0;font-size:12px;color:var(--t4)">Le client reçoit un e-mail avec son lien de connexion. Il n’a aucun mot de passe à retenir.</p>
-      ${acces || '<p class="meta">Aucun accès pour l’instant.</p>'}
-      <label class="lib" for="acc-email">E-mail du client</label>
-      <div class="rangee"><input class="champ" id="acc-email" type="email" value="${esc(p.email || '')}" style="flex:1;min-width:220px">
-      <button class="btn-or" id="acc-ok">Ouvrir l’accès et envoyer le lien</button></div>
-      <p class="meta" style="margin-top:8px">Adresse de l’espace à donner au client : ${esc(urlRetour())}</p></section>
-
-    <section class="carte"><h3>Statut du dossier</h3>
-      <p style="margin:0;font-size:12px;color:var(--t4)">Choisissez un statut de la bibliothèque, ajustez le texte, puis publiez. Le client le voit aussitôt et une ligne s’ajoute à son fil.</p>
-      <label class="lib" for="st-phase">Phase</label>
-      <select class="champ" id="st-phase">${PHASES_LONG.map((x, i) => `<option value="${i}" ${i === ph ? 'selected' : ''}>${i + 1}. ${esc(x)}</option>`).join('')}</select>
-      <label class="lib" for="st-code">Statut</label>
-      <select class="champ" id="st-code"><option value="">Choisir un statut…</option>${STATUTS.filter(x => x[1] === ph).map(x => `<option value="${x[0]}" ${x[0] === br.code ? 'selected' : ''}>${x[0]} · ${esc(x[2])}${x[6] ? ' ⚠' : ''}</option>`).join('')}</select>
-      <label class="lib" for="st-titre">Titre lu par le client</label><input class="champ" id="st-titre" value="${esc(br.titre)}">
-      <label class="lib" for="st-texte">Pourquoi cela prend-il ce temps ?</label><textarea class="champ" id="st-texte" rows="5">${esc(br.texte)}</textarea>
-      <div class="rangee"><div style="flex:1;min-width:200px"><label class="lib" for="st-delai">Délai habituel</label><input class="champ" id="st-delai" value="${esc(br.delai)}"></div>
-        <div style="flex:1;min-width:200px"><label class="lib" for="st-ech">Date prévue (facultatif)</label><input class="champ" id="st-ech" type="date" value="${esc(br.echeance)}"></div></div>
-      <label class="lib" for="st-client">De votre côté</label><input class="champ" id="st-client" value="${esc(br.client)}">
-      <label class="rangee" style="margin-top:14px;font-size:13px;gap:8px"><input type="checkbox" id="st-pause" ${br.pause ? 'checked' : ''} style="width:20px;height:20px"> Projet en pause</label>
-      ${br.pause ? `<label class="lib" for="st-rep">Date de reprise</label><input class="champ" id="st-rep" type="date" value="${esc(br.reprise)}">` : ''}
-      ${aDate ? `<div class="rangee" style="margin-top:14px"><label class="lib" for="st-date" style="margin:0">Date à mettre à la place de [date]</label><input class="champ" id="st-date" type="date" value="${jourISO()}" style="max-width:200px"><button class="btn-ligne" id="st-date-ok">Insérer la date</button></div>` : ''}
-      ${crochets ? '<div class="alerte">⚠ Il reste des mots entre crochets, comme [date] ou [lot] : remplacez-les avant de publier.</div>' : ''}
-      ${st && st[6] ? `<div class="alerte">⚠ Mauvaise nouvelle : appelez le client avant de publier.<label class="rangee" style="margin-top:8px;gap:8px"><input type="checkbox" id="st-appele" ${br.appele ? 'checked' : ''} style="width:20px;height:20px"> J’ai appelé le client</label></div>` : ''}
-      <div class="rangee" style="margin-top:18px"><button class="btn-or" id="st-pub">Publier le statut</button></div></section>
-
-    <section class="carte"><h3>Note au fil</h3>
-      <p style="margin:0;font-size:12px;color:var(--t4)">Une information du jour, sans changer le statut.</p>
-      <label class="lib" for="n-titre">Titre</label><input class="champ" id="n-titre" placeholder="Note du jour">
-      <label class="lib" for="n-texte">Texte</label><textarea class="champ" id="n-texte" rows="3" placeholder="Votre dossier suit son cours en mairie. Aucune demande de pièces à ce jour."></textarea>
-      <div class="rangee" style="margin-top:14px"><button class="btn-ligne" id="n-ok">Ajouter au fil</button></div>
-      <div style="margin-top:10px">${fil}</div></section>
-
-    <section class="carte"><h3>Documents</h3>
-      <p style="margin:0;font-size:12px;color:var(--t4)">Collez un lien de partage (Dropbox en lecture seule, par exemple). Le client l’ouvre depuis « Mes documents ».</p>
-      ${docs}
-      <div class="rangee"><div style="flex:1;min-width:140px"><label class="lib" for="d-cat">Catégorie</label><select class="champ" id="d-cat">${CATS.map(c => `<option>${c}</option>`).join('')}</select></div>
-        <div style="flex:2;min-width:200px"><label class="lib" for="d-titre">Titre</label><input class="champ" id="d-titre" placeholder="Plan d’aménagement"></div></div>
-      <label class="lib" for="d-desc">Description courte</label><input class="champ" id="d-desc" placeholder="Rez-de-chaussée et étage, version 3">
-      <label class="lib" for="d-url">Lien</label><input class="champ" id="d-url" type="url" placeholder="https://…">
-      <div class="rangee" style="margin-top:14px"><button class="btn-ligne" id="d-ok">Ajouter le document</button></div></section>
-
-    <section class="carte"><h3>Carnet et visite 3D</h3>
-      <label class="lib" for="c-url">Lien du carnet de projet</label><input class="champ" id="c-url" type="url" value="${esc(d.carnetUrl || '')}" placeholder="https://phenixarchitecte-del.github.io/…">
-      <label class="rangee" style="margin-top:14px;font-size:13px;gap:8px"><input type="checkbox" id="c-val" ${d.carnetValide ? 'checked' : ''} style="width:20px;height:20px"> Carnet rempli et validé par Phénix</label>
-      <label class="lib" for="v-url">Lien de la visite 3D (laisser vide tant qu’elle n’existe pas)</label><input class="champ" id="v-url" type="url" value="${esc(d.visiteUrl || '')}">
-      <p class="meta" style="margin-top:8px">Avant validation, le bouton or ouvre le carnet. Après validation, il ouvre la visite 3D et « Carnet » passe dans la barre du bas.</p>
-      <div class="rangee" style="margin-top:14px"><button class="btn-ligne" id="c-ok">Enregistrer</button></div></section>`;
-}
-function premierephrase(t) { t = String(t || '').trim(); const i = t.search(/[.!?](\s|$)/); return (i >= 0 ? t.slice(0, i + 1) : t).slice(0, 220); }
-function lireBrouillon() {
-  const v = id => { const e = document.getElementById(id); return e ? e.value : ''; };
-  const b = S.brouillon; if (!b) return;
-  b.titre = v('st-titre'); b.texte = v('st-texte'); b.delai = v('st-delai'); b.client = v('st-client'); b.echeance = v('st-ech');
-  const pz = document.getElementById('st-pause'); if (pz) b.pause = pz.checked;
-  const r = document.getElementById('st-rep'); if (r) b.reprise = r.value;
-  const a = document.getElementById('st-appele'); if (a) b.appele = a.checked;
-}
-function brancherPhenix(p) {
-  const on = (id, f) => { const e = document.getElementById(id); if (e) e.onclick = f; };
-  on('dec', () => signOut(auth));
-  const r = document.getElementById('rech'); if (r) { r.oninput = () => { S.recherche = r.value; const pos = r.selectionStart; rendrePhenix(); const r2 = document.getElementById('rech'); r2.focus(); try { r2.setSelectionRange(pos, pos); } catch (e) {} }; }
-  document.querySelectorAll('[data-pid]').forEach(b => b.onclick = () => choisirProjet(b.dataset.pid));
-  if (!p) return;
-  on('retour', () => choisirProjet(null));
-  on('apercu', () => { lireBrouillon(); S.apercu = true; S.onglet = 'avancement'; rendreApercu(); });
-  on('acc-ok', async () => {
-    const em = document.getElementById('acc-email').value.trim().toLowerCase();
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) { toast('E-mail incomplet.'); return; }
-    try {
-      await setDoc(doc(db, COL_ACCES, em), { email: em, projetId: String(p.id), at: new Date().toISOString(), par: String(auth.currentUser.email || '').toLowerCase() });
-      if (!S.dossiers[String(p.id)]) {
-        const r1 = STATUTS.find(x => x[0] === 'R1');
-        await sauver(p, { code: 'R1', phase: 0, titre: r1[2], texte: r1[3].replace('[date]', new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })), delai: '', client: r1[5],
-          fil: [{ id: nid(), date: jourISO(), type: 'Étape', titre: 'Votre espace est ouvert', texte: 'Bienvenue ! Vous suivrez ici chaque étape de votre projet.', etape: true }] }, 'Espace ouvert');
-      }
-      const ok = await envoyerLien(em, true);
-      toast(ok ? 'Accès ouvert, lien envoyé à ' + em : 'Accès ouvert. Le lien n’est pas parti : le client peut le demander lui-même depuis l’espace.');
-      journal('acces', String(p.id), 'Accès client ' + em);
-    } catch (e) { console.warn(e); toast('Accès refusé : vérifiez les règles Firestore.'); }
-  });
-  document.querySelectorAll('[data-retirer]').forEach(b => b.onclick = async () => {
-    if (!confirm('Retirer l’accès de ' + b.dataset.retirer + ' ? Il ne pourra plus voir ce dossier.')) return;
-    try { await deleteDoc(doc(db, COL_ACCES, b.dataset.retirer)); toast('Accès retiré'); } catch (e) { toast('Suppression refusée.'); }
-  });
-  const sp = document.getElementById('st-phase'); if (sp) sp.onchange = () => { lireBrouillon(); S.phaseSel = Number(sp.value); rendrePhenix(); };
-  const sc = document.getElementById('st-code'); if (sc) sc.onchange = () => {
-    const x = STATUTS.find(s => s[0] === sc.value); if (!x) return;
-    Object.assign(S.brouillon, { code: x[0], phase: x[1], titre: x[2], texte: x[3], delai: x[4] === '—' ? '' : x[4], client: x[5] ? x[5].charAt(0).toUpperCase() + x[5].slice(1) : '', echeance: '', appele: false });
-    S.phaseSel = x[1]; rendrePhenix();
-  };
-  ['st-titre', 'st-texte', 'st-delai', 'st-client', 'st-ech', 'st-rep'].forEach(id => { const e = document.getElementById(id); if (e) e.onchange = () => { lireBrouillon(); rendrePhenix(); }; });
-  const pz = document.getElementById('st-pause'); if (pz) pz.onchange = () => { lireBrouillon(); rendrePhenix(); };
-  const ap = document.getElementById('st-appele'); if (ap) ap.onchange = () => lireBrouillon();
-  on('st-date-ok', () => {
-    lireBrouillon(); const v = document.getElementById('st-date').value; if (!v) return;
-    const f = new Date(v + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }), b = S.brouillon;
-    ['titre', 'texte', 'delai'].forEach(k => { b[k] = String(b[k] || '').split('[date]').join(f); });
-    if (/reprise/i.test(b.delai) && b.pause) b.reprise = v;
-    rendrePhenix();
-  });
-  on('st-pub', async () => {
-    lireBrouillon(); const b = S.brouillon, st = STATUTS.find(x => x[0] === b.code);
-    if (!b.titre.trim()) { toast('Choisissez un statut ou écrivez un titre.'); return; }
-    if (/\[[^\]]+\]/.test(b.titre + ' ' + b.texte + ' ' + b.delai)) { toast('Remplacez d’abord les mots entre crochets.'); return; }
-    if (st && st[6] && !b.appele) { toast('Appelez le client avant de publier ce statut.'); return; }
-    const d = base(p), changePhase = Number(b.phase) !== Number(d.phase || 0);
-    const ligne = { id: nid(), date: jourISO(), type: b.pause ? 'Pause' : 'Statut', titre: b.titre.trim(), texte: premierephrase(b.texte), etape: changePhase };
-    const ok = await sauver(p, { code: b.code, phase: Number(b.phase), titre: b.titre.trim(), texte: b.texte.trim(), delai: b.delai.trim(), client: b.client.trim(),
-      echeance: b.echeance || '', pause: !!b.pause, reprise: b.pause ? (b.reprise || '') : '', fil: (d.fil || []).concat([ligne]).slice(-120) }, 'Statut publié');
-    if (ok) { S.brouillon = null; S.phaseSel = null; rendrePhenix(); }
-  });
-  on('n-ok', async () => {
-    const t = document.getElementById('n-titre').value.trim() || 'Note du jour', x = document.getElementById('n-texte').value.trim();
-    if (!x) { toast('Écrivez le texte de la note.'); return; }
-    lireBrouillon(); const d = base(p);
-    await sauver(p, { fil: (d.fil || []).concat([{ id: nid(), date: jourISO(), type: 'Note', titre: t, texte: x, etape: false }]).slice(-120) }, 'Note ajoutée au fil');
-  });
-  on('d-ok', async () => {
-    const t = document.getElementById('d-titre').value.trim(), u = document.getElementById('d-url').value.trim();
-    if (!t || !/^https?:\/\//.test(u)) { toast('Il faut un titre et un lien qui commence par https://'); return; }
-    lireBrouillon(); const d = base(p), cat = document.getElementById('d-cat').value;
-    const docs = (d.documents || []).concat([{ id: nid(), cat, titre: t, desc: document.getElementById('d-desc').value.trim(), url: u, date: jourISO() }]);
-    const fil = (d.fil || []).concat([{ id: nid(), date: jourISO(), type: 'Document', titre: 'Nouveau document : ' + t, texte: 'Il est dans vos documents, rubrique ' + cat + '.', etape: false }]).slice(-120);
-    await sauver(p, { documents: docs, fil }, 'Document ajouté');
-  });
-  document.querySelectorAll('[data-supdoc]').forEach(b => b.onclick = async () => {
-    const d = base(p), i = Number(b.dataset.supdoc), x = (d.documents || [])[i]; if (!x) return;
-    if (!confirm('Retirer « ' + x.titre + ' » de l’espace du client ? Le fichier lui-même n’est pas supprimé.')) return;
-    lireBrouillon(); await sauver(p, { documents: d.documents.filter((_, k) => k !== i) }, 'Document retiré');
-  });
-  on('c-ok', async () => {
-    const cu = document.getElementById('c-url').value.trim(), vu = document.getElementById('v-url').value.trim();
-    if ((cu && !/^https?:\/\//.test(cu)) || (vu && !/^https?:\/\//.test(vu))) { toast('Les liens doivent commencer par https://'); return; }
-    lireBrouillon(); const d = base(p), val = document.getElementById('c-val').checked;
-    const patch = { carnetUrl: cu, carnetValide: val, visiteUrl: vu };
-    if (val && !d.carnetValide) patch.fil = (d.fil || []).concat([{ id: nid(), date: jourISO(), type: 'Étape', titre: 'Carnet validé', texte: 'Vos choix sont validés. Merci pour votre confiance !', etape: true }]).slice(-120);
-    await sauver(p, patch, 'Carnet et visite enregistrés');
-  });
+// ═════════ CÔTÉ PHÉNIX : APERÇU SEULEMENT ═════════
+// [Espace client 25/11/2026] Tout se gère dans Phénix Dossier (fiche projet › onglet Espace client).
+// Le bouton « Voir comme le client » ouvre cette page avec ?apercu=<id du projet>.
+function demarrerApercu() {
+  let pid = ''; try { pid = new URLSearchParams(location.search).get('apercu') || ''; } catch (e) {}
+  if (!pid) {
+    $app().innerHTML = `<main class="page" style="padding-top:40px"><div class="marque">PHÉNIX</div>
+      <h1 class="h1" style="margin-top:60px;font-size:36px">Côté Phénix</h1>
+      <p style="font-size:13px;line-height:1.6;color:var(--t3);max-width:380px">L’espace client se gère dans <b style="font-weight:500">Phénix Dossier</b> : fiche du projet, onglet « Espace client ». Le bouton « Voir comme le client » ouvre ici l’aperçu du dossier.</p>
+      <button class="btn-discret" id="dec">Se déconnecter</button></main>`;
+    document.getElementById('dec').onclick = () => signOut(auth); return;
+  }
+  S.apercu = true;
+  unsubs.push(onSnapshot(doc(db, COL_DOS, String(pid)), s => { S.dossier = s.exists() ? s.data() : null; rendreApercu(); },
+    e => { console.warn(e); toast('Aperçu indisponible (règles Firestore).'); }));
 }
 function rendreApercu() {
-  const p = projetSel(); if (!p) { S.apercu = false; rendrePhenix(); return; }
-  const b = S.brouillon || {}, d0 = base(p);
-  const d = Object.assign({}, d0, b.titre ? { code: b.code, phase: Number(b.phase), titre: b.titre, texte: b.texte, delai: b.delai, client: b.client, echeance: b.echeance, pause: b.pause, reprise: b.reprise } : {});
+  const d = S.dossier;
+  if (!d) { $app().innerHTML = `<main class="page" style="padding-top:40px"><div class="marque">PHÉNIX</div><h1 class="h1" style="margin-top:60px;font-size:34px">Rien à montrer</h1><p style="font-size:13px;color:var(--t3)">Ce dossier n’a pas encore d’espace client. Ouvrez l’accès depuis Phénix Dossier.</p></main>`; return; }
   $app().className = '';
   const ong = S.onglet;
-  $app().innerHTML = `<div style="position:sticky;top:0;z-index:30;display:flex;justify-content:space-between;align-items:center;padding:8px 16px;background:var(--bar);border-bottom:.75px solid var(--or);font-size:12px;color:var(--or2)">Aperçu : ce que voit le client<button class="btn-discret" id="fin-apercu" style="min-height:36px;color:var(--or2)">Fermer l’aperçu</button></div>`
+  $app().innerHTML = `<div style="position:sticky;top:0;z-index:30;display:flex;justify-content:space-between;align-items:center;padding:8px 16px;background:var(--bar);border-bottom:.75px solid var(--or);font-size:12px;color:var(--or2)">Aperçu : ce que voit le client<button class="btn-discret" id="fin-apercu" style="min-height:32px;font-size:12px">Fermer</button></div>`
     + (ong === 'documents' ? htmlDocuments(d) : ong === 'fil' ? htmlFil(d) : htmlAvancement(d)) + htmlNav(d);
   brancherClient(d);
-  document.getElementById('fin-apercu').onclick = () => { S.apercu = false; rendrePhenix(); };
+  document.getElementById('fin-apercu').onclick = () => { window.close(); };
 }
 
 // ── démarrage ──

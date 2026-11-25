@@ -6,6 +6,11 @@
  HISTORIQUE DES MODIFICATIONS — phenix_shell.html
 ──────────────────────────────────────────────────────────────────────
  18/11/2026 (2) — [Tâches] La Synthèse 3D peut ouvrir la page Tâches de Dossier (mission « tâche en attente », onglet 'taches' → goto-page).
+ 25/11/2026 — [Espace client] Bouton « Client » sur chaque notification de la cloche (et « 👤 Prévenir le client » dans « À valider ») :
+   publier une note au fil du client ou changer le statut de son espace, sans quitter la notification. Dossier retrouvé tout seul
+   (projetId, devis signé, chantier d'un message d'artisan) ou choisi dans la liste ; statut proposé selon la notification
+   (décennale → attestations d'assurance, devis d'artisan → devis reçus, retard → intervention décalée) ; mots entre crochets à compléter ;
+   texte de note neutre, jamais le message brut. Bibliothèque : phenix_espace_client.js. Repérer : [Espace client].
  18/11/2026 — [Échanges] Réponse proposée sous chaque SMS ou mail à traiter : texte modifiable, « 💬 Envoyer par SMS » (appli Messages du téléphone)
    ou « ✉️ Répondre dans Outlook » (mailto, objet « Re : … »), « ↻ Autre proposition » / « ✍️ Proposer une réponse » (IA via le proxy). Répondu → traité.
    Repérer : [Réponse 18/11/2026].
@@ -356,6 +361,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 
 <div id="echBack" role="dialog" aria-modal="true" aria-label="Échanges reçus"><div class="eh"><b>📥 Échanges reçus — SMS et mails à traiter</b><button style="background:#fff;color:#1b2d5b;border:0;border-radius:8px;padding:6px 12px;font-weight:700;cursor:pointer" onclick="fermerEchanges()">Fermer ✕</button></div><div class="ef" id="echFiltres"></div><div class="el" id="echListe"></div></div>
 <div id="valBack" role="dialog" aria-modal="true" aria-label="Valider un message reçu"><div id="valBox"></div></div>
+<script src="phenix_espace_client.js"></script><!-- [Espace client] bibliothèque des statuts (partagée avec Dossier) -->
 <div class="toast" id="toast"></div>
 
 <script type="module">
@@ -525,18 +531,18 @@ window._NC = NC;
 function renderNC() {
   const bell = document.getElementById('ncBell'), cnt = document.getElementById('ncCount'), pan = document.getElementById('ncPanel'); if (!bell || !pan) return;
   const items = [];
-  NC.cli.forEach(x => items.push({ ico: '👤', t: x.t, h: 'Client · ' + (x.nom || 'projet'), txt: (x.who ? x.who + ' : ' : '') + (x.text || ''), go: 'msg', conv: 'cli|' + x.pid, col: 'phenix_notifs_client', id: x._id, patch: { lu: true } }));
-  NC.art.forEach(x => items.push({ ico: '🧱', t: x.date, h: 'Message d\'artisan', txt: x.texte || '', go: 'msg', conv: x.chantierId + '|' + x.intervenantId, col: 'phenix_ch_messages', id: x._id, patch: { luPhenix: true } }));
-  NC.devis.forEach(x => items.push({ ico: x.projet ? '📝' : '📄', t: x.date || x.at, h: (x.projet ? 'Devis signé · ' : 'Devis · ') + (x.client || ''), txt: x.projet ? (x.vers === 'accepte' ? 'signé (dossier déjà créé)' : (x.vers || '')) + ' — cliquer pour ouvrir le contrat' : 'statut → ' + (x.vers || ''), go: x.projet ? 'contrat' : 'espace', order: x.projet ? { source: 'phenix-shell', action: 'ouvrir-contrat', projet: x.projet } : null, col: 'phenix_notifs', id: x._id, patch: { lu: true } }));
-  NC.taches.forEach(x => items.push({ ico: '✅', t: x.quand || x.date, h: 'Tâche', txt: (String(x.par || '').split('@')[0] || 'L\'assistante') + ' · « ' + (x.titre || '') + ' »', go: 'dossier', col: 'phenix_notifs_taches', id: x._id, patch: { lu: true } }));
-  NC.ent.filter(x => x.type === 'rdv_calendly').forEach(x => items.push({ ico: x.rdv && x.rdv.annule ? '✕' : '📅', t: x.recuLe || x.creeLe, h: (x.rdv && x.rdv.annule ? 'Rendez-vous annulé · ' : x.rdv && x.rdv.deplace ? 'Rendez-vous déplacé · ' : 'Nouveau rendez-vous · ') + (x.deNom || 'client'), txt: _rdvQuand(x) + (x.canal ? ' · via ' + x.canal : '') + ((x.manque || []).length && !(x.rdv && x.rdv.annule) ? ' · ⚠ manque : ' + x.manque.join(', ') : ''), go: 'valider', valId: x._id, col: 'phenix_entrants', id: x._id, patch: { statut: 'lu' } }));
+  NC.cli.forEach(x => items.push({ raw: x, kind: 'cli', ico: '👤', t: x.t, h: 'Client · ' + (x.nom || 'projet'), txt: (x.who ? x.who + ' : ' : '') + (x.text || ''), go: 'msg', conv: 'cli|' + x.pid, col: 'phenix_notifs_client', id: x._id, patch: { lu: true } }));
+  NC.art.forEach(x => items.push({ raw: x, kind: 'art', ico: '🧱', t: x.date, h: 'Message d\'artisan', txt: x.texte || '', go: 'msg', conv: x.chantierId + '|' + x.intervenantId, col: 'phenix_ch_messages', id: x._id, patch: { luPhenix: true } }));
+  NC.devis.forEach(x => items.push({ raw: x, kind: 'devis', ico: x.projet ? '📝' : '📄', t: x.date || x.at, h: (x.projet ? 'Devis signé · ' : 'Devis · ') + (x.client || ''), txt: x.projet ? (x.vers === 'accepte' ? 'signé (dossier déjà créé)' : (x.vers || '')) + ' — cliquer pour ouvrir le contrat' : 'statut → ' + (x.vers || ''), go: x.projet ? 'contrat' : 'espace', order: x.projet ? { source: 'phenix-shell', action: 'ouvrir-contrat', projet: x.projet } : null, col: 'phenix_notifs', id: x._id, patch: { lu: true } }));
+  NC.taches.forEach(x => items.push({ raw: x, kind: 'taches', ico: '✅', t: x.quand || x.date, h: 'Tâche', txt: (String(x.par || '').split('@')[0] || 'L\'assistante') + ' · « ' + (x.titre || '') + ' »', go: 'dossier', col: 'phenix_notifs_taches', id: x._id, patch: { lu: true } }));
+  NC.ent.filter(x => x.type === 'rdv_calendly').forEach(x => items.push({ raw: x, kind: 'ent', ico: x.rdv && x.rdv.annule ? '✕' : '📅', t: x.recuLe || x.creeLe, h: (x.rdv && x.rdv.annule ? 'Rendez-vous annulé · ' : x.rdv && x.rdv.deplace ? 'Rendez-vous déplacé · ' : 'Nouveau rendez-vous · ') + (x.deNom || 'client'), txt: _rdvQuand(x) + (x.canal ? ' · via ' + x.canal : '') + ((x.manque || []).length && !(x.rdv && x.rdv.annule) ? ' · ⚠ manque : ' + x.manque.join(', ') : ''), go: 'valider', valId: x._id, col: 'phenix_entrants', id: x._id, patch: { statut: 'lu' } }));
   NC.ent.filter(x => x.type !== 'rdv_calendly').forEach(x => x.type === 'echange'
-    ? items.push({ ico: x.source === 'sms' ? '💬' : '✉️', t: x.recuLe || x.creeLe, h: (x.source === 'sms' ? 'SMS · ' : 'Mail · ') + _nomExp(x) + (x.expediteurType === 'client' ? ' (client)' : '') + (x.urgence === 'haute' ? ' · urgent' : ''), txt: (CLASSE_LIB[x.classe] ? CLASSE_LIB[x.classe] + ' — ' : '') + _txtRep(x, x.resume || x.objet || ''), go: 'valider', valId: x._id, col: 'phenix_entrants', id: x._id, patch: { statut: 'lu' } })
-    : items.push({ ico: x.source === 'sms' ? '💬' : x.resultat === 'bloquant' ? '⚠️' : x.resultat === 'conforme' ? '📄' : '📬', t: x.recuLe || x.creeLe, h: (x.source === 'sms' ? 'Reçu par SMS · ' : 'Reçu par mail · ') + (x.artisanNom || x.de || 'artisan'), txt: (x.titre || 'Nouveau message') + (x.objet ? ' — « ' + x.objet + ' »' : ''), go: x.resultat === 'a_rattacher' ? 'valider' : 'annuaire', valId: x._id, col: 'phenix_entrants', id: x._id, patch: { statut: 'lu' } }));
+    ? items.push({ raw: x, kind: 'ent', ico: x.source === 'sms' ? '💬' : '✉️', t: x.recuLe || x.creeLe, h: (x.source === 'sms' ? 'SMS · ' : 'Mail · ') + _nomExp(x) + (x.expediteurType === 'client' ? ' (client)' : '') + (x.urgence === 'haute' ? ' · urgent' : ''), txt: (CLASSE_LIB[x.classe] ? CLASSE_LIB[x.classe] + ' — ' : '') + _txtRep(x, x.resume || x.objet || ''), go: 'valider', valId: x._id, col: 'phenix_entrants', id: x._id, patch: { statut: 'lu' } })
+    : items.push({ raw: x, kind: 'ent', ico: x.source === 'sms' ? '💬' : x.resultat === 'bloquant' ? '⚠️' : x.resultat === 'conforme' ? '📄' : '📬', t: x.recuLe || x.creeLe, h: (x.source === 'sms' ? 'Reçu par SMS · ' : 'Reçu par mail · ') + (x.artisanNom || x.de || 'artisan'), txt: (x.titre || 'Nouveau message') + (x.objet ? ' — « ' + x.objet + ' »' : ''), go: x.resultat === 'a_rattacher' ? 'valider' : 'annuaire', valId: x._id, col: 'phenix_entrants', id: x._id, patch: { statut: 'lu' } }));
   items.sort((a, b) => String(b.t || '').localeCompare(String(a.t || '')));
   const n = items.length;
   bell.style.display = ''; cnt.textContent = n > 9 ? '9+' : String(n); cnt.style.display = n ? 'flex' : 'none';
-  pan.innerHTML = '<div class="nc-h"><span>Notifications</span><span>' + (n ? '<a href="#" onclick="ncToutLu(event)" style="color:#2f6fc0;font-weight:600;text-decoration:none">Tout marquer lu</a>' : '') + '</span></div>' + (n ? items.slice(0, 40).map((x, i) => '<div class="nc-i" onclick="ncOpen(' + i + ')"><span>' + x.ico + '</span><div style="min-width:0;flex:1"><b>' + _ncEsc(x.h) + '</b>' + _ncEsc(String(x.txt).slice(0, 140)) + '</div><button title="Marquer comme lu" aria-label="Marquer comme lu" onclick="ncLu(event,' + i + ')" style="border:1px solid #cfd8ea;background:#fff;color:#2f6fc0;border-radius:7px;padding:3px 8px;cursor:pointer;font-size:12px;font-weight:700;flex:none">✓ Lu</button></div>').join('') : '<div class="nc-e">Rien de nouveau.</div>') +
+  pan.innerHTML = '<div class="nc-h"><span>Notifications</span><span>' + (n ? '<a href="#" onclick="ncToutLu(event)" style="color:#2f6fc0;font-weight:600;text-decoration:none">Tout marquer lu</a>' : '') + '</span></div>' + (n ? items.slice(0, 40).map((x, i) => '<div class="nc-i" onclick="ncOpen(' + i + ')"><span>' + x.ico + '</span><div style="min-width:0;flex:1"><b>' + _ncEsc(x.h) + '</b>' + _ncEsc(String(x.txt).slice(0, 140)) + '</div><button title="Prévenir le client : note ou statut dans son espace" aria-label="Prévenir le client" onclick="ncClient(event,' + i + ')" style="border:1px solid #cfd8ea;background:#fff;color:#1b2d5b;border-radius:7px;padding:3px 8px;cursor:pointer;font-size:12px;font-weight:700;flex:none;margin-right:4px">Client</button><button title="Marquer comme lu" aria-label="Marquer comme lu" onclick="ncLu(event,' + i + ')" style="border:1px solid #cfd8ea;background:#fff;color:#2f6fc0;border-radius:7px;padding:3px 8px;cursor:pointer;font-size:12px;font-weight:700;flex:none">✓ Lu</button></div>').join('') : '<div class="nc-e">Rien de nouveau.</div>') +
     '<div style="padding:10px 14px;border-top:1px solid #e6eaf2;font-size:12px;color:#6b7a99">' +
     (_convAttente == null ? '' : (_convAttente ? '⏳ ' + _convAttente + ' devis signé(s) en attente de conversion en dossier.' : '✓ Aucun devis signé en attente de conversion.')) +
     '<br><a href="#" onclick="ncTester(event)" style="color:#2f6fc0;font-weight:600;text-decoration:none">🔧 Envoyer une notification de test</a></div>';
@@ -562,6 +568,134 @@ window.ncOpen = function(i) {
   if (_deja) { try { shellCurrentFrame.contentWindow.postMessage(x.order, '*'); } catch (e) {} shellPendingOrder = null; }
   if (x.go === 'msg') [500, 1600, 3600].forEach(t => setTimeout(() => { try { shellCurrentFrame.contentWindow.postMessage({ source: 'phenix-shell', action: 'goto-page', page: 'messages', conv: x.conv || null }, '*'); } catch (e) {} }, t));
 };
+
+// ═══ [Espace client] 25/11/2026 — « Prévenir le client » depuis chaque notification ═══
+// Sur chaque notification de la cloche (et dans « À valider ») : publier une note au fil du client ou changer le statut de son espace.
+// Bibliothèque des statuts : phenix_espace_client.js (partagée avec Dossier). Écrit dans phenix_client_dossiers/{id du projet}.
+// Rien n'est publié sans clic. Le texte proposé est neutre : jamais le contenu brut du message reçu, jamais de montant.
+const PEC = { src: null, pid: '', code: '', vals: {}, edit: null, d: null, ouvert: false };
+const _pecProjet = pid => (projets || []).find(p => String(p.id) === String(pid));
+const _pecLire = async pid => { const s = await getDoc(doc(db, 'phenix_client_dossiers', String(pid))); return s.exists() ? s.data() : null; };
+const _pecEcrire = (pid, d) => setDoc(doc(db, 'phenix_client_dossiers', String(pid)), d);
+// Ce que l'on propose selon la notification : statut suggéré (facultatif) et note neutre
+function _pecSuggestion(x) {
+  const r = x.raw || {}, cl = r.classe || '', ty = r.type || x.kind || '';
+  if (ty === 'decennale' || cl === 'decennale') return { code: 'P1', titre: 'Attestation d’assurance reçue', texte: 'Nous avons reçu l’attestation d’assurance décennale d’un artisan de votre projet. Nous continuons à rassembler celles des autres.' };
+  if (cl === 'devis_facture' && r.expediteurType !== 'client') return { code: 'C3', titre: 'Nouveau devis reçu', texte: 'Un artisan vient de nous transmettre son devis. Nous le vérifions ligne par ligne avant de l’intégrer à votre chiffrage.' };
+  if (cl === 'retard_probleme') return { code: 'X9', titre: 'Information sur votre projet', texte: '' };
+  if (ty === 'rdv_calendly') return { code: '', titre: 'Rendez-vous noté', texte: 'Votre rendez-vous est bien noté. À très bientôt !' };
+  if (x.kind === 'devis' && r.projet) return { code: '', titre: 'Merci pour votre confiance', texte: 'Votre devis signé est bien reçu. Nous ouvrons votre dossier et revenons vers vous très vite.' };
+  if (x.kind === 'art') return { code: '', titre: 'Nouvelles de votre chantier', texte: '' };
+  return { code: '', titre: 'Note du jour', texte: '' };
+}
+async function _pecProjetDe(x) {
+  const r = x.raw || {};
+  let pid = r.projetId || r.pid || (r.projet && r.projet.projetId) || '';
+  if (!pid && r.chantierId) { try { const c = await getDoc(doc(db, 'phenix_ch_chantiers', String(r.chantierId))); if (c.exists()) pid = c.data().projetId || ''; } catch (e) {} }
+  return pid ? String(pid) : '';
+}
+window.ncClient = async function(ev, i) {
+  if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+  const x = (NC._items || [])[i]; if (!x) return;
+  document.getElementById('ncPanel').classList.remove('open');
+  _pecOuvrir(x);
+};
+window.ncClientEntrant = function(id) {
+  const r = _echTrouve(id); if (!r) return;
+  _pecOuvrir({ raw: r, kind: 'ent', h: (r.source === 'sms' ? 'SMS · ' : 'Mail · ') + _nomExp(r), col: 'phenix_entrants', id: r._id, patch: { statut: 'lu' } });
+};
+async function _pecOuvrir(x) {
+  const sg = _pecSuggestion(x);
+  Object.assign(PEC, { src: x, pid: await _pecProjetDe(x), code: sg.code, vals: {}, edit: null, d: null, note: { titre: sg.titre, texte: sg.texte }, ouvert: true });
+  await _pecChargerDossier();
+  _pecDessiner();
+  document.getElementById('valBack').classList.add('open');
+}
+async function _pecChargerDossier() { PEC.d = null; if (!PEC.pid) return; try { PEC.d = await _pecLire(PEC.pid); } catch (e) { console.warn('Espace client :', e && e.code); PEC.d = undefined; } }
+function _pecStatutCalcule() {
+  if (!PEC.code || !window.PhenixEspaceClient) return null;
+  const st = PhenixEspaceClient.remplir(PEC.code, PEC.vals, PEC.d ? PEC.d.phase : 0);
+  if (st && PEC.edit) Object.assign(st, PEC.edit);
+  if (st) st.manque = PhenixEspaceClient.crochets(st.titre + ' ' + st.texte + ' ' + st.delai);
+  return st;
+}
+function _pecDessiner() {
+  const box = document.getElementById('valBox'); if (!box) return;
+  if (!window.PhenixEspaceClient) { box.innerHTML = '<div class="vb">Bibliothèque de l’espace client introuvable (phenix_espace_client.js).</div>'; return; }
+  const E = _ncEsc, x = PEC.src || {}, p = _pecProjet(PEC.pid), d = PEC.d;
+  const liste = (projets || []).slice().sort((a, b) => String(a.client || a.nom || '').localeCompare(String(b.client || b.nom || ''), 'fr'));
+  const st = _pecStatutCalcule(), s0 = PEC.code ? PhenixEspaceClient.statut(PEC.code) : null;
+  const phase = PEC.code ? (/^X/.test(PEC.code) ? 'x' : s0[1]) : (PEC.phaseSel != null ? PEC.phaseSel : (d ? Number(d.phase) || 0 : 0));
+  const ph = PEC.phaseSel != null ? PEC.phaseSel : phase;
+  const manque = st ? st.manque.filter(m => m !== '[date]') : [];
+  const etat = !PEC.pid ? '<div style="margin-top:6px;color:#7a4a00">⚠ Choisissez le dossier du client.</div>'
+    : d === undefined ? '<div style="margin-top:6px;color:#b3261e">⚠ Espace client illisible : règles Firestore (phenix_client_dossiers) ?</div>'
+    : d ? '<div style="margin-top:6px;color:#2e7d32">✓ Espace ouvert · statut actuel : <b>' + E(d.titre || '—') + '</b></div>'
+    : '<div style="margin-top:6px;color:#6b7a99">Espace pas encore ouvert pour ce dossier : ce que vous publiez sera visible dès son ouverture (Dossier › fiche projet › Espace client).</div>';
+  box.innerHTML =
+    '<div class="vh"><div><b>👤 Prévenir le client</b><br><span style="font-size:12px;color:#6b7a99">Depuis : ' + E(x.h || 'notification') + '</span></div><button class="vbtn" onclick="fermerValidation()" aria-label="Fermer">✕</button></div>' +
+    '<div class="vb"><label for="pec-p">Dossier</label><select id="pec-p"><option value="">Choisir le dossier…</option>' +
+      liste.map(q => '<option value="' + E(q.id) + '"' + (String(q.id) === String(PEC.pid) ? ' selected' : '') + '>' + E([q.client, q.nom && q.nom !== q.client ? q.nom : ''].filter(Boolean).join(' — ') || ('#' + q.id)) + '</option>').join('') + '</select>' + etat +
+    '<div style="font-size:12px;color:#6b7a99;margin:8px 0 12px">Le client le voit aussitôt dans son espace (Avancement et Le fil). Aucun mail ni SMS ne part.</div>' +
+    '<div class="vact"><b>Note au fil du client</b><label for="pec-nt">Titre</label><input id="pec-nt" value="' + E(PEC.note.titre) + '">' +
+      '<label for="pec-nx">Texte</label><textarea id="pec-nx" rows="3" placeholder="Une information simple, dans l’esprit Phénix.">' + E(PEC.note.texte) + '</textarea>' +
+      '<div style="margin-top:8px"><button class="vbtn p" id="pec-note">Publier la note</button></div></div>' +
+    '<div class="vact"><b>Changer le statut</b>' + (s0 && PEC.src && _pecSuggestion(PEC.src).code === PEC.code ? ' <span style="font-weight:400;color:#6b7a99">(proposé pour cette notification)</span>' : '') +
+      '<div class="vrow"><div><label for="pec-ph">Phase</label><select id="pec-ph">' + EC_PHASES_LONG.map((t, k) => '<option value="' + k + '"' + (ph === k ? ' selected' : '') + '>' + (k + 1) + '. ' + E(t) + '</option>').join('') + '<option value="x"' + (ph === 'x' ? ' selected' : '') + '>Pauses et imprévus</option></select></div>' +
+      '<div><label for="pec-c">Statut</label><select id="pec-c"><option value="">Ne pas changer</option>' + EC_STATUTS.filter(s => ph === 'x' ? /^X/.test(s[0]) : (s[1] === ph && !/^X/.test(s[0]))).map(s => '<option value="' + s[0] + '"' + (s[0] === PEC.code ? ' selected' : '') + '>' + s[0] + ' · ' + E(s[2]) + (s[6] ? ' ⚠' : '') + '</option>').join('') + '</select></div></div>' +
+      (st ? (/\[date\]/.test(s0[2] + s0[3] + s0[4]) ? '<label for="pec-date">Date</label><input type="date" id="pec-date" value="' + E(PEC.vals.date || _jour()) + '">' : '') +
+        manque.map((m, k) => '<label for="pec-v' + k + '">À compléter : ' + E(m) + '</label><input id="pec-v' + k + '" data-pec-cle="' + E(m) + '" value="' + E(PEC.vals[m] || '') + '">').join('') +
+        '<label for="pec-t">Titre lu par le client</label><input id="pec-t" value="' + E(st.titre) + '">' +
+        '<label for="pec-x">Pourquoi cela prend-il ce temps ?</label><textarea id="pec-x" rows="4">' + E(st.texte) + '</textarea>' +
+        '<div class="vrow"><div><label for="pec-dl">Délai</label><input id="pec-dl" value="' + E(st.delai) + '"></div><div><label for="pec-cl">De votre côté</label><input id="pec-cl" value="' + E(st.client) + '"></div></div>' +
+        (st.pause ? '<label for="pec-rep">Date de reprise</label><input type="date" id="pec-rep" value="' + E(PEC.vals.reprise || '') + '">' : '') +
+        (st.appeler ? '<label style="display:flex;gap:8px;align-items:center;color:#b3261e;font-weight:700"><input type="checkbox" id="pec-app" style="width:18px;height:18px"> ⚠ J’ai appelé le client avant de publier</label>' : '') +
+        '<div style="margin-top:8px"><button class="vbtn p" id="pec-st">Publier le statut</button></div>' : '<div style="font-size:12px;color:#6b7a99;margin-top:6px">Choisissez un statut pour le préparer.</div>') + '</div>' +
+    (x.col && x.id ? '<label style="display:flex;gap:8px;align-items:center;font-weight:400"><input type="checkbox" id="pec-lu" checked style="width:18px;height:18px"> Marquer la notification comme lue après publication</label>' : '') +
+    '</div>';
+  _pecBrancher();
+}
+function _pecLireChamps() {
+  const v = id => { const e = document.getElementById(id); return e ? e.value : null; };
+  const nt = v('pec-nt'), nx = v('pec-nx'); if (nt != null) PEC.note = { titre: nt, texte: nx || '' };
+  const dt = v('pec-date'); if (dt) PEC.vals.date = dt;
+  const rp = v('pec-rep'); if (rp != null) PEC.vals.reprise = rp;
+  document.querySelectorAll('[data-pec-cle]').forEach(e => { PEC.vals[e.dataset.pecCle] = e.value; });
+  if (document.getElementById('pec-t')) PEC.edit = { titre: v('pec-t'), texte: v('pec-x'), delai: v('pec-dl'), client: v('pec-cl') };
+}
+function _pecBrancher() {
+  const on = (id, ev, f) => { const e = document.getElementById(id); if (e) e[ev] = f; };
+  on('pec-p', 'onchange', async e => { _pecLireChamps(); PEC.pid = e.target.value; PEC.edit = null; await _pecChargerDossier(); _pecDessiner(); });
+  on('pec-ph', 'onchange', e => { _pecLireChamps(); PEC.phaseSel = e.target.value === 'x' ? 'x' : Number(e.target.value); PEC.code = ''; PEC.edit = null; _pecDessiner(); });
+  on('pec-c', 'onchange', e => { _pecLireChamps(); PEC.code = e.target.value; PEC.edit = null; PEC.phaseSel = null; _pecDessiner(); });
+  // une valeur à compléter ou la date : on recalcule le texte (les retouches du titre et du texte repartent du modèle)
+  ['pec-date'].concat([...document.querySelectorAll('[data-pec-cle]')].map(e => e.id)).forEach(id => on(id, 'onchange', () => { _pecLireChamps(); PEC.edit = null; _pecDessiner(); }));
+  const apres = async (libelle) => {
+    const lu = document.getElementById('pec-lu');
+    if (lu && lu.checked && PEC.src && PEC.src.col) _ncMarquer(PEC.src);
+    try { window.phenixJournal && window.phenixJournal('espace-client', 'maj', '#' + PEC.pid, libelle, { projetId: PEC.pid }); } catch (e) {}
+    await _pecChargerDossier(); _pecDessiner();
+  };
+  const verif = () => { const p = _pecProjet(PEC.pid); if (!p) { toast('⚠️ Choisissez le dossier du client.'); return null; } return p; };
+  on('pec-note', 'onclick', async e => {
+    _pecLireChamps(); const p = verif(); if (!p) return;
+    if (!String(PEC.note.texte || '').trim()) { toast('⚠️ Écrivez le texte de la note.'); return; }
+    e.target.disabled = true;
+    try { await PhenixEspaceClient.publier({ lire: _pecLire, ecrire: _pecEcrire, projet: p, note: { titre: PEC.note.titre.trim() || 'Note du jour', texte: PEC.note.texte.trim() }, par: _moi() });
+      toast('✅ Note publiée dans l’espace de ' + (p.client || p.nom || 'votre client')); PEC.note = { titre: 'Note du jour', texte: '' }; await apres('Note au fil'); }
+    catch (er) { console.warn(er); toast('⚠️ Publication refusée : règles Firestore (phenix_client_dossiers) ?'); e.target.disabled = false; }
+  });
+  on('pec-st', 'onclick', async e => {
+    _pecLireChamps(); const p = verif(); if (!p) return; const st = _pecStatutCalcule(); if (!st) return;
+    if (st.manque.length) { toast('⚠️ Complétez d’abord : ' + st.manque.join(', ')); return; }
+    if (st.appeler && !(document.getElementById('pec-app') || {}).checked) { toast('⚠️ Appelez le client avant de publier ce statut.'); return; }
+    if (st.pause) st.reprise = PEC.vals.reprise || '';
+    e.target.disabled = true;
+    try { await PhenixEspaceClient.publier({ lire: _pecLire, ecrire: _pecEcrire, projet: p, statut: st, auto: false, par: _moi() });
+      toast('✅ Statut « ' + st.titre + ' » publié pour ' + (p.client || p.nom || 'votre client')); PEC.code = ''; PEC.edit = null; PEC.vals = {}; await apres('Statut ' + st.code + ' · ' + st.titre); }
+    catch (er) { console.warn(er); toast('⚠️ Publication refusée : règles Firestore (phenix_client_dossiers) ?'); e.target.disabled = false; }
+  });
+}
 
 // ═══ [Échanges] SMS et mails reçus d'artisans et de clients : lecture IA faite côté serveur (phenix_entrants) ═══
 // Page « Échanges » : tout ce qui est à traiter / à répondre. Un clic ouvre « À valider » : l'IA propose, Maxime valide d'un clic.
@@ -788,7 +922,7 @@ window.ouvrirValidation = async function(id) {
     (_inconnuEff(x) || x.probable ? await _blocInconnu(x) : '') +
     '<div class="vact"><b>Ajouter une tâche libre</b><label>Titre</label><input id="vlt" placeholder="Ex. : Rappeler cet artisan"><div class="vrow"><div><label>Assigner à</label><select id="vla">' + opts + '</select></div><div><label>Pour le</label><input type="date" id="vlj"></div></div><div style="margin-top:8px"><button class="vbtn" onclick="validerAction(-1)">Créer la tâche</button></div></div>' +
     (precedents ? '<div style="font-weight:700;margin:6px 0 2px">Échanges précédents avec cette personne</div>' + precedents : '') +
-    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">' + (x.projetId ? '<button class="vbtn" onclick="validerOuvrirDossier()">Ouvrir le dossier</button>' : '') +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">' + (x.projetId ? '<button class="vbtn" onclick="validerOuvrirDossier()">Ouvrir le dossier</button>' : '') + '<button class="vbtn" onclick="ncClientEntrant(\'' + _ncEsc(x._id) + '\')">👤 Prévenir le client</button>' +
     (_estATraiter(x) ? '<button class="vbtn p" onclick="validerTermine()">✓ Lu — rien à faire, retirer des à traiter</button>' : '<button class="vbtn" onclick="validerRouvrir()">Remettre à traiter</button>') + '</div></div>';
   document.getElementById('valBack').classList.add('open');
 };
