@@ -8,6 +8,7 @@
  25/11/2026 — [Fiche artisan] Message d'un expéditeur inconnu : bouton « ➕ Créer une fiche artisan » (préremplie d'après la signature :
    entreprise, téléphone, ville, SIRET, métier deviné ; tout modifiable). Le mail est relu ensuite si ses PDF n'ont pas été lus.
  18/11/2026 (2) — [Tâches] La Synthèse 3D peut ouvrir la page Tâches de Dossier (mission « tâche en attente », onglet 'taches' → goto-page).
+ 25/11/2026 — [Espace client] Correctif : « Espace ouvert » seulement si un accès client existe (phenix_client_acces) ; sinon « Pas encore d'accès client · statut préparé ».
  25/11/2026 — [Espace client] Synthèse 3D › fiche d'une parcelle › « 👤 Espace client » (message 'espace-client') : la fenêtre Espace client
    s'ouvre par-dessus la 3D (statut actuel, note, statut) ; « ouvrir la fiche › » mène à l'onglet Espace client de Dossier.
  25/11/2026 — [Espace client] Bouton « Client » sur chaque notification de la cloche (et « 👤 Prévenir le client » dans « À valider ») :
@@ -626,7 +627,12 @@ async function _pecOuvrir(x) {
   _pecDessiner();
   document.getElementById('valBack').classList.add('open');
 }
-async function _pecChargerDossier() { PEC.d = null; if (!PEC.pid) return; try { PEC.d = await _pecLire(PEC.pid); } catch (e) { console.warn('Espace client :', e && e.code); PEC.d = undefined; } }
+async function _pecChargerDossier() {
+  PEC.d = null; PEC.acces = []; if (!PEC.pid) return;
+  try { PEC.d = await _pecLire(PEC.pid); } catch (e) { console.warn('Espace client :', e && e.code); PEC.d = undefined; }
+  // [Espace client 25/11/2026] l'espace n'est « ouvert » que si un accès client existe (phenix_client_acces), pas seulement un statut préparé par la checklist
+  try { const q = await getDocs(query(collection(db, 'phenix_client_acces'), where('projetId', '==', String(PEC.pid)))); q.forEach(x => PEC.acces.push(x.data().email || x.id)); } catch (e) { console.warn('Accès client :', e && e.code); PEC.acces = null; }
+}
 function _pecStatutCalcule() {
   if (!PEC.code || !window.PhenixEspaceClient) return null;
   const st = PhenixEspaceClient.remplir(PEC.code, PEC.vals, PEC.d ? PEC.d.phase : 0);
@@ -645,13 +651,13 @@ function _pecDessiner() {
   const manque = st ? st.manque.filter(m => m !== '[date]') : [];
   const etat = !PEC.pid ? '<div style="margin-top:6px;color:#7a4a00">⚠ Choisissez le dossier du client.</div>'
     : d === undefined ? '<div style="margin-top:6px;color:#b3261e">⚠ Espace client illisible : règles Firestore (phenix_client_dossiers) ?</div>'
-    : d ? '<div style="margin-top:6px;color:#2e7d32">✓ Espace ouvert · statut actuel : <b>' + E(d.titre || '—') + '</b></div>'
-    : '<div style="margin-top:6px;color:#6b7a99">Espace pas encore ouvert pour ce dossier : ce que vous publiez sera visible dès son ouverture (Dossier › fiche projet › Espace client).</div>';
+    : (PEC.acces && PEC.acces.length) ? '<div style="margin-top:6px;color:#2e7d32">✓ Espace ouvert pour ' + E(PEC.acces.join(', ')) + (d && d.titre ? ' · statut actuel : <b>' + E(d.titre) + '</b>' : '') + '</div>'
+    : '<div style="margin-top:6px;color:#6b7a99">Pas encore d’accès client pour ce dossier' + (d && d.titre ? ' · statut préparé : <b>' + E(d.titre) + '</b>' : '') + '. Ce que vous publiez sera visible dès l’ouverture de l’accès (bouton « ouvrir la fiche » ci-dessous).</div>';
   box.innerHTML =
     '<div class="vh"><div><b>👤 ' + (x.kind === 'synthese' ? 'Espace client' : 'Prévenir le client') + '</b><br><span style="font-size:12px;color:#6b7a99">Depuis : ' + E(x.h || 'notification') + '</span></div><button class="vbtn" onclick="fermerValidation()" aria-label="Fermer">✕</button></div>' +
     '<div class="vb"><label for="pec-p">Dossier</label><select id="pec-p"><option value="">Choisir le dossier…</option>' +
       liste.map(q => '<option value="' + E(q.id) + '"' + (String(q.id) === String(PEC.pid) ? ' selected' : '') + '>' + E([q.client, q.nom && q.nom !== q.client ? q.nom : ''].filter(Boolean).join(' — ') || ('#' + q.id)) + '</option>').join('') + '</select>' + etat +
-    '<div style="font-size:12px;color:#6b7a99;margin:8px 0 12px">Le client le voit aussitôt dans son espace (Avancement et Le fil). Aucun mail ni SMS ne part.</div>' +
+    '<div style="font-size:12px;color:#6b7a99;margin:8px 0 12px">' + ((PEC.acces && PEC.acces.length) ? 'Le client le voit aussitôt dans son espace (Avancement et Le fil). ' : '') + 'Aucun mail ni SMS ne part.</div>' +
     '<div class="vact"><b>Note au fil du client</b><label for="pec-nt">Titre</label><input id="pec-nt" value="' + E(PEC.note.titre) + '">' +
       '<label for="pec-nx">Texte</label><textarea id="pec-nx" rows="3" placeholder="Une information simple, dans l’esprit Phénix.">' + E(PEC.note.texte) + '</textarea>' +
       '<div style="margin-top:8px"><button class="vbtn p" id="pec-note">Publier la note</button></div></div>' +
@@ -666,7 +672,7 @@ function _pecDessiner() {
         (st.pause ? '<label for="pec-rep">Date de reprise</label><input type="date" id="pec-rep" value="' + E(PEC.vals.reprise || '') + '">' : '') +
         (st.appeler ? '<label style="display:flex;gap:8px;align-items:center;color:#b3261e;font-weight:700"><input type="checkbox" id="pec-app" style="width:18px;height:18px"> ⚠ J’ai appelé le client avant de publier</label>' : '') +
         '<div style="margin-top:8px"><button class="vbtn p" id="pec-st">Publier le statut</button></div>' : '<div style="font-size:12px;color:#6b7a99;margin-top:6px">Choisissez un statut pour le préparer.</div>') + '</div>' +
-    (PEC.pid ? '<div style="margin:0 0 10px"><button class="vbtn" onclick="pecFicheComplete()">Accès, documents, carnet et visite 3D : ouvrir la fiche ›</button></div>' : '') +
+    (PEC.pid ? '<div style="margin:0 0 10px"><button class="vbtn" onclick="pecFicheComplete()">' + ((PEC.acces && PEC.acces.length) ? 'Accès, documents, carnet et visite 3D : ouvrir la fiche ›' : 'Ouvrir l’accès du client (et documents, carnet) : ouvrir la fiche ›') + '</button></div>' : '') +
     (x.col && x.id ? '<label style="display:flex;gap:8px;align-items:center;font-weight:400"><input type="checkbox" id="pec-lu" checked style="width:18px;height:18px"> Marquer la notification comme lue après publication</label>' : '') +
     '</div>';
   _pecBrancher();
