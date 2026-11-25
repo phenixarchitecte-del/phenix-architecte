@@ -5,6 +5,8 @@
 ══════════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_dossier.html
 ──────────────────────────────────────────────────────────────────────
+ 25/11/2026 — [Checklist] Mission de la Synthèse › checklist : attente des projets portée à ~60 s et retour automatique sur la page Checklist
+   si le chargement du module ramène au tableau de bord (on arrivait parfois sur Dossier au lieu de la checklist).
  25/11/2026 — [Espace client] Ordre du shell « open-projet » avec onglet 'client' : la fiche s'ouvre sur l'onglet Espace client (bouton de la Synthèse 3D).
  25/11/2026 — [Espace client] Tout l'espace client se gère depuis la fiche projet, onglet « Espace client » (plus de module à part) :
    accès du client par lien magique (e-mail repris de la fiche), statut affiché, note au fil, documents (plans et photos des comptes rendus
@@ -11673,7 +11675,7 @@ window.addEventListener('message', (ev) => {
   function tryRun(fn, tries) {
     tries = tries || 0;
     const ready = stateDossier && Array.isArray(stateDossier.projets) && stateDossier.projets.length > 0;
-    if (ready || tries > 60) { fn(); return; }   // jusqu'à ~18 s : à l'ouverture depuis le shell, la connexion et le chargement des projets peuvent dépasser 4 s
+    if (ready || tries > 200) { fn(); return; }   // [Checklist 25/11/2026] jusqu'à ~60 s (avant ~18 s : sur une connexion lente, l'ordre partait avant les projets et l'on restait sur le tableau de bord) — jusqu'à ~18 s : à l'ouverture depuis le shell, la connexion et le chargement des projets peuvent dépasser 4 s
     setTimeout(() => tryRun(fn, tries + 1), 300);
   }
 
@@ -11685,7 +11687,10 @@ window.addEventListener('message', (ev) => {
         if (!p) { openProjectModal(msg.id); return; }
         checklistSelectedId = p.id;
         if (msg.groupe) (checklistOpenGroups[p.id] || (checklistOpenGroups[p.id] = new Set())).add(msg.groupe);
-        show_d('checklist', document.querySelector(`#app-dossier .nav-item[onclick*="show_d('checklist'"]`));
+        const _navCk = () => show_d('checklist', document.querySelector(`#app-dossier .nav-item[onclick*="show_d('checklist'"]`));
+        _navCk();
+        // [Checklist 25/11/2026] si le chargement du module ramène ensuite au tableau de bord, on revient sur la checklist
+        [700, 1800, 3500].forEach(t => setTimeout(() => { const pg = document.getElementById('page-checklist'); if (pg && !pg.classList.contains('active') && checklistSelectedId === p.id && !document.querySelector('#projectModal.open, .modal-overlay.open')) _navCk(); }, t));
         setTimeout(() => {
           const g = msg.groupe && document.querySelector('#checklistContent [data-groupe="' + msg.groupe + '"]');
           let cible = g || document.getElementById('checklistContent');
