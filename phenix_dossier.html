@@ -5,6 +5,9 @@
 ══════════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_dossier.html
 ──────────────────────────────────────────────────────────────────────
+ 25/11/2026 — [Ordres du shell] Vraie cause trouvée : les ordres du shell (ouvrir un projet, sa checklist, son espace client) partaient sur la
+   copie locale des projets chargée au démarrage, parfois ancienne et sans le dossier demandé → on restait sur le tableau de bord au 1er clic.
+   Ils attendent maintenant la liste venue de Firestore (window._projetsCloudPrets).
  25/11/2026 — [Checklist] Mission de la Synthèse › checklist : attente des projets portée à ~60 s et retour automatique sur la page Checklist
    si le chargement du module ramène au tableau de bord (on arrivait parfois sur Dossier au lieu de la checklist).
  25/11/2026 — [Espace client] Ordre du shell « open-projet » avec onglet 'client' : la fiche s'ouvre sur l'onglet Espace client (bouton de la Synthèse 3D).
@@ -3716,6 +3719,7 @@ window.addEventListener('firebase-ready', async () => {
   // Écoute temps réel : projets
   window._fb.listenProjets(list => {
     stateDossier.projets = list.sort((a,b) => (a.id||0)-(b.id||0));
+    window._projetsCloudPrets = true;   // [Ordres du shell 25/11/2026] la vraie liste est là (avant : copie locale, parfois ancienne)
     refreshAllViews();
     setSyncStatus('ok', 'Synchronisé ✓');
   });
@@ -11675,7 +11679,10 @@ window.addEventListener('message', (ev) => {
 
   function tryRun(fn, tries) {
     tries = tries || 0;
-    const ready = stateDossier && Array.isArray(stateDossier.projets) && stateDossier.projets.length > 0;
+    // [Ordres du shell 25/11/2026] on attend la liste venue de Firestore : la copie locale (localStorage) chargée au démarrage
+    // pouvait être ancienne, sans le dossier demandé → l'ordre partait dans le vide et l'on restait sur le tableau de bord
+    // (Synthèse › Espace client, mission › Checklist). Le 2e clic marchait parce que la vraie liste était arrivée entre-temps.
+    const ready = window._projetsCloudPrets === true && Array.isArray(stateDossier.projets) && stateDossier.projets.length > 0;
     if (ready || tries > 200) { fn(); return; }   // [Checklist 25/11/2026] jusqu'à ~60 s (avant ~18 s : sur une connexion lente, l'ordre partait avant les projets et l'on restait sur le tableau de bord) — jusqu'à ~18 s : à l'ouverture depuis le shell, la connexion et le chargement des projets peuvent dépasser 4 s
     setTimeout(() => tryRun(fn, tries + 1), 300);
   }
