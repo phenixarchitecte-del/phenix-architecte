@@ -10,6 +10,8 @@
  25/11/2026 — [Fiche artisan] Message d'un expéditeur inconnu : bouton « ➕ Créer une fiche artisan » (préremplie d'après la signature :
    entreprise, téléphone, ville, SIRET, métier deviné ; tout modifiable). Le mail est relu ensuite si ses PDF n'ont pas été lus.
  18/11/2026 (2) — [Tâches] La Synthèse 3D peut ouvrir la page Tâches de Dossier (mission « tâche en attente », onglet 'taches' → goto-page).
+ 25/11/2026 — [Espace client] Synthèse 3D › « 👤 Espace client » et « Gérer l'espace » (bouton Clients) ouvrent directement l'espace client complet
+   (fiche Dossier, onglet Espace client : accès, statut, note, documents, carnet, visite). La petite fenêtre reste pour la cloche et « Note rapide ».
  25/11/2026 — [Espace client] Bouton « Clients » dans la barre du haut (à côté de la cloche) : tous les espaces clients d'un coup d'œil,
    onglets « Accès ouverts » / « Pas encore d'accès » ; pour chacun phase, statut affiché, dernière nouvelle, « ⚠ Rien de neuf depuis N jours »
    (14 jours et plus), accès ; « 👁 Voir comme le client » (aperçu) et « Modifier » (fenêtre Espace client).
@@ -616,6 +618,16 @@ window.ncClient = async function(ev, i) {
 };
 window.pecOuvrirProjet = function(pid) { _pecOuvrir({ raw: { projetId: pid }, kind: 'synthese', h: 'Synthèse 3D' }); };
 // Accès du client, documents, carnet, visite : la fiche du projet dans Dossier, sur l'onglet Espace client
+// [Espace client 25/11/2026] espace client complet d'un dossier : fiche du projet dans Dossier, onglet Espace client (accès, statut, note, documents, carnet, visite)
+window.ecOuvrirFiche = function(pid) {
+  pid = String(pid || ''); if (!pid) return;
+  const ep = document.getElementById('ecpPanel'); if (ep) ep.classList.remove('open');
+  const el = document.querySelector('.shell-nav-item[data-module="dossier"]');
+  const ord = { source:'phenix-shell', action:'open-projet', id: /^\d+$/.test(pid) ? Number(pid) : pid, onglet: 'client' };
+  const deja = shellCurrentModule === 'dossier' && shellCurrentFrame;
+  shellOpenModule('dossier', el, ord);
+  if (deja) { try { shellCurrentFrame.contentWindow.postMessage(ord, '*'); } catch(e) {} shellPendingOrder = null; }
+};
 window.pecFicheComplete = function() {
   const pid = PEC.pid; if (!pid) { toast('⚠️ Choisissez le dossier du client.'); return; }
   fermerValidation();
@@ -776,7 +788,8 @@ function _ecpDessiner() {
         '<div style="font-size:11px;margin-top:3px;color:' + (vieux ? '#7a4a00' : '#6b7a99') + '">' + (vieux ? '⚠ Rien de neuf depuis ' + l.j + ' jours' : 'Mis à jour ' + (l.j === 0 ? 'aujourd’hui' : l.j === 1 ? 'hier' : l.j != null ? 'il y a ' + l.j + ' jours' : '—')) + (d.statutAuto ? ' · statut automatique' : '') + '</div>' +
         '<div style="font-size:11px;color:#6b7a99;margin-top:2px">' + (l.acc.length ? '✓ Accès : ' + E(l.acc.join(', ')) : 'Pas d’accès client') + '</div>' +
         '<div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap"><a href="' + E(url) + '?apercu=' + encodeURIComponent(l.pid) + '" target="_blank" rel="noopener" style="border:1.5px solid #1b2d5b;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:700;color:#1b2d5b;text-decoration:none;min-height:30px;display:inline-flex;align-items:center">👁 Voir comme le client</a>' +
-        '<button onclick="ecpModifier(\'' + E(l.pid) + '\')" style="border:1.5px solid #1b2d5b;background:#1b2d5b;color:#fff;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;min-height:30px">Modifier</button></div>' +
+        '<button onclick="ecOuvrirFiche(\'' + E(l.pid) + '\')" style="border:1.5px solid #1b2d5b;background:#1b2d5b;color:#fff;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;min-height:30px">Gérer l’espace (accès, statut, documents, carnet)</button>' +
+        '<button onclick="ecpModifier(\'' + E(l.pid) + '\')" style="border:1.5px solid #cfd6e4;background:#fff;color:#1b2d5b;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;min-height:30px">Note rapide</button></div>' +
       '</div>';
     }).join('') : '<div style="padding:14px 16px;font-size:13px;color:#6b7a99">' + (ECP.filtre === 'ouverts' ? 'Aucun espace ouvert pour l’instant. Ouvrez un accès depuis la fiche d’un projet (onglet Espace client) ou depuis une parcelle de la Synthèse 3D.' : 'Aucun statut préparé sans accès.') + '</div>');
 }
@@ -1899,7 +1912,7 @@ window.addEventListener('message', (ev) => {
   // [Espace client 25/11/2026] fiche d'une parcelle de la Synthèse 3D › « 👤 Espace client » : la fenêtre « Espace client » s'ouvre par-dessus la 3D
   if (msg.source === 'phenix-synthese' && msg.action === 'espace-client' && msg.projetId != null) {
     try { ev.source && ev.source.postMessage({ source:'phenix-shell', action:'ack-module' }, '*'); } catch(e) {}
-    try { window.pecOuvrirProjet(String(msg.projetId)); } catch (e) { console.warn('Espace client', e); }
+    try { window.ecOuvrirFiche(String(msg.projetId)); } catch (e) { console.warn('Espace client', e); }   // [25/11] directement l'espace client complet (onglet de la fiche Dossier)
     return;
   }
   if (msg.source === 'phenix-synthese' && msg.action === 'ouvrir-module' && msg.projetId != null) {
