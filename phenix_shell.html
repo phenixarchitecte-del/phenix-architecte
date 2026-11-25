@@ -5,6 +5,8 @@
 ══════════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_shell.html
 ──────────────────────────────────────────────────────────────────────
+ 25/11/2026 — [Fiche artisan] Message d'un expéditeur inconnu : bouton « ➕ Créer une fiche artisan » (préremplie d'après la signature :
+   entreprise, téléphone, ville, SIRET, métier deviné ; tout modifiable). Le mail est relu ensuite si ses PDF n'ont pas été lus.
  18/11/2026 (2) — [Tâches] La Synthèse 3D peut ouvrir la page Tâches de Dossier (mission « tâche en attente », onglet 'taches' → goto-page).
  25/11/2026 — [Espace client] Synthèse 3D › fiche d'une parcelle › « 👤 Espace client » (message 'espace-client') : la fenêtre Espace client
    s'ouvre par-dessus la 3D (statut actuel, note, statut) ; « ouvrir la fiche › » mène à l'onglet Espace client de Dossier.
@@ -950,8 +952,59 @@ async function _blocInconnu(x) {
   return '<div class="vact"><b>' + (x.probable ? 'Adresse reconnue d’après le nom (à confirmer) : ' : (x.source === 'sms' ? 'Numéro' : 'Adresse') + ' inconnu(e) : ') + _ncEsc(x.de || '') + '</b>' + (x.sansIA === 'inconnu' ? '<div style="font-size:12.5px;color:#6b7a99">Message non analysé par l’IA (expéditeur inconnu, aucun dossier cité). Rattachez-le pour que les prochains soient lus et classés.</div>' : x.sansIA === 'leger' ? '<div style="font-size:12.5px;color:#6b7a99">Résumé court uniquement, sans actions proposées (expéditeur inconnu, aucun dossier cité). Rattachez-le pour que les prochains soient analysés en entier.</div>' : '') + '<div style="font-size:12.5px;color:#6b7a99">Rattachez-le pour que ses prochains messages soient reconnus. Sinon, cliquez « Traité » : rien d’autre n’est modifié.</div>' +
     '<label>Artisan de l’Annuaire</label><select id="viArt"><option value="">— choisir —</option>' + o(_valArt, x.artisanId) + '</select>' +
     '<label>ou client d’un dossier</label><select id="viPro"><option value="">— choisir —</option>' + o(_valPro, x.projetId) + '</select>' +
-    '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="vbtn p" onclick="rattacherNumero()">Rattacher</button>' + (x.source === 'sms' ? '<div style="margin-top:8px"><label>ou simple contact (équipe, proche…)</label><input id="viContact" placeholder="Nom, par ex. Cassandra" style="width:100%"> <button class="vbtn" onclick="enregistrerContact()" style="margin-top:6px">Enregistrer ce numéro comme contact</button></div>' : '') + '<button class="vbtn" onclick="ignorerExpediteur()">Ne plus afficher cet expéditeur</button></div></div>';
+    '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="vbtn p" onclick="rattacherNumero()">Rattacher</button><button class="vbtn" onclick="formFicheArtisan()">➕ Créer une fiche artisan</button>' + (x.source === 'sms' ? '<div style="margin-top:8px"><label>ou simple contact (équipe, proche…)</label><input id="viContact" placeholder="Nom, par ex. Cassandra" style="width:100%"> <button class="vbtn" onclick="enregistrerContact()" style="margin-top:6px">Enregistrer ce numéro comme contact</button></div>' : '') + '<button class="vbtn" onclick="ignorerExpediteur()">Ne plus afficher cet expéditeur</button></div></div>';
 }
+// [Fiche artisan 25/11/2026] Expéditeur inconnu → nouvelle fiche dans l'Annuaire, préremplie avec ce que dit le message
+// (nom, mail ou numéro, téléphone et ville lus dans la signature, métier deviné). Tout reste modifiable avant d'enregistrer.
+// Si le mail portait des PDF (devis), il est relu au prochain passage de la surveillance, cette fois comme venant d'un artisan.
+const _METIERS_ANN = ['Maçonnerie','Charpente','Couverture','Plomberie','Électricité','Menuiserie','Carrelage','Peinture','Isolation','Plâtrerie','Terrassement','Serrurerie / Métallerie','Chauffage / CVC','Démolition','Génie civil','VRD','Autre'];
+function _devinerFiche(x) {
+  const t = String(x.texte || x.extrait || ''), tout = [x.objet, x.resume, t].join(' \n ');
+  const nomBrut = String(x.deNom || '').replace(/\s*\((inconnu|à confirmer)\)\s*$/i, '').replace(/^Adresse inconnue\s*/i, '').trim();
+  const tels = (t.match(/(?:\+33\s?|0)[1-9](?:[\s.\-]?\d{2}){4}|0[1-9]\.\d{2}\.\d{3}\.\d{3}/g) || []).map(v => v.replace(/\D/g, '').replace(/^33/, '0')).filter(v => v.length === 10);
+  const tel = tels.find(v => /^0[67]/.test(v)) || tels[0] || (x.source === 'sms' ? String(x.de || '') : '');
+  const cp = /\b(\d{5})\s+([A-ZÉÈÀÂÎÔÛÇ][A-ZÉÈÀÂÎÔÛÇa-zéèàâîôûç' \-]{2,40})/.exec(t);
+  const siret = (/(?:siret|siren|rcs)[^\d]{0,30}((?:\d[\s.]?){9,14})/i.exec(t) || [])[1];
+  const g = [[/[ée]lectri/i,'Électricité'],[/plomb|sanitaire/i,'Plomberie'],[/chauffage|pompe à chaleur|\bpac\b|cvc|vmc/i,'Chauffage / CVC'],[/ma[çc]on|gros [œo]uvre/i,'Maçonnerie'],[/charpent/i,'Charpente'],[/couvr|toiture|zingu/i,'Couverture'],[/menuis/i,'Menuiserie'],[/carrel/i,'Carrelage'],[/peint/i,'Peinture'],[/isola/i,'Isolation'],[/pl[âa]tr|plaquis/i,'Plâtrerie'],[/terrass|vrd/i,'Terrassement'],[/serrur|m[ée]tall/i,'Serrurerie / Métallerie']];
+  const metier = (g.find(([re]) => re.test(tout)) || [])[1] || '';
+  return { entreprise: nomBrut, contact: '', tel, email: x.source === 'sms' ? '' : String(x.de || ''), ville: cp ? cp[2].trim().replace(/\s+/g, ' ') : '', siret: siret ? siret.replace(/\D/g, '') : '', metier };
+}
+window.formFicheArtisan = function() {
+  const x = _echTrouve(_valId); if (!x) return; const f = _devinerFiche(x), box = document.getElementById('valBox'); if (!box) return;
+  const ch = (lib, id, v, ph) => '<label>' + lib + '</label><input id="' + id + '" value="' + _ncEsc(v || '') + '"' + (ph ? ' placeholder="' + _ncEsc(ph) + '"' : '') + '>';
+  let zone = document.getElementById('vFiche'); if (zone) { zone.scrollIntoView({ block: 'center' }); return; }
+  zone = document.createElement('div'); zone.id = 'vFiche'; zone.className = 'vact';
+  zone.innerHTML = '<b>➕ Nouvelle fiche artisan</b><div style="font-size:12.5px;color:#6b7a99">Prérempli d’après le message : vérifiez avant d’enregistrer.</div>' +
+    ch('Entreprise *', 'vfEnt', f.entreprise) + ch('Contact (nom de la personne)', 'vfNom', f.contact, 'ex. M. Malbrancq') +
+    '<label>Corps de métier *</label><select id="vfMet"><option value="">— choisir —</option>' + _METIERS_ANN.map(m => '<option' + (m === f.metier ? ' selected' : '') + '>' + m + '</option>').join('') + '</select>' +
+    ch('Téléphone', 'vfTel', f.tel) + ch('Mail', 'vfMail', f.email) + ch('Ville', 'vfVil', f.ville) + ch('SIRET / SIREN', 'vfSir', f.siret) +
+    '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="vbtn p" onclick="creerFicheArtisan()">✓ Créer la fiche</button><button class="vbtn" onclick="document.getElementById(\'vFiche\').remove()">Annuler</button></div>';
+  const ref = box.querySelector('.vact'); if (ref && ref.parentNode) ref.parentNode.insertBefore(zone, ref.nextSibling); else box.appendChild(zone);
+  zone.scrollIntoView({ block: 'center' });
+};
+window.creerFicheArtisan = async function() {
+  const x = _echTrouve(_valId); if (!x) return; const v = id => String((document.getElementById(id) || {}).value || '').trim();
+  const ent = v('vfEnt'), met = v('vfMet');
+  if (!ent) { toast('⚠️ Indiquez le nom de l’entreprise'); return; } if (!met) { toast('⚠️ Choisissez le corps de métier'); return; }
+  const id = 'art-' + Date.now(), maintenant = new Date().toISOString(), sms = x.source === 'sms';
+  const fiche = { id, nom: v('vfNom') || ent, entreprise: ent, metier: met, tel: v('vfTel'), email: v('vfMail'), ville: v('vfVil'), siret: v('vfSir'), note: 0, favori: 0,
+    notes: 'Fiche créée depuis un ' + (sms ? 'SMS' : 'mail') + ' reçu le ' + new Date(x.recuLe || x.creeLe || Date.now()).toLocaleDateString('fr-FR') + '.', source: 'echanges', createdAt: maintenant, updatedAt: maintenant,
+    [sms ? 'telsConnus' : 'emailsConnus']: x.de ? [String(x.de).toLowerCase()] : [] };
+  try {
+    await setDoc(doc(db, 'phenix_artisans', id), fiche);
+    const aPdf = !sms && ((x.piecesNoms || []).concat((x.pieces || []).map(pc => pc.nom)).some(n => /\.pdf$/i.test(n || '')));
+    const maj = { expediteurType: 'artisan', artisanId: id, artisanNom: ent, deNom: ent, probable: false };
+    if (aPdf && !(x.chiffrage && x.chiffrage.importId)) maj.aRelire = true;
+    await updateDoc(doc(db, 'phenix_entrants', x._id), maj);
+    if (maj.aRelire) {   // relire ce mail au prochain passage (10 min au plus) : ses devis seront lus et proposés au chiffrage
+      const jours = Math.min(30, Math.max(2, Math.ceil((Date.now() - new Date(x.recuLe || Date.now()).getTime()) / 864e5) + 1));
+      try { await setDoc(doc(db, 'phenix_meta', x.boite === 'maxime' ? 'mail_etat_2' : 'mail_etat'), { relire: true, relireJours: jours, relireUid: 0 }, { merge: true }); } catch (e) { console.warn('Relecture :', e && e.message); }
+    }
+    if (_valArt) { _valArt.push({ id, nom: ent }); _valArt.sort((p, q) => p.nom.localeCompare(q.nom, 'fr')); }
+    toast('✓ Fiche « ' + ent + ' » créée dans l’Annuaire' + (maj.aRelire ? ' — ses devis seront lus au prochain passage (10 min au plus)' : ''));
+    setTimeout(() => ouvrirValidation(x._id), 300);
+  } catch (e) { toast('⚠️ Création impossible : ' + (e && (e.code || e.message) || e)); }
+};
 window.ignorerExpediteur = async function() {
   const x = _echTrouve(_valId); if (!x || !x.de) return;
   try { await setDoc(doc(db, 'phenix_meta', 'tri_ignores'), { adresses: arrayUnion(String(x.de).toLowerCase()) }, { merge: true }); await updateDoc(doc(db, 'phenix_entrants', x._id), { statut: 'lu', resultat: 'ignore_expediteur' });
