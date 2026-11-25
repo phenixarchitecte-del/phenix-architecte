@@ -5,6 +5,7 @@
 ══════════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_dossier.html
 ──────────────────────────────────────────────────────────────────────
+ 25/11/2026 — [Espace client] Ordre du shell « open-projet » avec onglet 'client' : la fiche s'ouvre sur l'onglet Espace client (bouton de la Synthèse 3D).
  25/11/2026 — [Espace client] Tout l'espace client se gère depuis la fiche projet, onglet « Espace client » (plus de module à part) :
    accès du client par lien magique (e-mail repris de la fiche), statut affiché, note au fil, documents (plans et photos des comptes rendus
    à cocher « visible », ou fichier / lien ajouté), carnet et visite 3D, « Voir comme le client ». Le statut change TOUT SEUL quand une case
@@ -11693,6 +11694,9 @@ window.addEventListener('message', (ev) => {
         }, 80);
       } catch(e) { try { openProjectModal(msg.id); } catch(_) {} }
     });
+  } else if (msg.action === 'open-projet' && msg.id != null && msg.onglet === 'client') {
+    // [Espace client] depuis la Synthèse 3D ou la cloche : fiche du projet ouverte directement sur l'onglet Espace client
+    tryRun(() => { try { openProjectModal(msg.id); setTimeout(() => { try { switchModalTab('client'); } catch(e) {} }, 150); } catch(e) {} });
   } else if (msg.action === 'open-projet' && msg.id != null) {
     tryRun(() => { try { openProjectModal(msg.id); } catch(e) {} });
   } else if (msg.action === 'nouveau-projet-devis' && msg.devis) {

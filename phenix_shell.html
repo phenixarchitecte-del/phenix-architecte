@@ -6,6 +6,8 @@
  HISTORIQUE DES MODIFICATIONS — phenix_shell.html
 ──────────────────────────────────────────────────────────────────────
  18/11/2026 (2) — [Tâches] La Synthèse 3D peut ouvrir la page Tâches de Dossier (mission « tâche en attente », onglet 'taches' → goto-page).
+ 25/11/2026 — [Espace client] Synthèse 3D › fiche d'une parcelle › « 👤 Espace client » (message 'espace-client') : la fenêtre Espace client
+   s'ouvre par-dessus la 3D (statut actuel, note, statut) ; « ouvrir la fiche › » mène à l'onglet Espace client de Dossier.
  25/11/2026 — [Espace client] Bouton « Client » sur chaque notification de la cloche (et « 👤 Prévenir le client » dans « À valider ») :
    publier une note au fil du client ou changer le statut de son espace, sans quitter la notification. Dossier retrouvé tout seul
    (projetId, devis signé, chantier d'un message d'artisan) ou choisi dans la liste ; statut proposé selon la notification
@@ -600,6 +602,17 @@ window.ncClient = async function(ev, i) {
   document.getElementById('ncPanel').classList.remove('open');
   _pecOuvrir(x);
 };
+window.pecOuvrirProjet = function(pid) { _pecOuvrir({ raw: { projetId: pid }, kind: 'synthese', h: 'Synthèse 3D' }); };
+// Accès du client, documents, carnet, visite : la fiche du projet dans Dossier, sur l'onglet Espace client
+window.pecFicheComplete = function() {
+  const pid = PEC.pid; if (!pid) { toast('⚠️ Choisissez le dossier du client.'); return; }
+  fermerValidation();
+  const el = document.querySelector('.shell-nav-item[data-module="dossier"]');
+  const ord = { source:'phenix-shell', action:'open-projet', id: /^\d+$/.test(pid) ? Number(pid) : pid, onglet: 'client' };
+  const deja = shellCurrentModule === 'dossier' && shellCurrentFrame;
+  shellOpenModule('dossier', el, ord);
+  if (deja) { try { shellCurrentFrame.contentWindow.postMessage(ord, '*'); } catch(e) {} shellPendingOrder = null; }
+};
 window.ncClientEntrant = function(id) {
   const r = _echTrouve(id); if (!r) return;
   _pecOuvrir({ raw: r, kind: 'ent', h: (r.source === 'sms' ? 'SMS · ' : 'Mail · ') + _nomExp(r), col: 'phenix_entrants', id: r._id, patch: { statut: 'lu' } });
@@ -633,7 +646,7 @@ function _pecDessiner() {
     : d ? '<div style="margin-top:6px;color:#2e7d32">✓ Espace ouvert · statut actuel : <b>' + E(d.titre || '—') + '</b></div>'
     : '<div style="margin-top:6px;color:#6b7a99">Espace pas encore ouvert pour ce dossier : ce que vous publiez sera visible dès son ouverture (Dossier › fiche projet › Espace client).</div>';
   box.innerHTML =
-    '<div class="vh"><div><b>👤 Prévenir le client</b><br><span style="font-size:12px;color:#6b7a99">Depuis : ' + E(x.h || 'notification') + '</span></div><button class="vbtn" onclick="fermerValidation()" aria-label="Fermer">✕</button></div>' +
+    '<div class="vh"><div><b>👤 ' + (x.kind === 'synthese' ? 'Espace client' : 'Prévenir le client') + '</b><br><span style="font-size:12px;color:#6b7a99">Depuis : ' + E(x.h || 'notification') + '</span></div><button class="vbtn" onclick="fermerValidation()" aria-label="Fermer">✕</button></div>' +
     '<div class="vb"><label for="pec-p">Dossier</label><select id="pec-p"><option value="">Choisir le dossier…</option>' +
       liste.map(q => '<option value="' + E(q.id) + '"' + (String(q.id) === String(PEC.pid) ? ' selected' : '') + '>' + E([q.client, q.nom && q.nom !== q.client ? q.nom : ''].filter(Boolean).join(' — ') || ('#' + q.id)) + '</option>').join('') + '</select>' + etat +
     '<div style="font-size:12px;color:#6b7a99;margin:8px 0 12px">Le client le voit aussitôt dans son espace (Avancement et Le fil). Aucun mail ni SMS ne part.</div>' +
@@ -651,6 +664,7 @@ function _pecDessiner() {
         (st.pause ? '<label for="pec-rep">Date de reprise</label><input type="date" id="pec-rep" value="' + E(PEC.vals.reprise || '') + '">' : '') +
         (st.appeler ? '<label style="display:flex;gap:8px;align-items:center;color:#b3261e;font-weight:700"><input type="checkbox" id="pec-app" style="width:18px;height:18px"> ⚠ J’ai appelé le client avant de publier</label>' : '') +
         '<div style="margin-top:8px"><button class="vbtn p" id="pec-st">Publier le statut</button></div>' : '<div style="font-size:12px;color:#6b7a99;margin-top:6px">Choisissez un statut pour le préparer.</div>') + '</div>' +
+    (PEC.pid ? '<div style="margin:0 0 10px"><button class="vbtn" onclick="pecFicheComplete()">Accès, documents, carnet et visite 3D : ouvrir la fiche ›</button></div>' : '') +
     (x.col && x.id ? '<label style="display:flex;gap:8px;align-items:center;font-weight:400"><input type="checkbox" id="pec-lu" checked style="width:18px;height:18px"> Marquer la notification comme lue après publication</label>' : '') +
     '</div>';
   _pecBrancher();
@@ -1751,6 +1765,12 @@ window.addEventListener('message', (ev) => {
   /* Chantier → Synthèse 3D : « ← Synthèse » dans le module Chantier ramène à la vue d'ensemble des chantiers */
   if (msg.source === 'phenix-chantier' && msg.action === 'ouvrir-synthese') {
     const ns = document.querySelector('.shell-nav-item[data-module="synthese"]'); if (ns && ns.style.display !== 'none') shellOpenModule('synthese', ns);
+    return;
+  }
+  // [Espace client 25/11/2026] fiche d'une parcelle de la Synthèse 3D › « 👤 Espace client » : la fenêtre « Espace client » s'ouvre par-dessus la 3D
+  if (msg.source === 'phenix-synthese' && msg.action === 'espace-client' && msg.projetId != null) {
+    try { ev.source && ev.source.postMessage({ source:'phenix-shell', action:'ack-module' }, '*'); } catch(e) {}
+    try { window.pecOuvrirProjet(String(msg.projetId)); } catch (e) { console.warn('Espace client', e); }
     return;
   }
   if (msg.source === 'phenix-synthese' && msg.action === 'ouvrir-module' && msg.projetId != null) {
