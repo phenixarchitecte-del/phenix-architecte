@@ -8,11 +8,21 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Italiana&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
+<!-- [Carnet 25/11/2026] maquette 3D du carnet (three.js) et carnet du client : fichiers partagés -->
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+<script src="phenix_carnet_questions.js?v=20261125"></script>
+<script src="phenix_carnet_vue.js?v=20261125"></script>
 <!--
 ══════════════════════════════════════════════════════════════════════
  PHÉNIX — ESPACE CLIENT (phenix_client.html)
 ──────────────────────────────────────────────────────────────────────
  HISTORIQUE DES MODIFICATIONS
+ 25/11/2026 — [Conversation] « Le fil » montre aussi les échanges avec Phénix (messages de l'espace, réponses de Phénix par mail ou SMS) et
+   permet d'« Écrire à Phénix » : le message arrive dans la cloche de Phénix et dans la fiche du dossier. Données : phenix_client_dossiers/{id}/messages.
+ 25/11/2026 — [Carnet] Le carnet de projet s'ouvre DANS l'espace client (bouton or « Ouvrir mon carnet de projet », puis onglet Carnet
+   une fois validé) : accueil sur la maison en 3D, questions pas à pas, synthèse ; même connexion par lien magique, plus de mot de passe.
+   Fichiers partagés : phenix_carnet_questions.js (questions), phenix_carnet_vue.js (écran), phenix_maquette3d.js / phenix_maison3d.js (3D).
+   Données : phenix_portail/{id}/etat/fiche (lecture) et /etat/choix (lecture-écriture), règle Firestore à ajouter. Aperçu Phénix : ?apercu=<id>&carnet=1.
  25/11/2026 — [Espace client] Le côté Phénix quitte cette page : tout se gère dans Phénix Dossier (fiche projet › onglet « Espace client »),
    avec le statut qui change tout seul à chaque case de checklist liée à une étape. Ici ne restent que la vue du client et l'aperçu
    (?apercu=<id du projet>, compte Phénix). Les liens [texte](https://…) des statuts s'affichent comme de vrais liens.
@@ -117,7 +127,7 @@ details.pq p{margin:12px 0 0;font-size:13px;line-height:1.6;color:var(--t2)}
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import { getAuth, onAuthStateChanged, signOut, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, signInWithEmailAndPassword }
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-import { getFirestore, doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, query, where }
+import { getFirestore, doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, query, where, addDoc }
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 import { initializeAppCheck, ReCaptchaV3Provider } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js';
 
@@ -261,6 +271,7 @@ onAuthStateChanged(auth, async user => {
     S.acces = a.data();
     unsubs.push(onSnapshot(doc(db, COL_DOS, String(S.acces.projetId)), s => { S.dossier = s.exists() ? s.data() : null; rendreClient(); },
       e => { console.warn(e); vueSansAcces(email, true); }));
+    ecouterMessages(String(S.acces.projetId), () => { if (S.onglet === 'fil') rendreClient(); });
   } catch (e) { console.warn(e); vueSansAcces(email, true); }
 });
 function vueSansAcces(email, erreur) {
@@ -283,10 +294,32 @@ function rendreClient() {
   brancherClient(d);
   window.scrollTo(0, 0);
 }
+// [Carnet 25/11/2026] le carnet s'ouvre DANS l'espace (plus de lien vers une autre page ni de mot de passe)
+const carnetDispo = d => !!(d && (d.carnetOuvert || d.carnetUrl));
 function boutonOr(d) {
   if (d.carnetValide && d.visiteUrl) return { lib: 'Ouvrir ma visite 3D', url: d.visiteUrl, ic: IC.orbite };
-  if (!d.carnetValide && d.carnetUrl) return { lib: 'Ouvrir mon carnet de projet', url: d.carnetUrl, ic: IC.maison };
+  if (!d.carnetValide && carnetDispo(d)) return { lib: 'Ouvrir mon carnet de projet', carnet: true, ic: IC.maison };
   return null;
+}
+const htmlBoutonOr = (b, style) => b.carnet ? `<button class="btn-or" data-carnet ${style ? `style="${style}"` : ''}>${b.ic}${esc(b.lib)}</button>`
+  : `<a class="btn-or" ${style ? `style="${style}"` : ''} href="${esc(b.url)}" target="_blank" rel="noopener">${b.ic}${esc(b.lib)}</a>`;
+function ouvrirCarnet() {
+  const d = S.dossier || {}, pid = String(S.apercu ? S.apercuPid : (S.acces && S.acces.projetId) || '');
+  if (!pid || !window.PhenixCarnetVue) { toast('Le carnet se charge, réessayez dans un instant.'); return; }
+  const wm = document.querySelector('.wm'), img = wm ? wm.getAttribute('src') : '';
+  const ref = p => doc(db, 'phenix_portail', pid, 'etat', p);
+  window.PhenixCarnetVue.ouvrir({
+    pid, nom: d.clientNom ? 'Maison ' + String(d.clientNom).replace(/^(M\. et Mme|Mme|M\.|Mr|Monsieur et Madame|Monsieur|Madame)\s+/i, '') : 'Ma maison',
+    sousTitre: 'Plan définitif validé, à vous de choisir vos matières', logo: img, filigrane: img, apercu: !!S.apercu,
+    qui: String(S.user && S.user.email || ''),
+    lireFiche: () => getDoc(ref('fiche')).then(x => x.exists() ? x.data() : null),
+    ecouterChoix: cb => onSnapshot(ref('choix'), x => cb(x.exists() ? x.data() : null), e => { console.warn('Carnet :', e && e.code); cb(null); }),
+    ecrireChoix: data => setDoc(ref('choix'), data),
+    morceau: i => getDoc(doc(db, 'phenix_portail', pid, 'maquette', 'c' + i)).then(x => x.exists() ? (x.data().d || '') : ''),
+    notifier: text => addDoc(collection(db, 'phenix_notifs_client'), { pid, type: 'carnet', nom: d.clientNom || '', who: String(S.user && S.user.email || ''), text: String(text).slice(0, 200), t: new Date().toISOString(), lu: false }).catch(() => {}),
+    onNav: v => { S.onglet = v; S.apercu ? rendreApercu() : rendreClient(); }
+  });
+  journal('ouvre', 'carnet', 'Carnet de projet');
 }
 function enTete(d) {
   return `<header class="voile" style="display:inline-block;padding:6px 10px;margin-left:-10px">
@@ -324,7 +357,7 @@ function htmlAvancement(d) {
   else if (d.delai && d.delai !== '—') delai = /^[0-9a-zà-ü]/.test(d.delai) ? `Délai habituel : ${d.delai}` : d.delai;
   const action = d.pause
     ? `<div style="margin-top:28px"><div style="font-size:13px;color:var(--t3)">Une question pendant la pause ?</div><a class="btn-or" style="margin-top:10px" href="${TEL_LIEN}">${IC.tel}Appeler Phénix</a></div>`
-    : (b ? `<a class="btn-or" style="margin-top:30px" href="${esc(b.url)}" target="_blank" rel="noopener">${b.ic}${esc(b.lib)}</a>` : '');
+    : (b ? htmlBoutonOr(b, 'margin-top:30px') : '');
   return `<main class="page">${enTete(d)}
     <section style="margin-top:46px">
       <div class="voile" style="display:inline-block;padding:8px 10px;margin-left:-10px;max-width:100%">
@@ -356,9 +389,28 @@ function htmlDocuments(d) {
       <p style="margin:40px 0 0;font-size:11px;line-height:1.55;color:var(--t5)">Les plans du chantier (électricité, plomberie, cloisons) apparaîtront ici pendant la préparation du chantier.</p>
     </section></main>`;
 }
+// [Conversation 25/11/2026] échanges avec Phénix : phenix_client_dossiers/{id}/messages (messages de l'espace, et réponses de Phénix par mail ou SMS)
+function ecouterMessages(pid, apres) {
+  unsubs.push(onSnapshot(collection(db, COL_DOS, pid, 'messages'), s => { S.msgs = []; s.forEach(x => S.msgs.push(Object.assign({ _id: x.id }, x.data()))); apres(); },
+    e => { console.warn('Échanges :', e && e.code); S.msgs = null; }));
+}
+async function envoyerAPhenix(texte) {
+  const pid = String(S.acces && S.acces.projetId || ''); if (!pid || S.apercu) return false;
+  const t = new Date().toISOString(), email = String(S.user && S.user.email || '').toLowerCase();
+  try {
+    await setDoc(doc(db, COL_DOS, pid, 'messages', 'c' + Date.now().toString(36)), { de: 'client', canal: 'espace', texte: String(texte).slice(0, 4000), t, par: email });
+    addDoc(collection(db, 'phenix_notifs_client'), { pid, nom: (S.dossier && S.dossier.clientNom) || '', who: email, text: String(texte).slice(0, 200), t, lu: false }).catch(() => {});
+    journal('message', 'échanges', 'Message à Phénix');
+    return true;
+  } catch (e) { console.warn(e); toast('Votre message n’est pas parti. Réessayez dans un instant.'); return false; }
+}
 function htmlFil(d) {
-  const f = (d.fil || []).slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || String(b.id || '').localeCompare(String(a.id || '')));
-  const lis = f.length ? f.map(x => `<li><div class="pt" aria-hidden="true">${x.etape ? '<svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="7.5" fill="#0b1f4a" stroke="#d4b26a"/><circle cx="9" cy="9" r="3" fill="#d4b26a"/></svg>' : '<svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="3.5" fill="#cfe2f6"/></svg>'}</div>
+  const msgs = (S.msgs || []).map(m => ({ msg: true, de: m.de, canal: m.canal, date: String(m.t || '').slice(0, 10), t: m.t || '', texte: m.texte || '' }));
+  const f = (d.fil || []).map(x => Object.assign({ t: (x.date || '') + 'T12:00' }, x)).concat(msgs).sort((a, b) => String(b.t || '').localeCompare(String(a.t || '')) || String(b.id || '').localeCompare(String(a.id || '')));
+  const bulle = x => `<li><div class="pt" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 18 18"><path d="M3 4 H15 V12 H8 L5 15 V12 H3 Z" fill="none" stroke="${x.de === 'phenix' ? '#d4b26a' : '#8aa5cc'}" stroke-width="1.2" stroke-linejoin="round"/></svg></div>
+      <div class="corps voile" style="${x.de === 'client' ? 'border:.5px solid var(--line2);' : 'border:.5px solid var(--or);'}border-radius:12px;padding:8px 10px"><div style="font-size:10px;color:var(--t5)">${esc(dateFr(x.date))} — ${x.de === 'phenix' ? '<span style="color:var(--or)">Phénix vous écrit</span>' : 'Vous avez écrit'}${x.canal === 'mail' ? ' · par mail' : x.canal === 'sms' ? ' · par SMS' : ''}</div>
+      <p style="margin:4px 0 0;font-size:13px;line-height:1.5;color:var(--t2);white-space:pre-wrap">${esc(x.texte)}</p></div></li>`;
+  const lis = f.length ? f.map(x => x.msg ? bulle(x) : `<li><div class="pt" aria-hidden="true">${x.etape ? '<svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="7.5" fill="#0b1f4a" stroke="#d4b26a"/><circle cx="9" cy="9" r="3" fill="#d4b26a"/></svg>' : '<svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="3.5" fill="#cfe2f6"/></svg>'}</div>
       <div class="corps voile"><div style="font-size:10px;color:var(--t5)">${esc(dateFr(x.date))} — ${x.etape ? '<span style="color:var(--or)">Étape franchie</span>' : esc(x.type || 'Note')}</div>
       <div style="margin-top:4px;${x.etape ? "font-family:'Italiana',serif;font-size:18px;line-height:1.1" : 'font-size:13px;font-weight:400'}">${esc(x.titre)}</div>
       ${x.texte ? `<p style="margin:3px 0 0;font-size:12px;line-height:1.5;color:var(--t3)">${esc(x.texte)}</p>` : ''}</div></li>`).join('')
@@ -366,19 +418,25 @@ function htmlFil(d) {
   return `<main class="page">${enTete(d)}
     <section style="margin-top:46px">
       <div class="voile" style="display:inline-block;padding:6px 10px;margin-left:-10px"><h1 class="h1" style="font-size:40px">Le fil de votre projet</h1><div style="margin-top:6px;font-size:13px;color:var(--t4)">Tout ce qui s’est passé, du plus récent au plus ancien</div></div>
+      ${S.apercu ? '' : `<form id="f-msg" class="voile" style="margin-top:28px;padding:10px 12px"><label class="lib" for="msg-tx" style="margin-top:0">Écrire à Phénix</label><textarea class="champ" id="msg-tx" rows="3" placeholder="Une question, une précision… Phénix vous répond ici."></textarea><button class="btn-ligne" type="submit" style="margin-top:10px">Envoyer</button></form>`}
       <ol class="fil">${lis}</ol></section></main>`;
 }
 function htmlNav(d) {
   const b = boutonOr(d), o = S.onglet;
   const t = (id, lib, ic) => `<button class="tab" data-ong="${id}" ${o === id ? 'aria-current="page"' : ''}>${ic}${lib}</button>`;
-  const carnetTab = d.carnetValide && d.carnetUrl ? `<a class="tab" href="${esc(d.carnetUrl)}" target="_blank" rel="noopener">${IC.car}Carnet</a>` : '';
-  const gold = o !== 'avancement' && b && !d.pause ? `<a class="btn-or" href="${esc(b.url)}" target="_blank" rel="noopener">${b.ic}${esc(b.lib)}</a>` : '';
+  const carnetTab = d.carnetValide && carnetDispo(d) ? `<button class="tab" data-carnet>${IC.car}Carnet</button>` : '';
+  const gold = o !== 'avancement' && b && !d.pause ? htmlBoutonOr(b) : '';
   return `<nav class="nav" aria-label="Navigation">${gold}<div class="tabs">${t('avancement', 'Avancement', IC.av)}${t('documents', 'Documents', IC.doc)}${carnetTab}${t('fil', 'Le fil', IC.fil)}</div></nav>`;
 }
 function brancherClient(d) {
   document.querySelectorAll('[data-ong]').forEach(b => b.onclick = () => { S.onglet = b.dataset.ong; S.apercu ? rendreApercu() : rendreClient(); });
   document.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { S.cat = b.dataset.cat; S.apercu ? rendreApercu() : rendreClient(); });
   const dec = document.getElementById('dec'); if (dec) dec.onclick = () => S.apercu ? window.close() : signOut(auth);
+  document.querySelectorAll('[data-carnet]').forEach(b => b.onclick = ouvrirCarnet);
+  const fm = document.getElementById('f-msg');
+  if (fm) fm.onsubmit = async ev => { ev.preventDefault(); const ta = document.getElementById('msg-tx'), t = ta.value.trim(); if (!t) return; const b = fm.querySelector('button'); b.disabled = true;
+    if (await envoyerAPhenix(t)) { ta.value = ''; toast('Message envoyé à Phénix. Vous aurez la réponse ici.'); } b.disabled = false; };
+  if (S.ouvrirCarnetAuto && carnetDispo(d)) { S.ouvrirCarnetAuto = false; ouvrirCarnet(); }
 }
 
 // ═════════ CÔTÉ PHÉNIX : APERÇU SEULEMENT ═════════
@@ -393,7 +451,9 @@ function demarrerApercu() {
       <button class="btn-discret" id="dec">Se déconnecter</button></main>`;
     document.getElementById('dec').onclick = () => signOut(auth); return;
   }
-  S.apercu = true;
+  S.apercu = true; S.apercuPid = String(pid);
+  try { if (new URLSearchParams(location.search).get('carnet') === '1') S.ouvrirCarnetAuto = true; } catch (e) {}
+  ecouterMessages(String(pid), () => { if (S.onglet === 'fil') rendreApercu(); });
   unsubs.push(onSnapshot(doc(db, COL_DOS, String(pid)), s => { S.dossier = s.exists() ? s.data() : null; rendreApercu(); },
     e => { console.warn(e); toast('Aperçu indisponible (règles Firestore).'); }));
 }

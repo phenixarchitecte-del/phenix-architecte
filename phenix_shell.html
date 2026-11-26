@@ -10,6 +10,9 @@
  25/11/2026 — [Fiche artisan] Message d'un expéditeur inconnu : bouton « ➕ Créer une fiche artisan » (préremplie d'après la signature :
    entreprise, téléphone, ville, SIRET, métier deviné ; tout modifiable). Le mail est relu ensuite si ses PDF n'ont pas été lus.
  18/11/2026 (2) — [Tâches] La Synthèse 3D peut ouvrir la page Tâches de Dossier (mission « tâche en attente », onglet 'taches' → goto-page).
+ 25/11/2026 — [Conversation] Une conversation par client, visible des deux côtés (phenix_client_dossiers/{id}/messages) : vos réponses par mail
+   ou SMS à un client (Échanges, À valider) y sont copiées avec son message ; la fenêtre « Client » de la cloche permet de répondre dans son espace ;
+   un message écrit par le client depuis son espace ouvre ses échanges dans la fiche (Centre client › Échanges).
  25/11/2026 — [Espace client] Synthèse 3D › « 👤 Espace client » et « Gérer l'espace » (bouton Clients) ouvrent directement l'espace client complet
    (fiche Dossier, onglet Espace client : accès, statut, note, documents, carnet, visite). La petite fenêtre reste pour la cloche et « Note rapide ».
  25/11/2026 — [Espace client] Bouton « Clients » dans la barre du haut (à côté de la cloche) : tous les espaces clients d'un coup d'œil,
@@ -578,6 +581,7 @@ window.ncToutLu = function(ev) { if (ev) { ev.stopPropagation(); ev.preventDefau
 window.ncOpen = function(i) {
   const x = (NC._items || [])[i]; if (!x) return; document.getElementById('ncPanel').classList.remove('open');
   if (x.go === 'valider') { ouvrirValidation(x.valId); return; }
+  if (x.kind === 'cli' && x.raw && x.raw.pid) { _ncMarquer(x); window.ecOuvrirFiche(String(x.raw.pid), x.raw.type === 'carnet' ? 'carnet' : 'messages'); return; }   // [Conversation] message du client → ses échanges
   const mod = x.go === 'msg' ? 'chantier' : x.go;
   const _deja = x.order && shellCurrentModule === mod && shellCurrentFrame;
   shellOpenModule(mod, document.querySelector('.shell-nav-item[data-module="' + mod + '"]'), x.order || undefined);
@@ -619,15 +623,23 @@ window.ncClient = async function(ev, i) {
 window.pecOuvrirProjet = function(pid) { _pecOuvrir({ raw: { projetId: pid }, kind: 'synthese', h: 'Synthèse 3D' }); };
 // Accès du client, documents, carnet, visite : la fiche du projet dans Dossier, sur l'onglet Espace client
 // [Espace client 25/11/2026] espace client complet d'un dossier : fiche du projet dans Dossier, onglet Espace client (accès, statut, note, documents, carnet, visite)
-window.ecOuvrirFiche = function(pid) {
+window.ecOuvrirFiche = function(pid, sous) {
   pid = String(pid || ''); if (!pid) return;
   const ep = document.getElementById('ecpPanel'); if (ep) ep.classList.remove('open');
   const el = document.querySelector('.shell-nav-item[data-module="dossier"]');
-  const ord = { source:'phenix-shell', action:'open-projet', id: /^\d+$/.test(pid) ? Number(pid) : pid, onglet: 'client' };
+  const ord = { source:'phenix-shell', action:'open-projet', id: /^\d+$/.test(pid) ? Number(pid) : pid, onglet: 'client', sous: sous || null };
   const deja = shellCurrentModule === 'dossier' && shellCurrentFrame;
   shellOpenModule('dossier', el, ord);
   if (deja) { try { shellCurrentFrame.contentWindow.postMessage(ord, '*'); } catch(e) {} shellPendingOrder = null; }
 };
+// [Conversation 25/11/2026] trace d'un échange avec le client dans son espace (phenix_client_dossiers/{id}/messages) : visible des deux côtés
+async function _convNoter(pid, id, m) { try { await setDoc(doc(db, 'phenix_client_dossiers', String(pid), 'messages', String(id)), m, { merge: true }); return true; } catch (e) { console.warn('Échanges client :', e && e.code); return false; } }
+async function _convReponseEntrant(x, texte) {
+  if (!x || x.expediteurType !== 'client' || !x.projetId) return;
+  const canal = x.source === 'sms' ? 'sms' : 'mail';
+  await _convNoter(x.projetId, 'e-' + x._id, { de: 'client', canal, texte: String((x.objet && canal === 'mail' ? x.objet + '\n' : '') + (x.extrait || '')).slice(0, 4000), t: x.recuLe || x.creeLe || new Date().toISOString(), par: x.de || '', luPhenix: true });
+  await _convNoter(x.projetId, 'r-' + x._id + '-' + Date.now().toString(36), { de: 'phenix', canal, texte: String(texte).slice(0, 4000), t: new Date().toISOString(), par: _moi() });
+}
 window.pecFicheComplete = function() {
   const pid = PEC.pid; if (!pid) { toast('⚠️ Choisissez le dossier du client.'); return; }
   fermerValidation();
@@ -679,6 +691,8 @@ function _pecDessiner() {
     '<div class="vb"><label for="pec-p">Dossier</label><select id="pec-p"><option value="">Choisir le dossier…</option>' +
       liste.map(q => '<option value="' + E(q.id) + '"' + (String(q.id) === String(PEC.pid) ? ' selected' : '') + '>' + E([q.client, q.nom && q.nom !== q.client ? q.nom : ''].filter(Boolean).join(' — ') || ('#' + q.id)) + '</option>').join('') + '</select>' + etat +
     '<div style="font-size:12px;color:#6b7a99;margin:8px 0 12px">' + ((PEC.acces && PEC.acces.length) ? 'Le client le voit aussitôt dans son espace (Avancement et Le fil). ' : '') + 'Aucun mail ni SMS ne part.</div>' +
+    '<div class="vact"><b>Répondre au client dans son espace</b><label for="pec-mx">Message (il le lit dans « Le fil » de son espace)</label><textarea id="pec-mx" rows="3" placeholder="Bonjour, …"></textarea>' +
+      '<div style="margin-top:8px"><button class="vbtn p" id="pec-msg">Envoyer dans son espace</button> <button class="vbtn" onclick="ecOuvrirFiche(PEC.pid,\'messages\');fermerValidation()">Voir tous les échanges ›</button></div></div>' +
     '<div class="vact"><b>Note au fil du client</b><label for="pec-nt">Titre</label><input id="pec-nt" value="' + E(PEC.note.titre) + '">' +
       '<label for="pec-nx">Texte</label><textarea id="pec-nx" rows="3" placeholder="Une information simple, dans l’esprit Phénix.">' + E(PEC.note.texte) + '</textarea>' +
       '<div style="margin-top:8px"><button class="vbtn p" id="pec-note">Publier la note</button></div></div>' +
@@ -720,6 +734,12 @@ function _pecBrancher() {
     await _pecChargerDossier(); _pecDessiner();
   };
   const verif = () => { const p = _pecProjet(PEC.pid); if (!p) { toast('⚠️ Choisissez le dossier du client.'); return null; } return p; };
+  on('pec-msg', 'onclick', async e => {
+    const p = verif(); if (!p) return; const t = String((document.getElementById('pec-mx') || {}).value || '').trim(); if (!t) { toast('⚠️ Écrivez votre message.'); return; }
+    e.target.disabled = true;
+    if (await _convNoter(p.id, 'p' + Date.now().toString(36), { de: 'phenix', canal: 'espace', texte: t.slice(0, 4000), t: new Date().toISOString(), par: _moi() })) { toast('✅ Message envoyé dans l’espace de ' + (p.client || p.nom || 'votre client')); document.getElementById('pec-mx').value = ''; await apres('Message au client'); }
+    else { toast('⚠️ Envoi refusé : règles Firestore (messages de l’espace client) ?'); e.target.disabled = false; }
+  });
   on('pec-note', 'onclick', async e => {
     _pecLireChamps(); const p = verif(); if (!p) return;
     if (!String(PEC.note.texte || '').trim()) { toast('⚠️ Écrivez le texte de la note.'); return; }
@@ -855,6 +875,7 @@ window.echEnvoyerReponse = async function(id) {
   const x = _echTrouve(id); if (!x) return; const ta = document.getElementById('er_' + id), texte = String(ta ? ta.value : '').trim();
   if (!texte) { toast('Le texte est vide'); return; }
   if (!_ouvrirReponseCanal(x, texte)) return;
+  _convReponseEntrant(x, texte);   // [Conversation] le client retrouve cet échange dans son espace
   const i = _repIdx(x), faites = new Set([...(x.faites || []), i]);
   const reste = (x.actions || []).some((a, k) => a && a.type !== 'reponse' && !faites.has(k));   // d'autres actions à faire : le message reste « à traiter »
   const patch = { reponduLe: new Date().toISOString(), faites: arrayUnion(i) }; if (!reste) patch.statut = 'lu';
@@ -1300,6 +1321,7 @@ window.noterRdv = async function(i, mode) {
 window.repondre = async function(i) {
   const x = _echTrouve(_valId); if (!x) return; const texte = String(document.getElementById('vr' + i).value || '').trim(); if (!texte) { toast('Le texte est vide'); return; }
   if (!_ouvrirReponseCanal(x, texte)) return;   // [Réponse 18/11/2026] même ouverture que depuis la liste
+  _convReponseEntrant(x, texte);   // [Conversation] le client retrouve cet échange dans son espace
   await _echMaj(x._id, { reponduLe: new Date().toISOString(), faites: arrayUnion(i) }); toast('✓ Brouillon ouvert — relisez et envoyez'); setTimeout(() => ouvrirValidation(x._id), 250);
 };
 // Tâche, rappel, mission, note de dossier

@@ -7,6 +7,9 @@
 ══════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_chiffrage.html
 ──────────────────────────────────────────────────────────────────
+ 26/11/2026 — [Carnet unique] Le carnet ne s'ouvre plus dans Chiffrage (ni page intégrée, ni bouton « Carnet » sur les projets, ni « Ouvrir le Carnet
+   au client ») : un seul endroit, Dossier › fiche › Espace client › Carnet et maquette. La page devient « Chiffrer le carnet » : état des choix,
+   « Chiffrer avec le Carnet (IA) » et « Choix du client », en lecture seule.
  25/11/2026 — [Offres reçues] Plus aucun devis rangé tout seul : un devis reçu par mail arrive dans « Offres reçues » seulement après
    « 📥 Intégrer à Chiffrage » dans la cloche, et se range un par un (dossier au choix pour chacun, même s'ils viennent du même mail
    ou du même artisan). Offres repérées par leur identifiant (un clic ne peut plus toucher une autre offre). Dossier sans projet de
@@ -592,7 +595,7 @@ if (window.parent !== window) {
     <i class="ti ti-building-2" aria-hidden="true"></i> Projets
   </div>
   <div class="nav-item" onclick="showPage('carnet')" id="nav-carnet">
-    <i class="ti ti-book-2" aria-hidden="true"></i> Carnet
+    <i class="ti ti-book-2" aria-hidden="true"></i> Chiffrer le carnet
   </div>
   <div class="nav-item" onclick="showPage('chiffrage')" id="nav-chiffrage">
     <i class="ti ti-calculator" aria-hidden="true"></i> Lots & Chiffrage
@@ -640,11 +643,11 @@ if (window.parent !== window) {
   <!-- PAGE CARNET [Carnet] : phase conception, avant le chiffrage -->
   <div class="page" id="page-carnet">
     <div class="page-header">
-      <div class="page-title">Carnet du projet</div>
-      <div class="page-sub">Avant le chiffrage : fiche, maquette 3D (Atelier) et choix de matières du client. Ses choix alimentent ensuite le chiffrage IA.</div>
+      <div class="page-title">Chiffrer à partir du carnet</div>
+      <div class="page-sub">Les choix du client, la fiche et les métrés de la maquette alimentent le chiffrage IA. Le carnet lui-même se règle à un seul endroit : Dossier › fiche du projet › Espace client › Carnet et maquette.</div>
       <div class="page-actions" style="flex-wrap:wrap;gap:8px">
         <select id="carnet-chantier-select" aria-label="Projet" onchange="carnetSelect(this.value)" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;background:var(--surface2);color:var(--text)"></select>
-        <button class="btn btn-outline" onclick="exportToCarnet()" style="border-color:#E8833A;color:#E8833A" title="Crée l'accès privé du client à son Carnet (phase conception, sans prix)"><i class="ti ti-user-share" aria-hidden="true"></i>Ouvrir l'accès au client</button>
+        <button class="btn btn-outline" hidden onclick="exportToCarnet()" style="border-color:#E8833A;color:#E8833A" title="Crée l'accès privé du client à son Carnet (phase conception, sans prix)"><i class="ti ti-user-share" aria-hidden="true"></i>Ouvrir l'accès au client</button>
         <button class="btn btn-primary" onclick="carnetChiffrerModal()" style="background:linear-gradient(135deg,#E8833A,#2A5298);border-color:#E8833A"><i class="ti ti-robot" aria-hidden="true"></i>Chiffrer avec le Carnet (IA)</button>
       </div>
     </div>
@@ -682,7 +685,7 @@ if (window.parent !== window) {
           <button class="btn btn-outline" onclick="exportDPGF()" style="border-color:#7DC6E8;color:#7DC6E8"><i class="ti ti-clipboard-list" aria-hidden="true"></i>DPGF consultation</button>
           <button class="btn btn-outline" onclick="openImportArtisanModalGlobal()" style="border-color:#e74c3c;color:#e74c3c"><i class="ti ti-file-import" aria-hidden="true"></i>Importer devis artisan (IA)</button>
           <button class="btn btn-outline" onclick="exportToFinancement()" style="border-color:#2D7A4F;color:#2D7A4F"><i class="ti ti-coin" aria-hidden="true"></i>Envoyer vers Financement</button>
-          <button class="btn btn-outline" onclick="exportToCarnet()" style="border-color:#E8833A;color:#E8833A" title="Ouvre le Carnet de projet au client (phase conception : choix des matières, sans prix) et crée son accès privé"><i class="ti ti-book-2" aria-hidden="true"></i>Ouvrir le Carnet au client</button>
+          <button class="btn btn-outline" hidden onclick="exportToCarnet()" style="border-color:#E8833A;color:#E8833A" title="Ouvre le Carnet de projet au client (phase conception : choix des matières, sans prix) et crée son accès privé"><i class="ti ti-book-2" aria-hidden="true"></i>Ouvrir le Carnet au client</button>
           <button class="btn btn-outline" onclick="voirChoixCarnet()" style="border-color:#E8833A;color:#E8833A" title="Affiche les matières choisies par le client dans son Carnet, pour chiffrer en conséquence"><i class="ti ti-palette" aria-hidden="true"></i>Choix du client (Carnet)</button>
           <button class="btn btn-outline" onclick="exportToChantier()" style="border-color:#4fa8f0;color:#4fa8f0"><i class="ti ti-building-factory-2" aria-hidden="true"></i>Envoyer vers Chantier</button>
           <button class="btn btn-outline" onclick="exportToAppelsOffres()" style="border-color:#1E5FAA;color:#1E5FAA"><i class="ti ti-send" aria-hidden="true"></i>Envoyer vers Appels d'offres</button>
@@ -3899,7 +3902,6 @@ function renderChantierGrid(){
       ${(()=>{const n=(c.lots||[]).filter(l=>!l.exclu&&lotEntrepriseEtat(l)==='aucune').length; return n?'<div style="margin-top:5px"><span class="no-ent"><i class="ti ti-alert-triangle" aria-hidden="true"></i> '+n+' lot'+(n>1?'s':'')+' sans entreprise</span></div>':'';})()}
       <div class="chantier-progress"><div class="chantier-progress-inner" style="width:${getProgress(c)}%"></div></div>
       <div class="chantier-actions" style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
-        <button class="btn btn-sm btn-outline" onclick="ouvrirCarnet(${i})" style="border-color:#E8833A;color:#E8833A" title="Carnet du projet : fiche, maquette, choix du client"><i class="ti ti-book-2" aria-hidden="true"></i>Carnet</button>
         <button class="btn btn-sm btn-primary" onclick="selectChantier(${i})"><i class="ti ti-calculator" aria-hidden="true"></i>Chiffrer</button>
         <button class="btn btn-sm btn-outline" onclick="editChantier(${i})"><i class="ti ti-edit" aria-hidden="true"></i></button>
         <button class="btn btn-sm btn-danger" onclick="deleteChantier(${i})"><i class="ti ti-trash" aria-hidden="true"></i></button>
@@ -4593,12 +4595,9 @@ function renderCarnetPage(){
   if(!c.projetId){ msg('Ce projet n\'est pas relié à un projet Phénix Dossier : le Carnet s\'appuie sur ce lien.<br><button class="btn btn-outline" style="margin-top:12px;border-color:#e6b95c;color:#e6b95c" onclick="ouvrirModalRaccorderDossier()"><i class="ti ti-link" aria-hidden="true"></i>Raccorder à Phénix Dossier</button>'); return; }
   const pid=String(c.projetId);
   try{ localStorage.setItem('phenix-carnet-last', pid); }catch(e){}
-  let fr=document.getElementById('carnet-frame');
-  if(!fr){
-    wrap.innerHTML='<iframe id="carnet-frame" src="phenix_carnet.html" style="width:100%;height:100%;min-height:520px;border:0;display:block" title="Carnet du projet" allow="clipboard-write"></iframe>'; fr=document.getElementById('carnet-frame');
-    fr.addEventListener('load',function(){ _carnetPoste(); });
-  }
-  fr.dataset.pid=pid; _carnetPoste();
+  // [Carnet unique] 26/11/2026 : plus de carnet intégré ici (un seul endroit : la fiche Dossier › Espace client › Carnet et maquette)
+  wrap.style.minHeight='0'; wrap.style.flex='0 0 auto';
+  wrap.innerHTML='<div style="padding:18px 22px;color:#c9d6e8;font-size:13.5px;line-height:1.6">Pour modifier le carnet (fiche, maquette, ouverture au client) : <b>Dossier › fiche du projet › Espace client › Carnet et maquette</b>.<br>Ici, « Chiffrer avec le Carnet (IA) » et « Choix du client » lisent ce carnet sans le modifier.</div>';
   if(etat) etat.textContent='Lecture du Carnet…';
   _carnetLireEtat(c).then(e=>{
     if(!etat || String((_carnetProjet()||{}).projetId)!==pid) return;

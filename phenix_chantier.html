@@ -5,6 +5,8 @@
 ══════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_chantier.html
 ──────────────────────────────────────────────────────────────────
+ 26/11/2026 — [Carnet unique] « Carnet client » retiré du menu de Chantier : un seul endroit pour le carnet, Dossier › fiche › Espace client ›
+   Carnet et maquette. « Importer depuis Carnet » (lots) reste : il lit le carnet sans l'ouvrir.
  17/11/2026 — [Bureaux] « Équipe & accès » devient « Accès externes » (clients et artisans). Les collaborateurs (profil, droits,
    districts, chantiers) se règlent dans la Synthèse 3D › Bureaux ; leurs lignes restent visibles ici, sans modification.
  16/11/2026 — [PDF] Toutes les sorties PDF (réserves, fiche mission, lots, planning, compte rendu, synthèse, financier) passent
@@ -1693,7 +1695,7 @@ if (window.parent !== window) {
     <div class="nav-section">Navigation</div>
     <div class="nav-item active" onclick="show('dashboard',this)"><i class="ti ti-layout-dashboard"></i> Tableau de bord</div>
     <div class="nav-item" onclick="show('chantiers',this)"><i class="ti ti-building-factory-2"></i> Chantiers <span class="nav-badge" id="nb-chantiers">0</span></div>
-    <div class="nav-item staff-only" onclick="show('carnet',this)"><i class="ti ti-book-2"></i> Carnet client</div>
+    <!-- [Carnet unique] 26/11/2026 : « Carnet client » retiré du menu : le carnet se règle à un seul endroit, Dossier › fiche › Espace client › Carnet et maquette -->
     <div class="nav-item" onclick="show('plans',this)"><i class="ti ti-map-2"></i> Plans &amp; pastilles</div><!-- [Plans] -->
     <div class="nav-item" onclick="show('messages',this)"><i class="ti ti-message-circle"></i> Messages <span class="badge badge-red" id="msg-badge" style="display:none;margin-left:6px"></span></div><!-- [Artisan] -->
     <div class="nav-item" onclick="show('comptes_rendus',this)"><i class="ti ti-file-description"></i> Comptes Rendus <span class="nav-badge" id="nb-cr">0</span></div>

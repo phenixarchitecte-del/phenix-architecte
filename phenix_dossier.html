@@ -5,6 +5,12 @@
 ══════════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_dossier.html
 ──────────────────────────────────────────────────────────────────────
+ 25/11/2026 — [Centre client] L'onglet Espace client s'ouvre en grand avec 4 sous-onglets : Statut et accès, Échanges (conversation avec le
+   client, phenix_client_dossiers/{id}/messages, réponses mail/SMS de la cloche comprises), Documents, Carnet et maquette (réglages du carnet
+   et Atelier intégrés, sans changer d'écran). Ordre du shell open-projet : sous = 'messages' | 'carnet'.
+ 25/11/2026 — [Carnet] Onglet Espace client › « Carnet de projet et visite 3D » : case « Carnet ouvert au client » (le carnet s'ouvre dans
+   l'espace client, plus de lien externe), réponses du client (envoyés / modifiés après envoi, n sur N, détail avec % par choix),
+   « Voir le carnet comme le client », « Réglages du carnet et Atelier maquette » (phenix_carnet.html). Questions : phenix_carnet_questions.js.
  25/11/2026 — [Ordres du shell] Vraie cause trouvée : les ordres du shell (ouvrir un projet, sa checklist, son espace client) partaient sur la
    copie locale des projets chargée au démarrage, parfois ancienne et sans le dossier demandé → on restait sur le tableau de bord au 1er clic.
    Ils attendent maintenant la liste venue de Firestore (window._projetsCloudPrets).
@@ -102,6 +108,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="phenix_espace_client.js"></script><!-- [Espace client] bibliothèque des statuts partagée avec la cloche du shell -->
+<script src="phenix_carnet_questions.js?v=20261125"></script><!-- [Carnet] questions du carnet (réponses du client) -->
 <title>Phénix-Architecture · Gestion de Dossier</title>
 <script type="module">
 import { initializeApp }       from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
@@ -191,6 +198,11 @@ window.phenixJournal = function(module, action, objet, libelle, extra){
 // [Espace client] 25/11/2026 — ce que voit le client (phenix_client_dossiers) et qui y a accès (phenix_client_acces)
 window._fbClient = {
   async lire(pid) { const s = await getDoc(doc(db, 'phenix_client_dossiers', String(pid))); return s.exists() ? s.data() : null; },
+  // [Conversation 25/11/2026] échanges avec le client : phenix_client_dossiers/{id}/messages/{id} { de:'client'|'phenix', canal:'espace'|'mail'|'sms', texte, t, par }
+  ecouterMessages(pid, cb) { return onSnapshot(collection(db, 'phenix_client_dossiers', String(pid), 'messages'), s => { const l = []; s.forEach(x => l.push(Object.assign({ _id: x.id }, x.data()))); cb(l); }, e => { console.warn('Messages client :', e && e.code); cb(null); }); },
+  async envoyerMessage(pid, id, m) { await setDoc(doc(db, 'phenix_client_dossiers', String(pid), 'messages', String(id)), m, { merge: true }); },
+  async lireCarnet(pid) { try { const s = await getDoc(doc(db, 'phenix_portail', String(pid), 'etat', 'choix')); return s.exists() ? s.data() : null; } catch (e) { return null; } },   // [Carnet] choix du client
+  async lireFicheCarnet(pid) { try { const s = await getDoc(doc(db, 'phenix_portail', String(pid), 'etat', 'fiche')); return s.exists() ? s.data() : null; } catch (e) { return null; } },
   async ecrire(pid, d) { await setDoc(doc(db, 'phenix_client_dossiers', String(pid)), d); },
   async accesDuProjet(pid) { const s = await getDocs(query(collection(db, 'phenix_client_acces'), where('projetId', '==', String(pid)))); const l = []; s.forEach(x => l.push(x.data())); return l; },
   async ouvrirAcces(email, pid, par) { await setDoc(doc(db, 'phenix_client_acces', String(email).toLowerCase()), { email: String(email).toLowerCase(), projetId: String(pid), at: new Date().toISOString(), par: par || '' }); },
@@ -1012,6 +1024,7 @@ tr:last-child td{border-bottom:none} tr:hover td{background:var(--accent-bg)}
 /* ── MODALS ──────────────────────────────────────────────── */
 #app-dossier .modal-overlay{position:fixed;inset:0;background:rgba(15,30,61,.55);z-index:100;display:none;align-items:center;justify-content:center;backdrop-filter:blur(3px)}
 #app-dossier .modal-overlay.open{display:flex}
+#app-dossier #projectModal.ec-large .modal{width:1120px;max-width:97vw!important;height:92vh;max-height:92vh}   /* [Centre client] onglet Espace client en grand */
 #app-dossier .modal{background:var(--card);border-radius:var(--r-lg);width:680px;max-width:95vw;max-height:90vh;overflow:hidden;box-shadow:var(--shadow-md);border-top:3px solid #4fa8f0;display:flex;flex-direction:column}
 #app-dossier .modal-header{
   padding:1.25rem 1.5rem;border-bottom:1px solid var(--border);
@@ -5789,14 +5802,22 @@ async function ecApresCoche(p, itemId, valeur, fond) {
 }
 
 // ── Onglet « Espace client » de la fiche projet ──
-const _EC = { pid: null, d: null, acces: [], br: null, phaseSel: null, charge: false };
+const _EC = { pid: null, d: null, acces: [], br: null, phaseSel: null, charge: false, sous: 'statut', msgs: null, unsubMsgs: null };
+function _ecStopMessages() { if (_EC.unsubMsgs) { try { _EC.unsubMsgs(); } catch (e) {} _EC.unsubMsgs = null; } }
+function _ecEcouterMessages(p) {
+  if (_EC.unsubMsgs && _EC.msgsPid === String(p.id)) return;
+  _ecStopMessages(); _EC.msgs = null; _EC.msgsPid = String(p.id);
+  if (!window._fbClient || !window._fbClient.ecouterMessages) return;
+  _EC.unsubMsgs = window._fbClient.ecouterMessages(String(p.id), l => { _EC.msgs = l || []; if (_EC.pid === String(p.id) && _EC.sous === 'messages') _ecDessiner(p); });
+}
 async function renderProjectClient(id) {
   const el = document.getElementById('projectClientBody'); if (!el) return;
   const p = stateDossier.projets.find(x => x.id == id); if (!p) return;
   if (!_ecAdmin()) { el.innerHTML = '<p style="font-size:13px;color:var(--text2)">L’espace client se gère depuis le compte de Maxime.</p>'; return; }
   if (!window._fbClient) { el.innerHTML = '<p style="font-size:13px;color:var(--text2)">Connexion à Firebase en cours… rouvrez l’onglet dans un instant.</p>'; return; }
-  if (_EC.pid !== String(id)) { Object.assign(_EC, { pid: String(id), d: null, acces: [], br: null, phaseSel: null }); el.innerHTML = '<p style="font-size:13px;color:var(--text2)">Chargement de l’espace client…</p>'; }
-  try { const r = await Promise.all([_ecLire(id), window._fbClient.accesDuProjet(String(id))]); _EC.d = r[0]; _EC.acces = r[1] || []; }
+  if (_EC.pid === String(id) && _EC.sousDemande) { _EC.sous = _EC.sousDemande; _EC.sousDemande = null; }
+  if (_EC.pid !== String(id)) { _ecStopMessages(); Object.assign(_EC, { pid: String(id), d: null, acces: [], br: null, phaseSel: null, sous: _EC.sousDemande || 'statut', msgs: null }); _EC.sousDemande = null; el.innerHTML = '<p style="font-size:13px;color:var(--text2)">Chargement de l’espace client…</p>'; }
+  try { const r = await Promise.all([_ecLire(id), window._fbClient.accesDuProjet(String(id)), window._fbClient.lireCarnet ? window._fbClient.lireCarnet(String(id)) : null, window._fbClient.lireFicheCarnet ? window._fbClient.lireFicheCarnet(String(id)) : null]); _EC.d = r[0]; _EC.acces = r[1] || []; _EC.choix = r[2]; _EC.ficheCarnet = r[3]; }
   catch (e) { console.warn(e); el.innerHTML = '<p style="font-size:13px;color:var(--red)">⚠ Espace client indisponible : vérifiez les règles Firestore (phenix_client_dossiers, phenix_client_acces).</p>'; return; }
   _ecDessiner(p);
 }
@@ -5835,14 +5856,18 @@ function _ecDessiner(p) {
       <div style="display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap"><span style="font-size:12px;font-weight:700;color:${ouvert ? 'var(--green)' : 'var(--text3)'}">${ouvert ? '✓ Espace ouvert' : 'Espace pas encore ouvert'}</span>
         <a class="btn btn-sm" href="${esc(EC_URL_CLIENT())}?apercu=${encodeURIComponent(p.id)}" target="_blank" rel="noopener"><i class="ti ti-eye"></i> Voir comme le client</a></div>
     </div>
-    ${sec('Accès du client', 'Le client reçoit un e-mail avec son lien de connexion, sans mot de passe. Adresse de son espace : ' + esc(EC_URL_CLIENT()),
+    <div role="tablist" aria-label="Centre client" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:14px;border-bottom:1px solid var(--border);padding-bottom:8px">
+      ${[['statut','Statut et accès'],['messages','Échanges' + (_ecNonLus() ? ' (' + _ecNonLus() + ')' : '')],['documents','Documents'],['carnet','Carnet et maquette']].map(([k, l]) => `<button class="btn btn-sm${_EC.sous === k ? ' btn-primary' : ''}" role="tab" aria-selected="${_EC.sous === k}" data-ec-sous="${k}">${esc(l)}</button>`).join('')}
+    </div>
+    ${_EC.sous === 'messages' ? _ecHtmlMessages(p) : ''}
+    ${_EC.sous !== 'statut' ? '' : sec('Accès du client', 'Le client reçoit un e-mail avec son lien de connexion, sans mot de passe. Adresse de son espace : ' + esc(EC_URL_CLIENT()),
       (_EC.acces.length ? _EC.acces.map(a => `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
         <span>✓ ${esc(a.email)} <span style="color:var(--text3);font-size:11px">· ouvert le ${esc(String(a.at || '').slice(0, 10))}</span></span>
         <span style="display:flex;gap:6px"><button class="btn btn-sm" data-ec-renv="${esc(a.email)}">Renvoyer le lien</button><button class="btn btn-sm" data-ec-ret="${esc(a.email)}">Retirer</button></span></div>`).join('') : '') +
       (_EC.acces.length ? '<div style="font-size:11.5px;color:var(--text3);margin-top:8px">Changer d’adresse : ajoutez la nouvelle ci-dessous, puis retirez l’ancienne.</div>' : '') +
       champ(_EC.acces.length ? 'Ajouter une adresse' : 'E-mail du client', `<input type="email" id="ec-email" value="${esc(_EC.acces.length ? '' : (p.email || ''))}" placeholder="client@email.fr">`) +
       `<div style="margin-top:10px"><button class="btn btn-primary" id="ec-acces"><i class="ti ti-send"></i> ${_EC.acces.length ? 'Ajouter cet accès et envoyer le lien' : 'Ouvrir l’accès et envoyer le lien'}</button></div>`)}
-    ${sec('Statut affiché chez le client', d.titre ? '' : 'Aucun statut publié pour l’instant.',
+    ${_EC.sous !== 'statut' ? '' : sec('Statut affiché chez le client', d.titre ? '' : 'Aucun statut publié pour l’instant.',
       (d.titre ? `<div style="margin-top:8px;font-size:12px;color:var(--text3)">${esc(EC_PHASES_LONG[Number(d.phase) || 0])}${d.pause ? ' · en pause' : ''}</div>
         <div style="font-size:16px;font-weight:600;color:var(--navy);margin-top:2px">${esc(d.titre)}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:3px">${esc(d.code || '')} · ${d.statutAuto ? 'mis à jour automatiquement par la checklist' : 'choisi à la main'}${d.majAt ? ' · ' + esc(new Date(d.majAt).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })) : ''}</div>` : '') +
@@ -5865,22 +5890,59 @@ function _ecDessiner(p) {
         ${st && st[6] ? `<label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:var(--red)"><input type="checkbox" id="ec-appele" ${br.appele ? 'checked' : ''} style="width:18px;height:18px"> ⚠ J’ai appelé le client avant de publier</label>` : ''}
         <div style="margin-top:12px"><button class="btn btn-primary" id="ec-pub"><i class="ti ti-check"></i> Publier ce statut</button></div>
       </details>`)}
-    ${sec('Note au fil', 'Une information du jour, sans changer le statut.',
+    ${_EC.sous !== 'statut' ? '' : sec('Note au fil', 'Une information du jour, sans changer le statut.',
       champ('Titre', `<input id="ec-ntitre" placeholder="Note du jour">`) + champ('Texte', `<textarea id="ec-ntexte" rows="3" placeholder="Votre dossier suit son cours en mairie. Aucune demande de pièces à ce jour."></textarea>`) +
       `<div style="margin-top:10px"><button class="btn" id="ec-note"><i class="ti ti-message-plus"></i> Ajouter au fil</button></div><div style="margin-top:10px">${fil}</div>`)}
-    ${sec('Documents', 'Rien n’est visible par défaut : cochez ce que le client peut voir. Les plans et photos viennent des comptes rendus du projet.',
+    ${_EC.sous !== 'documents' ? '' : sec('Documents', 'Rien n’est visible par défaut : cochez ce que le client peut voir. Les plans et photos viennent des comptes rendus du projet.',
       `<div style="margin-top:8px">${lignesCand}</div>` + (lignesAutres ? `<div style="margin-top:14px;font-size:12px;font-weight:700;color:var(--text2)">Autres documents visibles</div>${lignesAutres}` : '') +
       `<div style="margin-top:14px;font-size:12px;font-weight:700;color:var(--text2)">Ajouter un document</div>
        <div style="display:grid;grid-template-columns:1fr 2fr;gap:10px">${champ('Catégorie', `<select id="ec-dcat">${EC_CATS.map(c => `<option>${c}</option>`).join('')}</select>`)}${champ('Titre', `<input id="ec-dtitre" placeholder="Plan d’aménagement">`)}</div>
        ${champ('Description courte', `<input id="ec-ddesc" placeholder="Rez-de-chaussée et étage, version 3">`)}
        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${champ('Fichier (PDF ou image)', `<input id="ec-dfich" type="file" accept=".pdf,image/*">`)}${champ('ou lien (Dropbox en lecture seule…)', `<input id="ec-durl" type="url" placeholder="https://…">`)}</div>
        <div style="margin-top:10px"><button class="btn" id="ec-dajout"><i class="ti ti-file-plus"></i> Ajouter le document</button></div>`)}
-    ${sec('Carnet et visite 3D', 'Avant validation, le bouton doré du client ouvre le carnet. Après validation, il ouvre la visite 3D.',
-      champ('Lien du carnet de projet', `<div style="display:flex;gap:8px"><input id="ec-carnet" type="url" value="${esc(d.carnetUrl || '')}" style="flex:1" placeholder="https://…"><button class="btn btn-sm" id="ec-carnet-auto" type="button">Carnet de ce dossier</button></div>`) +
-      `<label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px"><input type="checkbox" id="ec-cval" ${d.carnetValide ? 'checked' : ''} style="width:18px;height:18px"> Carnet rempli et validé par Phénix</label>` +
+    ${_EC.sous !== 'carnet' ? '' : sec('Carnet de projet et visite 3D', 'Le carnet s’ouvre dans l’espace du client (bouton doré), avec la même connexion. Une fois validé, le bouton doré ouvre la visite 3D.',
+      `<label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px"><input type="checkbox" id="ec-couv" ${(d.carnetOuvert || d.carnetUrl) ? 'checked' : ''} style="width:18px;height:18px"> Carnet ouvert au client (choix des matières)</label>` +
+      _ecReponsesCarnet(p) +
+      `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><a class="btn btn-sm" href="${esc(EC_URL_CLIENT())}?apercu=${encodeURIComponent(p.id)}&carnet=1" target="_blank" rel="noopener"><i class="ti ti-eye"></i> Voir le carnet comme le client</a>` +
+      `</div>` +
+      `<label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px"><input type="checkbox" id="ec-cval" ${d.carnetValide ? 'checked' : ''} style="width:18px;height:18px"> Carnet rempli et validé par Phénix</label>` +
       champ('Lien de la visite 3D (vide tant qu’elle n’existe pas)', `<input id="ec-visite" type="url" value="${esc(d.visiteUrl || '')}">`) +
-      `<div style="margin-top:10px"><button class="btn" id="ec-cok"><i class="ti ti-device-floppy"></i> Enregistrer</button></div>`)}`;
+      `<div style="margin-top:10px"><button class="btn" id="ec-cok"><i class="ti ti-device-floppy"></i> Enregistrer</button></div>`)}
+    ${_EC.sous !== 'carnet' ? '' : sec('Réglages du carnet et maquette 3D', 'Fiche du carnet (choix imposés, spécificités), dépôt de la maquette ArchiCAD et Atelier : ici même, sans changer d’écran.',
+      `<iframe title="Réglages du carnet et Atelier maquette" src="${esc(EC_URL_CARNET(p.id))}&centre=1" style="display:block;width:100%;height:78vh;margin-top:10px;border:1px solid var(--border);border-radius:var(--r-md);background:#0a1628" loading="lazy" allow="fullscreen"></iframe>`)}`;
   _ecBrancher(p, candidats);
+}
+// [Conversation] échanges avec le client : espace client, et mails/SMS de la cloche reliés au dossier
+function _ecNonLus() { return (_EC.msgs || []).filter(m => m.de === 'client' && !m.luPhenix).length; }
+function _ecHtmlMessages(p) {
+  const l = (_EC.msgs || []).slice().sort((a, b) => String(a.t || '').localeCompare(String(b.t || '')));
+  const canal = m => m.canal === 'mail' ? ' · par mail' : m.canal === 'sms' ? ' · par SMS' : '';
+  const bulles = _EC.msgs == null ? '<div style="font-size:12.5px;color:var(--text3)">Chargement des échanges…</div>'
+    : !l.length ? '<div style="font-size:12.5px;color:var(--text3)">Aucun échange pour l’instant. Ce que vous écrivez ici apparaît dans l’espace du client (Le fil), et ses messages vous arrivent dans la cloche.</div>'
+    : l.map(m => { const moi = m.de === 'phenix'; return `<div style="display:flex;justify-content:${moi ? 'flex-end' : 'flex-start'};margin:6px 0"><div style="max-width:78%;padding:8px 12px;border-radius:12px;border:1px solid ${moi ? 'var(--accent)' : 'var(--border)'};background:${moi ? 'var(--accent-bg)' : 'transparent'}">
+        <div style="font-size:11px;color:var(--text3)">${moi ? 'Phénix' : 'Client'}${esc(canal(m))} · ${esc(new Date(m.t).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))}</div>
+        <div style="font-size:13.5px;white-space:pre-wrap;margin-top:2px">${esc(m.texte || '')}</div></div></div>`; }).join('');
+  return `<div style="margin-top:16px;padding:14px 16px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--card)">
+    <div style="font-family:var(--font-serif);font-size:17px;color:var(--navy)">Échanges avec le client</div>
+    <div style="font-size:12px;color:var(--text3);margin-top:3px">Tout au même endroit : messages de son espace, et vos réponses par mail ou SMS envoyées depuis la cloche ou Échanges.</div>
+    <div id="ec-fil" style="margin-top:10px;max-height:52vh;overflow-y:auto;padding-right:4px">${bulles}</div>
+    <div class="form-group" style="margin-top:10px"><label for="ec-mtx">Écrire au client (visible dans son espace)</label><textarea id="ec-mtx" rows="3" placeholder="Bonjour, …"></textarea></div>
+    <div style="margin-top:8px"><button class="btn btn-primary" id="ec-menv"><i class="ti ti-send"></i> Envoyer dans son espace</button></div></div>`;
+}
+// [Carnet] réponses du client, lues dans phenix_portail/{id}/etat/choix (questions : phenix_carnet_questions.js)
+function _ecReponsesCarnet(p) {
+  const c = _EC.choix, PC = window.PhenixCarnet;
+  if (!c) return '<div style="margin-top:8px;font-size:12px;color:var(--text3)">Le client n’a encore fait aucun choix.</div>';
+  const lib = { valide: '✓ Choix envoyés par le client', modifie: '⚠ Choix modifiés après envoi : à revoir avec le client', brouillon: 'Choix en cours' }[c.statut || 'brouillon'] || 'Choix en cours';
+  let n = 0, tot = 0, lignes = '';
+  if (PC) {
+    const st = PC.etat(c), fiche = _EC.ficheCarnet || { cats: {} };
+    const q = PC.aRepondre(fiche, st); tot = q.length; n = q.filter(x => st.conf[x.id]).length;
+    lignes = PC.questions(fiche).map(x => { const phx = PC.parPhenix(x) || PC.impose(fiche, st, x), ok = !!st.conf[x.id];
+      return `<div style="display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12.5px"><span><b style="font-weight:600">${esc(x.t)}</b> <span style="color:var(--text3)">· ${phx ? 'Phénix : ' : ok ? '' : 'proposition : '}${esc(PC.libelle(st, x))}</span></span><span style="flex:none;color:${ok ? 'var(--text2)' : 'var(--text3)'}">${phx ? 'décidé par Phénix' : ok ? esc(PC.pctChoix(st, x) || 'sans écart') : 'à choisir'}</span></div>`; }).join('');
+  } else (c.items || []).forEach(it => { tot++; if (it.confirme) n++; });
+  return `<div style="margin-top:12px;padding:10px 12px;border-radius:10px;border:1px solid var(--border)"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><b style="font-size:13px">${esc(lib)}</b><span style="font-size:12px;color:var(--text3)">${n} sur ${tot} confirmés${c.updatedAt ? ' · ' + esc(new Date(c.updatedAt).toLocaleDateString('fr-FR')) : ''}</span></div>` +
+    (lignes ? `<details style="margin-top:6px"><summary style="cursor:pointer;font-size:12.5px;color:var(--accent)">Voir le détail des choix</summary>${lignes}</details>` : '') + '</div>';
 }
 function _ecLireBrouillon() {
   const v = id => { const e = document.getElementById(id); return e ? e.value : null; }, b = _EC.br; if (!b) return;
@@ -5890,6 +5952,20 @@ function _ecLireBrouillon() {
 }
 function _ecBrancher(p, candidats) {
   const on = (id, f) => { const e = document.getElementById(id); if (e) e.onclick = f; };
+  document.querySelectorAll('[data-ec-sous]').forEach(b => b.onclick = () => { _ecLireBrouillon(); _EC.sous = b.dataset.ecSous; if (_EC.sous === 'messages') _ecEcouterMessages(p); _ecDessiner(p); });
+  if (_EC.sous === 'messages') {
+    _ecEcouterMessages(p);
+    const fil = document.getElementById('ec-fil'); if (fil) fil.scrollTop = fil.scrollHeight;
+    // messages du client marqués lus par Phénix
+    (_EC.msgs || []).filter(m => m.de === 'client' && !m.luPhenix).forEach(m => { try { window._fbClient.envoyerMessage(String(p.id), m._id, { luPhenix: true }); } catch (e) {} });
+  }
+  on('ec-menv', async ev => {
+    const t = String((document.getElementById('ec-mtx') || {}).value || '').trim(); if (!t) { toast_d('⚠️ Écrivez votre message.'); return; }
+    ev.currentTarget.disabled = true;
+    try { const id = 'p' + Date.now().toString(36); await window._fbClient.envoyerMessage(String(p.id), id, { de: 'phenix', canal: 'espace', texte: t.slice(0, 4000), t: new Date().toISOString(), par: _ecMoi() });
+      toast_d('✅ Message envoyé dans l’espace du client'); const _tx = document.getElementById('ec-mtx'); if (_tx) _tx.value = ''; ev.currentTarget && (ev.currentTarget.disabled = false); try { window.phenixJournal && window.phenixJournal('espace-client', 'message', p.nom || ('#' + p.id), 'Message au client', { projetId: String(p.id) }); } catch (e) {} }
+    catch (e) { console.warn(e); toast_d('⚠️ Envoi refusé (règles Firestore : messages de l’espace client).'); ev.currentTarget.disabled = false; }
+  });
   const recharger = async () => { await renderProjectClient(p.id); };
   const verrou = async (btn, f) => { if (btn) btn.disabled = true; try { await f(); } finally { if (btn) btn.disabled = false; } };
   // Accès
@@ -5985,14 +6061,14 @@ function _ecBrancher(p, candidats) {
     if (await _ecEcrire(p, { documents: docs, fil }, 'Document ajouté : ' + titre)) { toast_d('✅ Document ajouté'); await recharger(); }
   }));
   // Carnet et visite 3D (A5 à l'ouverture du carnet, A6 à sa validation)
-  on('ec-carnet-auto', () => { const e = document.getElementById('ec-carnet'); if (e) e.value = EC_URL_CARNET(p.id); });
   on('ec-cok', ev => verrou(ev.currentTarget, async () => {
-    const cu = document.getElementById('ec-carnet').value.trim(), vu = document.getElementById('ec-visite').value.trim(), val = document.getElementById('ec-cval').checked;
-    if ((cu && !/^https?:\/\//.test(cu)) || (vu && !/^https?:\/\//.test(vu))) { toast_d('⚠️ Les liens doivent commencer par https://'); return; }
+    const couv = document.getElementById('ec-couv').checked, vu = document.getElementById('ec-visite').value.trim(), val = document.getElementById('ec-cval').checked;
+    if (vu && !/^https?:\/\//.test(vu)) { toast_d('⚠️ Le lien de la visite doit commencer par https://'); return; }
     _ecLireBrouillon(); const d = (await _ecLire(p.id)) || _ecBase(p);
-    let patch = { carnetUrl: cu, carnetValide: val, visiteUrl: vu }, fil = (d.fil || []).slice();
+    const cu = couv ? 'interne' : '';   // [Carnet 25/11] le carnet s'ouvre dans l'espace client (plus de lien externe)
+    let patch = { carnetOuvert: couv, carnetUrl: cu, carnetValide: val, visiteUrl: vu }, fil = (d.fil || []).slice();
     const etape = (code) => { const st = _ecRemplir(code); if (!st || _ecRang(d.code) > _ecRang(code)) return; Object.assign(patch, st, { statutAuto: true }); fil.push(_ecLigneFil('Statut', st.titre, _ecPremPhrase(st.texte), Number(st.phase) !== Number(d.phase || 0))); };
-    if (cu && !d.carnetUrl && !val) etape('A5');
+    if (couv && !(d.carnetOuvert || d.carnetUrl) && !val) { etape('A5'); fil.push(_ecLigneFil('Étape', 'Votre carnet de projet est ouvert', 'Choisissez vos matières depuis le bouton doré de votre espace.', true)); }
     if (val && !d.carnetValide) { etape('A6'); fil.push(_ecLigneFil('Étape', 'Carnet validé', 'Vos choix sont validés. Merci pour votre confiance !', true)); }
     if (vu && !d.visiteUrl) fil.push(_ecLigneFil('Étape', 'Votre visite 3D est prête', 'Ouvrez-la depuis le bouton doré de votre espace.', true));
     patch.fil = fil.slice(-120);
@@ -6022,6 +6098,7 @@ function switchModalTab(tab) {
   if (tab==='client' && currentProjectId) {
     renderProjectClient(currentProjectId);   // [Espace client]
   }
+  try { document.getElementById('projectModal').classList.toggle('ec-large', tab==='client'); if (tab!=='client') _ecStopMessages(); } catch(e) {}   // [Centre client] grand format
 }
 
 // ── Marge réelle d'un projet (facturé client − charges liées, ex. sous-traitance artisans) ──
@@ -11709,7 +11786,7 @@ window.addEventListener('message', (ev) => {
     });
   } else if (msg.action === 'open-projet' && msg.id != null && msg.onglet === 'client') {
     // [Espace client] depuis la Synthèse 3D ou la cloche : fiche du projet ouverte directement sur l'onglet Espace client
-    tryRun(() => { try { openProjectModal(msg.id); setTimeout(() => { try { switchModalTab('client'); } catch(e) {} }, 150); } catch(e) {} });
+    tryRun(() => { try { _EC.sousDemande = msg.sous || null; openProjectModal(msg.id); setTimeout(() => { try { switchModalTab('client'); } catch(e) {} }, 150); } catch(e) {} });
   } else if (msg.action === 'open-projet' && msg.id != null) {
     tryRun(() => { try { openProjectModal(msg.id); } catch(e) {} });
   } else if (msg.action === 'nouveau-projet-devis' && msg.devis) {
