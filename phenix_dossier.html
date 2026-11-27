@@ -27,7 +27,7 @@
    phenix_client_dossiers / phenix_client_acces (règles déjà publiées le 24/11). Fichiers ajoutés : Storage espace_client/{id}/. Repérer : [Espace client].
  23/11/2026 — [Contrôle plans] Checklist : F4 et F6 reçoivent deux listes à cocher avant chaque présentation au client
    (plans : zones, cotations, compteur, chauffe-eau, chauffage, poêle, points lumineux, interrupteurs, fluides ;
-   images : plinthes, spots, abat-jours ou plafonniers ; interrupteurs retirés des images le 27/11/2026, déjà contrôlés sur les plans). Identifiants par texte : aucune coche existante perdue.
+   images : plinthes, spots, abat-jours ou plafonniers, interrupteurs — contrôle sur l'image 3D, distinct des plans). Identifiants par texte : aucune coche existante perdue.
  18/11/2026 (2) — [Menu] Ménage : onglets « Phases & suivi » et « Agenda » retirés du menu (pages conservées dans le code, plus accessibles).
  18/11/2026 — [Liens] Devis signé depuis « Devis en cours » : rattaché au dossier existant (lien choisi à la saisie, sinon même e-mail / téléphone,
    sinon même nom de famille, un seul dossier ouvert) au lieu de créer un doublon ; notification « devis rattaché — à vérifier ».
@@ -6721,7 +6721,7 @@ const CHECKLIST_TEMPLATE = [
       "Les plinthes apparaissent.",
       "Les spots apparaissent.",
       "Les abat-jours ou plafonniers apparaissent.",
-      // [27/11/2026] « Les interrupteurs apparaissent. » retiré : déjà contrôlé dans « Contrôle avant présentation : les plans »
+      "Les interrupteurs apparaissent.",   // [27/11/2026] gardé à la demande de Maxime : contrôle sur l'image 3D, distinct de celui des plans
     ]},
     { id:'rdv', titre:'Prise de rendez-vous', taches:[
       "Informer le client du règlement (30 % de la mission AP) dès la prise de rendez-vous — SMS, mail ou vocal.",
@@ -6768,7 +6768,7 @@ const CHECKLIST_TEMPLATE = [
       "Les plinthes apparaissent.",
       "Les spots apparaissent.",
       "Les abat-jours ou plafonniers apparaissent.",
-      // [27/11/2026] « Les interrupteurs apparaissent. » retiré : déjà contrôlé dans « Contrôle avant présentation : les plans »
+      "Les interrupteurs apparaissent.",   // [27/11/2026] gardé à la demande de Maxime : contrôle sur l'image 3D, distinct de celui des plans
     ]},
     { id:'verif', titre:'Vérifications techniques', taches:[
       'Définition des surfaces détaillées (SHAB, surface de plancher)',
