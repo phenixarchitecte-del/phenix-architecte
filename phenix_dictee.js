@@ -9,7 +9,7 @@
        (en continu, Chrome Android répète la phrase entière en boucle) + suppression des doublons.
      • Ponctuation dictée : « virgule », « point », « point à la ligne », « à la ligne », « point d'interrogation »,
        « point d'exclamation », « deux points », « point-virgule », « ouvrez / fermez les guillemets ».
-     • Majuscule en début de phrase.
+     • Majuscule en début de phrase. Hésitations retirées (« euh », « heu », « hum », « bah »…) et mots bégayés (« le le le », « de de »).
    Utilisation :
      var d = PhenixDictee.ecouter({ base:'texte déjà là', onTexte:function(affiche, definitif){…}, onFin:function(texte){…}, onEtat:function(etat, msg){…} });
      d.stop();          // fin voulue : onFin(texte complet) est appelé
@@ -23,9 +23,17 @@
   var actif = null;   /* une seule dictée à la fois dans la page */
 
   function n(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9àâäéèêëîïôöùûüç]+/g, ' ').trim(); }
+  /* hésitations et répétitions retirées : « euh », « heu », « hum », « bah »… et « le le le », « de de » */
+  var BEGUE = 'le|la|les|l|un|une|des|de|du|d|et|à|a|au|aux|en|je|j|il|elle|on|ce|c|qui|que|qu|sur|dans|pour|par|avec|mais|donc|alors|si';
+  function nettoyer(t) {
+    var s = ' ' + String(t || '') + ' ';
+    s = s.replace(/[\s,]*(?<!\p{L})(?:e+u+h+|h?e+u+|heu+m*|hu+m+|hm+|mm+h*|bah|beh|ben|bon\s+ben)(?!\p{L})[\s,.…]*/giu, ' ');
+    s = s.replace(new RegExp("(?<!\\p{L})(" + BEGUE + ")(?:['’]|(?!\\p{L}))(?:[\\s,]+\\1(?:['’]|(?!\\p{L})))+", 'giu'), function (m, w) { return w + (/['’]$/.test(m) ? "'" : ''); });
+    return s.replace(/\s{2,}/g, ' ').trim();
+  }
   /* ponctuation dite à voix haute → signes */
   function ponctuer(t) {
-    var s = ' ' + String(t || '') + ' ';
+    var s = ' ' + nettoyer(t) + ' ';
     s = s.replace(/\s+point\s+(?:à|a)\s+la\s+ligne\b/gi, '.\n')
       .replace(/\s+(?:à|a)\s+la\s+ligne\b/gi, '\n').replace(/\s+nouvelle\s+ligne\b/gi, '\n')
       .replace(/\s+point\s+d['’ ]\s*interrogation\b/gi, ' ?').replace(/\s+point\s+d['’ ]\s*exclamation\b/gi, ' !')
@@ -133,5 +141,5 @@
   Reconnaissance.prototype.stop = function () { if (this._d) this._d.stop(); };
   Reconnaissance.prototype.abort = function () { if (this._d) this._d.stop(true); if (this._fin) this._fin(); };
 
-  g.PhenixDictee = { dispo: !!SR, Reconnaissance: SR ? Reconnaissance : null, android: ANDROID, ecouter: ecouter, ponctuer: ponctuer, coller: coller, arreter: function () { if (actif) actif.stop(); } };
+  g.PhenixDictee = { nettoyer: nettoyer, dispo: !!SR, Reconnaissance: SR ? Reconnaissance : null, android: ANDROID, ecouter: ecouter, ponctuer: ponctuer, coller: coller, arreter: function () { if (actif) actif.stop(); } };
 })(window);

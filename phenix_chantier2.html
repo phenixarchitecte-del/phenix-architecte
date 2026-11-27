@@ -32,6 +32,10 @@
    (6) [Dictée] Toute la dictée du module passe par phenix_dictee.js (moteur commun à la suite) : on peut faire des pauses de réflexion,
    rien n'est validé avant le 2e appui (« ■ Fini ») ; relance immédiate après les coupures du navigateur ; plus de répétitions sur Android ;
    ponctuation dite à voix haute (virgule, point, à la ligne, point d'interrogation…). Concerne le constat, le compte rendu, la dictée de visite et la date.
+   (7) Dictée : un bouton « 🎙 Dicter » pour commencer, le même devient « ■ Terminer » (champ encadré pendant l'écoute) ; hésitations retirées
+   (« euh », « heu », « hum », « bah »…, « le le le ») ; après la dictée, le texte se corrige à la main et « ↺ Refaire » remet le texte d'avant et réécoute.
+   Lots d'un désordre / point : ceux du chantier + ceux des autres fiches chantier du même dossier + ceux de Chiffrage + « ✎ Autre lot » à écrire ou dicter.
+   Les pastilles de la maquette 3D ne passent plus par-dessus l'écran du constat / compte rendu (#h3-host isolé, masquées pendant la saisie).
    (5) Micro 🎙 aussi sur le nom du plan à l'étape du cadrage (le premier appui vide le nom pré-rempli puis écoute).
  15/11/2026 — [Travaux] Ordre « open-projet » avec onglet 'travaux' (bouton « Préciser les travaux » de la Synthèse) : ouvre l'onglet Travaux ;
    si le dossier n'a pas encore de chantier, il est créé vide depuis la fiche du dossier (phenix_projets) pour renseigner les travaux tout de suite.
@@ -193,6 +197,8 @@ h1,h2,h3{margin:0;font-weight:400;font-family:var(--fd)}
 .gx-seg>div.done{background:rgba(47,196,122,.35);color:var(--gx-txt)}.gx-seg>div.cur{background:rgba(252,211,77,.25);color:var(--gx-txt)}
 .gx-hd{position:absolute;top:50%;width:16px;height:40px;transform:translate(-50%,-50%);border-radius:8px;background:var(--gx-gold);border:3px solid #0b1424;box-shadow:0 0 0 3px rgba(252,211,77,.3);pointer-events:none}
 #gx-lab{position:absolute;inset:0;pointer-events:none;z-index:8;overflow:hidden}
+#h3-host{isolation:isolate}   /* [Constat] les pastilles 3D (z-index jusqu'à 1000) restent DANS la maquette, jamais par-dessus le constat */
+body.ct-on #stage .h3-layer,body.ct-on #gx-lab{visibility:hidden}
 .gx-lab{position:absolute;left:0;top:0;pointer-events:auto;display:flex;align-items:center;gap:7px;padding:5px 11px 5px 8px;border-radius:999px;background:rgba(13,26,45,.92);border:1px solid rgba(255,255,255,.16);box-shadow:0 6px 18px rgba(0,0,0,.45);white-space:nowrap;font:600 12.5px var(--gx-sans);color:var(--gx-txt);cursor:pointer}
 .gx-lab small{font:500 11px var(--gx-mono);color:var(--gx-mut)}.gx-lab.sel{border-color:rgba(252,211,77,.8)}
 .gx-num{position:absolute;left:0;top:0;pointer-events:auto;width:24px;height:24px;border-radius:12px;background:var(--gx-gold);color:#0b1424;font:700 12px var(--gx-sans);display:flex;align-items:center;justify-content:center;border:2px solid #0b1424;cursor:pointer}
@@ -263,7 +269,11 @@ h1,h2,h3{margin:0;font-weight:400;font-family:var(--fd)}
 .ctplan-pages{flex:1;overflow:auto;background:#525659;padding:12px;display:flex;flex-direction:column;gap:12px;align-items:flex-start}
 .ctplan-pg{position:relative;width:100%;background:#fff;cursor:crosshair;flex-shrink:0}
 .ctmicrow{display:flex;gap:6px;align-items:flex-start}.ctmicrow input,.ctmicrow textarea{flex:1;min-width:0}
-.ctmic{min-width:48px;padding:0 10px;font-size:18px;flex-shrink:0}
+.ctmic{min-width:118px;padding:0 12px;font-size:15px;flex-shrink:0;white-space:nowrap}
+.ctmic[aria-pressed=true]{background:#fcd34d;color:#0b1424;border:0;font-weight:700}
+.ctmicrow.rec input,.ctmicrow.rec textarea{border:2px solid #fcd34d;box-shadow:0 0 0 3px rgba(252,211,77,.25)}
+.ctredo{min-width:118px;padding:0 12px;font-size:14px;flex-shrink:0}
+@media(max-width:640px){.ctmic,.ctredo{min-width:0}}
 .ctav{display:flex;flex-direction:column;gap:6px}
 .ctavl{display:flex;gap:8px;align-items:center;padding:8px 10px;border-radius:12px;border:1px solid var(--line);background:var(--pan2)}
 .ctavl.on{border:2px solid var(--accent)}
@@ -311,7 +321,7 @@ h1,h2,h3{margin:0;font-weight:400;font-family:var(--fd)}
 </div>
 
 <!-- Dictée commune à la suite (pauses possibles, rien n'est validé avant le 2e appui) [Dictée] -->
-<script src="phenix_dictee.js?v=20261127"></script>
+<script src="phenix_dictee.js?v=20261127b"></script>
 <!-- Moteur 3D partagé avec le Carnet [Moteur partagé] -->
 <script type="module" src="phenix_maquette3d.js?v=20261122b"></script>
 
@@ -1813,12 +1823,19 @@ function ctMerge(){
   var have = {}; CT.presents.forEach(function(p){ have[p.id] = p; });
   ctBase(chantier()).forEach(function(p){ if (!have[p.id]) CT.presents.push(p); else if (p.id === 'client' && have.client.nom === 'Le client' && p.nom !== 'Le client') { have.client.nom = p.nom; have.client.qualite = p.qualite; } });
 }
-function ctLot(id){ return D.lots.filter(function(l){ return l.id == id; })[0] || null; }
+function ctLot(id){ return id == null || id === '' || id === 'autre' || String(id).indexOf('chf:') === 0 ? null : D.lots.filter(function(l){ return l.id == id; })[0] || null; }
 function ctLotTxt(id, nom){ var l = ctLot(id); if (!l) return nom || 'Lot à déterminer'; var e = entrepriseOf(l); return lotLabel(l) + (e ? ' · ' + e : ''); }
 function ctD(id){ return CT && CT.desordres.filter(function(d){ return String(d.id) === String(id); })[0]; }
 /* lots de Chiffrage pas encore dans Chantier (proposés en plus) */
+/* tous les lots du dossier : ce chantier, puis les autres fiches chantier du même dossier (ancien module) */
+function ctLotsTous(){
+  var c = chantier(), out = lotsOf(), have = out.map(function(l){ return norm(lotLabel(l)); });
+  if (c && c.projetId) D.chantiers.filter(function(x){ return x.id != c.id && String(x.projetId) === String(c.projetId); }).forEach(function(x){
+    D.lots.filter(function(l){ return l.chantierId == x.id; }).forEach(function(l){ var k = norm(lotLabel(l)); if (have.indexOf(k) < 0) { have.push(k); out.push(l); } }); });
+  return out;
+}
 function ctChfLots(){
-  var c = chantier(), it = c && CTS.chf[c.projetId] || [], have = lotsOf().map(function(l){ return norm(lotLabel(l)); });
+  var c = chantier(), it = c && CTS.chf[c.projetId] || [], have = ctLotsTous().map(function(l){ return norm(lotLabel(l)); });
   return it.map(function(x, i){ return { id:'chf:' + i, nom:(x.num ? x.num + ' — ' : '') + (x.nom || ''), lbl:x.nom || '', ent:x.entreprise || '' }; }).filter(function(x){ return x.lbl && have.indexOf(norm(x.lbl)) < 0; });
 }
 /* ce que le dossier sait déjà : client (Dossier), lots du chiffrage, annuaire des artisans */
@@ -1827,7 +1844,7 @@ function ctPrefill(){
   if (FB.demo) { CTS.proj[c.projetId] = CTS.proj[c.projetId] || { client:'M. et Mme Faure', adresse:'12 route de Pontaumur, 63380 Saint-Hilaire' }; CTS.chf[c.projetId] = CTS.chf[c.projetId] || [{ num:'09', nom:'Carrelage, faïence', entreprise:'[Entreprise carrelage]' }];
     CTS.ann = CTS.ann || [{ id:'a1', entreprise:'[Entreprise menuiserie]', metier:'Menuiserie', nom:'M. Barre', tel:'06 00 00 00 01' }, { id:'a2', entreprise:'[Bureau de contrôle]', metier:'Contrôle technique', nom:'' }, { id:'a3', entreprise:'[Entreprise carrelage]', metier:'Carrelage', nom:'' }]; return; }
   if (c.projetId && !CTS.proj[c.projetId] && FB.projet) FB.projet(c.projetId).then(function(p){ if (!p) return; CTS.proj[c.projetId] = p; if (CT) { ctMerge(); ctPut(); if ($('overlay').className === 'on') ctRender(); } }).catch(function(){});
-  if (c.projetId && !CTS.chf[c.projetId] && FB.chImport) FB.chImport(c.projetId).then(function(d){ CTS.chf[c.projetId] = (d && d.lots) || []; }).catch(function(){});
+  if (c.projetId && !CTS.chf[c.projetId] && FB.chImport) FB.chImport(c.projetId).then(function(d){ CTS.chf[c.projetId] = (d && d.lots) || []; if (CT && CTS.open && !CTS.sr && $('overlay').className === 'on') ctRender(); }).catch(function(){});
   if (!CTS.ann && FB.listenId) { CTS.ann = []; FB.listenId('phenix_artisans', function(a){ CTS.ann = a || []; }); }
 }
 
@@ -1847,25 +1864,33 @@ function ctOpen(type){
   ctPrefill();
   ctGet(ctKey(c.id, type)).then(function(v){ return v || (type === 'litige' ? ctGet(String(c.id)).then(function(o){ if (o) ctDel(String(c.id)); return o; }) : null); }).then(function(v){ CT = v || ctNew(type); CT.type = type; ctMerge(); if (!v) CTS.open = null; (S.ctDrafts = S.ctDrafts || {})[ctKey(c.id, type)] = 1; ctPut(); ctRender(); ctLibs().catch(function(){}); pdfLib().catch(function(){}); });
 }
-function ctClose(){ ctStopMic(); var o = $('overlay'); o.className = ''; o.innerHTML = ''; renderAll(); }
+function ctClose(){ ctStopMic(); document.body.classList.remove('ct-on'); var o = $('overlay'); o.className = ''; o.innerHTML = ''; renderAll(); }
 
 /* ─── Dictée (micro de la tablette) ─── */
-function ctBtnOff(b){ if (!b) return; if (b.dataset.html != null) b.innerHTML = b.dataset.html; b.classList.remove('pri'); b.removeAttribute('aria-pressed'); }
+function ctBtnOff(b){ if (!b) return; if (b.dataset.html != null) b.innerHTML = b.dataset.html; b.classList.remove('pri'); b.removeAttribute('aria-pressed'); if (b.parentNode) b.parentNode.classList.remove('rec'); }
 function ctStopMic(){ var d = CTS.sr, b = CTS.srBtn; CTS.sr = null; CTS.srBtn = null; if (d) d.stop(); ctBtnOff(b); }
-/* [Dictée] moteur commun phenix_dictee.js : pauses de réflexion possibles, rien n'est validé avant le 2e appui */
+/* [Dictée] moteur commun phenix_dictee.js : un bouton pour commencer (« 🎙 Dicter »), le même pour finir (« ■ Terminer ») ;
+   pauses de réflexion possibles ; hésitations retirées ; ensuite le texte se corrige à la main, ou « ↺ Refaire » remet le texte d'avant et réécoute */
 function ctMic(btn, ta){
   if (CTS.sr && CTS.srBtn === btn) { ctStopMic(); return; }
   ctStopMic();
   if (!window.PhenixDictee || !PhenixDictee.dispo) { toast('Dictée indisponible dans ce navigateur : touchez le micro du clavier tactile (ou Windows + H).'); ta.focus(); return; }
   if (btn.dataset.html == null) btn.dataset.html = btn.innerHTML;
-  btn.innerHTML = '■ Fini'; btn.classList.add('pri'); btn.setAttribute('aria-pressed', 'true');
-  if (!S.dicteeVu) { S.dicteeVu = 1; toast('Je vous écoute : faites des pauses si besoin, touchez « ■ Fini » quand vous avez terminé.'); }
+  var row = btn.parentNode, avant = ta.value, old = row && row.querySelector('.ctredo'); if (old) old.remove();
+  btn.innerHTML = '■ Terminer'; btn.setAttribute('aria-pressed', 'true'); if (row) row.classList.add('rec');
+  if (!S.dicteeVu) { S.dicteeVu = 1; toast('Je vous écoute : prenez votre temps, faites des pauses ; touchez « ■ Terminer » quand vous avez fini.'); }
   var me = PhenixDictee.ecouter({ base:ta.value,
     onTexte:function(a){ ta.value = a; ta.dispatchEvent(new Event('input')); ta.scrollTop = ta.scrollHeight; },
-    onEtat:function(e, m){ if (e === 'erreur') toast(m); if ((e === 'fin' || e === 'erreur') && CTS.sr === me) { CTS.sr = null; CTS.srBtn = null; ctBtnOff(btn); } } });
+    onEtat:function(e, m){
+      if (e === 'erreur') toast(m);
+      if ((e === 'fin' || e === 'erreur') && CTS.sr === me) { CTS.sr = null; CTS.srBtn = null; ctBtnOff(btn); }
+      if (e === 'fin' && row && ta.value !== avant && !row.querySelector('.ctredo')) {
+        var r = document.createElement('button'); r.type = 'button'; r.className = 'btn ctredo'; r.textContent = '↺ Refaire'; r.setAttribute('aria-label', 'Effacer ce qui vient d\'être dicté et recommencer');
+        r.onclick = function(){ r.remove(); ta.value = avant; ta.dispatchEvent(new Event('input')); ctMic(btn, ta); };
+        row.appendChild(r); ta.addEventListener('input', function kill(ev){ if (ev.isTrusted) { r.remove(); ta.removeEventListener('input', kill); } });
+      } } });
   CTS.sr = me; CTS.srBtn = btn;
 }
-
 /* ─── Photos : caméra dans l'appli (Windows n'ouvre pas l'appareil photo depuis un simple bouton fichier) ─── */
 function ctFiles(cb){
   var i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.multiple = true;
@@ -2042,7 +2067,7 @@ function ctItem(min){ var t = CT ? CT_K[CT.type].item : 'Désordre'; return min 
 function ctIn(label, id, val, o){
   o = o || {};
   var f = o.rows ? '<textarea id="' + id + '" ' + o.attr + ' rows="' + o.rows + '" placeholder="' + esc(o.ph || '') + '">' + esc(val || '') + '</textarea>' : '<input id="' + id + '" ' + o.attr + ' value="' + esc(val || '') + '" placeholder="' + esc(o.ph || '') + '">';
-  return '<div class="ctf"' + (o.style ? ' style="' + o.style + '"' : '') + '><label class="eyebrow" for="' + id + '">' + label + '</label><div class="ctmicrow">' + f + '<button class="btn ctmic" type="button" data-mic="' + id + '" aria-label="Dicter : ' + esc(label) + '">🎙</button></div></div>';
+  return '<div class="ctf"' + (o.style ? ' style="' + o.style + '"' : '') + '><label class="eyebrow" for="' + id + '">' + label + '</label><div class="ctmicrow">' + f + '<button class="btn ctmic" type="button" data-mic="' + id + '" aria-label="Dicter : ' + esc(label) + '">🎙 Dicter</button></div></div>';
 }
 function ctLotBtn(id, on, b, s){ return '<button type="button" class="ctlot' + (on ? ' on' : '') + '" data-ctlot="' + esc(id) + '" aria-pressed="' + on + '">' + (on ? '✓ ' : '') + '<b>' + esc(b) + '</b><span>' + esc(s) + '</span></button>'; }
 function ctDesHtml(d){
@@ -2050,10 +2075,11 @@ function ctDesHtml(d){
   if (CTS.open !== d.id) {
     return '<button type="button" class="ctd" data-ctopen="' + d.id + '"><span class="ctn">' + d.n + '</span><span style="flex:1;min-width:0;text-align:left"><b style="font-size:16px">' + esc(d.titre || (d.description ? d.description.slice(0, 80) : it + ' à décrire')) + '</b><span class="muted" style="display:block">' + esc(ctLotTxt(d.lotId, d.lotNom)) + (d.lieu ? ' · ' + esc(d.lieu) : '') + '</span><span class="muted" style="display:block;font-size:13px">' + g[1] + ' ' + g[0] + ' · 📷 ' + np + ' photo' + (np > 1 ? 's' : '') + ' · 📍 ' + na + ' pastille' + (na > 1 ? 's' : '') + (d.delai ? ' · reprise avant le ' + frDate(d.delai) : '') + '</span></span><span class="chip">Modifier</span></button>';
   }
-  var lots = lotsOf(), chf = ctChfLots(), p = 'ctf-' + d.id + '-';
+  var lots = ctLotsTous(), chf = ctChfLots(), p = 'ctf-' + d.id + '-', autre = d.lotId === 'autre';
   var h = '<div class="card ctedit" data-ctd="' + d.id + '"><div style="display:flex;align-items:center;gap:10px"><span class="ctn">' + d.n + '</span><h3 style="font-size:20px;flex:1">' + it + ' n° ' + d.n + '</h3><button class="btn pri" type="button" data-ctclose="1">✓ Fini</button></div>';
   h += '<div class="eyebrow">Lot concerné</div><div class="ctlots">' + lots.map(function(l){ return ctLotBtn(l.id, d.lotId == l.id, lotLabel(l), entrepriseOf(l) || 'Aucune entreprise'); }).join('') +
-    chf.map(function(x){ return ctLotBtn(x.id, d.lotId === x.id, x.lbl, (x.ent || 'Aucune entreprise') + ' · chiffrage'); }).join('') + ctLotBtn('', !d.lotId, 'À déterminer', 'Lot pas encore identifié') + '</div>';
+    chf.map(function(x){ return ctLotBtn(x.id, d.lotId === x.id, x.lbl, (x.ent || 'Aucune entreprise') + ' · chiffrage'); }).join('') + ctLotBtn('autre', autre, '✎ Autre lot', autre && d.lotNom ? d.lotNom : 'À écrire ou dicter') + ctLotBtn('', !d.lotId, 'À déterminer', 'Lot pas encore identifié') + '</div>' +
+    (autre ? ctIn('Nom du lot (et entreprise si connue)', p + 'lotNom', d.lotNom, { attr:'data-ctf="lotNom"', ph:'Ex. : Carrelage · entreprise Martin' }) : '');
   h += '<div class="eyebrow">Gravité</div><span class="seg" style="flex-wrap:wrap">' + Object.keys(CT_GRAV).map(function(k){ return '<button type="button" data-ctgrav="' + k + '" aria-pressed="' + (d.gravite === k) + '">' + CT_GRAV[k][1] + ' ' + CT_GRAV[k][0] + '</button>'; }).join('') + '</span>';
   h += ctIn('Titre court', p + 'titre', d.titre, { attr:'data-ctf="titre"', ph:'Ex. : infiltration en rive de toiture' });
   h += ctIn('Localisation', p + 'lieu', d.lieu, { attr:'data-ctf="lieu"', ph:'Ex. : chambre 1, angle nord-est, à 1,20 m du sol' });
@@ -2076,7 +2102,7 @@ function ctRender(){
   ctStopMic();
   var o = $('overlay'), c = chantier(); if (!CT || !c) return;
   var K = CT_K[CT.type], cr = CT.type === 'cr';
-  o.className = 'on';
+  o.className = 'on'; document.body.classList.add('ct-on');
   var y = o.scrollTop, np = (CT.photosG || []).length; CT.desordres.forEach(function(d){ np += (d.photos || []).length; });
   var on = CT.presents.filter(function(p){ return p.on; }), n = 1, sec = function(t, extra){ return '<section class="card ctsec"><h2 style="font-size:22px">' + (n++) + '. ' + t + (extra || '') + '</h2>'; };
   var h = '<div class="cthead"><div style="flex:1;min-width:220px"><div class="eyebrow">' + K.ico + ' ' + K.titre + ' · gardé sur la tablette à chaque geste</div><div style="font:400 26px var(--fd)">' + esc(c.nom || '') + '</div></div><button class="btn" type="button" id="ct-back">← Retour au chantier</button></div><div class="ctwrap">';
@@ -2114,6 +2140,7 @@ function ctRender(){
     var d = ctD(ed.getAttribute('data-ctd')), e = function(s, f){ [].forEach.call(ed.querySelectorAll(s), f); };
     e('[data-ctclose]', function(b){ b.onclick = function(){ CTS.open = null; ctRender(); }; });
     e('[data-ctlot]', function(b){ b.onclick = function(){ var v = b.getAttribute('data-ctlot'), l = v && ctLot(v), cf = v && v.indexOf('chf:') === 0 ? ctChfLots().filter(function(x){ return x.id === v; })[0] : null;
+      if (v === 'autre') { if (d.lotId !== 'autre') d.lotNom = ''; d.lotId = 'autre'; ctPut(); ctRender(); var f = $('ctf-' + d.id + '-lotNom'); if (f) f.focus(); return; }
       d.lotId = l ? l.id : cf ? cf.id : null; d.lotNom = l ? '' : cf ? cf.lbl + (cf.ent ? ' · ' + cf.ent : '') : ''; ctPut(); ctRender(); }; });
     e('[data-ctgrav]', function(b){ b.onclick = function(){ d.gravite = b.getAttribute('data-ctgrav'); ctPut(); ctRender(); }; });
     e('[data-ctf]', function(x){ x.oninput = function(){ d[x.getAttribute('data-ctf')] = x.value; ctPutSoon(); }; });
@@ -2169,7 +2196,7 @@ function ctRecord(withMedia){
   Object.keys(CT.signatures).forEach(function(k){ var s = CT.signatures[k]; if (!on.some(function(p){ return p.id === k; })) return; sig[k] = Object.assign({ nom:s.nom, qualite:s.qualite, t:s.t }, put(s.dataUrl, 'signature')); });
   var used = {}; CT.desordres.forEach(function(d){ (d.pastilles || []).forEach(function(a){ used[a.planId + '_' + (a.page || 0)] = 1; }); });
   Object.keys(CT.planImgs).forEach(function(k){ if (!used[k]) return; var p = CT.planImgs[k]; pim[k] = Object.assign({ nom:p.nom, page:p.page, planId:p.planId }, put(p.dataUrl, 'plan')); });
-  var des = CT.desordres.map(function(d){ var lid = d.lotId && String(d.lotId).indexOf('chf:') !== 0 ? d.lotId : null; return { id:d.id, n:d.n, lotId:lid, lot:ctLotTxt(lid, d.lotNom), gravite:d.gravite, titre:(d.titre || '').trim(), description:(d.description || '').trim(), lieu:(d.lieu || '').trim(), action:(d.action || '').trim(), delai:d.delai || '',
+  var des = CT.desordres.map(function(d){ var lid = ctLot(d.lotId) ? d.lotId : null; return { id:d.id, n:d.n, lotId:lid, lot:ctLotTxt(lid, d.lotNom), gravite:d.gravite, titre:(d.titre || '').trim(), description:(d.description || '').trim(), lieu:(d.lieu || '').trim(), action:(d.action || '').trim(), delai:d.delai || '',
     photos:(d.photos || []).map(function(p){ return put(p.dataUrl, 'photo'); }), pastilles:(d.pastilles || []).map(function(a){ return { planId:a.planId, planNom:a.planNom, page:a.page || 0, x:a.x, y:a.y }; }) }; });
   var r = { id:CT.id, num:withMedia ? ctNum(CT.type) : 'Brouillon', type:cr ? 'visite' : 'litige', chantierId:c ? c.id : CT.cid, chantierNom:c ? c.nom || '' : '', date:CT.date, heure:CT.heure, objet:(CT.objet || CT_K[CT.type].obj).trim(),
     presents:on.map(function(p){ return p.nom + (p.qualite ? ' (' + p.qualite + ')' : ''); }).join(', '), presentsListe:on.map(function(p){ return { id:p.id, nom:p.nom, qualite:p.qualite || '' }; }),
@@ -2197,7 +2224,7 @@ function ctSave(){
   else if (CT.reserves) { var n = D.reserves.filter(function(r){ return r.chantierId == c.id; }).length;
     rec.desordres.forEach(function(d){ n++; var rs = { id:uid(), chantierId:c.id, ref:'R' + String(n).padStart(2, '0'), titre:d.titre || (d.description.length > 70 ? d.description.slice(0, 67) + '…' : d.description) || 'Désordre n° ' + d.n, description:d.description + (d.action ? '\nReprise demandée : ' + d.action : ''), lieu:d.lieu, lotId:d.lotId, intervId:(ctLot(d.lotId) || {}).interv || null, priorite:d.gravite === 'bloquant' ? 'haute' : 'normale', origine:'constat ' + rec.num, echeance:d.delai || '', statut:'ouverte', dateLevee:'', photos:d.photos.slice(0, 6).map(function(p){ return { mediaId:p.mediaId, caption:'' }; }) }; D.reserves.push(rs); save('reserves', rs); }); }
   ctDel(ctKey(CT.cid, CT.type)); var K = CT_K[CT.type], nb = rec.desordres ? rec.desordres.length : rec.points.length; CT = null; CTS.busy = false; CTS.open = null;
-  var o = $('overlay'); o.className = ''; o.innerHTML = ''; renderAll();
+  var o = $('overlay'); o.className = ''; o.innerHTML = ''; document.body.classList.remove('ct-on'); renderAll();
   var bg = document.createElement('div'); bg.className = 'sheetbg';
   bg.innerHTML = '<div class="sheet"><div class="eyebrow">' + K.court + ' ' + esc(rec.num) + ' enregistré</div><h2 style="font-size:24px">' + nb + ' ' + it + (nb > 1 ? 's' : '') + (cr ? ' relevé' : ' constaté') + (nb > 1 ? 's' : '') + '</h2><div class="muted">' + (S.online ? 'Envoyé dans le dossier du chantier' : '⚠ Hors ligne : il partira dès le retour du réseau. Gardez l\'onglet ouvert') + '. ' + (cr && rec.aValider ? 'Il attend la validation au bureau. ' : '') + 'Vous le retrouvez dans l\'onglet « Comptes rendus ».</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn big pri" type="button" id="cts-pdf">📄 Télécharger le PDF</button><button class="btn big ghost" type="button" data-x="1">Fermer</button></div></div>';
   document.body.appendChild(bg);
