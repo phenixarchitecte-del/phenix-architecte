@@ -109,7 +109,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script src="phenix_dictee.js?v=20261127c"></script><!-- [Dictée] moteur de dictée commun : pauses possibles, validation au 2e appui -->
+<script src="phenix_dictee.js?v=20261127c"></script><script src="phenix_reglements.js?v=20261127b"></script><!-- [Règlements] règlements des clients lus sur le relevé bancaire --><!-- [Dictée] moteur de dictée commun : pauses possibles, validation au 2e appui -->
 <script src="phenix_espace_client.js"></script><!-- [Espace client] bibliothèque des statuts partagée avec la cloche du shell -->
 <script src="phenix_carnet_questions.js?v=20261125"></script><!-- [Carnet] questions du carnet (réponses du client) -->
 <title>Phénix-Architecture · Gestion de Dossier</title>
@@ -211,6 +211,11 @@ window._fbClient = {
   async ouvrirAcces(email, pid, par) { await setDoc(doc(db, 'phenix_client_acces', String(email).toLowerCase()), { email: String(email).toLowerCase(), projetId: String(pid), at: new Date().toISOString(), par: par || '' }); },
   async retirerAcces(email) { await deleteDoc(doc(db, 'phenix_client_acces', String(email).toLowerCase())); },
   async envoyerLien(email, url) { try { await sendSignInLinkToEmail(auth, String(email).toLowerCase(), { url, handleCodeInApp: true }); return true; } catch (e) { console.warn('Lien client :', e && e.code); return false; } },
+};
+// [Règlements 27/11/2026] relevés bancaires et factures MEG importés dans la Synthèse 3D (phenix_tresorerie, administrateur seulement)
+window._fbReglements = {
+  ecouter(cb) { return onSnapshot(collection(db, 'phenix_tresorerie'), s => { const l = []; s.forEach(x => l.push(Object.assign({ id: x.id }, x.data()))); cb(l); }, e => { console.warn('Trésorerie illisible', e && e.code); cb(null); }); },
+  async ecrire(v) { await setDoc(doc(db, 'phenix_tresorerie', 'reglages'), JSON.parse(JSON.stringify(Object.assign({}, v, { maj: new Date().toISOString() }))), { merge: true }); },
 };
 window._fb = {
   db, doc, setDoc, deleteDoc, getDoc,
@@ -2619,6 +2624,8 @@ if (window.parent !== window) {
         </div>
 
         <!-- KPIs -->
+        <!-- [Règlements 27/11/2026] règlements des clients par dossier, lus sur le relevé bancaire importé dans la Synthèse 3D -->
+        <div id="factReglements" style="margin-bottom:1.25rem"></div>
         <div class="fact-status-bar" id="factKpis">
           <div class="fact-kpi"><div class="fact-kpi-label">CA facturé HT</div><div class="fact-kpi-value" id="fkpi-facture">0 €</div><div class="fact-kpi-sub" id="fkpi-facture-sub">—</div></div>
           <div class="fact-kpi kpi-green"><div class="fact-kpi-label">Encaissé HT</div><div class="fact-kpi-value" id="fkpi-paye">0 €</div><div class="fact-kpi-sub" id="fkpi-paye-sub">—</div></div>
@@ -7318,6 +7325,44 @@ function payProgressHtml(f) {
   return `<div class="fact-progress-wrap"><div class="pay-bar"><div class="pay-fill ${cls}" style="width:${pct}%"></div></div><span style="font-size:11px;width:34px;text-align:right">${pct}%</span></div>`;
 }
 
+/* ═══ [Règlements 27/11/2026] Règlements des clients par dossier ═══
+   Le relevé importé dans la Synthèse 3D (Phénix › Banque) dit ce que chaque client a payé ; phenix_reglements.js le rattache
+   aux factures (export MEG, sinon les factures ci-dessous) et aux devis. Réservé à l'administrateur (règle phenix_tresorerie). */
+let _reglTreso = null, _reglRes = null, _reglEcoute = false;
+function reglRendre() {
+  const box = document.getElementById('factReglements'); if (!box || !window.PhenixReglements) return;
+  const admin = typeof getCurrentUserRole !== 'function' || getCurrentUserRole() === 'admin';
+  if (!admin) { box.innerHTML = ''; return; }
+  if (!_reglEcoute && window._fbReglements) { _reglEcoute = true; window._fbReglements.ecouter(l => { _reglTreso = l || []; reglRendre(); }); }
+  if (_reglTreso == null) { box.innerHTML = '<div class="card"><div class="card-title">Règlements des clients par dossier</div><div style="font-size:12px;color:var(--text3)">Lecture des relevés…</div></div>'; return; }
+  const R = window.PhenixReglements;
+  _reglRes = R.analyser({ tresorerie: _reglTreso, projets: stateDossier.projets, factures: stateDossier.factures });
+  const res = _reglRes;
+  if (!res.nbReleves) { box.innerHTML = '<div class="card"><div class="card-title">Règlements des clients par dossier</div><div style="font-size:12px;color:var(--text3);margin-top:4px">Aucun relevé bancaire importé. Déposez vos relevés dans la Synthèse 3D (🏦 Banque) : chaque virement client sera rattaché ici à sa facture et à son devis.</div></div>'; return; }
+  const ouverts = new Set([...box.querySelectorAll('details[data-pid][open]')].map(x => x.getAttribute('data-pid')));
+  const ds = Object.values(res.dossiers).sort((a, b) => (b.reste - a.reste) || String(a.nom).localeCompare(String(b.nom), 'fr'));
+  const tot = ds.reduce((o, d) => { o.f += d.facture; o.r += d.regle; o.d += d.reste; o.l += d.retard; return o; }, { f: 0, r: 0, d: 0, l: 0 });
+  const nbConf = res.encaissements.filter(e => !e.ignore && e.projetId && !e.sur).length;
+  const e = R.euros;
+  let h = '<div class="card"><div class="card-header" style="flex-wrap:wrap;gap:6px"><div><div class="card-title">Règlements des clients par dossier</div>'
+    + '<div style="font-size:12px;color:var(--text3)">D\'après le relevé bancaire jusqu\'au ' + (res.releveAu ? new Date(res.releveAu).toLocaleDateString('fr-FR') : '—') + ' · factures ' + (res.source === 'MEG' ? 'de l\'export MEG (TTC)' : 'de Phénix (TTC)') + '</div></div>'
+    + '<div style="margin-left:auto;font-size:13px;display:flex;gap:14px;flex-wrap:wrap"><span>Facturé <b>' + e(tot.f) + '</b></span><span>Réglé <b>' + e(tot.r) + '</b></span><span>Reste dû <b>' + e(tot.d) + '</b>' + (tot.l > 0 ? ' · ⚠ en retard ' + e(tot.l) : '') + '</span></div></div>';
+  if (nbConf || res.aRattacher.length) h += '<div style="font-size:12px;margin:4px 0 8px;padding:6px 10px;border-radius:8px;background:var(--bg)">' + (nbConf ? '? ' + nbConf + ' règlement' + (nbConf > 1 ? 's' : '') + ' à confirmer' : '') + (nbConf && res.aRattacher.length ? ' · ' : '') + (res.aRattacher.length ? res.aRattacher.length + ' virement' + (res.aRattacher.length > 1 ? 's' : '') + ' client à rattacher (en bas de la liste)' : '') + '</div>';
+  if (!ds.length) h += '<div style="font-size:12px;color:var(--text3)">Aucune facture ni aucun règlement rattaché à un dossier pour l\'instant.</div>';
+  ds.forEach(d => {
+    const etat = d.reste > 0.009 ? (d.retard > 0 ? '⚠ En retard · reste ' + e(d.reste) : '○ Reste ' + e(d.reste)) : (d.facture > 0 ? '✓ Tout est réglé' : '◇ Règlement sans facture');
+    h += '<details data-pid="' + _reglEsc(d.projetId) + '"' + (ouverts.has(String(d.projetId)) ? ' open' : '') + ' style="border-top:1px solid var(--border);padding:8px 0"><summary style="cursor:pointer;display:flex;gap:12px;flex-wrap:wrap;align-items:baseline;list-style:none">'
+      + '<span style="font-weight:600;min-width:180px">▸ ' + _reglEsc(d.nom) + '</span>'
+      + '<span style="font-size:12px;color:var(--text3)">facturé ' + e(d.facture) + ' · réglé ' + e(d.regle) + (d.dernier ? ' · dernier règlement le ' + new Date(d.dernier).toLocaleDateString('fr-FR') : '') + '</span>'
+      + '<span style="margin-left:auto;font-size:12px;font-weight:600">' + etat + (d.aConfirmer ? ' · ? à confirmer' : '') + '</span></summary>'
+      + R.htmlDossier(res, d.projetId, { theme: 'clair', ecrire: true }) + '</details>';
+  });
+  if (res.aRattacher.length || nbConf) h += '<details style="border-top:1px solid var(--border);padding:8px 0"' + (res.aRattacher.length ? ' open' : '') + '><summary style="cursor:pointer;font-weight:600">Virements clients à rattacher ou à confirmer</summary>' + R.htmlARattacher(res, { theme: 'clair', ecrire: true, note: 'Votre choix est retenu : il s\'applique aussi dans la Synthèse 3D (fiche du dossier, missions « Encaisser »).' }) + '</details>';
+  box.innerHTML = h + '</div>';
+  R.brancher(box, () => _reglRes, v => window._fbReglements.ecrire(v));
+}
+function _reglEsc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
 function nomProjet(projetId) {
   const p = stateDossier.projets.find(x=>x.id==projetId);
   return p ? esc(p.nom) : '—';
@@ -7390,6 +7435,7 @@ function renderFacturation() {
   { const __el=document.getElementById('fkpi-devis-att-sub'); if(__el) __el.textContent=devisAll.length+' devis au total'; }
 
   renderFacturationDonuts(factures, devisAll, today);
+  try { reglRendre(); } catch (e) { console.warn('Règlements', e); }
   { const __el=document.getElementById('navBadgeFactures'); if(__el) __el.textContent=factures.length; }
 
   // Tableau factures
