@@ -378,7 +378,9 @@ if (!DEMO) {
     async chImport(pid) { const s = await S.getDoc(S.doc(db, 'phenix_chantier_import', String(pid))); return s.exists() ? s.data() : null; },
     /* [Statuts client v2 27/11/2026] un compte rendu ou un constat enregistré s'affiche dans l'espace du client (dernier compte rendu, constat
        et ses reprises, ligne dans « Le fil »), si son espace existe. Le grand statut ne change pas. Refusé sans bruit si le compte n'a pas le droit. */
-    async clientMaj(pid, f) { try { const r = S.doc(db, 'phenix_client_dossiers', String(pid)); const x = await S.getDoc(r); if (!x.exists()) return false; const patch = f(x.data()); if (!patch) return false; await S.setDoc(r, patch, { merge: true }); return true; } catch (e) { console.warn('Espace client :', e && e.code); return false; } },
+    async clientMaj(pid, f) { try { const r = S.doc(db, 'phenix_client_dossiers', String(pid)); const x = await S.getDoc(r); if (!x.exists()) return false; const avant = x.data(), patch = f(avant); if (!patch) return false; await S.setDoc(r, patch, { merge: true });
+      try { if (window.phenixNotifClient) window.phenixNotifClient.apresEcriture(pid, avant, Object.assign({}, avant, patch)); } catch (e) {}   // [Notifications client]
+      return true; } catch (e) { console.warn('Espace client :', e && e.code); return false; } },
     async projet(pid) { const s = await S.getDoc(S.doc(db, 'phenix_projets', String(pid))); return s.exists() ? s.data() : null; },   /* [Travaux] 15/11/2026 */
     async fiche(pid) { const s = await S.getDoc(S.doc(db, 'phenix_portail', String(pid), 'etat', 'fiche')); return s.exists() ? s.data() : null; },
     async chunk(pid, i) { const s = await S.getDoc(S.doc(db, 'phenix_portail', String(pid), 'maquette', 'c' + i)); return s.exists() ? (s.data().d || '') : ''; },
@@ -1579,7 +1581,7 @@ function msgSend(){
   var c = msgConvs().filter(function(x){ return x.k === MSG.cur; })[0], t = ($('msg-reply').value || '').trim(); if (!c || !t) return;
   if (c.client) {
     var e = { t:new Date().toISOString(), kind:'msg', by:'moe', who:'Phénix', text:t, cat:null, email:'' };
-    if (FB.demo) return; FB.saveSub(['phenix_portail', c.pid, 'journal'], 'ms' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), e).then(function(){ toast('Réponse envoyée au client'); }).catch(function(){ toast('⛔ Envoi impossible.'); });
+    if (FB.demo) return; FB.saveSub(['phenix_portail', c.pid, 'journal'], 'ms' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), e).then(function(){ toast('Réponse envoyée au client'); try { if (window.phenixNotifClient) window.phenixNotifClient.message(c.pid, e.text); } catch (x) {} }).catch(function(){ toast('⛔ Envoi impossible.'); });
     $('msg-reply').value = ''; return;
   }
   var id = 'ms_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
@@ -2710,5 +2712,6 @@ function init(){
 }
 if (window.FB) init(); else window.addEventListener('fb-loaded', init, {once:true});
 </script>
+<script type="module" src="phenix_notif_client.js?v=20261127"></script><!-- [Notifications client 26/11/2026] étapes clés et documents par mail, le reste en push -->
 </body>
 </html>

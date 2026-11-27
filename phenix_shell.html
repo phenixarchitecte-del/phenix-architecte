@@ -597,7 +597,11 @@ window.ncOpen = function(i) {
 const PEC = { src: null, pid: '', code: '', vals: {}, edit: null, d: null, ouvert: false };
 const _pecProjet = pid => (projets || []).find(p => String(p.id) === String(pid));
 const _pecLire = async pid => { const s = await getDoc(doc(db, 'phenix_client_dossiers', String(pid))); return s.exists() ? s.data() : null; };
-const _pecEcrire = (pid, d) => setDoc(doc(db, 'phenix_client_dossiers', String(pid)), d);
+const _pecEcrire = async (pid, d) => {   // [Notifications client] étapes clés et documents par mail, le reste en push
+  let avant = null; try { avant = await _pecLire(pid); } catch (e) {}
+  await setDoc(doc(db, 'phenix_client_dossiers', String(pid)), d);
+  try { if (window.phenixNotifClient) window.phenixNotifClient.apresEcriture(pid, avant, d); } catch (e) {}
+};
 // Ce que l'on propose selon la notification : statut suggéré (facultatif) et note neutre
 function _pecSuggestion(x) {
   const r = x.raw || {}, cl = r.classe || '', ty = r.type || x.kind || '';
@@ -634,7 +638,9 @@ window.ecOuvrirFiche = function(pid, sous) {
   if (deja) { try { shellCurrentFrame.contentWindow.postMessage(ord, '*'); } catch(e) {} shellPendingOrder = null; }
 };
 // [Conversation 25/11/2026] trace d'un échange avec le client dans son espace (phenix_client_dossiers/{id}/messages) : visible des deux côtés
-async function _convNoter(pid, id, m) { try { await setDoc(doc(db, 'phenix_client_dossiers', String(pid), 'messages', String(id)), m, { merge: true }); return true; } catch (e) { console.warn('Échanges client :', e && e.code); return false; } }
+async function _convNoter(pid, id, m) { try { await setDoc(doc(db, 'phenix_client_dossiers', String(pid), 'messages', String(id)), m, { merge: true });
+  try { if (m && m.de === 'phenix' && m.canal === 'espace' && m.texte && window.phenixNotifClient) window.phenixNotifClient.message(pid, m.texte); } catch (e) {}   // une réponse par mail ou SMS est déjà reçue par le client
+  return true; } catch (e) { console.warn('Échanges client :', e && e.code); return false; } }
 async function _convReponseEntrant(x, texte) {
   if (!x || x.expediteurType !== 'client' || !x.projetId) return;
   const canal = x.source === 'sms' ? 'sms' : 'mail';
@@ -1700,7 +1706,7 @@ const MODULES = {
   synthese:     { src: 'phenix_synthese.html',           title: 'Synthèse 3D — tous les dossiers' },   // [Synthèse 3D]
   espace:       { src: 'phenix_espace.html',             title: 'Mon espace — devis à relancer, tâches et projets' },
   contrat:      { src: 'phenix_contrat.html',            title: 'Contrats — MOE / contractant général' },
-  chantier:     { src: 'phenix_chantier2.html?v=20261127o',   /* [Cache] numéro de version : à changer à chaque mise à jour du module pour forcer le rechargement */           title: 'Chantier — suivi de travaux (nouveau module)' },
+  chantier:     { src: 'phenix_chantier2.html?v=20261127p',   /* [Cache] numéro de version : à changer à chaque mise à jour du module pour forcer le rechargement */           title: 'Chantier — suivi de travaux (nouveau module)' },
   financement:  { src: 'phenix_financement.html',        title: 'Dossier de financement' },
   annuaire:     { src: 'Phenix_Annuaire_Artisans.html',  title: 'Annuaire artisans' },
 };
@@ -1995,5 +2001,6 @@ window.addEventListener('message', (ev) => {
   }
 });
 </script>
+<script type="module" src="phenix_notif_client.js?v=20261127"></script><!-- [Notifications client 26/11/2026] étapes clés et documents par mail, le reste en push -->
 </body>
 </html>

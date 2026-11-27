@@ -1,0 +1,10 @@
+{
+  "name": "Mon espace Phénix",
+  "short_name": "Phénix",
+  "start_url": "phenix_client.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b1f4a",
+  "theme_color": "#0b1f4a",
+  "lang": "fr"
+}

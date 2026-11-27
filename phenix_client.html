@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
+<link rel="manifest" href="phenix_client.webmanifest"><meta name="theme-color" content="#0b1f4a"><meta name="apple-mobile-web-app-capable" content="yes"><!-- [Notifications push 26/11/2026] -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#0b1f4a">
@@ -154,6 +155,26 @@ const app  = initializeApp(firebaseConfig);
 try { initializeAppCheck(app, { provider: new ReCaptchaV3Provider('6LeObWktAAAAAL9eyppDRtLp5yZTyBaF4ZNKXNIO'), isTokenAutoRefreshEnabled: true }); } catch (e) { console.warn('App Check :', e); }
 const auth = getAuth(app);
 const db   = getFirestore(app);
+
+// ══ [Notifications push 26/11/2026] « Être prévenu sur ce téléphone » ══
+// Clé publique Web Push (Firebase › Paramètres du projet › Cloud Messaging › Certificats Web push). Tant qu'elle n'est pas remplie, le bouton reste caché.
+const VAPID = 'A_REMPLIR';
+const pushPossible = () => VAPID !== 'A_REMPLIR' && 'Notification' in window && 'serviceWorker' in navigator && !S.apercu;
+async function activerPush() {
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { toast('Notifications refusées. Vous pouvez les autoriser plus tard dans les réglages du navigateur.'); return; }
+    const { getMessaging, getToken, isSupported } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging.js');
+    if (!(await isSupported())) { toast('Ce navigateur ne reçoit pas les notifications. Sur iPhone : Partager › « Sur l’écran d’accueil », puis rouvrez l’espace depuis l’icône.'); return; }
+    const reg = await navigator.serviceWorker.register('firebase-messaging-sw.js');
+    const token = await getToken(getMessaging(app), { vapidKey: VAPID, serviceWorkerRegistration: reg });
+    if (!token) { toast('Activation impossible pour le moment.'); return; }
+    await setDoc(doc(db, 'phenix_fcm_tokens', token), { token, email: String(S.user && S.user.email || '').toLowerCase(), pid: String(S.acces && S.acces.projetId || ''), t: new Date().toISOString(), ua: navigator.userAgent.slice(0, 120) });
+    try { localStorage.setItem('phx_push', '1'); } catch (e) {}
+    toast('C’est fait : vous serez prévenu sur cet appareil à chaque nouveauté.'); rendreClient();
+  } catch (e) { console.warn('Push :', e); toast('Activation impossible pour le moment.'); }
+}
+const pushActif = () => { try { return localStorage.getItem('phx_push') === '1' && Notification.permission === 'granted'; } catch (e) { return false; } };
 
 const ADMIN = 'contact@phenixarchitecte.fr';
 const TEL = '04 73 73 00 59', TEL_LIEN = 'tel:0473730059';
@@ -488,6 +509,7 @@ function htmlFil(d) {
   return `<main class="page">${enTete(d)}
     <section style="margin-top:46px">
       <div class="voile" style="display:inline-block;padding:6px 10px;margin-left:-10px"><h1 class="h1" style="font-size:40px">Le fil de votre projet</h1><div style="margin-top:6px;font-size:13px;color:var(--t4)">Tout ce qui s’est passé, du plus récent au plus ancien</div></div>
+      ${pushPossible() && !pushActif() ? `<div class="voile" style="margin-top:28px;padding:10px 12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><span style="flex:1;min-width:200px;font-size:13px;color:var(--t2)">Être prévenu sur ce téléphone à chaque nouveauté de votre projet.</span><button class="btn-ligne" type="button" id="b-push">Activer les notifications</button></div>` : ''}
       ${S.apercu ? '' : `<form id="f-msg" class="voile" style="margin-top:28px;padding:10px 12px"><label class="lib" for="msg-tx" style="margin-top:0">Écrire à Phénix</label><textarea class="champ" id="msg-tx" rows="3" placeholder="Une question, une précision… Phénix vous répond ici."></textarea><button class="btn-ligne" type="submit" style="margin-top:10px">Envoyer</button></form>`}
       <ol class="fil">${lis}</ol></section></main>`;
 }
@@ -503,6 +525,7 @@ function brancherClient(d) {
   document.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { S.cat = b.dataset.cat; S.apercu ? rendreApercu() : rendreClient(); });
   const dec = document.getElementById('dec'); if (dec) dec.onclick = () => S.apercu ? window.close() : signOut(auth);
   document.querySelectorAll('[data-carnet]').forEach(b => b.onclick = ouvrirCarnet);
+  const bp = document.getElementById('b-push'); if (bp) bp.onclick = activerPush;
   const fm = document.getElementById('f-msg');
   if (fm) fm.onsubmit = async ev => { ev.preventDefault(); const ta = document.getElementById('msg-tx'), t = ta.value.trim(); if (!t) return; const b = fm.querySelector('button'); b.disabled = true;
     if (await envoyerAPhenix(t)) { ta.value = ''; toast('Message envoyé à Phénix. Vous aurez la réponse ici.'); } b.disabled = false; };

@@ -203,10 +203,15 @@ window._fbClient = {
   async lire(pid) { const s = await getDoc(doc(db, 'phenix_client_dossiers', String(pid))); return s.exists() ? s.data() : null; },
   // [Conversation 25/11/2026] échanges avec le client : phenix_client_dossiers/{id}/messages/{id} { de:'client'|'phenix', canal:'espace'|'mail'|'sms', texte, t, par }
   ecouterMessages(pid, cb) { return onSnapshot(collection(db, 'phenix_client_dossiers', String(pid), 'messages'), s => { const l = []; s.forEach(x => l.push(Object.assign({ _id: x.id }, x.data()))); cb(l); }, e => { console.warn('Messages client :', e && e.code); cb(null); }); },
-  async envoyerMessage(pid, id, m) { await setDoc(doc(db, 'phenix_client_dossiers', String(pid), 'messages', String(id)), m, { merge: true }); },
+  async envoyerMessage(pid, id, m) { await setDoc(doc(db, 'phenix_client_dossiers', String(pid), 'messages', String(id)), m, { merge: true });
+    try { if (m && m.de === 'phenix' && m.texte && window.phenixNotifClient) window.phenixNotifClient.message(pid, m.texte); } catch (e) {} },
   async lireCarnet(pid) { try { const s = await getDoc(doc(db, 'phenix_portail', String(pid), 'etat', 'choix')); return s.exists() ? s.data() : null; } catch (e) { return null; } },   // [Carnet] choix du client
   async lireFicheCarnet(pid) { try { const s = await getDoc(doc(db, 'phenix_portail', String(pid), 'etat', 'fiche')); return s.exists() ? s.data() : null; } catch (e) { return null; } },
-  async ecrire(pid, d) { await setDoc(doc(db, 'phenix_client_dossiers', String(pid)), d); },
+  async ecrire(pid, d) {
+    let avant = null; try { const s0 = await getDoc(doc(db, 'phenix_client_dossiers', String(pid))); avant = s0.exists() ? s0.data() : null; } catch (e) {}
+    await setDoc(doc(db, 'phenix_client_dossiers', String(pid)), d);
+    try { if (window.phenixNotifClient) window.phenixNotifClient.apresEcriture(pid, avant, d); } catch (e) {}   // [Notifications client] étapes clés et documents par mail, le reste en push
+  },
   // [Statuts client v2 27/11/2026] lots du chiffrage (devis reçus, contrats signés) et fiches de l'Annuaire (décennales), pour les compteurs du client
   async sources(pid) {
     const pick = d => { const c = ((d && d.chantiers) || []).find(x => String(x.projetId) === String(pid)); return c ? (c.lots || []) : null; };
@@ -14691,5 +14696,6 @@ import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10
   }catch(e){}
 })();
 </script>
+<script type="module" src="phenix_notif_client.js?v=20261127"></script><!-- [Notifications client 26/11/2026] étapes clés et documents par mail, le reste en push -->
 </body>
 </html>
