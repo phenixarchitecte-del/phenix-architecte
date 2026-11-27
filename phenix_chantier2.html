@@ -46,6 +46,8 @@
    la tablette, puis « 📝 Retranscrire » au retour du réseau. Mémos non retranscrits : joints au document (🔊 dans « Comptes rendus »).
    (12) [Espace artisan] Onglet Messages : « Espace chantier des entreprises » : ✉ Inviter / Renvoyer le lien (mail pré-rempli depuis l'Annuaire),
    choix des plans visibles, 👁 Voir comme l'entreprise. Écrit phenix_users (rôle artisan) + lien de connexion par mail (phenix_artisan.html).
+   (13) [Pointage] Plateau 3D : camionnette = entreprise pointée « J'arrive » dans l'espace artisan (phenix_ch_pointages, lu en temps réel) ; en pointillés =
+   attendue (lot en cours ou prévu ce jour) mais pas sur place ; sinon rien. Nom de l'entreprise peint sur la camionnette (phenix_maquette3d.js).
    (5) Micro 🎙 aussi sur le nom du plan à l'étape du cadrage (le premier appui vide le nom pré-rempli puis écoute).
  15/11/2026 — [Travaux] Ordre « open-projet » avec onglet 'travaux' (bouton « Préciser les travaux » de la Synthèse) : ouvre l'onglet Travaux ;
    si le dossier n'a pas encore de chantier, il est créé vide depuis la fiche du dossier (phenix_projets) pour renseigner les travaux tout de suite.
@@ -349,7 +351,7 @@ if (!DEMO) {
   let db;
   try { db = S.initializeFirestore(app, { localCache: S.persistentLocalCache({ tabManager: S.persistentMultipleTabManager() }) }); } catch (e) { db = S.getFirestore(app); }
   const auth = U.getAuth(app);
-  const COLS = { chantiers:'phenix_ch_chantiers', lots:'phenix_ch_lots', intervenants:'phenix_ch_intervenants', reserves:'phenix_ch_reserves', crs:'phenix_ch_crs', factures:'phenix_ch_factures', plans:'phenix_ch_plans', messages:'phenix_ch_messages' };
+  const COLS = { chantiers:'phenix_ch_chantiers', lots:'phenix_ch_lots', intervenants:'phenix_ch_intervenants', reserves:'phenix_ch_reserves', crs:'phenix_ch_crs', factures:'phenix_ch_factures', plans:'phenix_ch_plans', messages:'phenix_ch_messages', pointages:'phenix_ch_pointages' };
   const MEDIA = 'phenix_media', CH = 700000;
   Object.assign(window.FB, {
     ready: true,
@@ -438,7 +440,7 @@ function zoneOf(lot){ for (var i = 0; i < ZONE_RE.length; i++) if (ZONE_RE[i][1]
 function phaseIdx(n){ for (var i = 0; i < PHASES.length; i++) if (n >= PHASES[i][1] && n <= PHASES[i][2]) return i; return -1; }
 
 /* ═══════════ Données ═══════════ */
-var D = { chantiers:[], lots:[], intervenants:[], reserves:[], crs:[], factures:[], plans:[], messages:[] };
+var D = { chantiers:[], lots:[], intervenants:[], reserves:[], crs:[], factures:[], plans:[], messages:[], pointages:[] };
 var CLI = { notifs:[], j:{}, on:{} };
 var S = { mode:'terrain', tab:'recap', view:'liste', zoom:'mois', cid:null, lotId:null, role:'', pending:false, online:navigator.onLine, real:true, in3d:'out', drawer:false, gxSel:'', vis:null, maq:null, user:'', screen:'home', hf:'' };
 function chantier(){ return D.chantiers.filter(function(c){ return c.id == S.cid; })[0] || null; }
@@ -459,6 +461,7 @@ function demoSeed(){
   D.reserves = [{id:71, chantierId:3, ref:'R01', titre:'Fissure cloison', statut:'ouverte', lotId:31}, {id:72, chantierId:3, ref:'R02', titre:'Prise à reprendre', statut:'ouverte', lotId:31}, {id:73, chantierId:4, ref:'R01', titre:'Joint à refaire', statut:'levee', lotId:41}];
   D.crs = [{id:81, num:'CR-01', chantierId:1, date:'2026-10-30', aValider:true, prochaine:''}, {id:82, num:'CR-01', chantierId:3, date:'2026-10-12', aValider:false, prochaine:'Jeudi 12 novembre, 9 h'}, {id:83, num:'CR-01', chantierId:4, date:'2026-11-03', aValider:false, prochaine:'Réception le 5 novembre'}];
   D.intervenants = [{id:5, nom:'[Entreprise électricité]', chantierId:1, metier:'Électricité'}];
+  D.pointages = [{ id:'pt1', chantierId:1, intervenantId:'4', date:today(), arrivee:new Date(new Date().setHours(7, 42, 0, 0)).toISOString(), depart:null, nom:'[Entreprise couverture]' }];
   D.messages = [{id:'ms1', chantierId:1, intervenantId:5, de:'artisan', nom:'[Entreprise électricité]', texte:'Quel jour puis-je passer pour le passage des gaines ?', date:'2026-11-08T14:10:00', luPhenix:false}];
   D.factures = [{id:901, chantierId:1, lotId:11, num:'SIT-01', date:'2026-09-30', ht:18000, statut:'payee', notes:'Situation n° 1'}, {id:902, chantierId:1, lotId:11, num:'SIT-02', date:'2026-10-20', ht:14500, statut:'payee', notes:'Solde du lot'}, {id:903, chantierId:1, lotId:14, num:'SIT-01', date:'2026-11-02', ht:6200, statut:'validee', notes:''}, {id:904, chantierId:1, lotId:12, num:'FAC-02', date:'2026-09-15', ht:5200, statut:'retard', notes:''}];
   D.lots.forEach(function(l){ l.ht = {11:32500, 12:9800, 14:15400, 15:12600, 16:8900, 17:7400, 18:21300}[l.id] || 0; l.tva = 10; });
@@ -1738,7 +1741,16 @@ function gxReserves(){ var c = chantier(); return c ? D.reserves.filter(function
 function gxData(){
   var c = chantier(); if (!c) return null; var ls = lotsOf(), td = today();
   var doing = ls.filter(function(l){ return stOf(l) === 'doing'; });
-  var vans = doing.filter(function(l){ return entrepriseOf(l); }).map(function(l){ return { id:l.id }; });
+  /* [Pointage] 27/11/2026 : camionnette pleine = entreprise pointée « J'arrive » aujourd'hui (pas encore « Je pars ») ;
+     camionnette en pointillés = entreprise attendue (lot en cours ou prévu aujourd'hui) mais pas sur place ; sinon pas de camionnette. */
+  var sur = {}; (D.pointages || []).forEach(function(p){ if (p.chantierId == c.id && p.date === td && p.arrivee && !p.depart) { [p.intervenantId != null ? 'i' + p.intervenantId : '', p.nom ? 'n' + norm(p.nom) : ''].forEach(function(k){ if (k && (!sur[k] || p.arrivee > sur[k].arrivee)) sur[k] = p; }); } });
+  var attendu = function(l){ return stOf(l) === 'doing' || (stOf(l) !== 'done' && l.debut && l.debut <= td && (!l.fin || l.fin >= td)); };
+  var vans = [], vuV = {};
+  ls.forEach(function(l){ var ent = entrepriseOf(l); if (!ent) return; var k = l.interv != null ? 'i' + l.interv : 'n' + norm(ent); if (vuV[k]) return;
+    var p = (l.interv != null && sur['i' + l.interv]) || sur['n' + norm(ent)] || null;
+    if (p) { vuV[k] = 1; vans.push({ id:l.id, nom:ent, depuis:p.arrivee }); }
+    else if (attendu(l)) { vuV[k] = 1; vans.push({ id:l.id, nom:ent, absent:true }); } });
+  vans.sort(function(a, b){ return (a.absent ? 1 : 0) - (b.absent ? 1 : 0); });
   var slots = ls.filter(function(l){ return !entrepriseOf(l) && (stOf(l) === 'doing' || (stOf(l) === 'todo' && l.debut && l.debut <= td)); }).map(function(l){ return { id:l.id }; });
   var cones = gxReserves().map(function(r, i){ var l = D.lots.filter(function(x){ return x.id == r.lotId; })[0]; return { id:r.id, n:i + 1, zone:l ? zoneOf(l) : null }; });
   var late = ls.filter(function(l){ return l.fin && l.fin < td && stOf(l) !== 'done'; })[0];
@@ -1751,7 +1763,7 @@ function gxDecor(){ var P = PX(); if (!(P && P.setDecor && S.screen === 'chantie
 function gxLabels(){
   var el = $('gx-lab'); if (!el) return; var d = gxData(); if (!d || M3.failed) { el.innerHTML = ''; return; }
   var h = '', lot = function(id){ return D.lots.filter(function(x){ return x.id == id; })[0]; };
-  d.vans.forEach(function(v){ var l = lot(v.id); if (!l) return; h += '<button type="button" class="gx-lab' + (S.gxSel === 'van:' + v.id ? ' sel' : '') + '" data-k="van:' + v.id + '" data-lot="' + v.id + '">' + gxI('done', '#2fc47a', 15) + esc(metier(l)) + ' <small>· ' + esc(entrepriseOf(l)) + ' · ' + (l.av || 0) + ' %</small></button>'; });
+  d.vans.forEach(function(v){ var l = lot(v.id); if (!l) return; h += '<button type="button" class="gx-lab' + (S.gxSel === 'van:' + v.id ? ' sel' : '') + '" data-k="van:' + v.id + '" data-lot="' + v.id + '"' + (v.absent ? ' style="border-style:dashed;opacity:.85"' : '') + '>' + (v.absent ? gxI('issue', '#fcd34d', 15) : gxI('done', '#2fc47a', 15)) + esc(v.nom || entrepriseOf(l)) + ' <small>· ' + (v.absent ? 'attendue, pas sur place' : 'sur place depuis ' + new Date(v.depuis).toTimeString().slice(0, 5).replace(':', ' h ')) + '</small></button>'; });
   d.slots.forEach(function(v){ var l = lot(v.id); if (!l) return; h += '<button type="button" class="gx-lab" data-k="slot:' + v.id + '" data-lot="' + v.id + '">' + gxI('issue', '#fcd34d', 15) + esc(metier(l)) + ' <small>· aucune entreprise</small></button>'; });
   d.cones.forEach(function(cn){ h += '<button type="button" class="gx-num" data-k="cone:' + cn.id + '" data-res="' + cn.id + '" aria-label="Réserve n° ' + cn.n + '">' + cn.n + '</button>'; });
   if (d.barrier) { var lb = lot(d.barrier.lotId); h += '<button type="button" class="gx-lab" data-k="barrier" data-lot="' + d.barrier.lotId + '" style="border-color:rgba(239,68,68,.7)">' + gxI('block', '#ef4444', 15) + 'En retard : ' + esc(lb ? lotLabel(lb) : '') + '</button>'; }
@@ -2529,7 +2541,7 @@ function cliStart(){
 }
 function startData(){
   var n = 0, any = function(){ ensureChantier(); if (S.screen === 'home') { renderTop(); renderHome(); return; } renderTop(); renderTabs(); renderBureau(); renderTiles(); applyStage(); renderGx(); };
-  ['chantiers', 'lots', 'intervenants', 'reserves', 'crs', 'factures', 'plans', 'messages'].forEach(function(k){ FB.listen(k, function(a, pend){ D[k] = a; S.pending = !!pend; if (k === 'chantiers') cliStart(); if (k === 'intervenants' || k === 'lots' || k === 'chantiers') { n |= { chantiers:1, lots:2, intervenants:4 }[k]; if (n === 7 && !S.loaded) { S.loaded = true; ouvrirVoulu(); } } any(); }); });
+  ['chantiers', 'lots', 'intervenants', 'reserves', 'crs', 'factures', 'plans', 'messages', 'pointages'].forEach(function(k){ FB.listen(k, function(a, pend){ D[k] = a; S.pending = !!pend; if (k === 'chantiers') cliStart(); if (k === 'intervenants' || k === 'lots' || k === 'chantiers') { n |= { chantiers:1, lots:2, intervenants:4 }[k]; if (n === 7 && !S.loaded) { S.loaded = true; ouvrirVoulu(); } } any(); }); });
 }
 var ADMIN_EMAILS = ['contact@phenixarchitecte.fr'];   /* même repli que l'ancien Chantier */
 function authed(email){

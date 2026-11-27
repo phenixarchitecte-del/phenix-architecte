@@ -11,7 +11,7 @@
 ══════════════════════════════════════════════════════════════════
  27/11/2026 — [Espace artisan] Refonte d'après la maquette validée : style de l'espace client (bleu nuit, or, Italiana / Jost, phénix en
    filigrane, volutes) et verre dépoli brillant sur les blocs. Connexion PAR LIEN reçu par mail (comme l'espace client), plus de mot de passe.
-   Trois onglets : Aujourd'hui (gros bouton J'arrive / Je pars / Je reviens, photo du chantier, nouveaux plans, photos à prendre, messages),
+   Trois onglets : Aujourd'hui (gros bouton J'arrive / Je pars, photo du chantier, nouveaux plans, photos à prendre, messages),
    Plans (dernière version, pastilles, « Prendre la photo »), Phénix (messages, bouton « Dicter un message » avec phenix_dictee.js).
    Aperçu pour Phénix : ?apercu=<mail de l'entreprise> (rien n'est envoyé). Mêmes collections qu'avant (phenix_users rôle artisan,
    phenix_ch_pointages / messages / photos / vus) : aucune règle Firestore à changer. Page rechargeable hors ligne (phenix_sw.js).
@@ -213,7 +213,7 @@ async function boot(email){
   listen(C.pointages, query(collection(db,C.pointages), where('intervenantId','==',S.me.intervId)),'pointages');
   listen(C.messages, query(collection(db,C.messages), where('intervenantId','==',S.me.intervId)),'messages');
   listen(C.photos, query(collection(db,C.photos), where('intervenantId','==',S.me.intervId)),'photos');
-  if(S.apercu){ ['arrive','partir','revenir','addPhotoLibre','addPhotoPastille','sendMsg','poserPastille'].forEach(k=>{ window[k]=()=>toast('Aperçu : rien n\'est envoyé.'); }); }
+  if(S.apercu){ ['arrive','partir','addPhotoLibre','addPhotoPastille','sendMsg','poserPastille'].forEach(k=>{ window[k]=()=>toast('Aperçu : rien n\'est envoyé.'); }); }
   render();
 }
 
@@ -223,7 +223,7 @@ const grp = p => p.groupe || p.id;
 function myPlans(){ const g={}; S.plans.filter(p=>p.chantierId==S.ch).forEach(p=>{ const k=grp(p); if(!g[k]||(p.version||1)>(g[k].version||1)) g[k]=p; });
   return Object.keys(g).map(k=>g[k]).sort((a,b)=>String(a.nom).localeCompare(String(b.nom))); }
 const isNew = p => (S.vus.vus[grp(p)]||0) < (p.version||1);
-const today = () => S.pointages.find(x=>x.date===ymd(new Date()) && x.chantierId==S.ch);
+const today = () => S.pointages.filter(x=>x.date===ymd(new Date()) && x.chantierId==S.ch).sort((a,b)=>String(a.arrivee)<String(b.arrivee)?1:-1)[0];
 function aPhotographier(){ const out=[]; myPlans().forEach(p=>(p.pastilles||[]).forEach((a,i)=>{
   if(a.type==='photo' && a.statut!=='verifiee' && !(p.photos||[]).some(x=>x.pastilleId===a.id)) out.push({plan:p,a,n:i+1}); })); return out; }
 function unreadMsgs(){ return S.messages.filter(m=>m.de==='phenix' && !m.luArtisan && m.chantierId==S.ch).length; }
@@ -235,7 +235,7 @@ let pose=false;
 async function hydrateImgs(){ document.querySelectorAll('img[data-mid]').forEach(async im=>{ if(im.getAttribute('src')||!im.dataset.mid) return; try{ const d=await getMedia(im.dataset.mid); if(d) im.src=d; }catch(e){} }); }
 
 // ── Pointage ──
-const pid = () => S.me.email.replace(/[^a-z0-9]/gi,'_')+'_'+ymd(new Date())+'_'+S.ch;
+const pid = () => S.me.email.replace(/[^a-z0-9]/gi,'_')+'_'+ymd(new Date())+'_'+S.ch+'_'+Date.now().toString(36);
 window.arrive = async () => {
   const unseen = myPlans().filter(p => (S.vus.vus[grp(p)]||0)<(p.version||1) && (S.vus.rappel[grp(p)]||0)<(p.version||1));
   const rec = { id:pid(), chantierId:S.ch, intervenantId:S.me.intervId, email:S.me.email, nom:S.me.nom, date:ymd(new Date()), arrivee:new Date().toISOString(), depart:null, planAlerte:unseen.map(p=>p.id) };
@@ -245,7 +245,6 @@ window.arrive = async () => {
 };
 async function upd(patch){ const t=today(); if(!t) return; Object.assign(t,patch); try{ await setDoc(doc(db,C.pointages,t.id),t); }catch(e){ toast('Pas de réseau : réessayez'); } render(); }
 window.partir = () => upd({depart:new Date().toISOString()}).then(()=>toast('Départ enregistré'));
-window.revenir = () => upd({depart:null});
 
 // ── Plans ──
 window.S_back = () => { S.planId=null; S.pastId=null; pose=false; render(); };
@@ -343,9 +342,8 @@ function vPointer(){
   const t=today(), ph=aPhotographier().filter(x=>x.plan.chantierId==S.ch), np=myPlans().filter(isNew), nb=unreadMsgs();
   let h=entete(t && !t.depart ? 'Sur le chantier depuis '+hm(t.arrivee) : '');
   h+='<div class="centre">';
-  if(!t) h+='<button type="button" class="rond or" onclick="arrive()">J\'arrive</button><span class="aide">Un seul appui. Pas de géolocalisation.</span>';
-  else if(!t.depart) h+='<button type="button" class="rond verre" onclick="partir()">Je pars</button><span class="aide">✓ Arrivée envoyée à Phénix · touchez en partant, même pour une pause</span>';
-  else h+='<button type="button" class="rond verre" onclick="revenir()">Je reviens</button><span class="aide">Parti à '+hm(t.depart)+' · arrivé à '+hm(t.arrivee)+'</span>';
+  if(t && !t.depart) h+='<button type="button" class="rond verre" onclick="partir()">Je pars</button><span class="aide">✓ Arrivée envoyée à Phénix</span>';
+  else h+='<button type="button" class="rond or" onclick="arrive()">J\'arrive</button><span class="aide">'+(t ? 'Départ envoyé à Phénix à '+hm(t.depart) : 'Un seul appui. Pas de géolocalisation.')+'</span>';
   h+='</div>';
   if(t && !t.depart) h+='<label class="btn-or large">'+ICO.photo+'Photo du chantier<input type="file" accept="image/*" capture="environment" multiple hidden onchange="addPhotoLibre(event)"></label><span class="aide c">Vos photos vont à Phénix, jamais directement au client.</span>';
   const lignes=[];

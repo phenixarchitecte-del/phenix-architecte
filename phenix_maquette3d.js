@@ -5,6 +5,7 @@
    Prérequis de la page hôte : <script type="importmap"> pour « three » (0.160) et « three/addons/ »,
    puis <script type="module" src="phenix_maquette3d.js">. API : init, update, setLook, setStage, setMode,
    focus, goView, views, overview, zoomIn, setActive. La page fournit PXModel.loader (→ ArrayBuffer .glb) et PXModel.cfg.
+   27/11/2026 [Pointage] camionnettes : nom de l'entreprise peint sur les flancs (v.nom) ; v.absent = attendue mais pas pointée → silhouette en pointillés or.
    22/11/2026 [Fluidité] maquette importée : morceaux fusionnés par catégorie et statut (une dizaine de dessins au lieu de centaines).
    22/11/2026 [Existant/Projet] statut de rénovation par élément (userData.reno ou réglage de l'Atelier) ; M.hasReno(), M.setReno('existant'|'projet').
    22/11/2026 [Visite chantier] PXModel.stagesUtiles() : étapes qui changent quelque chose sur la maquette ; ce qui n'est pas encore construit
@@ -469,14 +470,25 @@
       glow(cx, ch + .2, cz, 0xfff1c1, 2.2); decorPts.crane = new THREE.Vector3(cx, ch + 1, cz); }
     /* camionnettes des artisans (une par lot en cours) et places vides (artisan attendu, sans entreprise) */
     var rowZ = z1 - 2.7, rx = x0 + 3.2;
-    var van = function(x, z, sel){ var g = new THREE.Group(); g.position.set(x, -.03, z); g.rotation.y = -Math.PI/2; G.add(g);
+    /* [Pointage] 27/11/2026 : nom de l'entreprise peint sur les deux flancs ; « absente » (attendue, pas pointée) = camionnette fantôme en pointillés */
+    var nomTex = function(t){ var cv = document.createElement('canvas'); cv.width = 640; cv.height = 200; var x = cv.getContext('2d');
+      x.fillStyle = '#f4f6fa'; x.fillRect(0, 0, 640, 200); x.strokeStyle = '#0b1f4a'; x.lineWidth = 8; x.strokeRect(6, 6, 628, 188); x.fillStyle = '#0b1f4a'; var fs = 96; x.font = '600 ' + fs + 'px Jost, Arial, sans-serif';
+      while (x.measureText(t).width > 590 && fs > 34) { fs -= 4; x.font = '600 ' + fs + 'px Jost, Arial, sans-serif'; }
+      x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(t, 320, 104); var tx = new THREE.CanvasTexture(cv); tx.anisotropy = 4; return tx; };
+    var van = function(x, z, sel, nom, absent){ var g = new THREE.Group(); g.position.set(x, -.03, z); g.rotation.y = -Math.PI/2; G.add(g);
       bx(2, 1.9, 3.4, MS(0xf4f6fa, { roughness:.5, emissive:0xf4f6fa, emissiveIntensity:.25 }), 0, .25, -.5, g); bx(2, 1.3, 1.3, MS(0xe3e9f1, { emissive:0xe3e9f1, emissiveIntensity:.2 }), 0, .25, 1.8, g);
       bx(1.9, .55, .06, MS(0x1e2a3a), 0, .95, 2.47, g); bx(.06, .25, 3.3, EM(0xfcd34d, .9), 1.02, 1.15, -.5, g); bx(.06, .25, 3.3, EM(0xfcd34d, .9), -1.02, 1.15, -.5, g);
       [[-1, 1.6], [1, 1.6], [-1, -1.6], [1, -1.6]].forEach(function(w){ var c = new THREE.Mesh(new THREE.CylinderGeometry(.34, .34, .25, 14), MS(0x111827)); c.rotation.z = Math.PI/2; c.position.set(w[0], .34, w[1]); g.add(c); });
       [-.65, .65].forEach(function(hx){ var s2 = new THREE.Mesh(new THREE.SphereGeometry(.12, 8, 6), EM(0xfff3c4, 3)); s2.position.set(hx, .75, 2.48); g.add(s2); });
+      if(nom){ var tx = nomTex(String(nom).replace(/^\[|\]$/g, '')); var mt = new THREE.MeshBasicMaterial({ map:tx, transparent:!!absent, opacity:absent ? .7 : 1, depthWrite:!absent });
+        [1.06, -1.06].forEach(function(sx){ var pl = new THREE.Mesh(new THREE.PlaneGeometry(3.3, 1.03), mt); pl.position.set(sx, 1.25, -.5); pl.rotation.y = sx > 0 ? Math.PI/2 : -Math.PI/2; g.add(pl); });
+        var tt = new THREE.Mesh(new THREE.PlaneGeometry(3.3, 1.03), mt); tt.position.set(0, 2.19, -.5); tt.rotation.set(-Math.PI/2, 0, Math.PI/2); g.add(tt); /* aussi sur le toit : lisible depuis la vue plongeante */ }
+      if(absent){ /* attendue mais pas sur place : silhouette en pointillés or, presque transparente */
+        g.traverse(function(o){ if(o.isMesh && !(o.material && o.material.map)) o.material = new THREE.MeshBasicMaterial({ color:0xfcd34d, transparent:true, opacity:.07, depthWrite:false }); });
+        [[2, 1.9, 3.4, .25, -.5], [2, 1.3, 1.3, .25, 1.8]].forEach(function(q){ var e = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(q[0], q[1], q[2])), new THREE.LineDashedMaterial({ color:0xfcd34d, dashSize:.28, gapSize:.2 })); e.computeLineDistances(); e.position.set(0, q[3] + q[1]/2, q[4]); g.add(e); }); }
       if(sel){ var ring = new THREE.Mesh(new THREE.RingGeometry(2.6, 2.9, 40), new THREE.MeshBasicMaterial({ color:0xfcd34d, side:THREE.DoubleSide })); ring.rotation.x = -Math.PI/2; ring.position.y = .03; g.add(ring); }
     };
-    (d.vans || []).slice(0, Math.max(1, Math.floor((W - 6) / 5))).forEach(function(v){ van(rx + 2.3, rowZ, d.sel === 'van:' + v.id); decorPts['van:' + v.id] = new THREE.Vector3(rx + 2.3, 2.9, rowZ); rx += 5.2; });
+    (d.vans || []).slice(0, Math.max(1, Math.floor((W - 6) / 5.8))).forEach(function(v){ van(rx + 2.3, rowZ, d.sel === 'van:' + v.id, v.nom, v.absent); decorPts['van:' + v.id] = new THREE.Vector3(rx + 2.3, 2.9, rowZ); rx += 5.8; });
     var gold = EM(0xfcd34d, 1.6);
     (d.slots || []).slice(0, 3).forEach(function(v){ if(rx + 4.6 > x1) return; var sx = rx + 2.3;
       for(var a = -1.6; a < 1.6; a += .6){ bx(.32, .04, .09, gold, sx + a + .15, -.02, rowZ - 1.15); bx(.32, .04, .09, gold, sx + a + .15, -.02, rowZ + 1.15); }
