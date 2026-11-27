@@ -5,6 +5,8 @@
 ══════════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_dossier.html
 ──────────────────────────────────────────────────────────────────────
+ 27/11/2026 — [Dictée] CR vocal de réunion et tâche vocale passent par phenix_dictee.js (moteur commun) : pauses de réflexion possibles,
+   rien n'est validé avant le 2e appui sur le micro ; plus de répétitions sur Android ; ponctuation dite (virgule, point, à la ligne…).
  25/11/2026 — [Centre client] L'onglet Espace client s'ouvre en grand avec 4 sous-onglets : Statut et accès, Échanges (conversation avec le
    client, phenix_client_dossiers/{id}/messages, réponses mail/SMS de la cloche comprises), Documents, Carnet et maquette (réglages du carnet
    et Atelier intégrés, sans changer d'écran). Ordre du shell open-projet : sous = 'messages' | 'carnet'.
@@ -107,6 +109,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="phenix_dictee.js?v=20261127"></script><!-- [Dictée] moteur de dictée commun : pauses possibles, validation au 2e appui -->
 <script src="phenix_espace_client.js"></script><!-- [Espace client] bibliothèque des statuts partagée avec la cloche du shell -->
 <script src="phenix_carnet_questions.js?v=20261125"></script><!-- [Carnet] questions du carnet (réponses du client) -->
 <title>Phénix-Architecture · Gestion de Dossier</title>
@@ -4501,7 +4504,7 @@ function stopReunionVocal(confirm) {
   if (confirm && _rvocal.active && _rvocal.step > 0) {
     if (!window.confirm('Abandonner ce CR en cours ?')) return;
   }
-  _rvocalStopListening();
+  _rvocalStopListening(true);   /* fermeture : on n'envoie pas ce qui était en cours de dictée */
   if (window.speechSynthesis) window.speechSynthesis.cancel();
   _rvocal.active = false;
   document.getElementById('modalReunionVocal').classList.remove('open');
@@ -4570,71 +4573,24 @@ function toggleReunionVocalListening() {
   }
 }
 
-function _rvocalStartListening() {
+function _rvocalStartListening() {   /* [Dictée] 27/11/2026 : moteur commun phenix_dictee.js — pauses possibles, validation au 2e appui seulement */
   if (window.speechSynthesis) window.speechSynthesis.cancel();
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) return;
-  if (typeof _rvocal.finalTranscript !== 'string') _rvocal.finalTranscript = '';
-  _rvocal.reco = new SR();
-  _rvocal.reco.lang = 'fr-FR';
-  // continuous:true relance parfois TOUTE la reconnaissance depuis le début sur
-  // Android au lieu de simplement reprendre — la phrase entière est alors
-  // retranscrite en boucle, de plus en plus longue. continuous:false est
-  // nettement plus fiable sur mobile : chaque écoute ne capte qu'UNE phrase
-  // complète et propre, et on enchaîne automatiquement une nouvelle écoute dès
-  // que la précédente se termine naturellement — même confort, sans le bug.
-  _rvocal.reco.continuous = false;
-  _rvocal.reco.interimResults = true;
-  _rvocal.reco.maxAlternatives = 1;
-  _rvocal.reco.onstart = () => {
-    _rvocal.listening = true; _rvocalSetMic(true);
-    document.getElementById('rvocal-transcript-wrap').style.display = '';
-    document.getElementById('rvocal-transcript').textContent = _rvocal.finalTranscript || '…';
-    _rvocalSetStatus('🔴 Écoute en cours — parlez, faites une pause si besoin, réappuyez sur le micro pour valider');
-  };
-  _rvocal.reco.onresult = e => {
-    let interim = '';
-    // Chaque session (continuous:false) ne contient qu'UNE seule phrase.
-    for (let i = 0; i < e.results.length; i++) {
-      const r = e.results[i];
-      if (r.isFinal) {
-        const segment = r[0].transcript.trim();
-        if (segment) _rvocal.finalTranscript = (_rvocal.finalTranscript + ' ' + segment).trim();
-      } else {
-        interim += r[0].transcript;
-      }
-    }
-    document.getElementById('rvocal-transcript').textContent = (_rvocal.finalTranscript + ' ' + interim).trim();
-  };
-  _rvocal.reco.onerror = e => {
-    if (e.error === 'no-speech' || e.error === 'aborted') return; // pause : onend relance discrètement
-    _rvocal.userStopped = true;
-    _rvocal.listening=false; _rvocalSetMic(false);
-    _rvocalSetStatus(e.error==='not-allowed'?'⚠️ Accès micro refusé':'Erreur: '+e.error);
-  };
-  _rvocal.reco.onend = () => {
-    _rvocal.listening = false;
-    if (_rvocal.userStopped) {
-      _rvocalSetMic(false);
-      _rvocal.reco = null;
-      const finalText = (_rvocal.finalTranscript || '').trim();
-      if (finalText && !_rvocal.discardNextResult) _rvocalProcess(finalText);
-      _rvocal.discardNextResult = false;
-    } else {
-      try { _rvocal.reco.start(); } catch (err) { _rvocalSetMic(false); }
-    }
-  };
-  _rvocal.reco.start();
+  if (!window.PhenixDictee || !PhenixDictee.dispo) { _rvocalSetStatus('⚠️ Dictée indisponible ici : utilisez le micro du clavier (Windows + H)'); return; }
+  _rvocal.listening = true; _rvocalSetMic(true);
+  document.getElementById('rvocal-transcript-wrap').style.display = '';
+  document.getElementById('rvocal-transcript').textContent = _rvocal.finalTranscript || '…';
+  _rvocalSetStatus('🔴 Écoute en cours — parlez, faites des pauses si besoin, réappuyez sur le micro pour valider');
+  _rvocal.reco = PhenixDictee.ecouter({ base:_rvocal.finalTranscript || '',
+    onTexte:(a, def) => { _rvocal.finalTranscript = def; const el = document.getElementById('rvocal-transcript'); if (el) el.textContent = a || '…'; },
+    onEtat:(e, m) => { if (e === 'erreur') _rvocalSetStatus('⚠️ ' + m); },
+    onFin:t => { _rvocal.reco = null; _rvocal.listening = false; _rvocalSetMic(false); const finalText = (t || '').trim(); if (finalText && !_rvocal.discardNextResult) _rvocalProcess(finalText); _rvocal.discardNextResult = false; } });
 }
 
 function _rvocalStopListening(discard) {
   _rvocal.userStopped = true;
   if (discard) _rvocal.discardNextResult = true;
-  if (_rvocal.reco) {
-    try { _rvocal.reco.stop(); } catch(e){}
-  } else {
-    _rvocal.listening=false; _rvocalSetMic(false);
-  }
+  if (_rvocal.reco) { const r = _rvocal.reco; r.stop(!!discard); if (discard) { _rvocal.reco = null; _rvocal.discardNextResult = false; } }
+  _rvocal.listening = false; _rvocalSetMic(false);
 }
 
 function _rvocalSetMic(on) {
@@ -4849,40 +4805,25 @@ function _tvocalRenderRecap() {
 }
 
 function toggleTacheVocalListening() {
-  if (_tvocal.listening) _tvocalStopListening();
+  if (_tvocal.listening) _tvocalStopListening(true);
   else _tvocalStartListening();
 }
 
-function _tvocalStartListening() {
+function _tvocalStartListening() {   /* [Dictée] 27/11/2026 : moteur commun — plus de validation à la première pause ; on valide en réappuyant */
   if (window.speechSynthesis) window.speechSynthesis.cancel();
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) return;
-  _tvocal.reco = new SR();
-  _tvocal.reco.lang = 'fr-FR';
-  _tvocal.reco.continuous = false;
-  _tvocal.reco.interimResults = true;
-  _tvocal.reco.onstart = () => {
-    _tvocal.listening = true; _tvocalSetMic(true);
-    document.getElementById('tvocal-transcript-wrap').style.display = '';
-    document.getElementById('tvocal-transcript').textContent = '…';
-    _tvocalSetStatus('🎙️ J\'écoute…');
-  };
-  _tvocal.reco.onresult = e => {
-    let txt = '';
-    for (let i=e.resultIndex; i<e.results.length; i++) txt += e.results[i][0].transcript;
-    document.getElementById('tvocal-transcript').textContent = txt;
-    if (e.results[e.results.length-1].isFinal) _tvocalProcess(txt.trim());
-  };
-  _tvocal.reco.onerror = ev => {
-    _tvocalSetStatus(ev.error==='no-speech' ? 'Rien entendu — réessayez' : 'Erreur micro : '+ev.error);
-    _tvocalStopListening();
-  };
-  _tvocal.reco.onend = () => { _tvocal.listening = false; _tvocalSetMic(false); };
-  try { _tvocal.reco.start(); } catch(e) { _tvocalSetStatus('Micro déjà actif'); }
+  if (!window.PhenixDictee || !PhenixDictee.dispo) { _tvocalSetStatus('⚠️ Dictée indisponible ici : utilisez le micro du clavier'); return; }
+  _tvocal.listening = true; _tvocalSetMic(true);
+  document.getElementById('tvocal-transcript-wrap').style.display = '';
+  document.getElementById('tvocal-transcript').textContent = '…';
+  _tvocalSetStatus('🎙️ J\'écoute — faites des pauses si besoin, réappuyez pour valider');
+  _tvocal.reco = PhenixDictee.ecouter({ base:'',
+    onTexte:a => { const el = document.getElementById('tvocal-transcript'); if (el) el.textContent = a || '…'; },
+    onEtat:(e, m) => { if (e === 'erreur') _tvocalSetStatus('⚠️ ' + m); },
+    onFin:t => { _tvocal.reco = null; _tvocal.listening = false; _tvocalSetMic(false); if (t && t.trim()) _tvocalProcess(t.trim()); } });
 }
 
-function _tvocalStopListening() {
-  if (_tvocal.reco) { try { _tvocal.reco.stop(); } catch(e){} }
+function _tvocalStopListening(valider) {   /* valider=true : appui sur le micro ; sinon (retour, passer, fermer) on annule l'écoute */
+  if (_tvocal.reco) { const r = _tvocal.reco; if (valider) r.stop(); else { _tvocal.reco = null; r.stop(true); } }
   _tvocal.listening = false; _tvocalSetMic(false);
 }
 

@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+<script src="phenix_dictee.js?v=20261127"></script>   <!-- [Dictée] moteur commun : pauses possibles, on valide en réappuyant sur le micro -->
 <script src="phenix_messages.js"></script>   <!-- [Décennale] modèles de demande / relance (mêmes textes que Chiffrage) -->
 <script src="phenix_decennale.js"></script>   <!-- lecture IA des attestations décennales (fichier partagé avec Chiffrage) -->
 <script type="module">
@@ -977,7 +978,7 @@ async function addG(i){
 
 let scores_cache=[];
 
-function startChV(){if(_cvl){stopChV();return;}if(!('webkitSpeechRecognition' in window)&&!('SpeechRecognition' in window)){document.getElementById('ch-vs').textContent='⚠️ Utilisez Chrome';return;}const SR=window.SpeechRecognition||window.webkitSpeechRecognition;_cvr=new SR();_cvr.lang='fr-FR';_cvr.continuous=false;_cvr.interimResults=true;_cvr.onstart=()=>{_cvl=true;const b=document.getElementById('ch-mic');b.style.background='linear-gradient(135deg,#C0392B,#E74C3C)';b.textContent='⏹️';document.getElementById('ch-vs').textContent='🔴 Écoute…';};_cvr.onresult=e=>{const t=Array.from(e.results).map(r=>r[0].transcript).join('');document.getElementById('ch-vs').textContent=t;if(e.results[0].isFinal)parseChV(t);};_cvr.onerror=e=>{stopChV();document.getElementById('ch-vs').textContent='⚠️ '+e.error;};_cvr.onend=()=>stopChV();_cvr.start();}
+function startChV(){if(_cvl){stopChV();return;}if(!('webkitSpeechRecognition' in window)&&!('SpeechRecognition' in window)){document.getElementById('ch-vs').textContent='⚠️ Utilisez Chrome';return;}const SR=(window.PhenixDictee&&PhenixDictee.Reconnaissance)||window.SpeechRecognition||window.webkitSpeechRecognition;_cvr=new SR();_cvr.lang='fr-FR';_cvr.continuous=false;_cvr.interimResults=true;_cvr.onstart=()=>{_cvl=true;const b=document.getElementById('ch-mic');b.style.background='linear-gradient(135deg,#C0392B,#E74C3C)';b.textContent='⏹️';document.getElementById('ch-vs').textContent='🔴 Écoute…';};_cvr.onresult=e=>{const t=Array.from(e.results).map(r=>r[0].transcript).join('');document.getElementById('ch-vs').textContent=t;if(e.results[0].isFinal)parseChV(t);};_cvr.onerror=e=>{stopChV();document.getElementById('ch-vs').textContent='⚠️ '+e.error;};_cvr.onend=()=>stopChV();_cvr.start();}
 function stopChV(){if(_cvr){try{_cvr.stop();}catch(e){}_cvr=null;}_cvl=false;const b=document.getElementById('ch-mic');if(b){b.style.background='linear-gradient(135deg,#4A9CC7,#2A5298)';b.textContent='🎙️';}}
 function resetChV(){stopChV();document.getElementById('ch-vs').textContent='"Électricien à Riom budget serré disponible"';['ch-lieu','ch-pro'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});document.getElementById('ch-met').value='';document.getElementById('ch-bud').value='';document.getElementById('ch-dis').value='';renderCh();}
 function parseChV(tx){
@@ -1106,7 +1107,7 @@ function startVoiceSearch(){
   if(!('webkitSpeechRecognition' in window)&&!('SpeechRecognition' in window)){
     document.getElementById('vsearch-status').textContent='⚠️ Recherche vocale : utilisez Chrome';return;
   }
-  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  const SR=(window.PhenixDictee&&PhenixDictee.Reconnaissance)||window.SpeechRecognition||window.webkitSpeechRecognition;
   _vsr=new SR();_vsr.lang='fr-FR';_vsr.continuous=false;_vsr.interimResults=true;
   _vsr.onstart=()=>{
     _vsl=true;
@@ -1227,7 +1228,7 @@ function clearVoiceSearch(silent){
 
 function toggleVP(){const p=document.getElementById('vpanel');p.classList.contains('open')?closeVP():p.classList.add('open');}
 function closeVP(){stopVP();document.getElementById('vpanel').classList.remove('open');resetVP();}
-function startVP(){if(_vl){stopVP();return;}if(!('webkitSpeechRecognition' in window)&&!('SpeechRecognition' in window)){setVS('⚠️ Utilisez Chrome',false);return;}const SR=window.SpeechRecognition||window.webkitSpeechRecognition;_vr=new SR();_vr.lang='fr-FR';_vr.continuous=false;_vr.interimResults=true;_vr.onstart=()=>{_vl=true;document.getElementById('vfab').classList.add('rec');document.getElementById('vp-lbl').textContent='Arrêter';document.getElementById('vp-mic').querySelector('i').className='ti ti-microphone-off';setVS('🔴 Écoute…',true);['vp-tr','vp-prev'].forEach(id=>document.getElementById(id).style.display='none');document.getElementById('vp-ok').style.display='none';document.getElementById('vp-a2').style.display='none';document.getElementById('vp-hint').style.display='block';};_vr.onresult=e=>{const t=Array.from(e.results).map(r=>r[0].transcript).join('');const tr=document.getElementById('vp-tr');tr.style.display='block';tr.textContent=t;if(e.results[0].isFinal)parseVP(t);};_vr.onerror=e=>{_vl=false;document.getElementById('vfab').classList.remove('rec');rstVPbtn();setVS('⚠️ '+e.error,false);};_vr.onend=()=>{_vl=false;document.getElementById('vfab').classList.remove('rec');rstVPbtn();};_vr.start();}
+function startVP(){if(_vl){stopVP();return;}if(!('webkitSpeechRecognition' in window)&&!('SpeechRecognition' in window)){setVS('⚠️ Utilisez Chrome',false);return;}const SR=(window.PhenixDictee&&PhenixDictee.Reconnaissance)||window.SpeechRecognition||window.webkitSpeechRecognition;_vr=new SR();_vr.lang='fr-FR';_vr.continuous=false;_vr.interimResults=true;_vr.onstart=()=>{_vl=true;document.getElementById('vfab').classList.add('rec');document.getElementById('vp-lbl').textContent='Arrêter';document.getElementById('vp-mic').querySelector('i').className='ti ti-microphone-off';setVS('🔴 Écoute…',true);['vp-tr','vp-prev'].forEach(id=>document.getElementById(id).style.display='none');document.getElementById('vp-ok').style.display='none';document.getElementById('vp-a2').style.display='none';document.getElementById('vp-hint').style.display='block';};_vr.onresult=e=>{const t=Array.from(e.results).map(r=>r[0].transcript).join('');const tr=document.getElementById('vp-tr');tr.style.display='block';tr.textContent=t;if(e.results[0].isFinal)parseVP(t);};_vr.onerror=e=>{_vl=false;document.getElementById('vfab').classList.remove('rec');rstVPbtn();setVS('⚠️ '+e.error,false);};_vr.onend=()=>{_vl=false;document.getElementById('vfab').classList.remove('rec');rstVPbtn();};_vr.start();}
 function stopVP(){if(_vr){try{_vr.stop();}catch(e){}_vr=null;}_vl=false;document.getElementById('vfab').classList.remove('rec');rstVPbtn();}
 function rstVPbtn(){document.getElementById('vp-lbl').textContent='Écouter';document.getElementById('vp-mic').querySelector('i').className='ti ti-microphone';}
 function setVS(m,a){const e=document.getElementById('vp-st');e.textContent=m;e.className='vst'+(a?' rec':'');}
@@ -1575,7 +1576,7 @@ function startCarteVocal(){
   if(!('webkitSpeechRecognition' in window)&&!('SpeechRecognition' in window)){
     document.getElementById('carte-vstatus').textContent='⚠️ Utilisez Chrome';return;
   }
-  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  const SR=(window.PhenixDictee&&PhenixDictee.Reconnaissance)||window.SpeechRecognition||window.webkitSpeechRecognition;
   _carteVrec=new SR();_carteVrec.lang='fr-FR';_carteVrec.continuous=false;_carteVrec.interimResults=true;
   _carteVrec.onstart=()=>{
     _carteVlis=true;

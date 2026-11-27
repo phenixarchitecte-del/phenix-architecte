@@ -29,6 +29,9 @@
    dans Chantier. « + Ajouter une personne » : recherche dans l'Annuaire des artisans (phenix_artisans, lecture seule) ou saisie à la main.
    Dictée 🎙 à côté de CHAQUE champ de texte (objet, météo, titre, localisation, constat, reprise, décisions, recherche, nom…). Date de reprise avec
    raccourcis + 1 sem. / + 2 sem. / + 1 mois. Un brouillon par chantier et par type.
+   (6) [Dictée] Toute la dictée du module passe par phenix_dictee.js (moteur commun à la suite) : on peut faire des pauses de réflexion,
+   rien n'est validé avant le 2e appui (« ■ Fini ») ; relance immédiate après les coupures du navigateur ; plus de répétitions sur Android ;
+   ponctuation dite à voix haute (virgule, point, à la ligne, point d'interrogation…). Concerne le constat, le compte rendu, la dictée de visite et la date.
    (5) Micro 🎙 aussi sur le nom du plan à l'étape du cadrage (le premier appui vide le nom pré-rempli puis écoute).
  15/11/2026 — [Travaux] Ordre « open-projet » avec onglet 'travaux' (bouton « Préciser les travaux » de la Synthèse) : ouvre l'onglet Travaux ;
    si le dossier n'a pas encore de chantier, il est créé vide depuis la fiche du dossier (phenix_projets) pour renseigner les travaux tout de suite.
@@ -307,6 +310,8 @@ h1,h2,h3{margin:0;font-weight:400;font-family:var(--fd)}
   </div>
 </div>
 
+<!-- Dictée commune à la suite (pauses possibles, rien n'est validé avant le 2e appui) [Dictée] -->
+<script src="phenix_dictee.js?v=20261127"></script>
 <!-- Moteur 3D partagé avec le Carnet [Moteur partagé] -->
 <script type="module" src="phenix_maquette3d.js?v=20261122b"></script>
 
@@ -703,7 +708,7 @@ function openDictee(){
   var ta = $('d-txt'); ta.value = REC.text;
   ta.oninput = function(){ REC.text = ta.value; VIS.notes = ta.value; visPut(); renderDoc(); };
   $('d-back').onclick = function(){ stopRec(); o.className = ''; o.innerHTML = ''; renderAll(); };
-  if ($('d-rec')) $('d-rec').onclick = function(){ REC.on ? stopRec() : startRec(SR); };
+  if ($('d-rec')) $('d-rec').onclick = function(){ REC.on ? stopRec() : startRec(); };
   $('d-end').onclick = function(){ stopRec(); renderDoc(true); };
   $('d-qpq').onclick = function(){ stopRec(); questions(); };
   renderDoc(); stateRec();
@@ -728,21 +733,19 @@ function sheetDate(done){
   bg.innerHTML = '<div class="sheet"><div class="eyebrow">Prochaine réunion</div><label style="display:flex;flex-direction:column;gap:4px"><span class="eyebrow">Date</span><input id="pd-d" type="date" style="min-height:48px"></label><label style="display:flex;flex-direction:column;gap:4px"><span class="eyebrow">Ou dites-la</span><input id="pd-t" placeholder="ex. jeudi 12 novembre à 9 h" style="min-height:48px"></label><div style="display:flex;gap:8px;flex-wrap:wrap">' + (SR ? '<button class="btn big" type="button" id="pd-mic">🎙 Dicter la date</button>' : '') + '<button class="btn big pri" type="button" id="pd-ok">Enregistrer</button><button class="btn big ghost" type="button" data-x="1">Annuler</button></div></div>';
   document.body.appendChild(bg);
   bg.onclick = function(e){ if (e.target === bg || e.target.getAttribute('data-x')) bg.remove(); };
-  if ($('pd-mic')) $('pd-mic').onclick = function(){ var sr = new SR(); sr.lang = 'fr-FR'; sr.onresult = function(ev){ $('pd-t').value = ev.results[0][0].transcript; }; sr.onerror = function(){ toast('Micro indisponible : écrivez la date.'); }; try{ sr.start(); toast('Je vous écoute…'); }catch(e){} };
+  if ($('pd-mic')) $('pd-mic').onclick = function(){ ctMic(this, $('pd-t')); };
   $('pd-ok').onclick = function(){ var v = $('pd-t').value.trim() || ($('pd-d').value ? frDate($('pd-d').value) : ''); if (!v) { toast('Indiquez une date.'); return; } bg.remove(); done(v); };
 }
 function stateRec(){ var l = $('d-led'), s = $('d-state'), b = $('d-rec'); if (!l) return; l.className = REC.on ? 'rec' : ''; s.textContent = REC.on ? 'Écoute en cours…' : 'Micro arrêté'; if (b) b.textContent = REC.on ? '■ Arrêter' : '🎙 Dicter'; }
-function startRec(SR){
-  var sr = new SR(); sr.lang = 'fr-FR'; sr.continuous = true; sr.interimResults = true; REC.sr = sr; REC.on = true;
-  sr.onresult = function(ev){ var fin = '', itm = ''; for (var i = ev.resultIndex; i < ev.results.length; i++) { var t = ev.results[i][0].transcript; if (ev.results[i].isFinal) fin += t + ' '; else itm += t; }
-    if (fin) { REC.text = (REC.text ? REC.text.replace(/\s+$/, '') + ' ' : '') + fin.trim(); VIS.notes = REC.text; visPut(); }
-    var ta = $('d-txt'); if (ta) { ta.value = REC.text + (itm ? ' ' + itm : ''); ta.scrollTop = ta.scrollHeight; } renderDoc(); };
-  sr.onend = function(){ if (REC.on) { try{ sr.start(); }catch(e){ REC.on = false; stateRec(); } } else stateRec(); };
-  sr.onerror = function(e){ if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { REC.on = false; toast('Micro refusé : autorisez-le dans le navigateur.'); stateRec(); } };
-  try{ sr.start(); }catch(e){ REC.on = false; }
+function startRec(){   /* [Dictée] moteur commun : la dictée ne coupe plus sur une pause */
+  if (!window.PhenixDictee || !PhenixDictee.dispo) { toast('Dictée indisponible : utilisez le micro du clavier (Windows + H).'); return; }
+  REC.on = true; var last = REC.text;
+  REC.d = PhenixDictee.ecouter({ base:REC.text,
+    onTexte:function(a, def){ var ta = $('d-txt'); if (ta) { ta.value = a; ta.scrollTop = ta.scrollHeight; } if (def !== last) { last = def; REC.text = def; VIS.notes = def; visPut(); } renderDoc(); },
+    onEtat:function(e, m){ if (e === 'erreur') toast(m); if (e === 'fin' || e === 'erreur') { REC.on = false; REC.d = null; stateRec(); } } });
   stateRec();
 }
-function stopRec(){ REC.on = false; try{ if (REC.sr) REC.sr.stop(); }catch(e){} stateRec(); }
+function stopRec(){ REC.on = false; if (REC.d) REC.d.stop(); stateRec(); }
 var CRD = { meteo:'', presents:'', avancement:'', reserves:'', decisions:'', prochaine:'', props:[], touched:false };
 function renderDoc(final){
   var doc = $('d-doc'); if (!doc) return;
@@ -1847,20 +1850,20 @@ function ctOpen(type){
 function ctClose(){ ctStopMic(); var o = $('overlay'); o.className = ''; o.innerHTML = ''; renderAll(); }
 
 /* ─── Dictée (micro de la tablette) ─── */
-function ctStopMic(){ if (CTS.sr) { var sr = CTS.sr; CTS.sr = null; try{ sr.stop(); }catch(e){} } if (CTS.srBtn) { CTS.srBtn.innerHTML = '🎙 Dicter'; CTS.srBtn.classList.remove('pri'); CTS.srBtn = null; } }
+function ctBtnOff(b){ if (!b) return; if (b.dataset.html != null) b.innerHTML = b.dataset.html; b.classList.remove('pri'); b.removeAttribute('aria-pressed'); }
+function ctStopMic(){ var d = CTS.sr, b = CTS.srBtn; CTS.sr = null; CTS.srBtn = null; if (d) d.stop(); ctBtnOff(b); }
+/* [Dictée] moteur commun phenix_dictee.js : pauses de réflexion possibles, rien n'est validé avant le 2e appui */
 function ctMic(btn, ta){
   if (CTS.sr && CTS.srBtn === btn) { ctStopMic(); return; }
   ctStopMic();
-  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { toast('Dictée indisponible dans ce navigateur : touchez le micro du clavier tactile (ou Windows + H).'); ta.focus(); return; }
-  var sr = new SR(), base = ta.value; sr.lang = 'fr-FR'; sr.continuous = true; sr.interimResults = true; CTS.sr = sr; CTS.srBtn = btn;
-  btn.innerHTML = '■ Arrêter'; btn.classList.add('pri');
-  sr.onresult = function(ev){ var fin = '', itm = ''; for (var i = ev.resultIndex; i < ev.results.length; i++) { var t = ev.results[i][0].transcript; if (ev.results[i].isFinal) fin += t + ' '; else itm += t; }
-    if (fin) { fin = fin.trim(); base = (base ? base.replace(/\s+$/, '') + ' ' : '') + fin.charAt(0).toUpperCase() + fin.slice(1); }
-    ta.value = base + (itm ? ' ' + itm : ''); ta.dispatchEvent(new Event('input')); ta.scrollTop = ta.scrollHeight; };
-  sr.onend = function(){ if (CTS.sr === sr) { try{ sr.start(); }catch(e){ ctStopMic(); } } };
-  sr.onerror = function(e){ if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { toast('Micro refusé : autorisez-le dans le navigateur (icône à gauche de l\'adresse).'); ctStopMic(); } else if (e.error === 'network') { toast('Dictée impossible sans réseau : utilisez le micro du clavier tactile (Windows + H).'); ctStopMic(); } };
-  try{ sr.start(); }catch(e){ ctStopMic(); }
+  if (!window.PhenixDictee || !PhenixDictee.dispo) { toast('Dictée indisponible dans ce navigateur : touchez le micro du clavier tactile (ou Windows + H).'); ta.focus(); return; }
+  if (btn.dataset.html == null) btn.dataset.html = btn.innerHTML;
+  btn.innerHTML = '■ Fini'; btn.classList.add('pri'); btn.setAttribute('aria-pressed', 'true');
+  if (!S.dicteeVu) { S.dicteeVu = 1; toast('Je vous écoute : faites des pauses si besoin, touchez « ■ Fini » quand vous avez terminé.'); }
+  var me = PhenixDictee.ecouter({ base:ta.value,
+    onTexte:function(a){ ta.value = a; ta.dispatchEvent(new Event('input')); ta.scrollTop = ta.scrollHeight; },
+    onEtat:function(e, m){ if (e === 'erreur') toast(m); if ((e === 'fin' || e === 'erreur') && CTS.sr === me) { CTS.sr = null; CTS.srBtn = null; ctBtnOff(btn); } } });
+  CTS.sr = me; CTS.srBtn = btn;
 }
 
 /* ─── Photos : caméra dans l'appli (Windows n'ouvre pas l'appareil photo depuis un simple bouton fichier) ─── */
