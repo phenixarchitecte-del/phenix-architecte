@@ -7333,7 +7333,7 @@ function reglRendre() {
   const box = document.getElementById('factReglements'); if (!box || !window.PhenixReglements) return;
   const admin = typeof getCurrentUserRole !== 'function' || getCurrentUserRole() === 'admin';
   if (!admin) { box.innerHTML = ''; return; }
-  if (!_reglEcoute && window._fbReglements) { _reglEcoute = true; window._fbReglements.ecouter(l => { _reglTreso = l || []; reglRendre(); }); }
+  if (!_reglEcoute && window._fbReglements) { _reglEcoute = true; window._fbReglements.ecouter(l => { _reglTreso = l || []; reglRendre(); reglFicheMaj(); }); }
   if (_reglTreso == null) { box.innerHTML = '<div class="card"><div class="card-title">Règlements des clients par dossier</div><div style="font-size:12px;color:var(--text3)">Lecture des relevés…</div></div>'; return; }
   const R = window.PhenixReglements;
   _reglRes = R.analyser({ tresorerie: _reglTreso, projets: stateDossier.projets, factures: stateDossier.factures });
@@ -9981,6 +9981,22 @@ function renderProjectFacturation(projetId) {
       </tr>`).join('')}
       </tbody>
     </table></div>`}`;
+  try { reglFiche(projetId, container); } catch (e) { console.warn('Règlements', e); }
+}
+
+/* [Règlements 27/11/2026] même bloc que la Synthèse 3D, en tête de l'onglet Facturation de la fiche du dossier (administrateur) */
+function reglFicheMaj() { const c = document.getElementById('projectFacturationBody'); if (currentProjectId != null && c && c.querySelector('[data-regl-fiche]')) reglFiche(currentProjectId, c); }
+function reglFiche(projetId, container) {
+  if (!container || !window.PhenixReglements) return;
+  const admin = typeof getCurrentUserRole !== 'function' || getCurrentUserRole() === 'admin';
+  if (!admin) return;
+  if (!_reglEcoute && window._fbReglements) { _reglEcoute = true; window._fbReglements.ecouter(l => { _reglTreso = l || []; reglRendre(); reglFicheMaj(); }); }
+  let box = container.querySelector('[data-regl-fiche]');
+  if (!box) { box = document.createElement('div'); box.setAttribute('data-regl-fiche', ''); box.style.marginBottom = '1rem'; const btns = container.firstElementChild; if (btns && btns.nextSibling) container.insertBefore(box, btns.nextSibling); else container.appendChild(box); }
+  if (_reglTreso == null) { box.innerHTML = '<div style="font-size:12px;color:var(--text3)">Lecture des relevés…</div>'; return; }
+  _reglRes = window.PhenixReglements.analyser({ tresorerie: _reglTreso, projets: stateDossier.projets, factures: stateDossier.factures });
+  box.innerHTML = window.PhenixReglements.htmlDossier(_reglRes, projetId, { theme: 'clair', ecrire: true, vide: true });
+  window.PhenixReglements.brancher(box, () => _reglRes, v => window._fbReglements.ecrire(v));
 }
 
 function factKpiMini(label, val, color='var(--navy)') {
