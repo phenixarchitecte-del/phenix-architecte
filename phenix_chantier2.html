@@ -334,7 +334,8 @@ body.ct-on #stage .h3-layer,body.ct-on #gx-lab{visibility:hidden}
 
 <!-- Dictée commune à la suite (pauses possibles, rien n'est validé avant le 2e appui) [Dictée] -->
 <script src="phenix_dictee.js?v=20261127c"></script>
-<script src="phenix_messages.js?v=20261127b"></script><!-- [Envoi par mail] modèles « compte-rendu » et « constat-desordres » -->
+<script src="phenix_messages.js?v=20261127b"></script>
+<script src="phenix_espace_client.js?v=20261127"></script><!-- [Statuts client v2] statuts de chantier publiés dans l'espace du client --><!-- [Envoi par mail] modèles « compte-rendu » et « constat-desordres » -->
 <!-- Moteur 3D partagé avec le Carnet [Moteur partagé] -->
 <script type="module" src="phenix_maquette3d.js?v=20261122b"></script>
 
@@ -452,8 +453,47 @@ function lotsOf(){ return D.lots.filter(function(l){ return l.chantierId == S.ci
 function lotNum(l, i){ var m = /^\s*(?:lot\s*)?(\d+)/i.exec(l.nom || ''); return m ? m[1].padStart(2, '0') : String(i + 1).padStart(2, '0'); }
 function lotLabel(l){ var n = String(l.nom || '').replace(/^\s*(?:lot\s*)?\d+\s*[—\-–.:]?\s*/i, '').trim(); return n || String(l.nom || ''); }
 function entrepriseOf(l){ if (l.interv){ var iv = D.intervenants.filter(function(x){ return x.id == l.interv; })[0]; if (iv) return iv.nom; } return l.entrepriseNom || ''; }
-function save(key, obj){ if (FB.demo) return Promise.resolve(); return FB.save(key, obj).catch(function(e){ toast('⚠ Enregistrement impossible : ' + (e && e.message || e)); }); }
+function save(key, obj){ if (key === 'lots' && obj && obj.chantierId != null) ctEtapeClientBientot(obj.chantierId); if (FB.demo) return Promise.resolve(); return FB.save(key, obj).catch(function(e){ toast('⚠ Enregistrement impossible : ' + (e && e.message || e)); }); }
 
+/* ═══ [Statuts client v2 27/11/2026] Les étapes du chantier se valident ici, dans les lots (statut ou % fait) : l'espace du client suit tout seul.
+   Chaque lot est rangé par métier d'après son nom ; le statut client le plus avancé atteint est publié (S27 gros œuvre … S41 finitions),
+   seulement si le client est déjà en préparation de chantier ou en chantier, et jamais en arrière. ═══ */
+var CT_ETAPES_LOTS = [
+  ['go', /terrass|gros oeuvre|gros-oeuvre|maconn|fondation|vrd|demolition|soubassement|dalle/],
+  ['toit', /charpent|couvert|toitur|zingu/],
+  ['mext', /menuiseries? ext|fenetre|baie|volet/],
+  ['platre', /platr|plaqu|isolation|cloison|doublage|faux plafond|plafond/],
+  ['reseaux', /plomb|electri|chauffag|sanitaire|ventilation|vmc|pompe a chaleur/],
+  ['peint', /peint/],
+  ['sols', /carrel|faience|parquet|chape|revetement de sol|revetements? sol|sols?\b/],
+  ['fini', /menuiseries? int|cuisine|agencement|serrurerie|finition|portes? int/]
+];
+function ctEtapeCible(lots){
+  var g = {}; lots.forEach(function(l){ var n = norm(l.nom || ''); CT_ETAPES_LOTS.forEach(function(k){ if (k[1].test(n)) { (g[k[0]] = g[k[0]] || []).push(l); } }); });
+  var st = function(k){ var a = g[k] || []; if (!a.length) return { on:false, done:false, av:0 }; var av = a.reduce(function(t, l){ return t + (stOf(l) === 'done' ? 100 : (+l.av || 0)); }, 0) / a.length; return { on:a.some(function(l){ var x = stOf(l); return x === 'doing' || x === 'done'; }), done:a.every(function(l){ return stOf(l) === 'done'; }), av:av }; };
+  var go = st('go'), toit = st('toit'), mext = st('mext'), pl = st('platre'), res = st('reseaux'), pe = st('peint'), so = st('sols'), fi = st('fini'), n = 0;
+  var maxi = function(v){ if (v > n) n = v; };
+  if (go.on) maxi(27); if (toit.on) maxi(28); if (toit.done) maxi(29); if (mext.on) maxi(30); if (mext.done && (toit.done || !toit.on)) maxi(31);
+  if (pl.on) maxi(32); if (pl.av >= 25) maxi(33); if (pl.av >= 40) maxi(34); if (res.on && pl.on) maxi(35); if (pl.av >= 70) maxi(36); if (pl.done) maxi(37);
+  if (pe.on) maxi(38); if (so.on) maxi(39); if (res.done && (so.on || pe.done)) maxi(40); if (fi.on) maxi(41);
+  return n ? 'S' + n : '';
+}
+var CT_ETAPE_T = {};
+function ctEtapeClientBientot(cid){ clearTimeout(CT_ETAPE_T[cid]); CT_ETAPE_T[cid] = setTimeout(function(){ ctEtapeClient(cid); }, 1500); }
+function ctEtapeClient(cid){
+  var c = D.chantiers.filter(function(y){ return y.id == cid; })[0]; if (!c || !c.projetId || !FB.clientMaj || !window.PhenixEspaceClient) return;
+  var cible = ctEtapeCible(D.lots.filter(function(l){ return l.chantierId == cid; })); if (!cible) return;
+  var st = PhenixEspaceClient.remplir(cible, {}); if (!st) return;
+  var num = function(k){ return /^S\d+$/.test(k || '') ? Number(String(k).slice(1)) : 0; };
+  FB.clientMaj(c.projetId, function(d){
+    var cur = num(d.code), base = d.code === 'S42' || d.code === 'S44' ? num((d.suivi || {}).etapeCode) : cur;
+    if (cur < 23 || cur > 45 || num(cible) <= base) return null;   // pas encore en préparation de chantier, déjà en réception, ou pas d'avancée
+    var ligne = PhenixEspaceClient.ligne('Statut', st.titre, st.petit || '', false);
+    return { code:cible, phase:st.phase, titre:st.titre, petit:st.petit, texte:st.texte || '', delai:st.delai || '', client:st.client || '', reglement:st.reglement || '', elements:st.elements || [],
+      v:2, statutAuto:true, pause:false, reprise:'', echeance:'', suivi:Object.assign({}, d.suivi || {}, { etapeCode:cible }),
+      fil:(d.fil || []).concat([ligne]).slice(-120), majAt:new Date().toISOString(), majPar:'Chantier' };
+  }).then(function(ok){ if (ok) toast('Espace client : « ' + st.titre + ' »'); });
+}
 function demoSeed(){
   var c = {id:1, nom:'Maison Faure', projetId:'faure', statut:'actif', etape:12, fin:'2027-02-15'};
   D.chantiers = [c];

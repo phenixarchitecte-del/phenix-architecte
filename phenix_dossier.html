@@ -27,7 +27,7 @@
    phenix_client_dossiers / phenix_client_acces (règles déjà publiées le 24/11). Fichiers ajoutés : Storage espace_client/{id}/. Repérer : [Espace client].
  23/11/2026 — [Contrôle plans] Checklist : F4 et F6 reçoivent deux listes à cocher avant chaque présentation au client
    (plans : zones, cotations, compteur, chauffe-eau, chauffage, poêle, points lumineux, interrupteurs, fluides ;
-   images : plinthes, spots, abat-jours ou plafonniers, interrupteurs). Identifiants par texte : aucune coche existante perdue.
+   images : plinthes, spots, abat-jours ou plafonniers ; interrupteurs retirés des images le 27/11/2026, déjà contrôlés sur les plans). Identifiants par texte : aucune coche existante perdue.
  18/11/2026 (2) — [Menu] Ménage : onglets « Phases & suivi » et « Agenda » retirés du menu (pages conservées dans le code, plus accessibles).
  18/11/2026 — [Liens] Devis signé depuis « Devis en cours » : rattaché au dossier existant (lien choisi à la saisie, sinon même e-mail / téléphone,
    sinon même nom de famille, un seul dossier ouvert) au lieu de créer un doublon ; notification « devis rattaché — à vérifier ».
@@ -5728,6 +5728,14 @@ async function _ecEcrire(p, patch, libelle) {
   } catch (e) { console.warn('Espace client (écriture) :', e); toast_d('⚠️ Espace client : enregistrement refusé (règles Firestore).'); return null; }
 }
 const _ecLigneFil = (type, titre, texte, etape) => ({ id: _ecNid(), date: _jourLocalISO(), type, titre, texte: texte || '', etape: !!etape });
+// Planning déposé dans les documents → « Réunion de démarrage du chantier » (S25) si le client est en S23 ou S24
+async function _ecPlanningAuto(p, titre, desc) {
+  if (!/planning/i.test((titre || '') + ' ' + (desc || ''))) return false;
+  const d = (await _ecLire(p.id)) || {}; if (!/^S2[34]$/.test(d.code || '')) return false;
+  const st = _ecRemplir('S25'); if (!st) return false;
+  if (await _ecPublierStatut(p, st, { auto: true })) { toast_d('✅ Planning déposé : « ' + st.titre + ' » publié pour ' + (p.client || p.nom || 'le client')); return true; }
+  return false;
+}
 async function _ecPublierStatut(p, st, opts) {
   opts = opts || {};
   const d0 = (await _ecLire(p.id)) || _ecBase(p);
@@ -5897,6 +5905,31 @@ async function _ecCompteurs(pid) {
     contrats: { x: lots.filter(l => l.contrat && l.contrat.statut === 'signe').length, n: lots.length },
     decennales: { x: ents.filter(recue).length, n: ents.length } };
 }
+// [Règlements v2] factures du dossier lues sur les relevés (phenix_reglements.js, données de la Facturation), dans l'ordre des dates
+function _ecFacturesDossier(pid) {
+  try {
+    if (window.PhenixReglements && _reglTreso && !_reglRes) _reglRes = PhenixReglements.analyser({ tresorerie: _reglTreso, projets: stateDossier.projets, factures: stateDossier.factures });
+    const o = _reglRes && _reglRes.dossiers[String(pid)]; return o ? o.factures.slice().sort((a, b) => String(a.date).localeCompare(String(b.date))) : [];
+  } catch (e) { return []; }
+}
+function _ecAppliquerFactures(pid, sv) {
+  const facs = _ecFacturesDossier(pid); let chg = false; sv.reglements = sv.reglements || {};
+  Object.keys(sv.factures || {}).forEach(code => { const f = facs.find(x => x.id === sv.factures[code]); if (!f) return; const e = f.statut === 'reglee' ? 'reglee' : 'envoyee'; if (sv.reglements[code] !== e) { sv.reglements[code] = e; chg = true; } });
+  return chg;
+}
+// Synchro en arrière-plan : à chaque nouveau relevé, les règlements liés passent à « Réglé » dans l'espace des clients concernés
+async function _ecSyncReglements() {
+  if (!_ecAdmin() || !window._fbClient || !_reglRes) return;
+  for (const pid of Object.keys(_reglRes.dossiers)) {
+    try {
+      const d = await _ecLire(pid); if (!d || !d.suivi || !d.suivi.factures || !Object.keys(d.suivi.factures).length) continue;
+      const sv = JSON.parse(JSON.stringify(d.suivi)); if (!_ecAppliquerFactures(pid, sv)) continue;
+      const p = stateDossier.projets.find(x => String(x.id) === String(pid)); if (!p) continue;
+      const fil = (d.fil || []).slice(); Object.keys(sv.reglements).forEach(code => { if (sv.reglements[code] === 'reglee' && (d.suivi.reglements || {})[code] !== 'reglee') { const e = EC2.find(x => x[0] === code); fil.push(_ecLigneFil('Note', 'Règlement reçu, merci', e ? e[6] : '', false)); } });
+      await _ecEcrire(p, { suivi: sv, fil: fil.slice(-120) }, 'Règlement vu sur le relevé');
+    } catch (e) { console.warn('Règlements → espace client :', e); }
+  }
+}
 function _ecSuiviDefaut(sv) {
   sv = Object.assign({ pieces: [], complements: [], reglements: {}, dommages: 'asouscrire' }, sv || {});
   sv.pieces = EC2_PIECES.map(([k, nom]) => Object.assign({ k, nom, etat: 'non' }, (sv.pieces || []).find(x => x.k === k) || {}));
@@ -5908,7 +5941,11 @@ function _ecHtmlSuivi(p, d) {
   const choix = (nom, opts, val) => `<span style="display:inline-flex;gap:4px;flex-wrap:wrap">${opts.map(([v, l]) => `<button type="button" class="btn btn-sm${val === v ? ' btn-primary' : ''}" data-ecs="${nom}" data-v="${v}" aria-pressed="${val === v}">${l}</button>`).join('')}</span>`;
   const ligne = (lib, html) => `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px"><span>${lib}</span>${html}</div>`;
   const num = (id, v) => `<input type="number" min="0" id="${id}" value="${v == null ? '' : v}" style="width:70px">`;
-  const regs = EC2.filter(e => e[6]).map(e => ligne(`<b style="font-weight:600">${esc(e[0])}</b> · ${esc(e[2])} <span style="color:var(--text3)">· ${esc(e[6])}</span>`, choix('regl:' + e[0], [['avenir', 'Facture à venir'], ['envoyee', 'Facture envoyée'], ['reglee', 'Réglée ✓']], sv.reglements[e[0]] || 'avenir'))).join('');
+  // [Règlements v2] chaque règlement d'étape peut être lié à une facture : son état suit alors le relevé bancaire (Réglée dès que le virement est vu)
+  const facs = _ecFacturesDossier(p.id); sv.factures = sv.factures || {};
+  const optFac = code => '<option value="">Facture liée…</option>' + facs.map(f => `<option value="${esc(f.id)}" ${sv.factures[code] === f.id ? 'selected' : ''}>${esc(f.numero)} · ${esc(f.date)} · ${esc(window.PhenixReglements ? PhenixReglements.euros(f.ttc) : f.ttc)} · ${f.statut === 'reglee' ? '✓ réglée' : f.statut === 'partielle' ? '◐ en partie' : '○ en attente'}</option>`).join('');
+  const regs = EC2.filter(e => e[6]).map(e => ligne(`<b style="font-weight:600">${esc(e[0])}</b> · ${esc(e[2])} <span style="color:var(--text3)">· ${esc(e[6])}</span>`,
+    `<span style="display:inline-flex;gap:6px;flex-wrap:wrap;align-items:center">${facs.length ? `<select data-ecs-fac="${e[0]}" aria-label="Facture liée au règlement ${esc(e[0])}" style="max-width:260px">${optFac(e[0])}</select>` : ''}${sv.factures[e[0]] ? `<span style="font-size:12px;color:var(--text2)">${{ avenir: '○ Facture à venir', envoyee: '○ Facture envoyée', reglee: '✓ Réglée (relevé)' }[sv.reglements[e[0]] || 'envoyee']}</span>` : choix('regl:' + e[0], [['avenir', 'Facture à venir'], ['envoyee', 'Facture envoyée'], ['reglee', 'Réglée ✓']], sv.reglements[e[0]] || 'avenir')}</span>`)).join('');
   const cpt = _EC.cpt;
   return sec('Ce que le client voit sous son statut', 'Tout ce qui est réglé ici s’affiche chez le client sous le statut concerné (compteurs, pièces, dommages-ouvrage…), sans changer le statut lui-même. Jamais de montant.',
       `<div style="margin-top:10px;font-size:12.5px;color:var(--text2)">${cpt === undefined ? 'Lecture de Chiffrage et de l’Annuaire…' : cpt ? `Chiffrage : <b>${cpt.devis.x} devis</b> sur ${cpt.devis.n} lots · <b>${cpt.contrats.x} contrats signés</b> · Annuaire : <b>${cpt.decennales.x} décennales reçues</b> sur ${cpt.decennales.n} entreprises` : 'Pas de chiffrage trouvé pour ce projet : les compteurs se règlent à la main.'}</div>
@@ -5927,7 +5964,8 @@ function _ecHtmlSuivi(p, d) {
       ligne('Dépôt en mairie', `<input type="date" id="ecs-depot" value="${esc(sv.depot || '')}">`) + ligne('Affichage du panneau', `<input type="date" id="ecs-aff" value="${esc(sv.affichage || '')}">`) + ligne('Réception des travaux', `<input type="date" id="ecs-rec" value="${esc(sv.reception || '')}">`)) +
     sec('Pièces demandées par la mairie', 'Une pièce par ligne ; mettez ✓ devant celles qui sont prêtes. Statuts 18 et 19.', `<textarea id="ecs-comp" rows="3" style="width:100%;margin-top:8px">${esc((sv.complements || []).map(c => (c.ok ? '✓ ' : '') + c.nom).join('\n'))}</textarea>`) +
     sec('Règlement en attente', 'Statut 45 : libellé montré au client, sans montant.', ligne('Libellé', `<input id="ecs-att" value="${esc((sv.attente || {}).libelle || '')}" placeholder="Facture n° FAC00000044" style="min-width:220px">`) + ligne('Émise le', `<input type="date" id="ecs-attd" value="${esc((sv.attente || {}).date || '')}">`)) +
-    sec('Règlements d’étape', 'L’état s’affiche sous le statut concerné : « Facture à venir », « Facture envoyée », puis « Réglé, merci ».', regs) +
+    sec('Règlements d’étape', 'L’état s’affiche sous le statut concerné : « Facture à venir », « Facture envoyée », puis « Réglé, merci ». Liez une facture : l’état suit alors tout seul le relevé bancaire importé dans la Synthèse 3D.' + (facs.length ? '' : ' Aucune facture trouvée pour ce dossier sur les relevés et l’export MEG : réglez l’état à la main.'),
+      (facs.length ? '<div style="margin-top:8px"><button class="btn btn-sm" id="ecs-lier"><i class="ti ti-link"></i> Lier les factures dans l’ordre des étapes</button></div>' : '') + regs) +
     `<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-primary" id="ecs-ok"><i class="ti ti-device-floppy"></i> Enregistrer le suivi</button><a class="btn" href="${esc(EC_URL_CLIENT())}?apercu=${encodeURIComponent(p.id)}" target="_blank" rel="noopener"><i class="ti ti-eye"></i> Voir comme le client</a></div>`;
 }
 function _ecLireSuivi() {
@@ -5944,6 +5982,7 @@ function _ecLireSuivi() {
 }
 function _ecBrancherSuivi(p) {
   if (_EC.sous !== 'suivi') return;
+  if (!_reglEcoute && window._fbReglements && window.PhenixReglements) { _reglEcoute = true; window._fbReglements.ecouter(l => { _reglTreso = l || []; _reglRes = null; try { reglRendre(); } catch (e) {} try { reglFicheMaj(); } catch (e) {} if (_EC.pid === String(p.id) && _EC.sous === 'suivi') { _ecLireSuivi(); _ecDessiner(p); } }); }
   if (_EC.cpt === undefined && !_EC.cptEnCours) { _EC.cptEnCours = true; _ecCompteurs(p.id).then(c => { _EC.cpt = c; _EC.cptEnCours = false; if (_EC.pid === String(p.id) && _EC.sous === 'suivi') { _ecLireSuivi(); _ecDessiner(p); } }).catch(() => { _EC.cpt = null; _EC.cptEnCours = false; }); }
   document.querySelectorAll('[data-ecs]').forEach(b => b.onclick = () => {
     _ecLireSuivi(); const sv = _EC.sv, k = b.dataset.ecs, val = b.dataset.v;
@@ -5953,6 +5992,13 @@ function _ecBrancherSuivi(p) {
     else sv[k] = val;
     _ecDessiner(p);
   });
+  document.querySelectorAll('[data-ecs-fac]').forEach(sel => sel.onchange = () => { _ecLireSuivi(); const sv = _EC.sv; sv.factures = sv.factures || {}; if (sel.value) sv.factures[sel.dataset.ecsFac] = sel.value; else delete sv.factures[sel.dataset.ecsFac]; _ecAppliquerFactures(p.id, sv); _ecDessiner(p); });
+  const lier = document.getElementById('ecs-lier'); if (lier) lier.onclick = () => {
+    _ecLireSuivi(); const sv = _EC.sv; sv.factures = sv.factures || {};
+    const prises = new Set(Object.values(sv.factures)), libres = _ecFacturesDossier(p.id).filter(f => !prises.has(f.id));
+    EC2.filter(e => e[6]).forEach(e => { if (!sv.factures[e[0]] && libres.length) sv.factures[e[0]] = libres.shift().id; });
+    _ecAppliquerFactures(p.id, sv); toast_d('Factures liées dans l’ordre : vérifiez, puis enregistrez.'); _ecDessiner(p);
+  };
   const auto = document.getElementById('ecs-auto'); if (auto) auto.onclick = async () => {
     _ecLireSuivi(); auto.disabled = true; const c = await _ecCompteurs(p.id).catch(() => null); _EC.cpt = c;
     if (c) { const sv = _EC.sv; sv.devis = c.devis; sv.contrats = c.contrats; if (c.decennales.n) sv.decennales = c.decennales; toast_d('Compteurs repris : pensez à enregistrer.'); }
@@ -6095,7 +6141,7 @@ function _ecBrancher(p, candidats) {
         fil = fil.concat([_ecLigneFil('Document', 'Nouveau document : ' + x.titre, 'Il est dans vos documents, rubrique ' + x.cat + '.', false)]).slice(-120);
       }
     } else docs = docs.filter(y => (y.src || y.url) !== x.src);
-    if (await _ecEcrire(p, { documents: docs, fil }, c.checked ? 'Document visible : ' + x.titre : 'Document masqué : ' + x.titre)) { toast_d(c.checked ? '✅ Visible par le client' : 'Masqué pour le client'); await recharger(); }
+    if (await _ecEcrire(p, { documents: docs, fil }, c.checked ? 'Document visible : ' + x.titre : 'Document masqué : ' + x.titre)) { toast_d(c.checked ? '✅ Visible par le client' : 'Masqué pour le client'); if (c.checked) await _ecPlanningAuto(p, x.titre, x.desc); await recharger(); }
   });
   document.querySelectorAll('[data-ec-retdoc]').forEach(b => b.onclick = () => verrou(b, async () => {
     const d = (await _ecLire(p.id)) || _ecBase(p), x = (d.documents || []).find(y => y.id === b.dataset.ecRetdoc); if (!x) return;
@@ -6117,7 +6163,7 @@ function _ecBrancher(p, candidats) {
     _ecLireBrouillon(); const d = (await _ecLire(p.id)) || _ecBase(p);
     const docs = (d.documents || []).concat([{ id: _ecNid(), src: url, url, cat, titre, desc, date: _jourLocalISO() }]);
     const fil = (d.fil || []).concat([_ecLigneFil('Document', 'Nouveau document : ' + titre, 'Il est dans vos documents, rubrique ' + cat + '.', false)]).slice(-120);
-    if (await _ecEcrire(p, { documents: docs, fil }, 'Document ajouté : ' + titre)) { toast_d('✅ Document ajouté'); await recharger(); }
+    if (await _ecEcrire(p, { documents: docs, fil }, 'Document ajouté : ' + titre)) { toast_d('✅ Document ajouté'); await _ecPlanningAuto(p, titre, desc); await recharger(); }
   }));
   // Carnet et visite 3D (A5 à l'ouverture du carnet, A6 à sa validation)
   on('ec-cok', ev => verrou(ev.currentTarget, async () => {
@@ -6675,7 +6721,7 @@ const CHECKLIST_TEMPLATE = [
       "Les plinthes apparaissent.",
       "Les spots apparaissent.",
       "Les abat-jours ou plafonniers apparaissent.",
-      "Les interrupteurs apparaissent.",
+      // [27/11/2026] « Les interrupteurs apparaissent. » retiré : déjà contrôlé dans « Contrôle avant présentation : les plans »
     ]},
     { id:'rdv', titre:'Prise de rendez-vous', taches:[
       "Informer le client du règlement (30 % de la mission AP) dès la prise de rendez-vous — SMS, mail ou vocal.",
@@ -6722,7 +6768,7 @@ const CHECKLIST_TEMPLATE = [
       "Les plinthes apparaissent.",
       "Les spots apparaissent.",
       "Les abat-jours ou plafonniers apparaissent.",
-      "Les interrupteurs apparaissent.",
+      // [27/11/2026] « Les interrupteurs apparaissent. » retiré : déjà contrôlé dans « Contrôle avant présentation : les plans »
     ]},
     { id:'verif', titre:'Vérifications techniques', taches:[
       'Définition des surfaces détaillées (SHAB, surface de plancher)',
@@ -7439,16 +7485,21 @@ function payProgressHtml(f) {
 /* ═══ [Règlements 27/11/2026] Règlements des clients par dossier ═══
    Le relevé importé dans la Synthèse 3D (Phénix › Banque) dit ce que chaque client a payé ; phenix_reglements.js le rattache
    aux factures (export MEG, sinon les factures ci-dessous) et aux devis. Réservé à l'administrateur (règle phenix_tresorerie). */
-let _reglTreso = null, _reglRes = null, _reglEcoute = false;
+let _reglTreso = null, _reglRes = null, _reglEcoute = false, _ecSyncFait = '';
+// [Règlements v2] lecture des relevés dès l'ouverture (administrateur) : les règlements d'étape des clients suivent la banque sans ouvrir la Facturation
+setTimeout(() => { try { if (_reglEcoute || !window._fbReglements || !window.PhenixReglements || !_ecAdmin()) return; _reglEcoute = true;
+  window._fbReglements.ecouter(l => { _reglTreso = l || []; _reglRes = null; try { reglRendre(); } catch (e) {} try { reglFicheMaj(); } catch (e) {}
+    if (!_reglRes && _reglTreso.length) { try { _reglRes = PhenixReglements.analyser({ tresorerie: _reglTreso, projets: stateDossier.projets, factures: stateDossier.factures }); const k = _reglRes.releveAu + '|' + _reglRes.encaissements.length; if (k !== _ecSyncFait) { _ecSyncFait = k; _ecSyncReglements(); } } catch (e) {} } }); } catch (e) {} }, 15000);
 function reglRendre() {
   const box = document.getElementById('factReglements'); if (!box || !window.PhenixReglements) return;
   const admin = typeof getCurrentUserRole !== 'function' || getCurrentUserRole() === 'admin';
   if (!admin) { box.innerHTML = ''; return; }
-  if (!_reglEcoute && window._fbReglements) { _reglEcoute = true; window._fbReglements.ecouter(l => { _reglTreso = l || []; reglRendre(); reglFicheMaj(); }); }
+  if (!_reglEcoute && window._fbReglements) { _reglEcoute = true; window._fbReglements.ecouter(l => { _reglTreso = l || []; _reglRes = null; reglRendre(); reglFicheMaj(); }); }
   if (_reglTreso == null) { box.innerHTML = '<div class="card"><div class="card-title">Règlements des clients par dossier</div><div style="font-size:12px;color:var(--text3)">Lecture des relevés…</div></div>'; return; }
   const R = window.PhenixReglements;
   _reglRes = R.analyser({ tresorerie: _reglTreso, projets: stateDossier.projets, factures: stateDossier.factures });
   const res = _reglRes;
+  if (!_ecSyncFait || _ecSyncFait !== res.releveAu + '|' + res.encaissements.length) { _ecSyncFait = res.releveAu + '|' + res.encaissements.length; _ecSyncReglements(); }
   if (!res.nbReleves) { box.innerHTML = '<div class="card"><div class="card-title">Règlements des clients par dossier</div><div style="font-size:12px;color:var(--text3);margin-top:4px">Aucun relevé bancaire importé. Déposez vos relevés dans la Synthèse 3D (🏦 Banque) : chaque virement client sera rattaché ici à sa facture et à son devis.</div></div>'; return; }
   const ouverts = new Set([...box.querySelectorAll('details[data-pid][open]')].map(x => x.getAttribute('data-pid')));
   const ds = Object.values(res.dossiers).sort((a, b) => (b.reste - a.reste) || String(a.nom).localeCompare(String(b.nom), 'fr'));
@@ -10101,7 +10152,7 @@ function reglFiche(projetId, container) {
   if (!container || !window.PhenixReglements) return;
   const admin = typeof getCurrentUserRole !== 'function' || getCurrentUserRole() === 'admin';
   if (!admin) return;
-  if (!_reglEcoute && window._fbReglements) { _reglEcoute = true; window._fbReglements.ecouter(l => { _reglTreso = l || []; reglRendre(); reglFicheMaj(); }); }
+  if (!_reglEcoute && window._fbReglements) { _reglEcoute = true; window._fbReglements.ecouter(l => { _reglTreso = l || []; _reglRes = null; reglRendre(); reglFicheMaj(); }); }
   let box = container.querySelector('[data-regl-fiche]');
   if (!box) { box = document.createElement('div'); box.setAttribute('data-regl-fiche', ''); box.style.marginBottom = '1rem'; const btns = container.firstElementChild; if (btns && btns.nextSibling) container.insertBefore(box, btns.nextSibling); else container.appendChild(box); }
   if (_reglTreso == null) { box.innerHTML = '<div style="font-size:12px;color:var(--text3)">Lecture des relevés…</div>'; return; }
