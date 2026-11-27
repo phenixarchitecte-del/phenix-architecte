@@ -18,6 +18,9 @@
    (2) Pointer sur un plan : « Importer un plan » directement sur place (PDF d'un jeu de plans complet ou image) → on touche la page qui contient
    le plan → on fait glisser un cadre autour du plan (ou page entière) → pastilles. Le plan recadré est rangé dans les plans du chantier (case cochée par défaut,
    visible de personne d'autre tant qu'on ne règle pas sa visibilité).
+   (3) PDF AÉRÉ : sections espacées, interligne plus large, fiche « Lot / Gravité / Localisation » sur des lignes séparées, photos en grand (2 par ligne),
+   étiquettes jamais seules en bas de page. MÊME GABARIT pour le compte rendu de chantier (dictée) : bouton « 📄 PDF » sur chaque compte rendu
+   de l'onglet « Comptes rendus » (il n'y en avait pas dans ce module).
  15/11/2026 — [Travaux] Ordre « open-projet » avec onglet 'travaux' (bouton « Préciser les travaux » de la Synthèse) : ouvre l'onglet Travaux ;
    si le dossier n'a pas encore de chantier, il est créé vide depuis la fiche du dossier (phenix_projets) pour renseigner les travaux tout de suite.
  13/11/2026 (2) — [Travaux] Nouvel onglet « Travaux » (le premier) : ce qu'il y a à faire sur ce chantier. Construction neuve (tout est à faire)
@@ -2097,50 +2100,99 @@ function ctSave(){
   $('cts-pdf').onclick = function(){ ctPdf(rec); };
 }
 
-/* ─── PDF à la charte Phénix (phenix_pdf.js) ─── */
+/* ─── PDF à la charte Phénix (phenix_pdf.js) — gabarit AÉRÉ commun au constat de litige et au compte rendu de chantier ───
+   Règles : de l'air entre les blocs (sections espacées, interligne large, photos en grand), jamais de titre seul en bas de page,
+   une étiquette (« Constat », « Reprise demandée »…) toujours suivie d'au moins deux lignes sur la même page. */
 function ctSrc(x){ if (!x) return Promise.resolve(''); return x.dataUrl ? Promise.resolve(x.dataUrl) : plMediaGet(x.mediaId); }
+var CTP = {
+  /* titre de section précédé d'un vrai espace (sauf en haut de page) */
+  section:function(px, titre, hMin){ hMin = hMin || 24; if (!px.ensure(19 + hMin)) px.y += 9; px.section(titre, hMin); px.y += 1.5; },
+  /* petite étiquette en gras + texte saisi, gardés ensemble */
+  bloc:function(px, label, texte, vide){ px.ensure(label ? 19 : 12); if (label) { px.texte('**' + label + '**', { taille:10, pas:5.4, apres:1.4 }); } CTP.texte(px, texte, vide); px.y += 4; },
+  /* texte saisi, interligne large ; « - » ou « • » en début de ligne = puce */
+  texte:function(px, t, vide){
+    t = String(t == null ? '' : t).replace(/\r/g, '').replace(/\*\*/g, '').trim();
+    if (!t) { px.texte(vide || 'Néant', { taille:10, pas:5.4, apres:1 }); return; }
+    var puces = [], flush = function(){ if (puces.length) { px.puces(puces, { taille:10, pas:5.4 }); puces = []; } };
+    t.split('\n').forEach(function(l){ var s = l.trim(); if (!s) { flush(); px.y += 2.5; return; } var m = /^[-•*–]\s+(.*)$/.exec(s); if (m) puces.push(m[1]); else { flush(); px.texte(s, { taille:10, pas:5.4, apres:2 }); } });
+    flush();
+  },
+  /* fiche d'identité d'un point : « Lot : … » sur des lignes séparées */
+  fiche:function(px, lignes){ lignes = lignes.filter(function(l){ return l && l[1]; }); px.ensure(lignes.length * 6.6 + 2); lignes.forEach(function(l){ px.ligne(l[0], l[1]); px.y += 0.6; }); px.y += 3; },
+  photos:function(px, ph){ if (!ph.length) return; px.ensure(72); px.y += 1; px.vignettes(ph, { w:88, h:64 }); px.y += 3; },
+  presents:function(px, liste){ CTP.section(px, 'Personnes présentes', 14); if (liste.length) px.puces(liste.map(function(p){ return '**' + p.nom + '**' + (p.qualite ? ' — ' + p.qualite : ''); }), { taille:10, pas:5.6 }); else px.texte('Aucune personne renseignée.', { taille:10 }); px.y += 2; },
+  entete:function(px, r, quoi){ px.cadres([{ titre:'Chantier', lignes:['**' + (r.chantierNom || '') + '**', quoi + ' n° ' + r.num, 'Le ' + frDate(r.date) + (r.heure ? ' à ' + r.heure.replace(':', ' h ') : '')] }, { titre:'Rédigé par', lignes:['**Phénix-Architecture**', 'Maître d\'œuvre et contractant général', 'Établi sur place'] }]); px.y += 3; },
+  /* charge les images (photos, plans, signatures), lance le gabarit, enregistre */
+  run:function(imgs, build, fichier){
+    if (CTS.pdf) return; CTS.pdf = true; toast('Préparation du PDF…'); var P;
+    ctLibs().then(function(){ P = window.PhenixPDF; return Promise.all(imgs.map(function(o){ return ctSrc(o.x).then(function(du){ o.x._src = du; }); })); })
+    .then(function(){ return Promise.all(imgs.map(function(o){ if (o.k === 'sig' || !o.x._src) return null; return P.charger(o.x._src, o.k === 'plan' ? 2000 : 1400).then(function(j){ if (j) o.x._src = j; }); })); })
+    .then(function(){ var px = build(P); px.enregistrer(fichier); toast('PDF téléchargé'); })
+    .catch(function(e){ toast('⚠ PDF impossible : ' + (e && e.message || 'bibliothèque non chargée (réseau ?)')); })
+    .then(function(){ CTS.pdf = false; imgs.forEach(function(o){ delete o.x._src; }); });
+  },
+  nom:function(s){ return String(s || 'chantier').replace(/[^\wÀ-ſ-]+/g, '_'); }
+};
 function ctPdf(r){
-  if (CTS.pdf) return; CTS.pdf = true; toast('Préparation du PDF…');
-  var imgs = [], P;
+  var imgs = [];
   r.desordres.forEach(function(d){ d.photos.forEach(function(p){ imgs.push({ x:p, k:'photo' }); }); });
   Object.keys(r.planImgs || {}).forEach(function(k){ imgs.push({ x:r.planImgs[k], k:'plan' }); }); Object.keys(r.signatures || {}).forEach(function(k){ imgs.push({ x:r.signatures[k], k:'sig' }); });
-  ctLibs().then(function(){ P = window.PhenixPDF; return Promise.all(imgs.map(function(o){ return ctSrc(o.x).then(function(du){ o.x._src = du; }); })); })
-  .then(function(){ return Promise.all(imgs.map(function(o){ if (o.k === 'sig' || !o.x._src) return null; return P.charger(o.x._src, o.k === 'plan' ? 2000 : 1400).then(function(j){ if (j) o.x._src = j; }); })); })
-  .then(function(){
+  CTP.run(imgs, function(P){
     var px = P.create({ titre:r.objet || 'Constat de désordres', sousTitre:(r.chantierNom || '') + ' · ' + frDate(r.date) + (r.heure ? ' à ' + r.heure.replace(':', ' h ') : ''), reference:r.num + ' · ' + (r.chantierNom || '') });
-    px.cadres([{ titre:'Chantier', lignes:['**' + (r.chantierNom || '') + '**', 'Constat n° ' + r.num, 'Le ' + frDate(r.date) + (r.heure ? ' à ' + r.heure.replace(':', ' h ') : '')] }, { titre:'Rédigé par', lignes:['**Phénix-Architecture**', 'Maître d\'œuvre et contractant général', 'Constat établi sur place'] }]);
+    CTP.entete(px, r, 'Constat');
     var lots = {}; r.desordres.forEach(function(d){ lots[d.lot] = 1; });
-    px.cles([{ etiquette:'Désordres', valeur:String(r.desordres.length) }, { etiquette:'Lots concernés', valeur:String(Object.keys(lots).length) }, { etiquette:'Photos', valeur:String(imgs.filter(function(o){ return o.k === 'photo'; }).length) }]);
-    px.section('Personnes présentes', 14);
-    if ((r.presentsListe || []).length) px.puces(r.presentsListe.map(function(p){ return '**' + p.nom + '**' + (p.qualite ? ' — ' + p.qualite : ''); })); else px.texte('Aucune personne renseignée.');
+    px.cles([{ etiquette:'Désordres', valeur:String(r.desordres.length) }, { etiquette:'Lots concernés', valeur:String(Object.keys(lots).length) }, { etiquette:'Photos', valeur:String(imgs.filter(function(o){ return o.k === 'photo'; }).length) }]); px.y += 2;
+    CTP.presents(px, r.presentsListe || []);
     r.desordres.forEach(function(d){
-      var g = CT_GRAV[d.gravite] || CT_GRAV.important;
-      px.section('Désordre n° ' + d.n + (d.titre ? ' — ' + d.titre : ''), 30);
-      px.texte('**Lot :** ' + d.lot + '   ·   **Gravité :** ' + g[0] + (d.lieu ? '   ·   **Localisation :** ' + d.lieu : ''), { apres:2 });
-      px.texte('**Constat**', { apres:0.6 }); px.texteLibre(d.description, { vide:'Non décrit.' });
-      if (d.action || d.delai) { px.texte('**Reprise demandée**' + (d.delai ? ' — avant le ' + frDate(d.delai) : ''), { apres:0.6 }); px.texteLibre(d.action, { vide:'À préciser.' }); }
-      if (d.pastilles.length) px.texte('Repéré sur le plan : ' + d.pastilles.map(function(a){ return a.planNom + (a.page ? ' (p. ' + (a.page + 1) + ')' : ''); }).join(', ') + ' — pastille n° ' + d.n + '.', { taille:8.6 });
-      var ph = d.photos.filter(function(p){ return p._src; }).map(function(p, i){ return { src:p._src, legende:'Désordre ' + d.n + ' · photo ' + (i + 1) }; });
-      if (ph.length) px.vignettes(ph, { w:58, h:43 });
+      var g = CT_GRAV[d.gravite] || CT_GRAV.important, nl = function(t){ return String(t || '').split('\n').reduce(function(n, l){ return n + Math.max(1, Math.ceil(l.length / 95)); }, 0); };
+      var hD = 32 + 4 * 7.2 + 12 + nl(d.description) * 6.6 + (d.action || d.delai ? 12 + nl(d.action) * 6.6 : 0) + Math.ceil(d.photos.length / 2) * 72;
+      if (hD < 225) px.ensure(hD);   /* le désordre entier (texte + photos) sur une même page quand il y tient */
+      CTP.section(px, 'Désordre n° ' + d.n + (d.titre ? ' — ' + d.titre : ''), 34);
+      CTP.fiche(px, [['Lot :', d.lot], ['Gravité :', g[0]], ['Localisation :', d.lieu], ['Sur le plan :', d.pastilles.length ? d.pastilles.map(function(a){ return a.planNom; }).filter(function(x, i, a){ return a.indexOf(x) === i; }).join(', ') + ' — pastille n° ' + d.n : '']]);
+      CTP.bloc(px, 'Constat', d.description, 'Non décrit.');
+      if (d.action || d.delai) CTP.bloc(px, 'Reprise demandée' + (d.delai ? ' — avant le ' + frDate(d.delai) : ''), d.action, 'À préciser.');
+      CTP.photos(px, d.photos.filter(function(p){ return p._src; }).map(function(p, i){ return { src:p._src, legende:'Désordre ' + d.n + ' · photo ' + (i + 1) }; }));
     });
-    var keys = Object.keys(r.planImgs || {});
-    keys.forEach(function(k){
+    Object.keys(r.planImgs || {}).forEach(function(k){
       var p = r.planImgs[k]; if (!p._src) return;
       var pas = []; r.desordres.forEach(function(d){ d.pastilles.forEach(function(a){ if (a.planId + '_' + (a.page || 0) === k) pas.push({ x:a.x, y:a.y, n:d.n, couleur:d.gravite === 'bloquant' ? '#a3261b' : '#0a1628', t:d }); }); });
-      px.section('Plan repéré : ' + (p.nom || 'plan') + (p.page ? ' (page ' + (p.page + 1) + ')' : ''), 150);
-      px.image(p._src, { pastilles:pas, hMax:175 });
+      CTP.section(px, 'Plan repéré : ' + (p.nom || 'plan'), 150);
+      px.image(p._src, { pastilles:pas, hMax:170 }); px.y += 3;
       var vus = {}; px.legende(pas.filter(function(a){ if (vus[a.n]) return false; vus[a.n] = 1; return true; }).map(function(a){ return { n:a.n, texte:'**Désordre n° ' + a.n + '** — ' + (a.t.titre || a.t.description.slice(0, 90) || '') + ' (' + a.t.lot + ')', couleur:a.couleur }; }));
     });
-    if (r.conclusion) { px.section('Conclusion et suite à donner', 16); px.texteLibre(r.conclusion); }
+    if (r.conclusion) { CTP.section(px, 'Conclusion et suite à donner', 18); CTP.texte(px, r.conclusion); }
     var on = r.presentsListe || [], signes = on.filter(function(p){ return r.signatures && r.signatures[p.id] && r.signatures[p.id]._src; }), reste = on.filter(function(p){ return signes.indexOf(p) < 0; });
     if (on.length) {
-      px.ensure(Math.min(230, 12 + signes.length * 34 + Math.ceil(reste.length / 3) * 54)); px.section('Signatures', signes.length ? 40 : 50);
-      signes.forEach(function(p){ px.ensure(34); px.texte('**' + p.nom + '**' + (p.qualite ? ' — ' + p.qualite : '') + ' · signé sur place le ' + frDate(r.date), { taille:8.8, apres:0.5 }); px.image(r.signatures[p.id]._src, { w:70, hMax:24 }); });
-      for (var i = 0; i < reste.length; i += 3) px.signatures(reste.slice(i, i + 3).map(function(p){ return { titre:p.nom, qualite:p.qualite || '' }; }));
+      px.ensure(Math.min(230, 30 + signes.length * 38 + Math.ceil(reste.length / 3) * 58));
+      CTP.section(px, 'Signatures', signes.length ? 40 : 52);
+      signes.forEach(function(p){ px.ensure(38); px.texte('**' + p.nom + '**' + (p.qualite ? ' — ' + p.qualite : '') + ' · signé sur place le ' + frDate(r.date), { taille:9.5, apres:1.5 }); px.image(r.signatures[p.id]._src, { w:70, hMax:24 }); px.y += 3; });
+      for (var i = 0; i < reste.length; i += 3) { px.signatures(reste.slice(i, i + 3).map(function(p){ return { titre:p.nom, qualite:p.qualite || '' }; })); px.y += 2; }
     }
-    px.enregistrer('Constat_' + String(r.chantierNom || 'chantier').replace(/[^\wÀ-ſ-]+/g, '_') + '_' + r.date + '_' + r.num + '.pdf');
-    toast('PDF téléchargé');
-  }).catch(function(e){ toast('⚠ PDF impossible : ' + (e && e.message || 'bibliothèque non chargée (réseau ?)')); }).then(function(){ CTS.pdf = false; imgs.forEach(function(o){ delete o.x._src; }); });
+    return px;
+  }, 'Constat_' + CTP.nom(r.chantierNom) + '_' + r.date + '_' + r.num + '.pdf');
+}
+/* Compte rendu de visite (dictée) : même gabarit que le constat */
+function crPdf(c){
+  var ch = D.chantiers.filter(function(y){ return y.id == c.chantierId; })[0] || {}, lotName = function(id){ var l = ctLot(id); return l ? lotLabel(l) : ''; };
+  var r = { num:c.num || 'CR', date:c.date, heure:c.visite && c.visite.debut ? new Date(c.visite.debut).toTimeString().slice(0, 5) : '', chantierNom:ch.nom || '' };
+  var imgs = (c.photos || []).map(function(p){ return { x:p, k:'photo' }; });
+  CTP.run(imgs, function(P){
+    var px = P.create({ titre:'Compte rendu de chantier', sousTitre:r.chantierNom + ' · visite du ' + frDate(c.date), reference:r.num + ' · ' + r.chantierNom });
+    CTP.entete(px, r, 'Compte rendu');
+    var dec = (c.taches && c.taches.length) ? c.taches : decList(c.decisions), resN = String(c.reserves || '').split('\n').filter(function(x){ return x.trim(); }).length;
+    px.cles([{ etiquette:'Réserves', valeur:String(resN) }, { etiquette:'Décisions', valeur:String(dec.length) }, { etiquette:'Photos', valeur:String((c.photos || []).length) }]); px.y += 2;
+    var pres = String(c.presents || '').split(/\s*[,;]\s*|\s+et\s+/).filter(function(x){ return x.trim(); }).map(function(x){ return { nom:x.trim() }; });
+    CTP.presents(px, pres);
+    if (c.meteo) { CTP.section(px, 'Météo', 12); CTP.texte(px, c.meteo); }
+    CTP.section(px, 'Avancement des travaux', 20); CTP.texte(px, c.avancement, 'Rien de particulier.');
+    if ((c.propositions || []).length) { px.y += 2; CTP.fiche(px, c.propositions.map(function(q){ return [(lotName(q.lotId) || 'Lot') + ' :', q.de + ' % → ' + q.a + ' %']; })); }
+    CTP.section(px, 'Réserves', 16); CTP.texte(px, c.reserves, 'Aucune réserve.');
+    CTP.section(px, 'Décisions', 16); if (dec.length) px.puces(dec.map(function(d){ return typeof d === 'string' ? d : d.txt || ''; }), { taille:10, pas:5.6 }); else CTP.texte(px, '', 'Aucune décision.');
+    var ph = (c.photos || []).filter(function(p){ return p._src; }).map(function(p, i){ return { src:p._src, legende:(lotName(p.lotId) || 'Photo') + ' · ' + (i + 1) }; });
+    if (ph.length) { CTP.section(px, 'Photos (' + ph.length + ')', 70); CTP.photos(px, ph); }
+    if (c.prochaine) { px.y += 4; px.bandeau('Prochaine réunion', c.prochaine); }
+    return px;
+  }, 'Compte_rendu_' + CTP.nom(r.chantierNom) + '_' + c.date + '_' + r.num + '.pdf');
 }
 
 /* Liste des constats dans l'onglet « Comptes rendus » */
@@ -2148,9 +2200,13 @@ function ctListHtml(){
   var l = D.crs.filter(function(c){ return c.type === 'litige' && c.chantierId == S.cid; }).sort(function(a, b){ return String(b.date + b.heure).localeCompare(String(a.date + a.heure)); });
   var h = '<div class="card" style="max-width:720px;margin-bottom:14px;display:flex;flex-direction:column;gap:10px"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><div class="eyebrow" style="flex:1">Constats de litige (' + l.length + ')</div><button class="btn" type="button" data-ctgo="1">⚠ ' + (ctHas(S.cid) ? 'Reprendre le constat en cours' : 'Nouveau constat') + '</button></div>';
   h += l.length ? l.map(function(c){ var n = (c.desordres || []).length; return '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:10px"><span style="flex:1 1 260px"><b>' + esc(c.num) + ' · ' + frDate(c.date) + (c.heure ? ' à ' + esc(c.heure) : '') + '</b><span class="muted" style="display:block">' + n + ' désordre' + (n > 1 ? 's' : '') + ' · ' + esc((c.desordres || []).map(function(d){ return d.lot; }).filter(function(x, i, a){ return a.indexOf(x) === i; }).join(', ')) + '</span></span><button class="btn" type="button" data-ctpdf="' + esc(c.id) + '">📄 PDF</button></div>'; }).join('') : '<div class="muted">Aucun constat. Sur place : « Constat de litige » sur la maquette.</div>';
-  return h + '</div>';
+  h += '</div>';
+  var v = D.crs.filter(function(c){ return c.type !== 'litige' && c.chantierId == S.cid; }).sort(function(a, b){ return String(b.date).localeCompare(String(a.date)); });
+  if (v.length) h += '<div class="card" style="max-width:720px;margin-bottom:14px;display:flex;flex-direction:column;gap:10px"><div class="eyebrow">Comptes rendus de visite (' + v.length + ')</div>' + v.map(function(c){ return '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:10px"><span style="flex:1 1 260px"><b>' + esc(c.num || 'CR') + ' · visite du ' + frDate(c.date) + '</b><span class="muted" style="display:block">' + (c.aValider ? '⚠ À valider' : '✓ Validé') + ' · ' + (c.photos || []).length + ' photo' + ((c.photos || []).length > 1 ? 's' : '') + '</span></span><button class="btn" type="button" data-crpdf="' + esc(c.id) + '">📄 PDF</button></div>'; }).join('') + '</div>';
+  return h;
 }
 function ctListBind(root){
+  [].forEach.call(root.querySelectorAll('[data-crpdf]'), function(b){ b.onclick = function(){ var c = D.crs.filter(function(y){ return String(y.id) === b.getAttribute('data-crpdf'); })[0]; if (c) crPdf(c); }; });
   [].forEach.call(root.querySelectorAll('[data-ctpdf]'), function(b){ b.onclick = function(){ var c = D.crs.filter(function(y){ return String(y.id) === b.getAttribute('data-ctpdf'); })[0]; if (c) ctPdf(c); }; });
   [].forEach.call(root.querySelectorAll('[data-ctgo]'), function(b){ b.onclick = ctOpen; });
 }
