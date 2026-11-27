@@ -38,6 +38,7 @@
    Les pastilles de la maquette 3D ne passent plus par-dessus l'écran du constat / compte rendu (#h3-host isolé, masquées pendant la saisie).
    (8) [Caméra] La photo prend la caméra de la Surface (arrière d'abord), plus jamais la caméra virtuelle du téléphone relié à Windows ;
    « Changer de caméra » passe d'une vraie caméra à l'autre, le nom de la caméra s'affiche, le choix est retenu sur l'appareil.
+   (9) Import de plan : plus d'étape « cadre autour du plan » (inutile sur chantier) : on choisit la page, puis on pose les pastilles sur la page entière.
    (5) Micro 🎙 aussi sur le nom du plan à l'étape du cadrage (le premier appui vide le nom pré-rempli puis écoute).
  15/11/2026 — [Travaux] Ordre « open-projet » avec onglet 'travaux' (bouton « Préciser les travaux » de la Synthèse) : ouvre l'onglet Travaux ;
    si le dossier n'a pas encore de chantier, il est créé vide depuis la fiche du dossier (phenix_projets) pour renseigner les travaux tout de suite.
@@ -286,10 +287,6 @@ body.ct-on #stage .h3-layer,body.ct-on #gx-lab{visibility:hidden}
 .ctpthumb{display:flex;flex-direction:column;gap:6px;align-items:center;padding:10px;border-radius:14px;border:2px solid transparent;background:var(--pan);font:600 15px var(--fs)}
 .ctpthumb:hover,.ctpthumb:focus-visible{border-color:var(--accent)}
 .ctpimg{display:flex;align-items:center;justify-content:center;width:100%;aspect-ratio:1.41;background:#fff;border-radius:6px;overflow:hidden;color:#556}.ctpimg canvas{max-width:100%;max-height:100%}
-.ctcrop-box{flex:1;min-height:0;overflow:auto;background:#3b4048;padding:14px;display:flex;justify-content:center;align-items:flex-start}
-.ctcrop{position:relative;touch-action:none;cursor:crosshair;user-select:none;-webkit-user-select:none;line-height:0}
-.ctcrop img{display:block;max-width:100%;max-height:calc(100vh - 170px);background:#fff}
-.ctcrop-r{position:absolute;border:3px solid #fcd34d;box-shadow:0 0 0 9999px rgba(5,10,20,.55);pointer-events:none}
 @media(max-width:640px){.ctlots,.ctpres{grid-template-columns:1fr}.ctwrap{padding:10px}.ctcam-bar .btn{padding:0 10px;font-size:14px}}
 </style>
 </head>
@@ -1981,7 +1978,7 @@ function ctDemoPlan(){
 function ctPlanPick(d){
   var list = plLatest(); if (!list.length && FB.demo) list = [ctDemoPlan()];
   var bg = document.createElement('div'); bg.className = 'sheetbg';
-  bg.innerHTML = '<div class="sheet"><div class="eyebrow">' + ctItem() + ' n° ' + d.n + ' · sur quel plan ?</div><button class="btn big pri" type="button" id="ct-imp" style="justify-content:flex-start;text-align:left">📥 Importer un plan (PDF ou image)<span style="font-weight:500;font-size:13px;margin-left:6px">· jeu de plans : choix de la page, puis cadre</span></button>' +
+  bg.innerHTML = '<div class="sheet"><div class="eyebrow">' + ctItem() + ' n° ' + d.n + ' · sur quel plan ?</div><button class="btn big pri" type="button" id="ct-imp" style="justify-content:flex-start;text-align:left">📥 Importer un plan (PDF ou image)<span style="font-weight:500;font-size:13px;margin-left:6px">· jeu de plans : on choisit la page</span></button>' +
     (list.length ? '<div class="eyebrow">Plans déjà rangés sur ce chantier</div>' + list.map(function(x){ return '<button class="btn big" type="button" data-pl="' + esc(x.id) + '" style="justify-content:flex-start;text-align:left">📄 ' + esc(x.nom) + ' <span class="muted">· ' + esc(x.type || '') + ' v' + (x.version || 1) + '</span></button>'; }).join('') : '<div class="muted">Aucun plan rangé sur ce chantier pour l\'instant.</div>') +
     '<button class="btn ghost" type="button" data-x="1">Annuler</button></div>';
   document.body.appendChild(bg);
@@ -1995,7 +1992,7 @@ function ctImport(d){
   i.onchange = function(){
     var f = i.files && i.files[0]; if (!f) return;
     var nom = f.name.replace(/\.[a-z0-9]+$/i, '').replace(/[_-]+/g, ' ').trim();
-    if (/^image\//.test(f.type)) { shrinkImg(f, 3000).then(function(du){ ctCrop(d, du, nom, null, f.name); }).catch(function(){ toast('Image illisible.'); }); return; }
+    if (/^image\//.test(f.type)) { shrinkImg(f, 3000).then(function(du){ ctPlanImporte(d, du, nom, null, f.name); }).catch(function(){ toast('Image illisible.'); }); return; }
     toast('Ouverture du PDF…');
     var fr = new FileReader();
     fr.onload = function(){ var buf = new Uint8Array(fr.result); pdfLib().then(function(lib){ return lib.getDocument({ data:buf }).promise; }).then(function(pdf){ if (pdf.numPages === 1) ctPageRender(d, pdf, 1, nom, f.name); else ctPages(d, pdf, nom, f.name); }).catch(function(e){ toast('⚠ PDF illisible : ' + (e && e.message || 'bibliothèque PDF non chargée (réseau ?)')); }); };
@@ -2019,44 +2016,19 @@ function ctPages(d, pdf, nom, fname){
 }
 function ctPageRender(d, pdf, n, nom, fname){
   toast('Préparation de la page ' + n + '…');
-  pdf.getPage(n).then(function(pg){ var v1 = pg.getViewport({ scale:1 }), vp = pg.getViewport({ scale:Math.min(4, 3600 / Math.max(v1.width, v1.height)) }), cv = document.createElement('canvas'); cv.width = vp.width; cv.height = vp.height;
+  pdf.getPage(n).then(function(pg){ var v1 = pg.getViewport({ scale:1 }), vp = pg.getViewport({ scale:Math.min(4, 2800 / Math.max(v1.width, v1.height)) }), cv = document.createElement('canvas'); cv.width = vp.width; cv.height = vp.height;
     var g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height);
-    return pg.render({ canvasContext:g, viewport:vp }).promise.then(function(){ var du = cv.toDataURL('image/jpeg', .88); cv.width = cv.height = 0; ctCrop(d, du, nom + (pdf.numPages > 1 ? ' · p. ' + n : ''), n, fname); }); })
+    return pg.render({ canvasContext:g, viewport:vp }).promise.then(function(){ var du = cv.toDataURL('image/jpeg', .88); cv.width = cv.height = 0; ctPlanImporte(d, du, nom + (pdf.numPages > 1 ? ' · p. ' + n : ''), n, fname); }); })
   .catch(function(e){ toast('⚠ Page illisible : ' + (e && e.message || e)); });
 }
-function ctCrop(d, du, nom, pageNum, fname){
-  var bg = document.createElement('div'), R = null; bg.className = 'ctplan';
-  bg.innerHTML = '<div class="ctplan-top"><div style="flex:1 1 260px"><div class="eyebrow">Garder seulement le plan</div><div style="font:600 18px var(--fs)">Faites glisser un cadre autour du plan</div><div class="muted" style="font-size:13px">Ou gardez la page entière. Vous pouvez refaire le cadre autant de fois que nécessaire.</div></div>' +
-    '<div class="ctf" style="flex:1 1 260px"><label class="eyebrow" for="ctc-nom">Nom du plan</label><div class="ctmicrow"><input id="ctc-nom" value="' + esc(nom) + '"><button class="btn ctmic" type="button" id="ctc-mic" aria-label="Dicter le nom du plan">🎙</button></div></div>' +
-    '<label style="display:flex;gap:8px;align-items:center;min-height:48px;flex:0 1 230px"><input type="checkbox" id="ctc-keep" checked style="width:22px;height:22px"> <span style="font-size:14px">Ranger aussi dans les plans du chantier</span></label>' +
-    '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" type="button" data-k="x">Annuler</button><button class="btn" type="button" data-k="all">Page entière</button><button class="btn pri big" type="button" data-k="ok" disabled>Valider le cadre</button></div></div>' +
-    '<div class="ctcrop-box"><div class="ctcrop"><img alt="Page à recadrer" draggable="false"><div class="ctcrop-r" hidden></div></div></div>';
-  document.body.appendChild(bg);
-  var wrap = bg.querySelector('.ctcrop'), im = wrap.querySelector('img'), rb = wrap.querySelector('.ctcrop-r'), ok = bg.querySelector('[data-k=ok]'), st = null;
-  im.src = du;
-  var pos = function(e){ var r = im.getBoundingClientRect(); return [Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), Math.max(0, Math.min(1, (e.clientY - r.top) / r.height))]; };
-  var draw = function(){ if (!R) { rb.hidden = true; return; } rb.hidden = false; rb.style.left = R[0] * 100 + '%'; rb.style.top = R[1] * 100 + '%'; rb.style.width = (R[2] - R[0]) * 100 + '%'; rb.style.height = (R[3] - R[1]) * 100 + '%'; };
-  wrap.onpointerdown = function(e){ e.preventDefault(); wrap.setPointerCapture(e.pointerId); st = pos(e); R = [st[0], st[1], st[0], st[1]]; draw(); };
-  wrap.onpointermove = function(e){ if (!st) return; var q = pos(e); R = [Math.min(st[0], q[0]), Math.min(st[1], q[1]), Math.max(st[0], q[0]), Math.max(st[1], q[1])]; draw(); };
-  wrap.onpointerup = wrap.onpointercancel = function(){ st = null; if (R && (R[2] - R[0] < .03 || R[3] - R[1] < .03)) { R = null; draw(); } ok.disabled = !R; };
-  bg.querySelector('[data-k=x]').onclick = function(){ ctStopMic(); bg.remove(); };
-  bg.querySelector('#ctc-mic').onclick = function(){ var t = bg.querySelector('#ctc-nom'); if (!this.dataset.vu) { t.value = ''; this.dataset.vu = 1; } ctMic(this, t); };
-  var fin = function(full){ ctStopMic();
-    var W = im.naturalWidth, H = im.naturalHeight, r = full || !R ? [0, 0, 1, 1] : R;
-    var sx = Math.round(r[0] * W), sy = Math.round(r[1] * H), sw = Math.max(1, Math.round((r[2] - r[0]) * W)), sh = Math.max(1, Math.round((r[3] - r[1]) * H));
-    var k = Math.min(1, 2600 / Math.max(sw, sh)), cv = document.createElement('canvas'); cv.width = Math.round(sw * k); cv.height = Math.round(sh * k);
-    var g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height); g.drawImage(im, sx, sy, sw, sh, 0, 0, cv.width, cv.height);
-    var out = cv.toDataURL('image/jpeg', .86); cv.width = cv.height = 0;
-    var n = bg.querySelector('#ctc-nom').value.trim() || nom || 'Plan', keep = bg.querySelector('#ctc-keep').checked, id = uid();
-    var x = { id:id, chantierId:S.cid, groupe:id, version:1, nom:n, type:'Autre', plans:[{ name:(fname || 'plan') + (pageNum ? ' (page ' + pageNum + ')' : ''), dataUrl:out }], pastilles:[], photos:[], visibleIntervs:[], visibleClient:false, publieLe:new Date().toISOString(), publiePar:S.user || '', source:'constat' };
-    bg.remove();
-    if (keep) { var mid = 'm_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 9); MEDC[mid] = out; if (!FB.demo) FB.putMedia(mid, out, 'plan').catch(function(){}); x.plans[0].mediaId = mid; D.plans.push(x); plSave(x); toast('Plan « ' + n + ' » rangé dans les plans du chantier'); }
-    ctPlanView(d, x);
-  };
-  ok.onclick = function(){ fin(false); };
-  bg.querySelector('[data-k=all]').onclick = function(){ fin(true); };
+/* [Constat] plan importé → directement les pastilles, sur la page entière (plus d'étape de cadrage, jugée inutile sur chantier) ;
+   rangé dans les plans du chantier, visible de personne d'autre tant qu'on ne règle pas sa visibilité */
+function ctPlanImporte(d, du, nom, pageNum, fname){
+  var id = uid(), x = { id:id, chantierId:S.cid, groupe:id, version:1, nom:nom || 'Plan', type:'Autre', plans:[{ name:(fname || 'plan') + (pageNum ? ' (page ' + pageNum + ')' : ''), dataUrl:du }], pastilles:[], photos:[], visibleIntervs:[], visibleClient:false, publieLe:new Date().toISOString(), publiePar:S.user || '', source:'constat' };
+  var mid = 'm_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 9); MEDC[mid] = du; if (!FB.demo) FB.putMedia(mid, du, 'plan').catch(function(){});
+  x.plans[0].mediaId = mid; D.plans.push(x); plSave(x);
+  ctPlanView(d, x);
 }
-
 function ctPlanView(d, plan){
   if (!plan) return;
   var bg = document.createElement('div'), zoom = 1; bg.className = 'ctplan';
