@@ -380,7 +380,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 
 <div id="echBack" role="dialog" aria-modal="true" aria-label="Échanges reçus"><div class="eh"><b>📥 Échanges reçus — SMS et mails à traiter</b><button style="background:#fff;color:#1b2d5b;border:0;border-radius:8px;padding:6px 12px;font-weight:700;cursor:pointer" onclick="fermerEchanges()">Fermer ✕</button></div><div class="ef" id="echFiltres"></div><div class="el" id="echListe"></div></div>
 <div id="valBack" role="dialog" aria-modal="true" aria-label="Valider un message reçu"><div id="valBox"></div></div>
-<script src="phenix_espace_client.js"></script><!-- [Espace client] bibliothèque des statuts (partagée avec Dossier) -->
+<script src="phenix_espace_client.js?v=20261127"></script><!-- [Espace client] bibliothèque des statuts (partagée avec Dossier) -->
 <div class="toast" id="toast"></div>
 
 <script type="module">
@@ -699,7 +699,7 @@ function _pecDessiner() {
       '<div style="margin-top:8px"><button class="vbtn p" id="pec-note">Publier la note</button></div></div>' +
     '<div class="vact"><b>Changer le statut</b>' + (s0 && PEC.src && _pecSuggestion(PEC.src).code === PEC.code ? ' <span style="font-weight:400;color:#6b7a99">(proposé pour cette notification)</span>' : '') +
       '<div class="vrow"><div><label for="pec-ph">Phase</label><select id="pec-ph">' + EC_PHASES_LONG.map((t, k) => '<option value="' + k + '"' + (ph === k ? ' selected' : '') + '>' + (k + 1) + '. ' + E(t) + '</option>').join('') + '<option value="x"' + (ph === 'x' ? ' selected' : '') + '>Pauses et imprévus</option></select></div>' +
-      '<div><label for="pec-c">Statut</label><select id="pec-c"><option value="">Ne pas changer</option>' + EC_STATUTS.filter(s => ph === 'x' ? /^X/.test(s[0]) : (s[1] === ph && !/^X/.test(s[0]))).map(s => '<option value="' + s[0] + '"' + (s[0] === PEC.code ? ' selected' : '') + '>' + s[0] + ' · ' + E(s[2]) + (s[6] ? ' ⚠' : '') + '</option>').join('') + '</select></div></div>' +
+      '<div><label for="pec-c">Statut</label><select id="pec-c"><option value="">Ne pas changer</option>' + EC_STATUTS.filter(s => ph === 'x' ? /^X/.test(s[0]) : (s[1] === ph && /^S\d/.test(s[0]))).map(s => '<option value="' + s[0] + '"' + (s[0] === PEC.code ? ' selected' : '') + '>' + s[0] + ' · ' + E(s[2]) + (s[6] ? ' ⚠' : '') + '</option>').join('') + '</select></div></div>' +
       (st ? (/\[date\]/.test(s0[2] + s0[3] + s0[4]) ? '<label for="pec-date">Date</label><input type="date" id="pec-date" value="' + E(PEC.vals.date || _jour()) + '">' : '') +
         manque.map((m, k) => '<label for="pec-v' + k + '">À compléter : ' + E(m) + '</label><input id="pec-v' + k + '" data-pec-cle="' + E(m) + '" value="' + E(PEC.vals[m] || '') + '">').join('') +
         '<label for="pec-t">Titre lu par le client</label><input id="pec-t" value="' + E(st.titre) + '">' +
@@ -1700,7 +1700,7 @@ const MODULES = {
   synthese:     { src: 'phenix_synthese.html',           title: 'Synthèse 3D — tous les dossiers' },   // [Synthèse 3D]
   espace:       { src: 'phenix_espace.html',             title: 'Mon espace — devis à relancer, tâches et projets' },
   contrat:      { src: 'phenix_contrat.html',            title: 'Contrats — MOE / contractant général' },
-  chantier:     { src: 'phenix_chantier2.html?v=20261127l',   /* [Cache] numéro de version : à changer à chaque mise à jour du module pour forcer le rechargement */           title: 'Chantier — suivi de travaux (nouveau module)' },
+  chantier:     { src: 'phenix_chantier2.html?v=20261127m',   /* [Cache] numéro de version : à changer à chaque mise à jour du module pour forcer le rechargement */           title: 'Chantier — suivi de travaux (nouveau module)' },
   financement:  { src: 'phenix_financement.html',        title: 'Dossier de financement' },
   annuaire:     { src: 'Phenix_Annuaire_Artisans.html',  title: 'Annuaire artisans' },
 };

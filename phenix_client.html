@@ -12,11 +12,14 @@
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <script src="phenix_carnet_questions.js?v=20261125"></script>
 <script src="phenix_carnet_vue.js?v=20261125"></script>
+<script src="phenix_espace_client.js?v=20261127"></script><!-- [Statuts client v2] étapes du chantier et pièces de la déclaration -->
 <!--
 ══════════════════════════════════════════════════════════════════════
  PHÉNIX — ESPACE CLIENT (phenix_client.html)
 ──────────────────────────────────────────────────────────────────────
  HISTORIQUE DES MODIFICATIONS
+ 27/11/2026 — [Statuts client v2] 52 statuts (S01 à S52) : petit texte sous le titre, et dessous les compteurs (devis, décennales, contrats), pièces de la
+   déclaration, dommages-ouvrage, délai de recours, étapes du chantier, dernier compte rendu, constat, réserves, garanties et règlement de l'étape (d.suivi).
  25/11/2026 — [Conversation] « Le fil » montre aussi les échanges avec Phénix (messages de l'espace, réponses de Phénix par mail ou SMS) et
    permet d'« Écrire à Phénix » : le message arrive dans la cloche de Phénix et dans la fiche du dossier. Données : phenix_client_dossiers/{id}/messages.
  25/11/2026 — [Carnet] Le carnet de projet s'ouvre DANS l'espace client (bouton or « Ouvrir mon carnet de projet », puis onglet Carnet
@@ -64,6 +67,14 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .marque{font-size:15px;font-weight:400;letter-spacing:7px;color:var(--or)}
 .sous{font-size:12px;color:var(--t4)}
 .h1{margin:0;font-family:'Italiana',serif;font-weight:400;font-size:44px;line-height:1.04}
+.sv{margin-top:18px;padding:12px 14px;border-radius:16px;background:rgba(11,31,74,.78);border:.75px solid var(--line2);display:flex;flex-direction:column;gap:6px}
+.sv .t{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--t5)}
+.sv .l{display:flex;gap:10px;align-items:baseline;border-top:.5px solid var(--line);padding:7px 0;font-size:13px;color:var(--t2)}
+.sv .l .e{margin-left:auto;font-size:12px;white-space:nowrap;text-align:right}
+.sv .ok{color:var(--or2)} .sv .at{color:var(--t4)} .sv .al{color:var(--alerte)}
+.sv .ch{font-size:13px;color:var(--t2)} .sv .ch b{font-weight:500;color:var(--or2)}
+.jg{height:6px;border-radius:3px;background:rgba(255,255,255,.08);border:.5px solid var(--line);overflow:hidden}.jg span{display:block;height:100%;background:var(--or)}
+.sv.or{border-color:var(--or);background:rgba(212,178,106,.08)} .sv.or .v{font-size:15px;font-weight:500;color:var(--or2)}
 .h2{margin:0 0 14px 4px;font-family:'Italiana',serif;font-weight:400;font-size:22px}
 .meta{font-size:11px;color:var(--t5)}
 .btn-or{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 18px;border-radius:22px;border:none;background:var(--or);color:var(--bg);font-size:15px;font-weight:500;text-decoration:none}
@@ -363,15 +374,74 @@ function htmlAvancement(d) {
       <div class="voile" style="display:inline-block;padding:8px 10px;margin-left:-10px;max-width:100%">
         <div style="font-size:13px;color:var(--t4)">${esc(sousTitre)}</div>
         <h1 class="h1" style="margin-top:8px">${esc(d.titre || 'Votre projet')}</h1>
+        ${d.petit ? `<p style="margin:12px 0 0;font-size:14px;line-height:1.55;color:var(--t3)">${liens(d.petit)}</p>` : ''}
         ${delai ? `<div style="margin-top:14px;font-size:14px;font-weight:400;color:var(--or)">${esc(delai)}</div>` : ''}
         ${d.client && !d.pause ? `<div style="margin-top:8px;font-size:12px;color:var(--t3)">De votre côté : ${esc(d.client)}</div>` : ''}
         ${action}
       </div>
+      ${htmlSuivi(d)}
       ${d.texte ? `<details class="pq" style="margin-top:30px"><summary>${IC.chev}Pourquoi cela prend-il ce temps ?</summary><p class="voile" style="padding:8px 10px;margin-left:-10px">${liens(d.texte)}</p></details>` : ''}
     </section>
     ${htmlParcours(d)}
     <p class="meta" style="margin-top:30px">Mis à jour ${esc(dateFr(d.majAt) ? dateFr(d.majAt).toLowerCase() : '')} · <button class="btn-discret" id="dec" style="font-size:11px;min-height:30px">Se déconnecter</button></p>
   </main>`;
+}
+/* ═══ [Statuts client v2 — 27/11/2026] ce qui s'affiche sous le statut : compteurs, pièces, dommages-ouvrage, étapes du chantier,
+   règlement de l'étape. Données : d.elements (liste du statut) et d.suivi (mis à jour depuis Phénix Dossier, Chiffrage et Chantier). Jamais de montant. ═══ */
+function htmlSuivi(d) {
+  const el = d.elements || [], sv = d.suivi || {}, out = [];
+  const jauge = (x, n) => `<div class="jg" role="img" aria-label="${x} sur ${n}"><span style="width:${Math.round(Math.min(1, x / Math.max(1, n)) * 100)}%"></span></div>`;
+  const lg = (lib, cls, et) => `<div class="l"><span>${esc(lib)}</span><span class="e ${cls}">${esc(et)}</span></div>`;
+  const dFr = iso => { const x = new Date(String(iso || '').slice(0, 10) + 'T12:00:00'); return isNaN(x) ? '' : x.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }); };
+  const plus = (iso, m, a) => { const x = new Date(String(iso).slice(0, 10) + 'T12:00:00'); if (m) x.setMonth(x.getMonth() + m); if (a) x.setFullYear(x.getFullYear() + a); return x.toISOString().slice(0, 10); };
+  el.forEach(k => {
+    if ((k === 'devis' || k === 'devisFin') && sv.devis && sv.devis.n) {
+      const x = k === 'devisFin' ? sv.devis.n : Math.min(sv.devis.x || 0, sv.devis.n);
+      out.push(`<div class="sv"><span class="t">Consultation des entreprises</span><span class="ch"><b>${x}</b> devis reçu${x > 1 ? 's' : ''} sur <b>${sv.devis.n}</b> lots</span>${jauge(x, sv.devis.n)}${x >= sv.devis.n ? '<span class="ok" style="font-size:12px">✓ Tous les devis sont reçus</span>' : ''}</div>`);
+    }
+    if (k === 'pieces') {
+      const l = (sv.pieces || []).filter(p => p.etat === 'afournir' || p.etat === 'recue');
+      if (l.length) out.push(`<div class="sv"><span class="t">Pièces pour votre déclaration · ${l.filter(p => p.etat === 'recue').length} sur ${l.length}</span>${l.map(p => lg(p.nom, p.etat === 'recue' ? 'ok' : 'at', p.etat === 'recue' ? '✓ Reçue' : '○ À fournir')).join('')}</div>`);
+    }
+    if (k === 'instruction' && sv.depot) out.push(`<div class="sv"><span class="t">Instruction en mairie</span>${lg('Dossier déposé', 'ok', '✓ ' + dFr(sv.depot))}</div>`);
+    if (k === 'complements' && (sv.complements || []).length) out.push(`<div class="sv"><span class="t">Pièces demandées par la mairie</span>${sv.complements.map(c => lg(c.nom, c.ok ? 'ok' : 'at', c.ok ? '✓ Prête' : '○ En préparation')).join('')}</div>`);
+    if (k === 'panneau') out.push(`<div class="sv"><span class="t">Ce que nous attendons de vous</span>${lg('Panneau affiché sur le terrain', sv.affichage ? 'ok' : 'at', sv.affichage ? '✓ Affiché le ' + dFr(sv.affichage) : '○ À faire')}</div>`);
+    if (k === 'recours' && sv.affichage) {
+      const deb = new Date(sv.affichage + 'T12:00:00'), fin = plus(sv.affichage, 2), f = new Date(fin + 'T12:00:00'), tot = Math.round((f - deb) / 864e5), ec = Math.max(0, Math.min(tot, Math.round((Date.now() - deb) / 864e5)));
+      out.push(`<div class="sv"><span class="t">Délai de recours des tiers</span><span class="ch">Affiché le <b>${esc(dFr(sv.affichage))}</b> · fin le <b>${esc(dFr(fin))}</b></span>${jauge(ec, tot)}<span class="at" style="font-size:12px">${tot - ec > 0 ? 'Encore ' + (tot - ec) + ' jours' : '✓ Délai terminé'}</span></div>`);
+    }
+    if (k === 'do') {
+      const e = sv.dommages || 'asouscrire', et = { asouscrire: ['at', '○ À souscrire'], encours: ['at', '○ Devis en cours'], recue: ['ok', '✓ Attestation reçue'] }[e] || ['at', '○ À souscrire'];
+      out.push(`<div class="sv"><span class="t">Assurance dommages-ouvrage</span>${lg('Obligatoire avant le début des travaux', et[0], et[1])}${e !== 'recue' ? '<span style="font-size:12px;line-height:1.5;color:var(--t4)">Elle vous protège pendant dix ans : en cas de désordre grave, vous êtes remboursé sans attendre qu’on établisse les responsabilités. Nous vous aidons à comparer les offres ; merci de nous transmettre l’attestation dès que vous l’avez.</span>' : ''}</div>`);
+    }
+    if (k === 'prepa') {
+      const dc = sv.decennales || {}, ct = sv.contrats || {};
+      if (dc.n) out.push(`<div class="sv"><span class="t">Assurances décennales des entreprises</span><span class="ch"><b>${dc.x || 0}</b> reçue${(dc.x || 0) > 1 ? 's' : ''} sur <b>${dc.n}</b> entreprises</span>${jauge(dc.x || 0, dc.n)}</div>`);
+      out.push(`<div class="sv"><span class="t">Pièces écrites</span>${ct.n ? lg('Contrats d’engagement des entreprises', (ct.x || 0) >= ct.n ? 'ok' : 'at', ((ct.x || 0) >= ct.n ? '✓ ' : '○ ') + (ct.x || 0) + ' sur ' + ct.n) : ''}${lg('CCTP', sv.cctp ? 'ok' : 'at', sv.cctp ? '✓ Signé' : '○ À signer')}${lg('Plans d’exécution (DCE)', sv.plansExe ? 'ok' : 'at', sv.plansExe ? '✓ Terminés' : '○ En cours')}</div>`);
+    }
+    if (k === 'etapes' && typeof EC2_ETAPES !== 'undefined') {
+      const n = Number(String(d.code || '').slice(1)) || 0, num = c => Number(String(c).slice(1));
+      let i = -1; EC2_ETAPES.forEach((e, j) => { if (n >= num(e[1])) i = j; });
+      if (d.code === 'S42' && sv.etapeChantier != null) i = sv.etapeChantier;
+      const atteint = /^S(29|31|33)$/.test(d.code || '');   // « hors d'eau », « hors d'air », « doublage réalisé » : l'étape est terminée, la suivante pas encore commencée
+      out.push(`<div class="sv"><span class="t">Votre chantier</span>${EC2_ETAPES.map((e, j) => lg(e[0], j <= i ? 'ok' : 'at', j < i || (atteint && j === i) ? '✓ Fait' : j === i ? '◉ En cours' : '○ À venir')).join('')}</div>`);
+    }
+    if (k === 'cr' && sv.cr) out.push(`<div class="sv"><span class="t">Dernier compte rendu</span>${lg('Compte rendu n° ' + (sv.cr.num || ''), 'at', sv.cr.date ? 'visite du ' + dFr(sv.cr.date) : '')}</div>`);
+    if (k === 'litige' && sv.constat) out.push(`<div class="sv"><span class="t">Constat n° ${esc(sv.constat.num || '')}</span>${(sv.constat.points || []).map(x => lg(x.titre, x.repris ? 'ok' : 'al', x.repris ? '✓ Repris' : '⚠ Reprise demandée' + (x.avant ? ' avant le ' + dFr(x.avant) : ''))).join('')}</div>`);
+    if (k === 'attente' && sv.attente) out.push(`<div class="sv or"><span class="t">Règlement en attente</span><span class="v">${esc(sv.attente.libelle || 'Facture en attente')}</span>${sv.attente.date ? `<span style="font-size:12px;color:var(--t3)">Émise le ${esc(dFr(sv.attente.date))}</span>` : ''}</div>`);
+    if (k === 'reserves' && sv.reserves && sv.reserves.n) out.push(`<div class="sv"><span class="t">Réserves</span><span class="ch"><b>${sv.reserves.x || 0}</b> levée${(sv.reserves.x || 0) > 1 ? 's' : ''} sur <b>${sv.reserves.n}</b></span>${jauge(sv.reserves.x || 0, sv.reserves.n)}</div>`);
+    if (k === 'garanties' && sv.reception) out.push(`<div class="sv"><span class="t">Vos garanties · réception le ${esc(dFr(sv.reception))}</span>${lg('Parfait achèvement', 'ok', 'jusqu’au ' + dFr(plus(sv.reception, 0, 1)))}${lg('Bon fonctionnement (biennale)', 'ok', 'jusqu’au ' + dFr(plus(sv.reception, 0, 2)))}${lg('Décennale', 'ok', 'jusqu’au ' + dFr(plus(sv.reception, 0, 10)))}</div>`);
+  });
+  // pendant le chantier : dernier compte rendu (moins de 15 jours) et constat encore ouvert, quel que soit le statut
+  if (Number(d.phase) === 5) {
+    if (sv.cr && el.indexOf('cr') < 0 && (Date.now() - new Date(String(sv.cr.date) + 'T12:00:00')) / 864e5 < 15) out.push(`<div class="sv"><span class="t">Dernier compte rendu</span>${lg('Compte rendu n° ' + (sv.cr.num || ''), 'at', sv.cr.date ? 'visite du ' + dFr(sv.cr.date) : '')}</div>`);
+    if (sv.constat && el.indexOf('litige') < 0 && (sv.constat.points || []).some(x => !x.repris)) out.push(`<div class="sv"><span class="t">Constat n° ${esc(sv.constat.num || '')}</span>${(sv.constat.points || []).map(x => lg(x.titre, x.repris ? 'ok' : 'al', x.repris ? '✓ Repris' : '⚠ Reprise demandée' + (x.avant ? ' avant le ' + dFr(x.avant) : ''))).join('')}</div>`);
+  }
+  if (d.reglement) {
+    const e = (sv.reglements || {})[d.code] || 'avenir', txt = { avenir: '○ Facture à venir', envoyee: '○ Facture envoyée, en attente de règlement', reglee: '✓ Réglé, merci' }[e] || '○ Facture à venir';
+    out.push(`<div class="sv or"><span class="t">Règlement de cette étape</span><span class="v">${esc(d.reglement)}</span><span style="font-size:12px;color:${e === 'reglee' ? 'var(--or2)' : 'var(--t3)'}">${txt}</span></div>`);
+  }
+  return out.length ? `<div style="margin-top:22px;max-width:100%">${out.join('')}</div>` : '';
 }
 function htmlDocuments(d) {
   const docs = (d.documents || []).slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));

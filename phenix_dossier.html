@@ -110,7 +110,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="phenix_dictee.js?v=20261127c"></script><script src="phenix_reglements.js?v=20261127b"></script><!-- [Règlements] règlements des clients lus sur le relevé bancaire --><!-- [Dictée] moteur de dictée commun : pauses possibles, validation au 2e appui -->
-<script src="phenix_espace_client.js"></script><!-- [Espace client] bibliothèque des statuts partagée avec la cloche du shell -->
+<script src="phenix_espace_client.js?v=20261127"></script><!-- [Espace client] bibliothèque des statuts partagée avec la cloche du shell -->
 <script src="phenix_carnet_questions.js?v=20261125"></script><!-- [Carnet] questions du carnet (réponses du client) -->
 <title>Phénix-Architecture · Gestion de Dossier</title>
 <script type="module">
@@ -207,6 +207,16 @@ window._fbClient = {
   async lireCarnet(pid) { try { const s = await getDoc(doc(db, 'phenix_portail', String(pid), 'etat', 'choix')); return s.exists() ? s.data() : null; } catch (e) { return null; } },   // [Carnet] choix du client
   async lireFicheCarnet(pid) { try { const s = await getDoc(doc(db, 'phenix_portail', String(pid), 'etat', 'fiche')); return s.exists() ? s.data() : null; } catch (e) { return null; } },
   async ecrire(pid, d) { await setDoc(doc(db, 'phenix_client_dossiers', String(pid)), d); },
+  // [Statuts client v2 27/11/2026] lots du chiffrage (devis reçus, contrats signés) et fiches de l'Annuaire (décennales), pour les compteurs du client
+  async sources(pid) {
+    const pick = d => { const c = ((d && d.chantiers) || []).find(x => String(x.projetId) === String(pid)); return c ? (c.lots || []) : null; };
+    let lots = null;
+    try { const u = auth.currentUser; if (u) { const x = await getDoc(doc(db, 'phenix_chiffrage', u.uid)); if (x.exists()) lots = pick(x.data()); } } catch (e) {}
+    if (!lots) { try { const q = await getDocs(collection(db, 'phenix_chiffrage')); q.forEach(x => { if (!lots) lots = pick(x.data()); }); } catch (e) {} }
+    let artisans = [];
+    try { const q = await getDocs(collection(db, 'phenix_artisans')); q.forEach(x => artisans.push(x.data())); } catch (e) {}
+    return { lots: lots || [], artisans };
+  },
   async accesDuProjet(pid) { const s = await getDocs(query(collection(db, 'phenix_client_acces'), where('projetId', '==', String(pid)))); const l = []; s.forEach(x => l.push(x.data())); return l; },
   async ouvrirAcces(email, pid, par) { await setDoc(doc(db, 'phenix_client_acces', String(email).toLowerCase()), { email: String(email).toLowerCase(), projetId: String(pid), at: new Date().toISOString(), par: par || '' }); },
   async retirerAcces(email) { await deleteDoc(doc(db, 'phenix_client_acces', String(email).toLowerCase())); },
@@ -5659,15 +5669,21 @@ const EC_AUTO = [
   ['reception', 'cloture-admin', "Remise du DOE au client", 'F4'],
   ['reception', 'garanties', "Information du client sur les garanties biennale et décennale", 'F5'],
 ];
+// [Statuts client v2 27/11/2026] chaque case garde son code d'origine ; celles qui changent le statut du client publient le statut de la nouvelle liste.
+// Les cases internes (croquis, CERFA, CCTP…) ne changent plus le grand statut : certaines mettent seulement à jour le suivi affiché dessous.
+const EC_V2 = { R1: 'S02', R4: 'S03', R5: 'S04', R6: 'S05', A2: 'S06', A3: 'S07', A4: 'S08', C1: 'S09', C7: 'S10', C8: 'S11', D3bis: 'S13', D5: 'S17', D7: 'S18', D9: 'S20', D10: 'S21', P1: 'S23', P5: 'S24', T1: 'S26', F1: 'S46', F3: 'S48', F4: 'S50', F5: 'S52' };
+const EC_V2_SUIVI = { P3: { cctp: true }, P4: { plansExe: true } };
 // Statuts qui demandent une confirmation avant de partir (une réponse de la mairie peut être un refus)
 const EC_CONFIRMER = {
-  D9: "Arrêté reçu : est-ce un ACCORD ?\n\nOK : le client voit « Projet autorisé ».\nAnnuler : rien n'est publié (refus ou prescriptions : choisissez le statut dans l'onglet Espace client)."
+  S20: "Arrêté reçu : est-ce un ACCORD ?\n\nOK : le client voit « Votre déclaration est acceptée ».\nAnnuler : rien n'est publié (refus ou prescriptions : choisissez le statut dans l'onglet Espace client)."
 };
 const EC_URL_CLIENT = () => { try { return new URL('phenix_client.html', location.href).href.split('?')[0]; } catch (e) { return 'https://phenixarchitecte-del.github.io/phenix-architecte/phenix_client.html'; } };
 const EC_URL_CARNET = pid => { try { return new URL('phenix_carnet.html?projet=' + encodeURIComponent(pid), location.href).href; } catch (e) { return ''; } };
 
 let _ecIdx = null;
-function _ecIndex() { if (!_ecIdx) { _ecIdx = {}; EC_AUTO.forEach(a => { _ecIdx[_checklistItemId(a[0], a[1], a[2])] = a[3]; }); } return _ecIdx; }
+function _ecIndex() { if (!_ecIdx) { _ecIdx = {}; EC_AUTO.forEach(a => { if (EC_V2[a[3]]) _ecIdx[_checklistItemId(a[0], a[1], a[2])] = EC_V2[a[3]]; }); } return _ecIdx; }
+let _ecIdxSuivi = null;
+function _ecIndexSuivi() { if (!_ecIdxSuivi) { _ecIdxSuivi = {}; EC_AUTO.forEach(a => { if (EC_V2_SUIVI[a[3]]) _ecIdxSuivi[_checklistItemId(a[0], a[1], a[2])] = EC_V2_SUIVI[a[3]]; }); } return _ecIdxSuivi; }
 const _ecStatut = code => EC_STATUTS.find(x => x[0] === code);
 const _ecRang = code => EC_STATUTS.findIndex(x => x[0] === code);
 const _ecDateLongue = d => d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -5685,11 +5701,11 @@ function _ecRemplir(code) {
   const aj = EC_AJUSTE[code] || {};
   const auj = _ecDateLongue(new Date());
   let titre = aj.titre || s[2], texte = aj.texte || s[3], delai = aj.delai != null ? aj.delai : (s[4] === '—' ? '' : s[4]);
-  if (code === 'D10') { const f = new Date(); f.setMonth(f.getMonth() + 2); delai = 'Fin du délai : le ' + _ecDateLongue(f); }
+  if (code === 'D10' || code === 'S22') { const f = new Date(); f.setMonth(f.getMonth() + 2); delai = 'Fin du délai : le ' + _ecDateLongue(f); }
   const rep = t => String(t || '').split('[date]').join(auj).split('[n]').join('1');
   titre = rep(titre); texte = rep(texte); delai = rep(delai);
   if (_ecCrochets(titre + ' ' + texte + ' ' + delai)) return null;
-  return { code, phase: s[1], titre, texte, delai, client: _ecMaj(s[5]), echeance: '', pause: false, reprise: '' };
+  return { code, phase: s[1], titre, texte, delai, client: _ecMaj(s[5]), echeance: '', pause: false, reprise: '', petit: s[7] || '', reglement: s[10] || '', elements: s[11] || [] };
 }
 function _ecBase(p) {
   return { projetId: String(p.id), clientNom: p.client || '', ville: _ecVille(p.adresse), phase: 0, code: '', titre: '', texte: '', delai: '', client: '',
@@ -5716,8 +5732,9 @@ async function _ecPublierStatut(p, st, opts) {
   opts = opts || {};
   const d0 = (await _ecLire(p.id)) || _ecBase(p);
   const patch = { code: st.code || '', phase: Number(st.phase) || 0, titre: st.titre, texte: st.texte || '', delai: st.delai || '', client: st.client || '',
-    echeance: st.echeance || '', pause: !!st.pause, reprise: st.pause ? (st.reprise || '') : '', statutAuto: !!opts.auto };
-  if (!opts.silencieux) patch.fil = (d0.fil || []).concat([_ecLigneFil(st.pause ? 'Pause' : 'Statut', st.titre, _ecPremPhrase(st.texte), Number(st.phase) !== Number(d0.phase || 0))]).slice(-120);
+    echeance: st.echeance || '', pause: !!st.pause, reprise: st.pause ? (st.reprise || '') : '', statutAuto: !!opts.auto,
+    v: /^S\d/.test(st.code || '') ? 2 : (d0.v || 1), petit: st.petit || '', reglement: st.reglement || '', elements: st.elements || [] };
+  if (!opts.silencieux) patch.fil = (d0.fil || []).concat([_ecLigneFil(st.pause ? 'Pause' : 'Statut', st.titre, _ecPremPhrase(st.petit || st.texte), Number(st.phase) !== Number(d0.phase || 0))]).slice(-120);
   return _ecEcrire(p, patch, 'Statut ' + (st.code || '') + ' · ' + st.titre);
 }
 // Statut le plus avancé parmi les cases cochées (pour revenir en arrière quand une case est décochée)
@@ -5730,10 +5747,13 @@ function _ecMeilleurCoche(p) {
 async function ecApresCoche(p, itemId, valeur, fond) {
   try {
     if (!p || !_ecAdmin() || !window._fbClient) return;
+    const sv = _ecIndexSuivi()[itemId];
+    if (sv) { const d1 = await _ecLire(p.id); if (d1) { const s1 = Object.assign({}, d1.suivi || {}); Object.keys(sv).forEach(k => { s1[k] = valeur ? sv[k] : false; }); await _ecEcrire(p, { suivi: s1 }, 'Suivi du client'); } }
     const code = _ecIndex()[itemId]; if (!code) return;
     const d = await _ecLire(p.id);
     if (valeur) {
       if (d && d.code === code) return;
+      if (d && /^S\d/.test(d.code || '') && _ecRang(code) < _ecRang(d.code)) return;   // [Statuts client v2] une case cochée en retard ne fait jamais reculer le client
       if (EC_CONFIRMER[code]) {
         if (fond) { toast_d('Espace client : arrêté coché sur « ' + (p.nom || p.client || '') + ' », choisissez le statut dans l’onglet Espace client.'); return; }
         if (!confirm(EC_CONFIRMER[code])) return;
@@ -5764,7 +5784,7 @@ async function renderProjectClient(id) {
   if (!_ecAdmin()) { el.innerHTML = '<p style="font-size:13px;color:var(--text2)">L’espace client se gère depuis le compte de Maxime.</p>'; return; }
   if (!window._fbClient) { el.innerHTML = '<p style="font-size:13px;color:var(--text2)">Connexion à Firebase en cours… rouvrez l’onglet dans un instant.</p>'; return; }
   if (_EC.pid === String(id) && _EC.sousDemande) { _EC.sous = _EC.sousDemande; _EC.sousDemande = null; }
-  if (_EC.pid !== String(id)) { _ecStopMessages(); Object.assign(_EC, { pid: String(id), d: null, acces: [], br: null, phaseSel: null, sous: _EC.sousDemande || 'statut', msgs: null }); _EC.sousDemande = null; el.innerHTML = '<p style="font-size:13px;color:var(--text2)">Chargement de l’espace client…</p>'; }
+  if (_EC.pid !== String(id)) { _ecStopMessages(); Object.assign(_EC, { pid: String(id), d: null, acces: [], br: null, phaseSel: null, sous: _EC.sousDemande || 'statut', msgs: null, sv: null, cpt: undefined }); _EC.sousDemande = null; el.innerHTML = '<p style="font-size:13px;color:var(--text2)">Chargement de l’espace client…</p>'; }
   try { const r = await Promise.all([_ecLire(id), window._fbClient.accesDuProjet(String(id)), window._fbClient.lireCarnet ? window._fbClient.lireCarnet(String(id)) : null, window._fbClient.lireFicheCarnet ? window._fbClient.lireFicheCarnet(String(id)) : null]); _EC.d = r[0]; _EC.acces = r[1] || []; _EC.choix = r[2]; _EC.ficheCarnet = r[3]; }
   catch (e) { console.warn(e); el.innerHTML = '<p style="font-size:13px;color:var(--red)">⚠ Espace client indisponible : vérifiez les règles Firestore (phenix_client_dossiers, phenix_client_acces).</p>'; return; }
   _ecDessiner(p);
@@ -5772,7 +5792,7 @@ async function renderProjectClient(id) {
 function _ecDessiner(p) {
   const el = document.getElementById('projectClientBody'); if (!el || _EC.pid !== String(p.id)) return;
   const d = _EC.d || _ecBase(p), ouvert = _EC.acces.length > 0;
-  const br = _EC.br || { code: d.code || '', phase: d.phase || 0, titre: d.titre || '', texte: d.texte || '', delai: d.delai || '', client: d.client || '', echeance: d.echeance || '', pause: !!d.pause, reprise: d.reprise || '', appele: false };
+  const br = _EC.br || { code: d.code || '', phase: d.phase || 0, titre: d.titre || '', petit: d.petit || '', reglement: d.reglement || '', elements: d.elements || [], texte: d.texte || '', delai: d.delai || '', client: d.client || '', echeance: d.echeance || '', pause: !!d.pause, reprise: d.reprise || '', appele: false };
   _EC.br = br;
   const ph = _EC.phaseSel != null ? _EC.phaseSel : Number(br.phase) || 0;
   const st = _ecStatut(br.code), aCrochets = _ecCrochets(br.titre + ' ' + br.texte + ' ' + br.delai), aDate = /\[date\]/.test(br.titre + ' ' + br.texte + ' ' + br.delai);
@@ -5805,9 +5825,10 @@ function _ecDessiner(p) {
         <a class="btn btn-sm" href="${esc(EC_URL_CLIENT())}?apercu=${encodeURIComponent(p.id)}" target="_blank" rel="noopener"><i class="ti ti-eye"></i> Voir comme le client</a></div>
     </div>
     <div role="tablist" aria-label="Centre client" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:14px;border-bottom:1px solid var(--border);padding-bottom:8px">
-      ${[['statut','Statut et accès'],['messages','Échanges' + (_ecNonLus() ? ' (' + _ecNonLus() + ')' : '')],['documents','Documents'],['carnet','Carnet et maquette']].map(([k, l]) => `<button class="btn btn-sm${_EC.sous === k ? ' btn-primary' : ''}" role="tab" aria-selected="${_EC.sous === k}" data-ec-sous="${k}">${esc(l)}</button>`).join('')}
+      ${[['statut','Statut et accès'],['suivi','Suivi affiché'],['messages','Échanges' + (_ecNonLus() ? ' (' + _ecNonLus() + ')' : '')],['documents','Documents'],['carnet','Carnet et maquette']].map(([k, l]) => `<button class="btn btn-sm${_EC.sous === k ? ' btn-primary' : ''}" role="tab" aria-selected="${_EC.sous === k}" data-ec-sous="${k}">${esc(l)}</button>`).join('')}
     </div>
     ${_EC.sous === 'messages' ? _ecHtmlMessages(p) : ''}
+    ${_EC.sous === 'suivi' ? _ecHtmlSuivi(p, d) : ''}
     ${_EC.sous !== 'statut' ? '' : sec('Accès du client', 'Le client reçoit un e-mail avec son lien de connexion, sans mot de passe. Adresse de son espace : ' + esc(EC_URL_CLIENT()),
       (_EC.acces.length ? _EC.acces.map(a => `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
         <span>✓ ${esc(a.email)} <span style="color:var(--text3);font-size:11px">· ouvert le ${esc(String(a.at || '').slice(0, 10))}</span></span>
@@ -5822,9 +5843,11 @@ function _ecDessiner(p) {
       `<details style="margin-top:12px" ${_EC.phaseSel != null || (_EC.br && _EC.br._ouvert) ? 'open' : ''}><summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--accent)">Choisir un autre statut (pause, version, demande de la mairie…)</summary>
         <div class="form-row" style="display:grid;grid-template-columns:1fr 2fr;gap:10px">
           ${champ('Phase', `<select id="ec-phase">${EC_PHASES_LONG.map((x, i) => `<option value="${i}" ${i === ph ? 'selected' : ''}>${i + 1}. ${esc(x)}</option>`).join('')}<option value="x" ${ph === 'x' ? 'selected' : ''}>Pauses et imprévus</option></select>`)}
-          ${champ('Statut', `<select id="ec-code"><option value="">Choisir…</option>${EC_STATUTS.filter(x => ph === 'x' ? /^X/.test(x[0]) : (x[1] === ph && !/^X/.test(x[0]))).map(x => `<option value="${x[0]}" ${x[0] === br.code ? 'selected' : ''}>${x[0]} · ${esc(x[2])}${x[6] ? ' ⚠ appeler avant' : ''}</option>`).join('')}</select>`)}
+          ${champ('Statut', `<select id="ec-code"><option value="">Choisir…</option>${EC_STATUTS.filter(x => ph === 'x' ? /^X/.test(x[0]) : (x[1] === ph && /^S\d/.test(x[0]))).map(x => `<option value="${x[0]}" ${x[0] === br.code ? 'selected' : ''}>${x[0]} · ${esc(x[2])}${x[6] ? ' ⚠ appeler avant' : ''}</option>`).join('')}</select>`)}
         </div>
         ${champ('Titre lu par le client', `<input id="ec-titre" value="${esc(br.titre)}">`)}
+        ${champ('Petit texte sous le titre', `<textarea id="ec-petit" rows="2">${esc(br.petit || '')}</textarea>`)}
+        ${br.reglement ? `<div style="margin-top:8px;font-size:12.5px;color:var(--text2)">Règlement de l’étape affiché au client : <b>${esc(br.reglement)}</b> (état réglé dans « Suivi affiché au client »)</div>` : ''}
         ${champ('Pourquoi cela prend-il ce temps ?', `<textarea id="ec-texte" rows="4">${esc(br.texte)}</textarea>`)}
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           ${champ('Délai habituel', `<input id="ec-delai" value="${esc(br.delai)}">`)}
@@ -5859,6 +5882,91 @@ function _ecDessiner(p) {
     ${_EC.sous !== 'carnet' ? '' : sec('Réglages du carnet et maquette 3D', 'Fiche du carnet (choix imposés, spécificités), dépôt de la maquette ArchiCAD et Atelier : ici même, sans changer d’écran.',
       `<iframe title="Réglages du carnet et Atelier maquette" src="${esc(EC_URL_CARNET(p.id))}&centre=1" style="display:block;width:100%;height:78vh;margin-top:10px;border:1px solid var(--border);border-radius:var(--r-md);background:#0a1628" loading="lazy" allow="fullscreen"></iframe>`)}`;
   _ecBrancher(p, candidats);
+  _ecBrancherSuivi(p);
+}
+// ═══ [Statuts client v2 27/11/2026] « Suivi affiché au client » : ce qui s'affiche sous le statut (d.suivi) ═══
+// Compteurs automatiques : devis reçus et contrats signés (lots de Chiffrage), décennales reçues (fiches de l'Annuaire). Le reste se règle ici.
+const _ecNorm = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+async function _ecCompteurs(pid) {
+  if (!window._fbClient || !window._fbClient.sources) return null;
+  const src = await window._fbClient.sources(String(pid)); const lots = (src.lots || []).filter(l => !l.exclu);
+  if (!lots.length) return null;
+  const ents = []; lots.forEach(l => { const e = String(l.entreprise || (l.contrat && l.contrat.entreprise) || '').trim(); if (e && !ents.some(x => _ecNorm(x) === _ecNorm(e))) ents.push(e); });
+  const recue = e => (src.artisans || []).some(a => [a.entreprise, a.nom].some(n => n && _ecNorm(n) === _ecNorm(e)) && a.decennaleStatut === 'recue');
+  return { devis: { x: lots.filter(l => l.devisArtisan || l.entreprise || (l.contrat && l.contrat.entreprise)).length, n: lots.length },
+    contrats: { x: lots.filter(l => l.contrat && l.contrat.statut === 'signe').length, n: lots.length },
+    decennales: { x: ents.filter(recue).length, n: ents.length } };
+}
+function _ecSuiviDefaut(sv) {
+  sv = Object.assign({ pieces: [], complements: [], reglements: {}, dommages: 'asouscrire' }, sv || {});
+  sv.pieces = EC2_PIECES.map(([k, nom]) => Object.assign({ k, nom, etat: 'non' }, (sv.pieces || []).find(x => x.k === k) || {}));
+  return sv;
+}
+function _ecHtmlSuivi(p, d) {
+  const sv = _EC.sv || (_EC.sv = _ecSuiviDefaut(d.suivi));
+  const sec = (t, a, c) => `<div style="margin-top:16px;padding:14px 16px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--card)"><div style="font-family:var(--font-serif);font-size:17px;color:var(--navy)">${t}</div>${a ? `<div style="font-size:12px;color:var(--text3);margin-top:3px;line-height:1.5">${a}</div>` : ''}${c}</div>`;
+  const choix = (nom, opts, val) => `<span style="display:inline-flex;gap:4px;flex-wrap:wrap">${opts.map(([v, l]) => `<button type="button" class="btn btn-sm${val === v ? ' btn-primary' : ''}" data-ecs="${nom}" data-v="${v}" aria-pressed="${val === v}">${l}</button>`).join('')}</span>`;
+  const ligne = (lib, html) => `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px"><span>${lib}</span>${html}</div>`;
+  const num = (id, v) => `<input type="number" min="0" id="${id}" value="${v == null ? '' : v}" style="width:70px">`;
+  const regs = EC2.filter(e => e[6]).map(e => ligne(`<b style="font-weight:600">${esc(e[0])}</b> · ${esc(e[2])} <span style="color:var(--text3)">· ${esc(e[6])}</span>`, choix('regl:' + e[0], [['avenir', 'Facture à venir'], ['envoyee', 'Facture envoyée'], ['reglee', 'Réglée ✓']], sv.reglements[e[0]] || 'avenir'))).join('');
+  const cpt = _EC.cpt;
+  return sec('Ce que le client voit sous son statut', 'Tout ce qui est réglé ici s’affiche chez le client sous le statut concerné (compteurs, pièces, dommages-ouvrage…), sans changer le statut lui-même. Jamais de montant.',
+      `<div style="margin-top:10px;font-size:12.5px;color:var(--text2)">${cpt === undefined ? 'Lecture de Chiffrage et de l’Annuaire…' : cpt ? `Chiffrage : <b>${cpt.devis.x} devis</b> sur ${cpt.devis.n} lots · <b>${cpt.contrats.x} contrats signés</b> · Annuaire : <b>${cpt.decennales.x} décennales reçues</b> sur ${cpt.decennales.n} entreprises` : 'Pas de chiffrage trouvé pour ce projet : les compteurs se règlent à la main.'}</div>
+       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn btn-sm" id="ecs-auto"><i class="ti ti-refresh"></i> Reprendre les compteurs de Chiffrage et de l’Annuaire</button></div>`) +
+    sec('Compteurs', 'Devis reçus (statuts 11 et 12), décennales et contrats (statut 23), réserves (statut 47).',
+      ligne('Devis reçus', `<span>${num('ecs-dx', (sv.devis || {}).x)} sur ${num('ecs-dn', (sv.devis || {}).n)} lots</span>`) +
+      ligne('Décennales reçues', `<span>${num('ecs-ex', (sv.decennales || {}).x)} sur ${num('ecs-en', (sv.decennales || {}).n)} entreprises</span>`) +
+      ligne('Contrats d’engagement signés', `<span>${num('ecs-cx', (sv.contrats || {}).x)} sur ${num('ecs-cn', (sv.contrats || {}).n)}</span>`) +
+      ligne('CCTP', choix('cctp', [['0', 'À signer'], ['1', 'Signé ✓']], sv.cctp ? '1' : '0')) +
+      ligne('Plans d’exécution (DCE)', choix('plansExe', [['0', 'En cours'], ['1', 'Terminés ✓']], sv.plansExe ? '1' : '0')) +
+      ligne('Réserves levées', `<span>${num('ecs-rx', (sv.reserves || {}).x)} sur ${num('ecs-rn', (sv.reserves || {}).n)}</span>`)) +
+    sec('Pièces de la déclaration administrative', '« Pas nécessaire » : le client ne voit pas la ligne. Statuts 11 à 16.',
+      sv.pieces.map((x, i) => ligne(esc(x.nom), choix('piece:' + i, [['non', 'Pas nécessaire'], ['afournir', 'À fournir'], ['recue', 'Reçue ✓']], x.etat))).join('')) +
+    sec('Assurance dommages-ouvrage du client', 'Obligatoire pour lui avant l’ouverture du chantier. Statuts 22 et 23.', ligne('Où en est-il ?', choix('dommages', [['asouscrire', 'À souscrire'], ['encours', 'Devis en cours'], ['recue', 'Attestation reçue ✓']], sv.dommages))) +
+    sec('Dates', 'Dépôt (statut 17), affichage du panneau : la fin du délai de recours se calcule seule (statuts 21 et 22), réception : les garanties se calculent seules (statut 52).',
+      ligne('Dépôt en mairie', `<input type="date" id="ecs-depot" value="${esc(sv.depot || '')}">`) + ligne('Affichage du panneau', `<input type="date" id="ecs-aff" value="${esc(sv.affichage || '')}">`) + ligne('Réception des travaux', `<input type="date" id="ecs-rec" value="${esc(sv.reception || '')}">`)) +
+    sec('Pièces demandées par la mairie', 'Une pièce par ligne ; mettez ✓ devant celles qui sont prêtes. Statuts 18 et 19.', `<textarea id="ecs-comp" rows="3" style="width:100%;margin-top:8px">${esc((sv.complements || []).map(c => (c.ok ? '✓ ' : '') + c.nom).join('\n'))}</textarea>`) +
+    sec('Règlement en attente', 'Statut 45 : libellé montré au client, sans montant.', ligne('Libellé', `<input id="ecs-att" value="${esc((sv.attente || {}).libelle || '')}" placeholder="Facture n° FAC00000044" style="min-width:220px">`) + ligne('Émise le', `<input type="date" id="ecs-attd" value="${esc((sv.attente || {}).date || '')}">`)) +
+    sec('Règlements d’étape', 'L’état s’affiche sous le statut concerné : « Facture à venir », « Facture envoyée », puis « Réglé, merci ».', regs) +
+    `<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-primary" id="ecs-ok"><i class="ti ti-device-floppy"></i> Enregistrer le suivi</button><a class="btn" href="${esc(EC_URL_CLIENT())}?apercu=${encodeURIComponent(p.id)}" target="_blank" rel="noopener"><i class="ti ti-eye"></i> Voir comme le client</a></div>`;
+}
+function _ecLireSuivi() {
+  const sv = _EC.sv; if (!sv) return null;
+  const n = id => { const e = document.getElementById(id); if (!e || e.value === '') return null; const v = parseInt(e.value, 10); return isNaN(v) ? null : Math.max(0, v); };
+  const paire = (a, b) => { const x = n(a), y = n(b); return y ? { x: Math.min(x || 0, y), n: y } : null; };
+  const v = id => { const e = document.getElementById(id); return e ? e.value : ''; };
+  if (!document.getElementById('ecs-dx')) return sv;
+  sv.devis = paire('ecs-dx', 'ecs-dn'); sv.decennales = paire('ecs-ex', 'ecs-en'); sv.contrats = paire('ecs-cx', 'ecs-cn'); sv.reserves = paire('ecs-rx', 'ecs-rn');
+  sv.depot = v('ecs-depot'); sv.affichage = v('ecs-aff'); sv.reception = v('ecs-rec');
+  sv.complements = String(v('ecs-comp')).split('\n').map(x => x.trim()).filter(Boolean).map(x => ({ nom: x.replace(/^✓\s*/, ''), ok: /^✓/.test(x) }));
+  sv.attente = v('ecs-att').trim() ? { libelle: v('ecs-att').trim(), date: v('ecs-attd') } : null;
+  return sv;
+}
+function _ecBrancherSuivi(p) {
+  if (_EC.sous !== 'suivi') return;
+  if (_EC.cpt === undefined && !_EC.cptEnCours) { _EC.cptEnCours = true; _ecCompteurs(p.id).then(c => { _EC.cpt = c; _EC.cptEnCours = false; if (_EC.pid === String(p.id) && _EC.sous === 'suivi') { _ecLireSuivi(); _ecDessiner(p); } }).catch(() => { _EC.cpt = null; _EC.cptEnCours = false; }); }
+  document.querySelectorAll('[data-ecs]').forEach(b => b.onclick = () => {
+    _ecLireSuivi(); const sv = _EC.sv, k = b.dataset.ecs, val = b.dataset.v;
+    if (k.indexOf('regl:') === 0) sv.reglements[k.slice(5)] = val;
+    else if (k.indexOf('piece:') === 0) sv.pieces[+k.slice(6)].etat = val;
+    else if (k === 'cctp' || k === 'plansExe') sv[k] = val === '1';
+    else sv[k] = val;
+    _ecDessiner(p);
+  });
+  const auto = document.getElementById('ecs-auto'); if (auto) auto.onclick = async () => {
+    _ecLireSuivi(); auto.disabled = true; const c = await _ecCompteurs(p.id).catch(() => null); _EC.cpt = c;
+    if (c) { const sv = _EC.sv; sv.devis = c.devis; sv.contrats = c.contrats; if (c.decennales.n) sv.decennales = c.decennales; toast_d('Compteurs repris : pensez à enregistrer.'); }
+    else toast_d('⚠️ Aucun chiffrage trouvé pour ce projet.');
+    _ecDessiner(p);
+  };
+  const ok = document.getElementById('ecs-ok'); if (ok) ok.onclick = async () => {
+    const sv = _ecLireSuivi(); ok.disabled = true;
+    const d = await _ecEcrire(p, { suivi: JSON.parse(JSON.stringify(sv)) }, 'Suivi affiché au client');
+    ok.disabled = false; if (!d) return;
+    _EC.d = d; toast_d('✅ Suivi enregistré : le client le voit sous son statut');
+    // statut 12 automatique : tous les devis reçus pendant le statut 11
+    if (d.code === 'S11' && sv.devis && sv.devis.n && sv.devis.x >= sv.devis.n) { const st = _ecRemplir('S12'); if (st && await _ecPublierStatut(p, st, { auto: true })) { toast_d('✅ Tous les devis sont reçus : « ' + st.titre + ' » publié'); await renderProjectClient(p.id); } }
+  };
 }
 // [Conversation] échanges avec le client : espace client, et mails/SMS de la cloche reliés au dossier
 function _ecNonLus() { return (_EC.msgs || []).filter(m => m.de === 'client' && !m.luPhenix).length; }
@@ -5894,13 +6002,13 @@ function _ecReponsesCarnet(p) {
 }
 function _ecLireBrouillon() {
   const v = id => { const e = document.getElementById(id); return e ? e.value : null; }, b = _EC.br; if (!b) return;
-  [['titre', 'ec-titre'], ['texte', 'ec-texte'], ['delai', 'ec-delai'], ['client', 'ec-client'], ['echeance', 'ec-ech'], ['reprise', 'ec-rep']].forEach(([k, id]) => { const x = v(id); if (x != null) b[k] = x; });
+  [['titre', 'ec-titre'], ['petit', 'ec-petit'], ['texte', 'ec-texte'], ['delai', 'ec-delai'], ['client', 'ec-client'], ['echeance', 'ec-ech'], ['reprise', 'ec-rep']].forEach(([k, id]) => { const x = v(id); if (x != null) b[k] = x; });
   const pz = document.getElementById('ec-pause'); if (pz) b.pause = pz.checked;
   const a = document.getElementById('ec-appele'); if (a) b.appele = a.checked;
 }
 function _ecBrancher(p, candidats) {
   const on = (id, f) => { const e = document.getElementById(id); if (e) e.onclick = f; };
-  document.querySelectorAll('[data-ec-sous]').forEach(b => b.onclick = () => { _ecLireBrouillon(); _EC.sous = b.dataset.ecSous; if (_EC.sous === 'messages') _ecEcouterMessages(p); _ecDessiner(p); });
+  document.querySelectorAll('[data-ec-sous]').forEach(b => b.onclick = () => { _ecLireBrouillon(); _ecLireSuivi(); _EC.sous = b.dataset.ecSous; if (_EC.sous === 'messages') _ecEcouterMessages(p); _ecDessiner(p); });
   if (_EC.sous === 'messages') {
     _ecEcouterMessages(p);
     const fil = document.getElementById('ec-fil'); if (fil) fil.scrollTop = fil.scrollHeight;
@@ -5923,7 +6031,7 @@ function _ecBrancher(p, candidats) {
     try { await window._fbClient.ouvrirAcces(em, String(p.id), _ecMoi()); } catch (e) { console.warn(e); toast_d('⚠️ Accès refusé : vérifiez les règles Firestore.'); return; }
     const d = await _ecLire(p.id);
     if (!d || !d.titre) {   // premier accès : statut le plus avancé de la checklist (sinon « Relevé effectué ») + mot de bienvenue
-      const st = _ecRemplir(_ecMeilleurCoche(p) || 'R1');
+      const st = _ecRemplir(_ecMeilleurCoche(p) || 'S02');
       const base = (d && d.fil) || [];
       await _ecEcrire(p, Object.assign({}, st, { statutAuto: true, fil: base.concat([_ecLigneFil('Étape', 'Votre espace est ouvert', 'Bienvenue ! Vous suivrez ici chaque étape de votre projet.', true)]) }), 'Espace ouvert');
     }
@@ -5945,10 +6053,12 @@ function _ecBrancher(p, candidats) {
   const sp = document.getElementById('ec-phase'); if (sp) sp.onchange = () => { _ecLireBrouillon(); _EC.phaseSel = sp.value === 'x' ? 'x' : Number(sp.value); _ecDessiner(p); };
   const sc = document.getElementById('ec-code'); if (sc) sc.onchange = () => {
     const x = _ecStatut(sc.value); if (!x) return;
-    Object.assign(_EC.br, { code: x[0], phase: /^X/.test(x[0]) ? (Number((_EC.d || {}).phase) || 0) : x[1], titre: x[2], texte: x[3], delai: x[4] === '—' ? '' : x[4], client: _ecMaj(x[5]), echeance: '', pause: /^X(1|2|12)$/.test(x[0]), appele: false, _ouvert: true });
+    Object.assign(_EC.br, { code: x[0], phase: /^X/.test(x[0]) ? (Number((_EC.d || {}).phase) || 0) : x[1], titre: x[2], texte: x[3], delai: x[4] === '—' ? '' : x[4], client: _ecMaj(x[5]), echeance: '', pause: /^X(1|2|12)$/.test(x[0]), appele: false, _ouvert: true,
+      petit: x[7] || '', reglement: x[10] || '', elements: x[11] || [] });
+    if (x[0] === 'S22') { const f = new Date(); f.setMonth(f.getMonth() + 2); _EC.br.delai = 'Fin du délai : le ' + _ecDateLongue(f); }
     _ecDessiner(p);
   };
-  ['ec-titre', 'ec-texte', 'ec-delai', 'ec-client', 'ec-ech', 'ec-rep'].forEach(id => { const e = document.getElementById(id); if (e) e.onchange = () => { _ecLireBrouillon(); _EC.br._ouvert = true; _ecDessiner(p); }; });
+  ['ec-titre', 'ec-petit', 'ec-texte', 'ec-delai', 'ec-client', 'ec-ech', 'ec-rep'].forEach(id => { const e = document.getElementById(id); if (e) e.onchange = () => { _ecLireBrouillon(); _EC.br._ouvert = true; _ecDessiner(p); }; });
   const pz = document.getElementById('ec-pause'); if (pz) pz.onchange = () => { _ecLireBrouillon(); _EC.br._ouvert = true; _ecDessiner(p); };
   const ap = document.getElementById('ec-appele'); if (ap) ap.onchange = () => _ecLireBrouillon();
   on('ec-date-ok', () => {
@@ -5964,7 +6074,8 @@ function _ecBrancher(p, candidats) {
     if (_ecCrochets(b.titre + ' ' + b.texte + ' ' + b.delai)) { toast_d('⚠️ Remplacez d’abord les mots entre crochets.'); return; }
     if (st && st[6] && !b.appele) { toast_d('⚠️ Appelez le client avant de publier ce statut.'); return; }
     if (b.pause && !b.reprise && !/^X(3|4|5|6|12)$/.test(b.code)) { if (!confirm('Aucune date de reprise : publier quand même ?')) return; }
-    const r = await _ecPublierStatut(p, { code: b.code, phase: Number(b.phase) || 0, titre: b.titre.trim(), texte: String(b.texte || '').trim(), delai: String(b.delai || '').trim(), client: String(b.client || '').trim(), echeance: b.echeance, pause: b.pause, reprise: b.reprise }, { auto: false });
+    const r = await _ecPublierStatut(p, { code: b.code, phase: Number(b.phase) || 0, titre: b.titre.trim(), texte: String(b.texte || '').trim(), delai: String(b.delai || '').trim(), client: String(b.client || '').trim(), echeance: b.echeance, pause: b.pause, reprise: b.reprise,
+      petit: String(b.petit || '').trim(), reglement: b.reglement || '', elements: b.elements || [] }, { auto: false });
     if (r) { toast_d('✅ Statut publié'); _EC.br = null; _EC.phaseSel = null; await recharger(); }
   }));
   // Note au fil

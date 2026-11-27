@@ -375,6 +375,9 @@ if (!DEMO) {
       try { const q = await S.getDocs(S.collection(db, 'phenix_chiffrage')); let r = null; q.forEach(d => { if (!r) r = pick(d.data()); }); return r; } catch (e) { return null; }
     },
     async chImport(pid) { const s = await S.getDoc(S.doc(db, 'phenix_chantier_import', String(pid))); return s.exists() ? s.data() : null; },
+    /* [Statuts client v2 27/11/2026] un compte rendu ou un constat enregistré s'affiche dans l'espace du client (dernier compte rendu, constat
+       et ses reprises, ligne dans « Le fil »), si son espace existe. Le grand statut ne change pas. Refusé sans bruit si le compte n'a pas le droit. */
+    async clientMaj(pid, f) { try { const r = S.doc(db, 'phenix_client_dossiers', String(pid)); const x = await S.getDoc(r); if (!x.exists()) return false; const patch = f(x.data()); if (!patch) return false; await S.setDoc(r, patch, { merge: true }); return true; } catch (e) { console.warn('Espace client :', e && e.code); return false; } },
     async projet(pid) { const s = await S.getDoc(S.doc(db, 'phenix_projets', String(pid))); return s.exists() ? s.data() : null; },   /* [Travaux] 15/11/2026 */
     async fiche(pid) { const s = await S.getDoc(S.doc(db, 'phenix_portail', String(pid), 'etat', 'fiche')); return s.exists() ? s.data() : null; },
     async chunk(pid, i) { const s = await S.getDoc(S.doc(db, 'phenix_portail', String(pid), 'maquette', 'c' + i)); return s.exists() ? (s.data().d || '') : ''; },
@@ -2373,6 +2376,18 @@ function ctRecord(withMedia){
   r.visite = { debut:CT.date + 'T' + (CT.heure || '00:00') + ':00', fin:new Date().toISOString() }; r.aValider = S.role === 'chantier'; r.plans = [];
   return r;
 }
+function ctVersClient(c, rec, cr){
+  if (!c || !c.projetId || !FB.clientMaj) return;
+  FB.clientMaj(c.projetId, function(d){
+    var sv = Object.assign({}, d.suivi || {}), jour = rec.date || ctDay();
+    if (cr) sv.cr = { num:rec.num || '', date:jour, nb:(rec.points || []).length };
+    else sv.constat = { num:rec.num || '', date:jour, points:(rec.desordres || []).map(function(x){ return { titre:x.titre || (x.description || '').slice(0, 80) || ('Désordre n° ' + x.n), avant:x.delai || '', repris:false }; }) };
+    var ligne = { id:Date.now().toString(36) + Math.random().toString(36).slice(2, 6), date:jour, type:'Note',
+      titre: cr ? 'Nouveau compte rendu n° ' + (rec.num || '') : 'Constat de désordres n° ' + (rec.num || ''),
+      texte: cr ? 'Le compte rendu de la visite de chantier est disponible.' : (rec.desordres || []).length + ' désordre' + ((rec.desordres || []).length > 1 ? 's' : '') + ' constaté' + ((rec.desordres || []).length > 1 ? 's' : '') + ' : nous suivons leur reprise avec les entreprises.', etape:false };
+    return { suivi:sv, fil:(d.fil || []).concat([ligne]).slice(-120), majAt:new Date().toISOString() };
+  });
+}
 function ctSave(){
   if (!CT || CTS.busy) return; var c = chantier(); if (!c) return; var cr = CT.type === 'cr', it = ctItem(true);
   if (!cr && !CT.desordres.length && !confirm('Aucun désordre saisi. Enregistrer quand même le constat ?')) return;
@@ -2382,6 +2397,7 @@ function ctSave(){
   CTS.busy = true; ctStopMic();
   var rec = ctRecord(true);
   D.crs.push(rec); save('crs', rec);
+  ctVersClient(c, rec, cr);
   if (cr) { if (!rec.aValider) validerCR(rec.id); }
   else if (CT.reserves) { var n = D.reserves.filter(function(r){ return r.chantierId == c.id; }).length;
     rec.desordres.forEach(function(d){ n++; var rs = { id:uid(), chantierId:c.id, ref:'R' + String(n).padStart(2, '0'), titre:d.titre || (d.description.length > 70 ? d.description.slice(0, 67) + '…' : d.description) || 'Désordre n° ' + d.n, description:d.description + (d.action ? '\nReprise demandée : ' + d.action : ''), lieu:d.lieu, lotId:d.lotId, intervId:(ctLot(d.lotId) || {}).interv || null, priorite:d.gravite === 'bloquant' ? 'haute' : 'normale', origine:'constat ' + rec.num, echeance:d.delai || '', statut:'ouverte', dateLevee:'', photos:d.photos.slice(0, 6).map(function(p){ return { mediaId:p.mediaId, caption:'' }; }) }; D.reserves.push(rs); save('reserves', rs); }); }
