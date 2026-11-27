@@ -39,6 +39,7 @@
    (8) [Caméra] La photo prend la caméra de la Surface (arrière d'abord), plus jamais la caméra virtuelle du téléphone relié à Windows ;
    « Changer de caméra » passe d'une vraie caméra à l'autre, le nom de la caméra s'affiche, le choix est retenu sur l'appareil.
    (9) Import de plan : plus d'étape « cadre autour du plan » (inutile sur chantier) : on choisit la page, puis on pose les pastilles sur la page entière.
+   (10) Lots du constat / compte rendu : on lit aussi le chiffrage EN COURS dans Phénix Chiffrage (phenix_chiffrage), pas seulement le dernier « Envoyer vers Chantier ».
    (5) Micro 🎙 aussi sur le nom du plan à l'étape du cadrage (le premier appui vide le nom pré-rempli puis écoute).
  15/11/2026 — [Travaux] Ordre « open-projet » avec onglet 'travaux' (bouton « Préciser les travaux » de la Synthèse) : ouvre l'onglet Travaux ;
    si le dossier n'a pas encore de chantier, il est créé vide depuis la fiche du dossier (phenix_projets) pour renseigner les travaux tout de suite.
@@ -351,6 +352,12 @@ if (!DEMO) {
     save(key, obj) { return S.setDoc(S.doc(db, COLS[key], String(obj.id)), obj); },
     del(key, id) { return S.deleteDoc(S.doc(db, COLS[key], String(id))); },
     async delMedia(id) { const m = await S.getDoc(S.doc(db, MEDIA, id)); const n = m.exists() ? (m.data().parts || 0) : 0; for (let i = 0; i < n; i++) await S.deleteDoc(S.doc(db, MEDIA, id + '__' + i)); await S.deleteDoc(S.doc(db, MEDIA, id)); },
+    /* [Constat] lots du chiffrage EN COURS (Phénix Chiffrage, phenix_chiffrage/{uid}.chantiers[].lots), pas seulement le dernier envoi vers Chantier */
+    async chiffrageLots(pid) {
+      const pick = d => { const c = ((d && d.chantiers) || []).find(x => String(x.projetId) === String(pid)); return c ? (c.lots || []).map(l => ({ num: l.num || '', nom: l.nom || '', entreprise: String(l.entreprise || (l.contrat && l.contrat.entreprise) || '').trim() })) : null; };
+      try { const u = auth.currentUser; if (u) { const s = await S.getDoc(S.doc(db, 'phenix_chiffrage', u.uid)); const r = s.exists() ? pick(s.data()) : null; if (r) return r; } } catch (e) {}
+      try { const q = await S.getDocs(S.collection(db, 'phenix_chiffrage')); let r = null; q.forEach(d => { if (!r) r = pick(d.data()); }); return r; } catch (e) { return null; }
+    },
     async chImport(pid) { const s = await S.getDoc(S.doc(db, 'phenix_chantier_import', String(pid))); return s.exists() ? s.data() : null; },
     async projet(pid) { const s = await S.getDoc(S.doc(db, 'phenix_projets', String(pid))); return s.exists() ? s.data() : null; },   /* [Travaux] 15/11/2026 */
     async fiche(pid) { const s = await S.getDoc(S.doc(db, 'phenix_portail', String(pid), 'etat', 'fiche')); return s.exists() ? s.data() : null; },
@@ -1844,7 +1851,14 @@ function ctPrefill(){
   if (FB.demo) { CTS.proj[c.projetId] = CTS.proj[c.projetId] || { client:'M. et Mme Faure', adresse:'12 route de Pontaumur, 63380 Saint-Hilaire' }; CTS.chf[c.projetId] = CTS.chf[c.projetId] || [{ num:'09', nom:'Carrelage, faïence', entreprise:'[Entreprise carrelage]' }];
     CTS.ann = CTS.ann || [{ id:'a1', entreprise:'[Entreprise menuiserie]', metier:'Menuiserie', nom:'M. Barre', tel:'06 00 00 00 01' }, { id:'a2', entreprise:'[Bureau de contrôle]', metier:'Contrôle technique', nom:'' }, { id:'a3', entreprise:'[Entreprise carrelage]', metier:'Carrelage', nom:'' }]; return; }
   if (c.projetId && !CTS.proj[c.projetId] && FB.projet) FB.projet(c.projetId).then(function(p){ if (!p) return; CTS.proj[c.projetId] = p; if (CT) { ctMerge(); ctPut(); if ($('overlay').className === 'on') ctRender(); } }).catch(function(){});
-  if (c.projetId && !CTS.chf[c.projetId] && FB.chImport) FB.chImport(c.projetId).then(function(d){ CTS.chf[c.projetId] = (d && d.lots) || []; if (CT && CTS.open && !CTS.sr && $('overlay').className === 'on') ctRender(); }).catch(function(){});
+  if (c.projetId && !CTS.chf[c.projetId] && FB.chImport) {   /* chiffrage en cours + dernier envoi vers Chantier, sans doublon */
+    CTS.chf[c.projetId] = [];
+    Promise.all([FB.chiffrageLots ? FB.chiffrageLots(c.projetId).catch(function(){ return null; }) : null, FB.chImport(c.projetId).catch(function(){ return null; })]).then(function(r){
+      var vus = {}, out = [];
+      (r[0] || []).concat((r[1] && r[1].lots) || []).forEach(function(x){ var k = norm(String(x.nom || '').replace(/^\s*(?:lot\s*)?\d+[A-Za-z]?\s*[—–\-.:]?\s*/i, '')); if (k && !vus[k]) { vus[k] = 1; out.push(x); } });
+      CTS.chf[c.projetId] = out; CTS.chfInfo = (r[0] ? r[0].length + ' lots dans Chiffrage' : 'Chiffrage en cours illisible') + ' · ' + ((r[1] && r[1].lots || []).length) + ' lots envoyés vers Chantier';
+      if (CT && CTS.open && !CTS.sr && $('overlay').className === 'on') ctRender(); });
+  }
   if (!CTS.ann && FB.listenId) { CTS.ann = []; FB.listenId('phenix_artisans', function(a){ CTS.ann = a || []; }); }
 }
 
