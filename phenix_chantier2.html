@@ -44,6 +44,8 @@
    seulement pour l'absence de réseau ; Firestore n'est jamais intercepté). Micro sans réseau : dictée sur la tablette si le navigateur la propose
    (bouton « ⬇ Préparer la dictée hors ligne », à faire avec du réseau) ; sinon le micro enregistre un MÉMO VOCAL rattaché au champ, gardé sur
    la tablette, puis « 📝 Retranscrire » au retour du réseau. Mémos non retranscrits : joints au document (🔊 dans « Comptes rendus »).
+   (12) [Espace artisan] Onglet Messages : « Espace chantier des entreprises » : ✉ Inviter / Renvoyer le lien (mail pré-rempli depuis l'Annuaire),
+   choix des plans visibles, 👁 Voir comme l'entreprise. Écrit phenix_users (rôle artisan) + lien de connexion par mail (phenix_artisan.html).
    (5) Micro 🎙 aussi sur le nom du plan à l'étape du cadrage (le premier appui vide le nom pré-rempli puis écoute).
  15/11/2026 — [Travaux] Ordre « open-projet » avec onglet 'travaux' (bouton « Préciser les travaux » de la Synthèse) : ouvre l'onglet Travaux ;
    si le dossier n'a pas encore de chantier, il est créé vide depuis la fiche du dossier (phenix_projets) pour renseigner les travaux tout de suite.
@@ -355,6 +357,10 @@ if (!DEMO) {
     onAuth: cb => U.onAuthStateChanged(auth, cb),
     user: () => auth.currentUser,
     async role(email) { const s = await S.getDoc(S.doc(db, 'phenix_users', email)); return s.exists() ? (s.data().role || '') : ''; },
+    /* [Espace artisan] 27/11/2026 : compte artisan (phenix_users) et lien de connexion par mail, comme l'espace client */
+    async userGet(email) { const s = await S.getDoc(S.doc(db, 'phenix_users', String(email).toLowerCase())); return s.exists() ? s.data() : null; },
+    async userSet(email, data) { await S.setDoc(S.doc(db, 'phenix_users', String(email).toLowerCase()), data, { merge: true }); },
+    async lienArtisan(email, url) { await U.sendSignInLinkToEmail(auth, String(email).toLowerCase(), { url, handleCodeInApp: true }); },
     listen(key, cb) { return S.onSnapshot(S.collection(db, COLS[key]), { includeMetadataChanges: true }, snap => { const a = []; snap.forEach(d => a.push(d.data())); cb(a, snap.metadata.hasPendingWrites); }, e => console.warn(key, e && e.message)); },
     save(key, obj) { return S.setDoc(S.doc(db, COLS[key], String(obj.id)), obj); },
     del(key, id) { return S.deleteDoc(S.doc(db, COLS[key], String(id))); },
@@ -851,7 +857,7 @@ function renderBureau(){
   b.innerHTML = h;
   bindBureau();
   if (t === 'plans') plBind();
-  if (t === 'messages') msgBind();
+  if (t === 'messages') { msgBind(); artBind($('bureau')); }
   if (t === 'recap') bindRecap();
   if (t === 'travaux') bindTravaux();
   if (t === 'atraiter') ctListBind(b);   /* [Constat] */
@@ -1436,9 +1442,68 @@ function msgName(c){
   if (c.client) return '👤 Client' + cn;
   var iv = D.intervenants.filter(function(y){ return String(y.id) === String(c.intervenantId); })[0]; return esc(iv ? iv.nom : 'Artisan') + cn;
 }
+/* ═══════════ [Espace artisan] Inviter une entreprise : un lien par mail, sans mot de passe (comme l'espace client) — 27/11/2026 ═══════════
+   L'entreprise ne voit que son lot, les plans cochés et ses pastilles ; jamais les montants, les autres entreprises ni le client.
+   Écrit : phenix_users/{mail} (rôle artisan, intervenantId, chantierIds), l'intervenant (mail, invitation), plans.visibleIntervs. */
+var ART_URL = function(){ try { return new URL('phenix_artisan.html', location.href).href.split('?')[0]; } catch (e) { return 'https://phenixarchitecte-del.github.io/phenix-architecte/phenix_artisan.html'; } };
+function artEntreprises(){   /* une ligne par entreprise des lots du chantier */
+  var out = [], vus = {};
+  lotsOf().forEach(function(l){
+    var iv = l.interv != null ? D.intervenants.filter(function(x){ return x.id == l.interv; })[0] : null, nom = iv ? iv.nom : (l.entrepriseNom || '');
+    if (!nom) return; var k = iv ? 'i' + iv.id : 'n' + norm(nom);
+    if (vus[k]) { vus[k].lots.push(l); return; } vus[k] = { k:k, iv:iv, nom:nom, lots:[l] }; out.push(vus[k]); });
+  return out;
+}
+function artHtml(){
+  var l = artEntreprises(); if (!l.length) return '';
+  return '<div class="card" style="margin-bottom:14px;display:flex;flex-direction:column;gap:8px"><div class="eyebrow">Espace chantier des entreprises · un lien par mail, sans mot de passe</div>' + l.map(function(e){
+    var iv = e.iv || {}, inv = iv.inviteLe ? '✓ Invitée le ' + frDate(String(iv.inviteLe).slice(0, 10)) + (iv.inviteEmail ? ' · ' + esc(iv.inviteEmail) : '') : '○ Pas encore invitée';
+    return '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:8px"><span style="flex:1 1 240px"><b>' + esc(e.nom) + '</b><span class="muted" style="display:block;font-size:13px">' + esc(e.lots.map(lotLabel).join(', ')) + ' · ' + inv + '</span></span>' +
+      '<button class="btn' + (iv.inviteLe ? '' : ' pri') + '" type="button" data-artinv="' + esc(e.k) + '">✉ ' + (iv.inviteLe ? 'Renvoyer le lien' : 'Inviter') + '</button>' +
+      (iv.inviteEmail ? '<a class="btn" target="_blank" rel="noopener" href="' + esc(ART_URL()) + '?apercu=' + encodeURIComponent(iv.inviteEmail) + '">👁 Voir comme l\'entreprise</a>' : '') + '</div>'; }).join('') + '</div>';
+}
+function artBind(root){ if (!root) return; [].forEach.call(root.querySelectorAll('[data-artinv]'), function(b){ b.onclick = function(){ var e = artEntreprises().filter(function(x){ return x.k === b.getAttribute('data-artinv'); })[0]; if (e) artInviter(e); }; }); }
+function artMailAnnuaire(nom){ var a = (CTS.ann || []).filter(function(x){ return norm(x.entreprise || x.nom || '') === norm(nom); })[0]; return a ? (a.email || a.mail || '') : ''; }
+function artInviter(e){
+  ctPrefill();   /* charge l'Annuaire pour retrouver le mail */
+  var c = chantier(), iv = e.iv || {}, plans = plLatest();
+  var mail = iv.inviteEmail || iv.email || artMailAnnuaire(e.nom) || '';
+  var bg = document.createElement('div'); bg.className = 'sheetbg';
+  bg.innerHTML = '<div class="sheet" style="width:min(640px,100%)"><div class="eyebrow">Inviter l\'entreprise sur le chantier · ' + esc(c.nom || '') + '</div><h2 style="font-size:24px">' + esc(e.nom) + '</h2>' +
+    '<label style="display:flex;flex-direction:column;gap:4px"><span class="eyebrow">Mail de l\'entreprise</span><input id="ai-mail" type="email" value="' + esc(mail) + '" placeholder="contact@entreprise.fr" style="min-height:48px"></label>' +
+    '<div class="eyebrow">Ce qu\'elle verra</div><label style="display:flex;gap:10px;align-items:center;min-height:40px"><input type="checkbox" checked disabled style="width:22px;height:22px"> Son lot : ' + esc(e.lots.map(lotLabel).join(', ')) + ' (dates)</label>' +
+    (plans.length ? plans.map(function(x){ var on = iv.id != null && (x.visibleIntervs || []).some(function(v){ return v == iv.id; }); return '<label style="display:flex;gap:10px;align-items:center;min-height:40px"><input type="checkbox" data-aipl="' + esc(x.id) + '"' + (on ? ' checked' : '') + ' style="width:22px;height:22px"> Plan : ' + esc(x.nom) + ' <span class="muted">v' + (x.version || 1) + '</span></label>'; }).join('') : '<div class="muted">Aucun plan sur ce chantier pour l\'instant.</div>') +
+    '<div class="muted">Jamais les montants, les autres entreprises ni les coordonnées du client. Elle reçoit un mail avec son lien, sans mot de passe.</div>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end"><button class="btn ghost" type="button" data-x="1">Annuler</button><button class="btn" type="button" id="ai-copy">Copier l\'adresse de l\'espace</button><button class="btn pri" type="button" id="ai-ok">✉ Envoyer le lien</button></div></div>';
+  document.body.appendChild(bg);
+  bg.onclick = function(ev){ if (ev.target === bg || (ev.target.getAttribute && ev.target.getAttribute('data-x'))) bg.remove(); };
+  $('ai-copy').onclick = function(){ var u = ART_URL(); try { navigator.clipboard.writeText(u); toast('Adresse copiée : l\'entreprise y demandera son lien avec son mail.'); } catch (x) { prompt('Adresse de l\'espace entreprise', u); } };
+  $('ai-ok').onclick = function(){
+    var em = $('ai-mail').value.trim().toLowerCase(), btn = this;
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) { toast('Indiquez le mail de l\'entreprise.'); return; }
+    btn.disabled = true; btn.textContent = 'Envoi…';
+    /* 1. l'intervenant existe (lot venu de Chiffrage sans fiche) */
+    if (iv.id == null) { iv = { id:uid(), nom:e.nom, chantierId:c.id }; D.intervenants.push(iv); }
+    iv.email = iv.email || em; iv.inviteEmail = em; iv.inviteLe = new Date().toISOString(); iv.invitePar = S.user || '';
+    save('intervenants', iv);
+    e.lots.forEach(function(l){ if (String(l.interv) !== String(iv.id)) { l.interv = String(iv.id); save('lots', l); } });
+    /* 2. plans visibles */
+    [].forEach.call(bg.querySelectorAll('[data-aipl]'), function(cb){ var x = plans.filter(function(p){ return String(p.id) === cb.getAttribute('data-aipl'); })[0]; if (!x) return;
+      var v = (x.visibleIntervs || []).filter(function(y){ return y != iv.id; }); if (cb.checked) v.push(iv.id); if (v.length !== (x.visibleIntervs || []).length || cb.checked !== (x.visibleIntervs || []).some(function(y){ return y == iv.id; })) { x.visibleIntervs = v; plSave(x); } });
+    /* 3. compte et lien */
+    var fin = function(ok, msg){ bg.remove(); renderAll(); toast(msg || (ok ? 'Lien envoyé à ' + em + ' ✓' : '⚠ Le lien n\'est pas parti.')); };
+    if (FB.demo) { fin(true, 'Démo : lien « envoyé » à ' + em); return; }
+    FB.userGet(em).then(function(u){
+      if (u && u.role && u.role !== 'artisan') { fin(false, '⚠ Ce mail est déjà un compte « ' + u.role + ' » de la suite : utilisez un autre mail pour l\'entreprise.'); return null; }
+      var ids = ((u && u.chantierIds) || []).map(Number); if (ids.indexOf(Number(c.id)) < 0) ids.push(Number(c.id));
+      return FB.userSet(em, { email:em, role:'artisan', nom:e.nom, intervenantId:iv.id, chantierIds:ids, actif:true, invitePar:S.user || '', inviteLe:new Date().toISOString(), createdAt:(u && u.createdAt) || new Date().toISOString() })
+        .then(function(){ return FB.lienArtisan(em, ART_URL()); }).then(function(){ fin(true); });
+    }).catch(function(x){ fin(false, '⚠ ' + (x && x.code === 'auth/operation-not-allowed' ? 'La connexion par lien n\'est pas activée dans Firebase.' : 'Envoi impossible : ' + (x && (x.code || x.message) || x))); });
+  };
+}
 function viewMessages(){
   var cs = msgConvs().filter(function(c){ return c.chantierId == S.cid; });
-  var h = '<h2 style="font-size:24px;margin-bottom:4px">Messages</h2><div class="muted" style="margin-bottom:12px">Les artisans écrivent à Phénix, jamais au client. Vous répondez ou vous transmettez.</div>';
+  var h = '<h2 style="font-size:24px;margin-bottom:4px">Messages</h2><div class="muted" style="margin-bottom:12px">Les artisans écrivent à Phénix, jamais au client. Vous répondez ou vous transmettez.</div>' + artHtml();
   if (!cs.length) return h + '<div class="card muted">Aucun message pour ce chantier. Ceux des artisans (et du client) arrivent ici.</div>';
   if (!MSG.cur || !cs.some(function(c){ return c.k === MSG.cur; })) MSG.cur = cs[0].k;
   var cur = cs.filter(function(c){ return c.k === MSG.cur; })[0];
