@@ -118,6 +118,33 @@
     msg.points = pts; return msg;
   }
 
+  /* [Comptes rendus 27/11/2026] envoi d'un constat des désordres ou d'un compte rendu de chantier, PDF joint par Maxime.
+     Variables : {chantier} {num} {date} {siDesordres} {siProchaine}. Le message reste modifiable avant l'envoi. */
+  MODELES['compte-rendu'] = {
+    libelle: 'Envoi du compte rendu de chantier',
+    sujet: 'Chantier {chantier} \u2014 compte rendu n\u00b0 {num} du {date}',
+    mail:
+      'Bonjour \u00e0 tous,\n\n' +
+      'Vous trouverez ci-joint le compte rendu n\u00b0 {num} de notre visite du {date} sur le chantier {chantier}.\n\n' +
+      '{siProchaine}' +
+      'N\u2019h\u00e9sitez pas \u00e0 me faire part de vos remarques, ou \u00e0 m\u2019appeler au ' + EXPEDITEUR.tel + ', avec plaisir.\n\n' +
+      'Merci \u00e0 tous pour votre travail\n\n' +
+      'Ph\u00e9nix-Architecture \uD83D\uDC26\u200D\uD83D\uDD25'
+  };
+  MODELES['compte-rendu'].sms = MODELES['compte-rendu'].mail;
+  MODELES['constat-desordres'] = {
+    libelle: 'Envoi du constat des désordres',
+    sujet: 'Chantier {chantier} \u2014 constat des d\u00e9sordres n\u00b0 {num} du {date}',
+    mail:
+      'Bonjour \u00e0 tous,\n\n' +
+      'Vous trouverez ci-joint le constat des d\u00e9sordres n\u00b0 {num} \u00e9tabli le {date} sur le chantier {chantier}{siDesordres}. ' +
+      'Pour chaque point, la reprise demand\u00e9e et sa date figurent dans le document.\n\n' +
+      'Merci de me confirmer la prise en compte de ces reprises. Je reste disponible pour en parler, au ' + EXPEDITEUR.tel + ', avec plaisir.\n\n' +
+      'Merci beaucoup\n\n' +
+      'Ph\u00e9nix-Architecture \uD83D\uDC26\u200D\uD83D\uDD25'
+  };
+  MODELES['constat-desordres'].sms = MODELES['constat-desordres'].mail;
+
   /* ── Outils de contact ─────────────────────────────────────────── */
 
   /* Téléphone français → « 06 12 34 56 78 » ; renvoie '' si le numéro n'est pas plausible. */
@@ -194,6 +221,7 @@
       points: vars.points || '',
       signature: ''
     };
+    Object.keys(vars).forEach(function (k) { if (!(k in v) && vars[k] != null) v[k] = String(vars[k]); });   /* variables propres à un modèle ({num}, {date}, {siProchaine}…) */
     return {
       modele: idModele,
       sujet: remplir(mod.sujet, v),
@@ -209,6 +237,13 @@
       '?subject=' + encodeURIComponent(msg.sujet) +
       '&body=' + encodeURIComponent(msg.corps.replace(/\n/g, '\r\n'));
   }
+  /* Plusieurs destinataires (comptes rendus) : « a@x.fr,b@y.fr » ; les adresses invalides sont écartées. */
+  function lienMailPlusieurs(dests, msg, copie) {
+    var a = (dests || []).map(normMail).filter(Boolean), cc = (copie || []).map(normMail).filter(Boolean);
+    return 'mailto:' + a.join(',') + '?' + (cc.length ? 'cc=' + cc.join(',') + '&' : '') +
+      'subject=' + encodeURIComponent(msg.sujet) + '&body=' + encodeURIComponent(msg.corps.replace(/\n/g, '\r\n'));
+  }
+  function ouvrirMailPlusieurs(dests, msg, copie) { var a = (dests || []).map(normMail).filter(Boolean); if (!a.length) return false; _ouvrir(lienMailPlusieurs(a, msg, copie)); return true; }
   function lienSms(tel, msg) {
     // Numéro au format international (+33…) : l'appli « Lien avec Windows » retrouve ainsi la conversation existante ou en crée une nouvelle.
     var n = normTel(tel).replace(/\s/g, '').replace(/^0/, '+33');
@@ -248,7 +283,7 @@
     expediteur: EXPEDITEUR,
     modeles: MODELES,
     normTel: normTel, normMail: normMail, estMobile: estMobile, extraireContacts: extraireContacts,
-    preparer: preparer, preparerCorrection: preparerCorrection, pointsCorrection: pointsCorrection, libelleChantier: libelleChantier, lienMail: lienMail, lienSms: lienSms,
+    preparer: preparer, preparerCorrection: preparerCorrection, pointsCorrection: pointsCorrection, libelleChantier: libelleChantier, lienMail: lienMail, lienSms: lienSms, lienMailPlusieurs: lienMailPlusieurs, ouvrirMailPlusieurs: ouvrirMailPlusieurs,
     ouvrirMail: ouvrirMail, ouvrirSms: ouvrirSms, copier: copier, dateFr: dateFr
   };
 })(window);

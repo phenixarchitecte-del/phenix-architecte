@@ -334,6 +334,7 @@ body.ct-on #stage .h3-layer,body.ct-on #gx-lab{visibility:hidden}
 
 <!-- Dictée commune à la suite (pauses possibles, rien n'est validé avant le 2e appui) [Dictée] -->
 <script src="phenix_dictee.js?v=20261127c"></script>
+<script src="phenix_messages.js?v=20261127b"></script><!-- [Envoi par mail] modèles « compte-rendu » et « constat-desordres » -->
 <!-- Moteur 3D partagé avec le Carnet [Moteur partagé] -->
 <script type="module" src="phenix_maquette3d.js?v=20261122b"></script>
 
@@ -1900,6 +1901,20 @@ function ctH(h){ var m = /^(\d{1,2}):(\d{2})/.exec(h || ''); return m ? (+m[1]) 
 function ctNow(){ var d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
 function ctMoi(){ var u = String(S.user || '').toLowerCase(); if (FB.demo || /^(contact|maxime)/.test(u)) return 'Maxime Suchet'; var p = u.split('@')[0].replace(/[._-]+/g, ' ').trim(); return p ? p.replace(/\b\w/g, function(m){ return m.toUpperCase(); }) : 'Phénix-Architecture'; }
 function ctClient(c){ var p = c && CTS.proj[c.projetId]; return { id:'client', nom:(p && p.client) || 'Le client', qualite:'Maître d\'ouvrage' + (p && p.adresse ? ' · ' + p.adresse : c && c.nom ? ' · ' + c.nom : ''), on:false }; }
+/* ═══ [Envoi par mail 27/11/2026] chaque personne (présente ou non) peut recevoir le document par mail ═══
+   Adresse : saisie sur la personne, sinon retenue sur le chantier (c.mails), sinon fiche client (Dossier), entreprise du chantier
+   (intervenant), Annuaire des artisans. Rien ne part tout seul : le PDF est téléchargé et le mail s'ouvre prêt, destinataires remplis. */
+function ctNormMail(e){ var s = String(e == null ? '' : e).trim().toLowerCase().replace(/^mailto:/, ''); return /^[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$/.test(s) ? s : ''; }
+function ctMailDe(p, c){
+  if (!p || p.id === 'phenix') return '';
+  if (ctNormMail(p.mail)) return ctNormMail(p.mail);
+  var m = c && c.mails && c.mails[p.id]; if (ctNormMail(m)) return ctNormMail(m);
+  if (p.id === 'client') { var pr = c && CTS.proj[c.projetId]; return ctNormMail(pr && (pr.email || pr.mail)); }
+  var n = norm(p.nom || ''), iv = (D.intervenants || []).filter(function(x){ return norm(x.nom || '') === n; })[0];
+  if (iv && ctNormMail(iv.inviteEmail || iv.email)) return ctNormMail(iv.inviteEmail || iv.email);
+  if (p.annId) { var a = (CTS.ann || []).filter(function(x){ return String(x.id) === String(p.annId); })[0]; if (a && ctNormMail(a.email || a.mail)) return ctNormMail(a.email || a.mail); }
+  return ctNormMail(typeof artMailAnnuaire === 'function' ? artMailAnnuaire(p.nom) : '');
+}
 function ctBase(c){
   var out = [{ id:'phenix', nom:ctMoi(), qualite:'Phénix-Architecture · maître d\'œuvre', on:true }, ctClient(c)], vus = {};
   lotsOf().forEach(function(l){ var e = entrepriseOf(l); if (!e) return; var k = 'e_' + norm(e).replace(/[^a-z0-9]+/g, '_');
@@ -2309,7 +2324,7 @@ function ctAddPerson(){
   bg.innerHTML = '<div class="sheet" style="width:min(720px,100%)"><div class="eyebrow">Ajouter une personne présente</div>' +
     '<span class="seg light"><button type="button" data-tab="ann" aria-pressed="true">Annuaire des artisans</button><button type="button" data-tab="man" aria-pressed="false">Saisir à la main</button></span>' +
     '<div id="ctp-ann" style="display:flex;flex-direction:column;gap:8px"><div class="ctmicrow"><input id="ctp-q" placeholder="Rechercher une entreprise, un métier, un nom…" style="min-height:48px"><button class="btn ctmic" type="button" id="ctp-qmic" aria-label="Dicter la recherche">🎙</button></div><div id="ctp-list" style="display:flex;flex-direction:column;gap:6px;max-height:46vh;overflow:auto"></div></div>' +
-    '<div id="ctp-man" hidden style="display:flex;flex-direction:column;gap:8px"><div class="ctmicrow"><input id="ctp-n" placeholder="Nom (ex. M. Durand, entreprise Durand)" style="min-height:48px"><button class="btn ctmic" type="button" id="ctp-nmic" aria-label="Dicter le nom">🎙</button></div><div class="ctmicrow"><input id="ctp-ql" placeholder="Qualité (ex. client, expert, chef d\'équipe…)" style="min-height:48px"><button class="btn ctmic" type="button" id="ctp-qlmic" aria-label="Dicter la qualité">🎙</button></div><div style="display:flex;justify-content:flex-end"><button class="btn pri" type="button" id="ctp-ok">Ajouter</button></div></div>' +
+    '<div id="ctp-man" hidden style="display:flex;flex-direction:column;gap:8px"><div class="ctmicrow"><input id="ctp-n" placeholder="Nom (ex. M. Durand, entreprise Durand)" style="min-height:48px"><button class="btn ctmic" type="button" id="ctp-nmic" aria-label="Dicter le nom">🎙</button></div><div class="ctmicrow"><input id="ctp-ql" placeholder="Qualité (ex. client, expert, chef d\'équipe…)" style="min-height:48px"><button class="btn ctmic" type="button" id="ctp-qlmic" aria-label="Dicter la qualité">🎙</button></div><input id="ctp-m" type="email" inputmode="email" autocomplete="off" placeholder="Adresse mail (pour lui envoyer le document)" style="min-height:48px"><div style="display:flex;justify-content:flex-end"><button class="btn pri" type="button" id="ctp-ok">Ajouter</button></div></div>' +
     '<button class="btn ghost" type="button" data-x="1">Fermer</button></div>';
   document.body.appendChild(bg);
   var close = function(){ ctStopMic(); bg.remove(); };
@@ -2321,13 +2336,13 @@ function ctAddPerson(){
     var t = norm(bg.querySelector('#ctp-q').value), a = (CTS.ann || []).filter(function(x){ var s = norm([x.entreprise, x.nom, x.metier].join(' ')); return !t || t.split(/\s+/).every(function(w){ return s.indexOf(w) >= 0; }); }).sort(function(x, y){ return String(x.entreprise || x.nom).localeCompare(String(y.entreprise || y.nom), 'fr'); }).slice(0, 60);
     bg.querySelector('#ctp-list').innerHTML = a.length ? a.map(function(x){ var nm = (x.entreprise || x.nom || '').trim(), deja = have[norm(nm)]; return '<button type="button" class="ctlot" data-ann="' + esc(x.id) + '"' + (deja ? ' disabled style="opacity:.55"' : '') + '><b>' + (deja ? '✓ ' : '+ ') + esc(nm) + '</b><span>' + esc([x.metier, x.entreprise && x.nom && x.nom !== x.entreprise ? x.nom : '', x.tel].filter(Boolean).join(' · ') || 'Artisan') + (deja ? ' · déjà dans la liste' : '') + '</span></button>'; }).join('') : '<div class="muted">' + ((CTS.ann || []).length ? 'Aucun artisan ne correspond. Essayez un autre mot, ou « Saisir à la main ».' : 'Annuaire indisponible (pas de réseau ?) : utilisez « Saisir à la main ».') + '</div>';
     [].forEach.call(bg.querySelectorAll('[data-ann]'), function(b){ b.onclick = function(){ var x = (CTS.ann || []).filter(function(z){ return String(z.id) === b.getAttribute('data-ann'); })[0]; if (!x) return; var nm = (x.entreprise || x.nom || '').trim();
-      CT.presents.push({ id:'a_' + x.id, nom:nm, qualite:['Entreprise', x.metier, x.entreprise && x.nom && x.nom !== x.entreprise ? x.nom : ''].filter(Boolean).join(' · '), on:true, annId:x.id }); ctPut(); close(); ctRender(); toast(nm + ' ajouté aux présents'); }; });
+      CT.presents.push({ id:'a_' + x.id, nom:nm, qualite:['Entreprise', x.metier, x.entreprise && x.nom && x.nom !== x.entreprise ? x.nom : ''].filter(Boolean).join(' · '), on:true, annId:x.id, mail:ctNormMail(x.email || x.mail || '') }); ctPut(); close(); ctRender(); toast(nm + ' ajouté aux présents'); }; });
   };
   bg.querySelector('#ctp-q').oninput = list; list();
   bg.querySelector('#ctp-qmic').onclick = function(){ ctMic(this, bg.querySelector('#ctp-q')); };
   bg.querySelector('#ctp-nmic').onclick = function(){ ctMic(this, bg.querySelector('#ctp-n')); };
   bg.querySelector('#ctp-qlmic').onclick = function(){ ctMic(this, bg.querySelector('#ctp-ql')); };
-  bg.querySelector('#ctp-ok').onclick = function(){ var n = bg.querySelector('#ctp-n').value.trim(); if (!n) { toast('Indiquez un nom.'); return; } CT.presents.push({ id:'p' + Date.now().toString(36), nom:n, qualite:bg.querySelector('#ctp-ql').value.trim(), on:true }); ctPut(); close(); ctRender(); };
+  bg.querySelector('#ctp-ok').onclick = function(){ var n = bg.querySelector('#ctp-n').value.trim(); if (!n) { toast('Indiquez un nom.'); return; } CT.presents.push({ id:'p' + Date.now().toString(36), nom:n, qualite:bg.querySelector('#ctp-ql').value.trim(), on:true, mail:ctNormMail((bg.querySelector('#ctp-m') || {}).value || '') }); ctPut(); close(); ctRender(); };
 }
 
 /* ─── Enregistrement ─── */
@@ -2344,6 +2359,7 @@ function ctRecord(withMedia){
     photos:(d.photos || []).map(function(p){ return put(p.dataUrl, 'photo'); }), pastilles:(d.pastilles || []).map(function(a){ return { planId:a.planId, planNom:a.planNom, page:a.page || 0, x:a.x, y:a.y }; }) }; });
   var r = { id:CT.id, num:withMedia ? ctNum(CT.type) : 'Brouillon', type:cr ? 'visite' : 'litige', chantierId:c ? c.id : CT.cid, chantierNom:c ? c.nom || '' : '', date:CT.date, heure:CT.heure, objet:(CT.objet || CT_K[CT.type].obj).trim(),
     presents:on.map(function(p){ return p.nom + (p.qualite ? ' (' + p.qualite + ')' : ''); }).join(', '), presentsListe:on.map(function(p){ return { id:p.id, nom:p.nom, qualite:p.qualite || '' }; }),
+    destinataires:CT.presents.filter(function(p){ return p.id !== 'phenix'; }).map(function(p){ return { id:p.id, nom:p.nom, qualite:p.qualite || '', present:!!p.on, mail:ctMailDe(p, c) }; }),
     conclusion:(CT.conclusion || '').trim(), signatures:sig, planImgs:pim, reserves:des.map(function(d){ return '• n° ' + d.n + ' ' + (d.titre || d.description.slice(0, 70)) + ' — ' + d.lot + (d.delai ? ' (reprise avant le ' + frDate(d.delai) + ')' : ''); }).join('\n'),
     auteur:S.user || 'Phénix-Architecture', source:'formulaire', aValider:false, createdAt:new Date().toISOString() };
   r.memos = []; Object.keys(CT.memos || {}).forEach(function(k){ (CT.memos[k] || []).forEach(function(m){ var lab = document.querySelector('label[for="' + k + '"]'); r.memos.push(Object.assign({ champ:lab ? lab.textContent : k, duree:m.duree }, put(m.dataUrl, 'audio'))); }); });
@@ -2372,10 +2388,11 @@ function ctSave(){
   ctDel(ctKey(CT.cid, CT.type)); var K = CT_K[CT.type], nb = rec.desordres ? rec.desordres.length : rec.points.length; CT = null; CTS.busy = false; CTS.open = null;
   var o = $('overlay'); o.className = ''; o.innerHTML = ''; document.body.classList.remove('ct-on'); renderAll();
   var bg = document.createElement('div'); bg.className = 'sheetbg';
-  bg.innerHTML = '<div class="sheet"><div class="eyebrow">' + K.court + ' ' + esc(rec.num) + ' enregistré</div><h2 style="font-size:24px">' + nb + ' ' + it + (nb > 1 ? 's' : '') + (cr ? ' relevé' : ' constaté') + (nb > 1 ? 's' : '') + '</h2><div class="muted">' + (S.online ? 'Envoyé dans le dossier du chantier' : '⚠ Hors ligne : il partira dès le retour du réseau. Gardez l\'onglet ouvert') + '. ' + (cr && rec.aValider ? 'Il attend la validation au bureau. ' : '') + 'Vous le retrouvez dans l\'onglet « Comptes rendus ».</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn big pri" type="button" id="cts-pdf">📄 Télécharger le PDF</button><button class="btn big ghost" type="button" data-x="1">Fermer</button></div></div>';
+  bg.innerHTML = '<div class="sheet"><div class="eyebrow">' + K.court + ' ' + esc(rec.num) + ' enregistré</div><h2 style="font-size:24px">' + nb + ' ' + it + (nb > 1 ? 's' : '') + (cr ? ' relevé' : ' constaté') + (nb > 1 ? 's' : '') + '</h2><div class="muted">' + (S.online ? 'Envoyé dans le dossier du chantier' : '⚠ Hors ligne : il partira dès le retour du réseau. Gardez l\'onglet ouvert') + '. ' + (cr && rec.aValider ? 'Il attend la validation au bureau. ' : '') + 'Vous le retrouvez dans l\'onglet « Comptes rendus ».</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn big pri" type="button" id="cts-mail">✉ Envoyer par mail</button><button class="btn big" type="button" id="cts-pdf">📄 Télécharger le PDF</button><button class="btn big ghost" type="button" data-x="1">Fermer</button></div></div>';
   document.body.appendChild(bg);
   bg.onclick = function(e){ if (e.target === bg || (e.target.getAttribute && e.target.getAttribute('data-x'))) bg.remove(); };
   $('cts-pdf').onclick = function(){ ctPdf(rec); };
+  $('cts-mail').onclick = function(){ bg.remove(); ctEnvoyer(rec); };
 }
 
 /* ─── PDF à la charte Phénix (phenix_pdf.js) — gabarit AÉRÉ commun au constat de litige et au compte rendu de chantier ───
@@ -2402,12 +2419,12 @@ var CTP = {
   entete:function(px, r, quoi){ px.cadres([{ titre:'Chantier', lignes:['**' + (r.chantierNom || '') + '**', quoi + ' n° ' + r.num, 'Le ' + frDate(r.date) + (r.heure ? ' à ' + ctH(r.heure) : '')] }, { titre:'Rédigé par', lignes:['**Phénix-Architecture**', 'Maître d\'œuvre et contractant général', 'Établi sur place'] }]); px.y += 3; },
   /* charge les images (photos, plans, signatures), lance le gabarit, enregistre */
   run:function(imgs, build, fichier){
-    if (CTS.pdf) return; CTS.pdf = true; toast('Préparation du PDF…'); var P;
-    ctLibs().then(function(){ P = window.PhenixPDF; return Promise.all(imgs.map(function(o){ return ctSrc(o.x).then(function(du){ o.x._src = du; }); })); })
+    if (CTS.pdf) return Promise.resolve(null); CTS.pdf = true; toast('Préparation du PDF…'); var P, sortie = null;
+    return ctLibs().then(function(){ P = window.PhenixPDF; return Promise.all(imgs.map(function(o){ return ctSrc(o.x).then(function(du){ o.x._src = du; }); })); })
     .then(function(){ return Promise.all(imgs.map(function(o){ if (o.k === 'sig' || !o.x._src) return null; return P.charger(o.x._src, o.k === 'plan' ? 2000 : 1400).then(function(j){ if (j) o.x._src = j; }); })); })
-    .then(function(){ var px = build(P); px.enregistrer(fichier); toast('PDF téléchargé'); })
+    .then(function(){ var px = build(P); px.enregistrer(fichier); try { sortie = { fichier:fichier, blob:px.doc.output('blob') }; } catch (e) {} toast('PDF téléchargé'); })
     .catch(function(e){ toast('⚠ PDF impossible : ' + (e && e.message || 'bibliothèque non chargée (réseau ?)')); })
-    .then(function(){ CTS.pdf = false; imgs.forEach(function(o){ delete o.x._src; }); });
+    .then(function(){ CTS.pdf = false; imgs.forEach(function(o){ delete o.x._src; }); return sortie; });
   },
   nom:function(s){ return String(s || 'chantier').replace(/[^\wÀ-ſ-]+/g, '_'); }
 };
@@ -2452,7 +2469,7 @@ function ctSignPdf(px, r, toujours){
 function ctPdf(r){
   if (r.type !== 'litige') return crPdf(r);
   var imgs = ctImgs(r);
-  CTP.run(imgs, function(P){
+  return CTP.run(imgs, function(P){
     var px = P.create({ titre:r.objet || 'Constat des désordres', sousTitre:(r.chantierNom || '') + ' · ' + frDate(r.date) + (r.heure ? ' à ' + ctH(r.heure) : ''), reference:r.num + ' · ' + (r.chantierNom || '') });
     CTP.entete(px, r, 'Constat');
     var lots = {}; r.desordres.forEach(function(d){ lots[d.lot] = 1; });
@@ -2469,7 +2486,7 @@ function crPdf(c){
   var ch = D.chantiers.filter(function(y){ return y.id == c.chantierId; })[0] || {}, lotName = function(id){ var l = ctLot(id); return l ? lotLabel(l) : ''; };
   var r = { num:c.num || 'CR', date:c.date, heure:c.heure || (c.visite && c.visite.debut ? new Date(c.visite.debut).toTimeString().slice(0, 5) : ''), chantierNom:c.chantierNom || ch.nom || '' };
   var imgs = ctImgs(c), pts = c.points || [];
-  CTP.run(imgs, function(P){
+  return CTP.run(imgs, function(P){
     var px = P.create({ titre:c.objet || 'Compte rendu de chantier', sousTitre:r.chantierNom + ' · visite du ' + frDate(c.date) + (r.heure ? ' à ' + ctH(r.heure) : ''), reference:r.num + ' · ' + r.chantierNom });
     CTP.entete(px, r, 'Compte rendu');
     var dec = (c.taches && c.taches.length) ? c.taches : decList(c.decisions), resN = pts.length || String(c.reserves || '').split('\n').filter(function(x){ return x.trim(); }).length;
@@ -2492,10 +2509,58 @@ function crPdf(c){
 }
 
 /* Listes dans l'onglet « Comptes rendus » */
+/* Fenêtre « Envoyer par mail » : destinataires cochés (présents ou non), adresses modifiables, objet et message (modèle Phénix,
+   dictable). « Préparer le mail » ouvre la messagerie (Outlook) avec destinataires, objet et texte, et télécharge le PDF à glisser dedans. */
+function ctEnvoyer(rec){
+  ctPrefill();
+  var c = D.chantiers.filter(function(y){ return y.id == rec.chantierId; })[0] || chantier() || {}, pr = CTS.proj[c.projetId] || {};
+  var dest = (rec.destinataires && rec.destinataires.length ? rec.destinataires : ctBase(c).filter(function(p){ return p.id !== 'phenix'; }).map(function(p){ var on = (rec.presentsListe || []).some(function(x){ return x.id === p.id || x.nom === p.nom; }); return { id:p.id, nom:p.nom, qualite:p.qualite || '', present:on }; }))
+    .map(function(d){ return Object.assign({}, d, { mail:ctMailDe(d, c) }); });
+  var litige = rec.type === 'litige', nbD = (rec.desordres || []).length;
+  var nomCh = (window.PhenixMsg && PhenixMsg.libelleChantier({ client:pr.client, adresse:pr.adresse, nom:rec.chantierNom || c.nom })) || rec.chantierNom || c.nom || '';
+  var msg = window.PhenixMsg ? PhenixMsg.preparer(litige ? 'constat-desordres' : 'compte-rendu', { chantier:nomCh, num:rec.num || '', date:frDate(rec.date),
+    siDesordres:nbD ? ' (' + nbD + ' désordre' + (nbD > 1 ? 's' : '') + ')' : '', siProchaine:rec.prochaine ? 'Prochaine réunion : ' + String(rec.prochaine).replace(/\s+$/, '') + '.\n\n' : '' }) : { sujet:(rec.objet || 'Compte rendu') + ' — ' + nomCh, corps:'' };
+  var bg = document.createElement('div'); bg.className = 'sheetbg';
+  var ligne = function(d, i){ return '<div class="ctdest" style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;border-top:1px solid var(--line);padding:8px 0">' +
+    '<label style="display:flex;gap:10px;align-items:center;min-height:44px;cursor:pointer;flex:1 1 220px"><input type="checkbox" data-cd="' + i + '"' + (d.mail ? ' checked' : '') + ' style="width:22px;height:22px;flex:none">' +
+    '<span style="flex:1"><b>' + esc(d.nom) + '</b><span class="muted" style="display:block;font-size:13px">' + esc([d.qualite, d.present ? 'présent' : 'absent'].filter(Boolean).join(' · ')) + '</span></span></label>' +
+    '<input type="email" inputmode="email" autocomplete="off" data-cdm="' + i + '" value="' + esc(d.mail || '') + '" placeholder="Adresse mail à compléter" aria-label="Adresse mail de ' + esc(d.nom) + '" style="min-height:44px;flex:1 1 240px;min-width:0"></div>'; };
+  bg.innerHTML = '<div class="sheet" style="max-width:640px;max-height:92vh;overflow:auto"><div class="eyebrow">Envoyer par mail · ' + esc(rec.num || '') + '</div><h2 style="font-size:24px">À qui l\'envoyer ?</h2>' +
+    '<div>' + dest.map(ligne).join('') + '<div style="border-top:1px solid var(--line);padding-top:10px"><label class="eyebrow" for="cdm-autre">Autre destinataire (facultatif)</label><input id="cdm-autre" type="email" inputmode="email" autocomplete="off" placeholder="adresse@exemple.fr — plusieurs : séparez par une virgule" style="min-height:44px;width:100%"></div></div>' +
+    '<label class="eyebrow" for="cdm-sujet" style="margin-top:12px">Objet</label><input id="cdm-sujet" value="' + esc(msg.sujet) + '" style="min-height:44px">' +
+    '<label class="eyebrow" for="cdm-corps" style="margin-top:12px">Message</label><div class="ctmicrow" style="align-items:flex-start"><textarea id="cdm-corps" rows="9" style="flex:1">' + esc(msg.corps) + '</textarea><button class="btn ctmic" type="button" id="cdm-mic" aria-label="Dicter le message">🎙</button></div>' +
+    '<div class="muted" style="font-size:13px;margin-top:8px">Le PDF se télécharge en même temps : glissez-le dans le mail avant d\'envoyer (la messagerie ne permet pas de le joindre toute seule).</div>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn big pri" type="button" id="cdm-go">✉ Préparer le mail</button><button class="btn big" type="button" id="cdm-copie">Copier les adresses</button><button class="btn big ghost" type="button" data-x="1">Fermer</button></div></div>';
+  document.body.appendChild(bg);
+  var close = function(){ ctStopMic(); bg.remove(); };
+  bg.onclick = function(e){ if (e.target === bg || (e.target.getAttribute && e.target.getAttribute('data-x'))) close(); };
+  [].forEach.call(bg.querySelectorAll('[data-cdm]'), function(inp){ inp.oninput = function(){ var cb = bg.querySelector('[data-cd="' + inp.getAttribute('data-cdm') + '"]'); if (cb && ctNormMail(inp.value)) cb.checked = true; }; });
+  bg.querySelector('#cdm-mic').onclick = function(){ ctMic(this, bg.querySelector('#cdm-corps')); };
+  var lire = function(){
+    var a = [], manque = [];
+    dest.forEach(function(d, i){ var m = ctNormMail(bg.querySelector('[data-cdm="' + i + '"]').value); d.mail = m || d.mail; if (bg.querySelector('[data-cd="' + i + '"]').checked) { if (m) a.push(m); else manque.push(d.nom); } });
+    String(bg.querySelector('#cdm-autre').value || '').split(/[,;\s]+/).forEach(function(x){ var m = ctNormMail(x); if (m) a.push(m); });
+    return { a:a.filter(function(x, i){ return a.indexOf(x) === i; }), manque:manque };
+  };
+  bg.querySelector('#cdm-copie').onclick = function(){ var l = lire(); if (!l.a.length) { toast('Aucune adresse cochée.'); return; } var t = l.a.join('; '); (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(function(){ toast('Adresses copiées'); }, function(){ prompt('Adresses :', t); }); };
+  bg.querySelector('#cdm-go').onclick = function(){
+    var l = lire(); if (!l.a.length) { toast('Cochez au moins une personne avec une adresse mail.'); return; }
+    if (l.manque.length && !confirm('Pas d\'adresse pour : ' + l.manque.join(', ') + '. Continuer sans eux ?')) return;
+    var m = { sujet:bg.querySelector('#cdm-sujet').value.trim() || msg.sujet, corps:bg.querySelector('#cdm-corps').value };
+    var lien = window.PhenixMsg ? PhenixMsg.lienMailPlusieurs(l.a, m) : 'mailto:' + l.a.join(',') + '?subject=' + encodeURIComponent(m.sujet) + '&body=' + encodeURIComponent(m.corps.replace(/\n/g, '\r\n'));
+    var x = document.createElement('a'); x.href = lien; x.style.display = 'none'; document.body.appendChild(x); x.click(); setTimeout(function(){ x.remove(); }, 500);   /* d'abord la messagerie (geste de l'utilisateur), puis le PDF */
+    /* adresses retenues pour la prochaine fois (sur le chantier) et trace de l'envoi sur le document */
+    if (c && c.id != null) { c.mails = c.mails || {}; var chg = false; dest.forEach(function(d){ if (d.mail && c.mails[d.id] !== d.mail) { c.mails[d.id] = d.mail; chg = true; } }); if (chg) save('chantiers', c); }
+    rec.destinataires = dest.map(function(d){ return { id:d.id, nom:d.nom, qualite:d.qualite, present:!!d.present, mail:d.mail || '' }; });
+    rec.envois = (rec.envois || []).concat([{ le:new Date().toISOString(), a:l.a, par:S.user || '' }]); save('crs', rec);
+    close(); ctPdf(rec); toast('Mail prêt dans votre messagerie : glissez-y le PDF téléchargé.');
+    if ($('overlay').className !== 'on') renderAll();
+  };
+}
 function ctListHtml(){
   var l = D.crs.filter(function(c){ return c.type === 'litige' && c.chantierId == S.cid; }).sort(function(a, b){ return String(b.date + b.heure).localeCompare(String(a.date + a.heure)); });
   var v = D.crs.filter(function(c){ return c.type !== 'litige' && c.chantierId == S.cid; }).sort(function(a, b){ return String(b.date + (b.heure || '')).localeCompare(String(a.date + (a.heure || ''))); });
-  var row = function(c, sub){ return '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:10px"><span style="flex:1 1 260px"><b>' + esc(c.num || 'CR') + ' · ' + frDate(c.date) + (c.heure ? ' à ' + esc(c.heure) : '') + '</b><span class="muted" style="display:block">' + sub + '</span></span>' + (c.memos || []).map(function(m, i){ return '<button class="btn" type="button" data-memo="' + esc(c.id) + '|' + i + '" title="' + esc(m.champ || '') + '">🔊 Mémo ' + (i + 1) + '</button>'; }).join('') + '<button class="btn" type="button" data-ctpdf="' + esc(c.id) + '">📄 PDF</button></div>'; };
+  var row = function(c, sub){ return '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:10px"><span style="flex:1 1 260px"><b>' + esc(c.num || 'CR') + ' · ' + frDate(c.date) + (c.heure ? ' à ' + esc(c.heure) : '') + '</b><span class="muted" style="display:block">' + sub + '</span></span>' + (c.memos || []).map(function(m, i){ return '<button class="btn" type="button" data-memo="' + esc(c.id) + '|' + i + '" title="' + esc(m.champ || '') + '">🔊 Mémo ' + (i + 1) + '</button>'; }).join('') + '<button class="btn" type="button" data-ctpdf="' + esc(c.id) + '">📄 PDF</button><button class="btn" type="button" data-ctmail="' + esc(c.id) + '">✉ Envoyer</button></div>' + (c.envois && c.envois.length ? '<span class="muted" style="flex-basis:100%;font-size:13px">✉ Mail préparé le ' + frDate(String(c.envois[c.envois.length - 1].le).slice(0, 10)) + ' pour ' + c.envois[c.envois.length - 1].a.length + ' destinataire' + (c.envois[c.envois.length - 1].a.length > 1 ? 's' : '') + '</span>' : ''); };
   var h = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px"><button class="btn big pri" type="button" data-ctgo="cr">📋 ' + (ctHas(S.cid, 'cr') ? 'Reprendre le compte rendu' : 'Compte rendu de chantier') + '</button><button class="btn big" type="button" data-ctgo="litige" style="border-color:rgba(252,211,77,.6)">⚠ ' + (ctHas(S.cid, 'litige') ? 'Reprendre le constat' : 'Constat des désordres') + '</button></div>';
   h += '<div class="card" style="max-width:720px;margin-bottom:14px;display:flex;flex-direction:column;gap:10px"><div class="eyebrow">Comptes rendus de chantier (' + v.length + ')</div>' + (v.length ? v.map(function(c){ var n = (c.points || []).length; return row(c, (c.aValider ? '⚠ À valider' : '✓ Validé') + (n ? ' · ' + n + ' point' + (n > 1 ? 's' : '') : '') + ' · ' + (c.photos || []).length + ' photo' + ((c.photos || []).length > 1 ? 's' : '')); }).join('') : '<div class="muted">Aucun compte rendu.</div>') + '</div>';
   h += '<div class="card" style="max-width:720px;margin-bottom:14px;display:flex;flex-direction:column;gap:10px"><div class="eyebrow">Constats des désordres (' + l.length + ')</div>' + (l.length ? l.map(function(c){ var n = (c.desordres || []).length; return row(c, n + ' désordre' + (n > 1 ? 's' : '') + ' · ' + esc((c.desordres || []).map(function(d){ return d.lot; }).filter(function(x, i, a){ return a.indexOf(x) === i; }).join(', '))); }).join('') : '<div class="muted">Aucun constat.</div>') + '</div>';
@@ -2505,6 +2570,7 @@ function ctListBind(root){
   [].forEach.call(root.querySelectorAll('[data-memo]'), function(b){ b.onclick = function(){ var p = b.getAttribute('data-memo').split('|'), c = D.crs.filter(function(y){ return String(y.id) === p[0]; })[0], m = c && (c.memos || [])[+p[1]]; if (!m) return; ctSrc(m).then(function(du){ if (du) new Audio(du).play(); else toast('Mémo introuvable (réseau ?).'); }); }; });
   [].forEach.call(root.querySelectorAll('[data-ctpdf]'), function(b){ b.onclick = function(){ var c = D.crs.filter(function(y){ return String(y.id) === b.getAttribute('data-ctpdf'); })[0]; if (c) ctPdf(c); }; });
   [].forEach.call(root.querySelectorAll('[data-ctgo]'), function(b){ b.onclick = function(){ ctOpen(b.getAttribute('data-ctgo')); }; });
+  [].forEach.call(root.querySelectorAll('[data-ctmail]'), function(b){ b.onclick = function(){ var c = D.crs.filter(function(y){ return String(y.id) === b.getAttribute('data-ctmail'); })[0]; if (c) ctEnvoyer(c); }; });
 }
 function ctScan(){ /* brouillons présents sur l'appareil (boutons « Reprendre… ») */
   ctIdb().then(function(db){ var q = db.transaction('draft').objectStore('draft').getAllKeys(); q.onsuccess = function(){ S.ctDrafts = {}; (q.result || []).forEach(function(k){ S.ctDrafts[String(k).indexOf('|') < 0 ? k + '|litige' : k] = 1; }); if (S.screen === 'chantier') renderGx(); }; }).catch(function(){});
