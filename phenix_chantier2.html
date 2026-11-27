@@ -21,6 +21,14 @@
    (3) PDF AÉRÉ : sections espacées, interligne plus large, fiche « Lot / Gravité / Localisation » sur des lignes séparées, photos en grand (2 par ligne),
    étiquettes jamais seules en bas de page. MÊME GABARIT pour le compte rendu de chantier (dictée) : bouton « 📄 PDF » sur chaque compte rendu
    de l'onglet « Comptes rendus » (il n'y en avait pas dans ce module).
+   (4) DEUX BOUTONS sur la maquette et dans « Comptes rendus » : « 📋 Compte rendu de chantier » et « ⚠ Constat des désordres », même écran à remplir.
+   Compte rendu : présents, météo, avancement (texte + % par lot en − / +), points relevés (même fiche que les désordres : lot, gravité, localisation,
+   relevé, reprise demandée + date, photos, pastilles), décisions (une par ligne = une tâche), photos générales, prochaine réunion (date, heure, précision),
+   observations. Enregistré en CR-xx (même suite que les comptes rendus dictés) ; agence : appliqué tout de suite (lots, réserves, tâches) ;
+   Kevin : part au bureau pour validation. Pré-remplissage : client et adresse depuis Phénix Dossier, entreprises des lots, lots de Chiffrage pas encore
+   dans Chantier. « + Ajouter une personne » : recherche dans l'Annuaire des artisans (phenix_artisans, lecture seule) ou saisie à la main.
+   Dictée 🎙 à côté de CHAQUE champ de texte (objet, météo, titre, localisation, constat, reprise, décisions, recherche, nom…). Date de reprise avec
+   raccourcis + 1 sem. / + 2 sem. / + 1 mois. Un brouillon par chantier et par type.
  15/11/2026 — [Travaux] Ordre « open-projet » avec onglet 'travaux' (bouton « Préciser les travaux » de la Synthèse) : ouvre l'onglet Travaux ;
    si le dossier n'a pas encore de chantier, il est créé vide depuis la fiche du dossier (phenix_projets) pour renseigner les travaux tout de suite.
  13/11/2026 (2) — [Travaux] Nouvel onglet « Travaux » (le premier) : ce qu'il y a à faire sur ce chantier. Construction neuve (tout est à faire)
@@ -222,7 +230,8 @@ h1,h2,h3{margin:0;font-weight:400;font-family:var(--fd)}
 .ctwrap{width:min(980px,100%);margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:14px}
 .ctsec{display:flex;flex-direction:column;gap:12px}
 .ctrow{display:flex;gap:12px;flex-wrap:wrap}
-.ctf{display:flex;flex-direction:column;gap:6px;flex:1 1 160px}
+.ctf{display:flex;flex-direction:column;gap:6px}
+.ctrow>.ctf{flex:1 1 160px}
 .ctf input{min-height:48px;font-size:16px}
 .ctf textarea{font-size:16px}
 .ctlots,.ctpres{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}
@@ -249,6 +258,11 @@ h1,h2,h3{margin:0;font-weight:400;font-family:var(--fd)}
 .ctplan-top{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--line)}
 .ctplan-pages{flex:1;overflow:auto;background:#525659;padding:12px;display:flex;flex-direction:column;gap:12px;align-items:flex-start}
 .ctplan-pg{position:relative;width:100%;background:#fff;cursor:crosshair;flex-shrink:0}
+.ctmicrow{display:flex;gap:6px;align-items:flex-start}.ctmicrow input,.ctmicrow textarea{flex:1;min-width:0}
+.ctmic{min-width:48px;padding:0 10px;font-size:18px;flex-shrink:0}
+.ctav{display:flex;flex-direction:column;gap:6px}
+.ctavl{display:flex;gap:8px;align-items:center;padding:8px 10px;border-radius:12px;border:1px solid var(--line);background:var(--pan2)}
+.ctavl.on{border:2px solid var(--accent)}
 .ctdot{position:absolute;transform:translate(-50%,-50%);width:38px;height:38px;border-radius:50%;border:3px dashed #0a1628;background:rgba(255,255,255,.85);color:#0a1628;font:700 16px var(--fs);display:flex;align-items:center;justify-content:center;padding:0}
 .ctdot.mine{border:3px solid #fff;background:#0a1628;color:#fff;box-shadow:0 0 0 3px #fcd34d}
 .ctpgrid{flex:1;overflow:auto;padding:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;align-content:start;background:#3b4048}
@@ -756,7 +770,7 @@ function renderDoc(final){
   if ($('d-send')) $('d-send').onclick = sendCR;
 }
 function nextNum(){
-  var n = 0; D.crs.filter(function(c){ return c.chantierId == S.cid; }).forEach(function(c){ var m = /(\d+)\s*$/.exec(c.num || ''); if (m) n = Math.max(n, +m[1]); });
+  var n = 0; D.crs.filter(function(c){ return c.chantierId == S.cid && c.type !== 'litige'; }).forEach(function(c){ var m = /(\d+)\s*$/.exec(c.num || ''); if (m) n = Math.max(n, +m[1]); });
   return 'CR-' + String(n + 1).padStart(2, '0');
 }
 function sendCR(){
@@ -1737,7 +1751,7 @@ function renderGx(){
     h += '<div class="q3"><button type="button" data-va="ok" style="border:0;background:#2fc47a;color:#0b1424">' + gxI('done', '#0b1424', 22) + 'C\'est bon</button><button type="button" data-va="pb" style="border:0;background:#ef4444;color:#fff">' + gxI('issue', '#fff', 22) + 'Problème</button><button type="button" data-va="nc" style="border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.04);color:#f4f6fa">' + gxI('todo', '#f4f6fa', 22) + 'Pas commencé</button></div>';
     h += '<div style="font:500 12px var(--gx-sans);color:var(--gx-mut);margin-top:8px">« Problème » ouvre la réserve : photo et description, elle apparaît en cône sur la maquette.</div></div>';
   } else {
-    h += '<div id="gx-bot">' + (rv ? '<div style="flex:1"></div>' : '<div id="gx-frise" class="gx-pan">' + gxFrise(c) + '</div>') + '<div style="display:flex;flex-direction:column;gap:8px"><button type="button" class="gx-b gold big" id="gx-visit">' + gxI('chev', '#0b1424', 18) + 'Lancer la visite</button><button type="button" class="gx-b big" id="gx-dict">' + gxI('mic', null, 18) + 'Dicter une note</button><button type="button" class="gx-b big" id="gx-litige" style="border-color:rgba(252,211,77,.6)">⚠ ' + (ctHas(c.id) ? 'Reprendre le constat' : 'Constat de litige') + '</button></div></div>';
+    h += '<div id="gx-bot">' + (rv ? '<div style="flex:1"></div>' : '<div id="gx-frise" class="gx-pan">' + gxFrise(c) + '</div>') + '<div style="display:flex;flex-direction:column;gap:8px"><button type="button" class="gx-b gold big" id="gx-visit">' + gxI('chev', '#0b1424', 18) + 'Lancer la visite</button><button type="button" class="gx-b big" id="gx-dict">' + gxI('mic', null, 18) + 'Dicter une note</button><button type="button" class="gx-b big" id="gx-cr">📋 ' + (ctHas(c.id, 'cr') ? 'Reprendre le compte rendu' : 'Compte rendu de chantier') + '</button><button type="button" class="gx-b big" id="gx-litige" style="border-color:rgba(252,211,77,.6)">⚠ ' + (ctHas(c.id, 'litige') ? 'Reprendre le constat' : 'Constat des désordres') + '</button></div></div>';
   }
   hud.innerHTML = h;
   var on = function(id, f){ var b = $(id); if (b) b.onclick = f; };
@@ -1745,7 +1759,7 @@ function renderGx(){
   on('gx-over', function(){ try{ PX().setMode('out'); S.in3d = 'out'; PX().overview(); renderGx(); }catch(e){} });
   on('gx-misb', function(){ if (window.innerWidth <= 900) { S.gxMis = !S.gxMis; renderGx(); } else gxOpen('recap'); });
   on('gx-all', function(){ gxOpen('recap'); });
-  on('gx-visit', gxVisitStart); on('gx-litige', ctOpen); on('gx-dict', function(){ needVisit(function(){ openDictee(); }); }); on('gx-vend', gxVisitEnd);
+  on('gx-visit', gxVisitStart); on('gx-litige', function(){ ctOpen('litige'); }); on('gx-cr', function(){ ctOpen('cr'); }); on('gx-dict', function(){ needVisit(function(){ openDictee(); }); }); on('gx-vend', gxVisitEnd);
   var sel = $('gx-sel'); if (sel) sel.onchange = function(){ var y = D.chantiers.filter(function(z){ return String(z.id) === sel.value; })[0]; if (!y) return; S.cid = y.id; lk('px2.cid', String(S.cid)); S.lotId = null; S.gxSel = ''; M3.cid = null; gxClose(); boot2(); };
   [].forEach.call(hud.querySelectorAll('[data-gin]'), function(b){ b.onclick = function(){ S.in3d = b.getAttribute('data-gin'); try{ PX().setMode(S.in3d); }catch(e){} renderGx(); }; });
   [].forEach.call(hud.querySelectorAll('[data-mis]'), function(b){ b.onclick = function(){ var f = mi.fl[+b.getAttribute('data-mis')]; if (!f) return; if (f.tab) gxOpen(f.tab); else if (/visite/i.test(f.txt)) gxVisitStart(); else sheetEtape(c.etape || 1); }; });
@@ -1754,40 +1768,66 @@ function renderGx(){
   if (S.drawer) $('panel').classList.add('open'); else $('panel').classList.remove('open');
   gxLabels();
 }
-/* ═══════════ [Constat] CONSTAT DE LITIGE (terrain, Surface Pro) — 27/11/2026 ═══════════
-   Un écran simple pour constater des désordres sur place : date et heure, présents, puis un ou plusieurs désordres
-   (lot concerné, gravité, description écrite ou dictée, localisation, photos prises dans l'appli, pastilles sur un plan,
-   reprise demandée et délai), conclusion, signatures sur la tablette, PDF à la charte Phénix.
-   Le brouillon est gardé sur l'appareil (IndexedDB) à chaque geste : rien n'est perdu sans réseau ni si l'onglet se ferme.
-   Enregistré dans phenix_ch_crs (type 'litige', numéro CL-xx), photos et plans dans phenix_media : aucune nouvelle collection. */
-var CT = null, CTS = { open:null, sr:null, srBtn:null, t:null, busy:false }, CTPG = {};
+/* ═══════════ [Constat] CONSTAT DES DÉSORDRES et COMPTE RENDU DE CHANTIER (terrain, Surface Pro) — 27/11/2026 ═══════════
+   Deux boutons, un même écran à remplir et un même gabarit PDF :
+   • Constat des désordres (CL-xx) : présents, désordres numérotés (lot, gravité, localisation, constat, reprise demandée + date,
+     photos prises dans l'appli, pastilles sur un plan importé ou rangé), conclusion, signatures.
+   • Compte rendu de chantier (CR-xx) : présents, météo, avancement (texte + % par lot), points relevés (même fiche que les désordres),
+     décisions, photos, prochaine réunion, signatures si besoin.
+   Pré-rempli avec ce que le dossier sait déjà : client (Phénix Dossier), entreprises des lots, lots de Chantier et de Chiffrage ;
+   entreprises à ajouter depuis l'Annuaire ou à la main. Chaque texte se dicte (bouton 🎙 à côté de chaque champ).
+   Brouillon gardé sur l'appareil (IndexedDB 'px-constat'), un par chantier et par type. Enregistré dans phenix_ch_crs, images dans phenix_media. */
+var CT = null, CTS = { open:null, sr:null, srBtn:null, t:null, busy:false, proj:{}, chf:{}, ann:null }, CTPG = {};
 var CT_GRAV = { mineur:['Mineur', '●'], important:['Important', '▲'], bloquant:['Bloquant', '■'] };
+var CT_K = {
+  litige:{ titre:'Constat des désordres', court:'Constat', item:'Désordre', items:'Désordres constatés', nouv:'+ Nouveau désordre', obj:'Constat des désordres', ico:'⚠' },
+  cr:{ titre:'Compte rendu de chantier', court:'Compte rendu', item:'Point', items:'Points relevés (réserves, remarques)', nouv:'+ Nouveau point', obj:'Compte rendu de chantier', ico:'📋' }
+};
+function ctKey(cid, type){ return String(cid) + '|' + (type || 'litige'); }
 function ctIdb(){ return new Promise(function(ok, ko){ var r = indexedDB.open('px-constat', 1); r.onupgradeneeded = function(){ r.result.createObjectStore('draft'); }; r.onsuccess = function(){ ok(r.result); }; r.onerror = function(){ ko(r.error); }; }); }
-function ctGet(cid){ return ctIdb().then(function(db){ return new Promise(function(ok){ var q = db.transaction('draft').objectStore('draft').get(String(cid)); q.onsuccess = function(){ ok(q.result || null); }; q.onerror = function(){ ok(null); }; }); }).catch(function(){ return null; }); }
-function ctPut(){ if (!CT) return Promise.resolve(); CT.majLe = new Date().toISOString(); var v = CT; return ctIdb().then(function(db){ return new Promise(function(ok){ var t = db.transaction('draft', 'readwrite'); t.objectStore('draft').put(v, String(v.cid)); t.oncomplete = ok; t.onerror = ok; }); }).catch(function(){}); }
+function ctGet(k){ return ctIdb().then(function(db){ return new Promise(function(ok){ var q = db.transaction('draft').objectStore('draft').get(k); q.onsuccess = function(){ ok(q.result || null); }; q.onerror = function(){ ok(null); }; }); }).catch(function(){ return null; }); }
+function ctPut(){ if (!CT) return Promise.resolve(); CT.majLe = new Date().toISOString(); var v = CT; return ctIdb().then(function(db){ return new Promise(function(ok){ var t = db.transaction('draft', 'readwrite'); t.objectStore('draft').put(v, ctKey(v.cid, v.type)); t.oncomplete = ok; t.onerror = ok; }); }).catch(function(){}); }
 function ctPutSoon(){ clearTimeout(CTS.t); CTS.t = setTimeout(ctPut, 400); }
-function ctDel(cid){ return ctIdb().then(function(db){ return new Promise(function(ok){ var t = db.transaction('draft', 'readwrite'); t.objectStore('draft').delete(String(cid)); t.oncomplete = ok; t.onerror = ok; }); }).catch(function(){}); }
-function ctHas(cid){ return !!(S.ctDrafts && S.ctDrafts[cid]); }
+function ctDel(k){ if (S.ctDrafts) delete S.ctDrafts[k]; return ctIdb().then(function(db){ return new Promise(function(ok){ var t = db.transaction('draft', 'readwrite'); t.objectStore('draft').delete(k); t.oncomplete = ok; t.onerror = ok; }); }).catch(function(){}); }
+function ctHas(cid, type){ return !!(S.ctDrafts && S.ctDrafts[ctKey(cid, type)]); }
 function ctDay(){ var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function ctH(h){ var m = /^(\d{1,2}):(\d{2})/.exec(h || ''); return m ? (+m[1]) + ' h' + (m[2] !== '00' ? ' ' + m[2] : '') : (h || ''); }
 function ctNow(){ var d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
 function ctMoi(){ var u = String(S.user || '').toLowerCase(); if (FB.demo || /^(contact|maxime)/.test(u)) return 'Maxime Suchet'; var p = u.split('@')[0].replace(/[._-]+/g, ' ').trim(); return p ? p.replace(/\b\w/g, function(m){ return m.toUpperCase(); }) : 'Phénix-Architecture'; }
+function ctClient(c){ var p = c && CTS.proj[c.projetId]; return { id:'client', nom:(p && p.client) || 'Le client', qualite:'Maître d\'ouvrage' + (p && p.adresse ? ' · ' + p.adresse : c && c.nom ? ' · ' + c.nom : ''), on:false }; }
 function ctBase(c){
-  var out = [{ id:'phenix', nom:ctMoi(), qualite:'Phénix-Architecture · maître d\'œuvre', on:true }], vus = {};
+  var out = [{ id:'phenix', nom:ctMoi(), qualite:'Phénix-Architecture · maître d\'œuvre', on:true }, ctClient(c)], vus = {};
   lotsOf().forEach(function(l){ var e = entrepriseOf(l); if (!e) return; var k = 'e_' + norm(e).replace(/[^a-z0-9]+/g, '_');
     if (vus[k]) { vus[k].qualite += ', ' + lotLabel(l); return; } vus[k] = { id:k, nom:e, qualite:'Entreprise · ' + lotLabel(l), on:false }; out.push(vus[k]); });
-  out.push({ id:'client', nom:'Le client', qualite:'Maître d\'ouvrage' + (c && c.nom ? ' · ' + c.nom : ''), on:false });
   return out;
 }
-function ctNew(){
+function ctNew(type){
   var c = chantier();
-  return { id:uid(), cid:S.cid, date:ctDay(), heure:ctNow(), objet:'Constat de désordres', presents:ctBase(c), desordres:[], conclusion:'', signatures:{}, planImgs:{}, reserves:true, creeLe:new Date().toISOString() };
+  return { type:type, id:uid(), cid:S.cid, date:ctDay(), heure:ctNow(), objet:CT_K[type].obj, meteo:'', presents:ctBase(c), desordres:[], avancement:'', avLots:{}, decisions:'', photosG:[], prochaineDate:'', prochaineHeure:'', prochaineNote:'', conclusion:'', signatures:{}, planImgs:{}, reserves:true, creeLe:new Date().toISOString() };
 }
-function ctMerge(){ var have = {}; CT.presents.forEach(function(p){ have[p.id] = 1; }); ctBase(chantier()).forEach(function(p){ if (!have[p.id]) CT.presents.push(p); }); }
+function ctMerge(){
+  var have = {}; CT.presents.forEach(function(p){ have[p.id] = p; });
+  ctBase(chantier()).forEach(function(p){ if (!have[p.id]) CT.presents.push(p); else if (p.id === 'client' && have.client.nom === 'Le client' && p.nom !== 'Le client') { have.client.nom = p.nom; have.client.qualite = p.qualite; } });
+}
 function ctLot(id){ return D.lots.filter(function(l){ return l.id == id; })[0] || null; }
-function ctLotTxt(id){ var l = ctLot(id); if (!l) return 'Lot à déterminer'; var e = entrepriseOf(l); return lotLabel(l) + (e ? ' · ' + e : ''); }
+function ctLotTxt(id, nom){ var l = ctLot(id); if (!l) return nom || 'Lot à déterminer'; var e = entrepriseOf(l); return lotLabel(l) + (e ? ' · ' + e : ''); }
 function ctD(id){ return CT && CT.desordres.filter(function(d){ return String(d.id) === String(id); })[0]; }
+/* lots de Chiffrage pas encore dans Chantier (proposés en plus) */
+function ctChfLots(){
+  var c = chantier(), it = c && CTS.chf[c.projetId] || [], have = lotsOf().map(function(l){ return norm(lotLabel(l)); });
+  return it.map(function(x, i){ return { id:'chf:' + i, nom:(x.num ? x.num + ' — ' : '') + (x.nom || ''), lbl:x.nom || '', ent:x.entreprise || '' }; }).filter(function(x){ return x.lbl && have.indexOf(norm(x.lbl)) < 0; });
+}
+/* ce que le dossier sait déjà : client (Dossier), lots du chiffrage, annuaire des artisans */
+function ctPrefill(){
+  var c = chantier(); if (!c) return;
+  if (FB.demo) { CTS.proj[c.projetId] = CTS.proj[c.projetId] || { client:'M. et Mme Faure', adresse:'12 route de Pontaumur, 63380 Saint-Hilaire' }; CTS.chf[c.projetId] = CTS.chf[c.projetId] || [{ num:'09', nom:'Carrelage, faïence', entreprise:'[Entreprise carrelage]' }];
+    CTS.ann = CTS.ann || [{ id:'a1', entreprise:'[Entreprise menuiserie]', metier:'Menuiserie', nom:'M. Barre', tel:'06 00 00 00 01' }, { id:'a2', entreprise:'[Bureau de contrôle]', metier:'Contrôle technique', nom:'' }, { id:'a3', entreprise:'[Entreprise carrelage]', metier:'Carrelage', nom:'' }]; return; }
+  if (c.projetId && !CTS.proj[c.projetId] && FB.projet) FB.projet(c.projetId).then(function(p){ if (!p) return; CTS.proj[c.projetId] = p; if (CT) { ctMerge(); ctPut(); if ($('overlay').className === 'on') ctRender(); } }).catch(function(){});
+  if (c.projetId && !CTS.chf[c.projetId] && FB.chImport) FB.chImport(c.projetId).then(function(d){ CTS.chf[c.projetId] = (d && d.lots) || []; }).catch(function(){});
+  if (!CTS.ann && FB.listenId) { CTS.ann = []; FB.listenId('phenix_artisans', function(a){ CTS.ann = a || []; }); }
+}
 
-/* Bibliothèques PDF chargées en avance (dès l'ouverture du constat, quand il y a du réseau) */
+/* Bibliothèques PDF chargées en avance (dès l'ouverture, quand il y a du réseau) */
 function ctScript(src){ return new Promise(function(ok, ko){ var s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = ko; document.head.appendChild(s); }); }
 function ctLibs(){
   if (window.PhenixPDF && window.jspdf) return Promise.resolve();
@@ -1797,9 +1837,11 @@ function ctLibs(){
 }
 
 /* ─── Ouverture ─── */
-function ctOpen(){
+function ctOpen(type){
+  type = type === 'cr' ? 'cr' : 'litige';
   var c = chantier(); if (!c) { toast('Choisissez d\'abord un chantier.'); return; }
-  ctGet(c.id).then(function(v){ CT = v || ctNew(); ctMerge(); CTS.open = v ? CTS.open : null; (S.ctDrafts = S.ctDrafts || {})[c.id] = 1; ctPut(); ctRender(); ctLibs().catch(function(){}); pdfLib().catch(function(){}); });
+  ctPrefill();
+  ctGet(ctKey(c.id, type)).then(function(v){ return v || (type === 'litige' ? ctGet(String(c.id)).then(function(o){ if (o) ctDel(String(c.id)); return o; }) : null); }).then(function(v){ CT = v || ctNew(type); CT.type = type; ctMerge(); if (!v) CTS.open = null; (S.ctDrafts = S.ctDrafts || {})[ctKey(c.id, type)] = 1; ctPut(); ctRender(); ctLibs().catch(function(){}); pdfLib().catch(function(){}); });
 }
 function ctClose(){ ctStopMic(); var o = $('overlay'); o.className = ''; o.innerHTML = ''; renderAll(); }
 
@@ -1877,7 +1919,7 @@ function ctDemoPlan(){
 function ctPlanPick(d){
   var list = plLatest(); if (!list.length && FB.demo) list = [ctDemoPlan()];
   var bg = document.createElement('div'); bg.className = 'sheetbg';
-  bg.innerHTML = '<div class="sheet"><div class="eyebrow">Désordre n° ' + d.n + ' · sur quel plan ?</div><button class="btn big pri" type="button" id="ct-imp" style="justify-content:flex-start;text-align:left">📥 Importer un plan (PDF ou image)<span style="font-weight:500;font-size:13px;margin-left:6px">· jeu de plans : choix de la page, puis cadre</span></button>' +
+  bg.innerHTML = '<div class="sheet"><div class="eyebrow">' + ctItem() + ' n° ' + d.n + ' · sur quel plan ?</div><button class="btn big pri" type="button" id="ct-imp" style="justify-content:flex-start;text-align:left">📥 Importer un plan (PDF ou image)<span style="font-weight:500;font-size:13px;margin-left:6px">· jeu de plans : choix de la page, puis cadre</span></button>' +
     (list.length ? '<div class="eyebrow">Plans déjà rangés sur ce chantier</div>' + list.map(function(x){ return '<button class="btn big" type="button" data-pl="' + esc(x.id) + '" style="justify-content:flex-start;text-align:left">📄 ' + esc(x.nom) + ' <span class="muted">· ' + esc(x.type || '') + ' v' + (x.version || 1) + '</span></button>'; }).join('') : '<div class="muted">Aucun plan rangé sur ce chantier pour l\'instant.</div>') +
     '<button class="btn ghost" type="button" data-x="1">Annuler</button></div>';
   document.body.appendChild(bg);
@@ -1955,7 +1997,7 @@ function ctCrop(d, du, nom, pageNum, fname){
 function ctPlanView(d, plan){
   if (!plan) return;
   var bg = document.createElement('div'), zoom = 1; bg.className = 'ctplan';
-  bg.innerHTML = '<div class="ctplan-top"><div style="flex:1;min-width:200px"><div class="eyebrow">' + esc(plan.nom) + '</div><div style="font:600 18px var(--fs)">Touchez le plan à l\'endroit du désordre n° ' + d.n + '</div><div class="muted" style="font-size:13px">Touchez une pastille n° ' + d.n + ' pour l\'enlever. Les autres désordres sont en pointillé.</div></div><button class="btn" type="button" data-z="-1" aria-label="Dézoomer">−</button><button class="btn" type="button" data-z="1" aria-label="Zoomer">+</button><button class="btn pri big" type="button" data-k="end">Terminer</button></div><div class="ctplan-pages"><div class="muted" style="text-align:center;padding:40px;color:#ddd">Chargement du plan…</div></div>';
+  bg.innerHTML = '<div class="ctplan-top"><div style="flex:1;min-width:200px"><div class="eyebrow">' + esc(plan.nom) + '</div><div style="font:600 18px var(--fs)">Touchez le plan à l\'endroit du ' + ctItem(true) + ' n° ' + d.n + '</div><div class="muted" style="font-size:13px">Touchez une pastille n° ' + d.n + ' pour l\'enlever. Les autres numéros sont en pointillé.</div></div><button class="btn" type="button" data-z="-1" aria-label="Dézoomer">−</button><button class="btn" type="button" data-z="1" aria-label="Zoomer">+</button><button class="btn pri big" type="button" data-k="end">Terminer</button></div><div class="ctplan-pages"><div class="muted" style="text-align:center;padding:40px;color:#ddd">Chargement du plan…</div></div>';
   document.body.appendChild(bg);
   var box = bg.querySelector('.ctplan-pages');
   var dots = function(){
@@ -1965,7 +2007,7 @@ function ctPlanView(d, plan){
       CT.desordres.forEach(function(o){ (o.pastilles || []).forEach(function(a, ai){
         if (String(a.planId) !== String(plan.id) || (a.page || 0) !== pg) return;
         var mine = o.id === d.id, b = document.createElement('button'); b.type = 'button'; b.className = 'ctdot' + (mine ? ' mine' : '');
-        b.style.left = a.x + '%'; b.style.top = a.y + '%'; b.textContent = o.n; b.setAttribute('aria-label', 'Désordre n° ' + o.n + (mine ? ', toucher pour enlever' : ''));
+        b.style.left = a.x + '%'; b.style.top = a.y + '%'; b.textContent = o.n; b.setAttribute('aria-label', ctItem() + ' n° ' + o.n + (mine ? ', toucher pour enlever' : ''));
         b.onclick = function(e){ e.stopPropagation(); if (!mine) return; o.pastilles.splice(ai, 1); ctPut(); dots(); toast('Pastille enlevée'); };
         w.appendChild(b); }); });
     });
@@ -1989,112 +2031,170 @@ function ctPlanView(d, plan){
   [].forEach.call(bg.querySelectorAll('[data-z]'), function(b){ b.onclick = function(){ zoom = Math.max(1, Math.min(4, zoom + (+b.getAttribute('data-z')) * .5)); [].forEach.call(box.querySelectorAll('.ctplan-pg'), function(w){ w.style.width = (zoom * 100) + '%'; }); }; });
 }
 
-/* ─── Écran du constat ─── */
+/* ─── Écran à remplir (constat ou compte rendu) ─── */
+function ctItem(min){ var t = CT ? CT_K[CT.type].item : 'Désordre'; return min ? t.toLowerCase() : t; }
+/* champ avec bouton de dictée : tous les textes peuvent se dicter */
+function ctIn(label, id, val, o){
+  o = o || {};
+  var f = o.rows ? '<textarea id="' + id + '" ' + o.attr + ' rows="' + o.rows + '" placeholder="' + esc(o.ph || '') + '">' + esc(val || '') + '</textarea>' : '<input id="' + id + '" ' + o.attr + ' value="' + esc(val || '') + '" placeholder="' + esc(o.ph || '') + '">';
+  return '<div class="ctf"' + (o.style ? ' style="' + o.style + '"' : '') + '><label class="eyebrow" for="' + id + '">' + label + '</label><div class="ctmicrow">' + f + '<button class="btn ctmic" type="button" data-mic="' + id + '" aria-label="Dicter : ' + esc(label) + '">🎙</button></div></div>';
+}
+function ctLotBtn(id, on, b, s){ return '<button type="button" class="ctlot' + (on ? ' on' : '') + '" data-ctlot="' + esc(id) + '" aria-pressed="' + on + '">' + (on ? '✓ ' : '') + '<b>' + esc(b) + '</b><span>' + esc(s) + '</span></button>'; }
 function ctDesHtml(d){
-  var g = CT_GRAV[d.gravite] || CT_GRAV.important, np = (d.photos || []).length, na = (d.pastilles || []).length;
+  var g = CT_GRAV[d.gravite] || CT_GRAV.important, np = (d.photos || []).length, na = (d.pastilles || []).length, it = ctItem();
   if (CTS.open !== d.id) {
-    return '<button type="button" class="ctd" data-ctopen="' + d.id + '"><span class="ctn">' + d.n + '</span><span style="flex:1;min-width:0;text-align:left"><b style="font-size:16px">' + esc(d.titre || (d.description ? d.description.slice(0, 80) : 'Désordre à décrire')) + '</b><span class="muted" style="display:block">' + esc(ctLotTxt(d.lotId)) + (d.lieu ? ' · ' + esc(d.lieu) : '') + '</span><span class="muted" style="display:block;font-size:13px">' + g[1] + ' ' + g[0] + ' · 📷 ' + np + ' photo' + (np > 1 ? 's' : '') + ' · 📍 ' + na + ' pastille' + (na > 1 ? 's' : '') + (d.delai ? ' · reprise avant le ' + frDate(d.delai) : '') + '</span></span><span class="chip">Modifier</span></button>';
+    return '<button type="button" class="ctd" data-ctopen="' + d.id + '"><span class="ctn">' + d.n + '</span><span style="flex:1;min-width:0;text-align:left"><b style="font-size:16px">' + esc(d.titre || (d.description ? d.description.slice(0, 80) : it + ' à décrire')) + '</b><span class="muted" style="display:block">' + esc(ctLotTxt(d.lotId, d.lotNom)) + (d.lieu ? ' · ' + esc(d.lieu) : '') + '</span><span class="muted" style="display:block;font-size:13px">' + g[1] + ' ' + g[0] + ' · 📷 ' + np + ' photo' + (np > 1 ? 's' : '') + ' · 📍 ' + na + ' pastille' + (na > 1 ? 's' : '') + (d.delai ? ' · reprise avant le ' + frDate(d.delai) : '') + '</span></span><span class="chip">Modifier</span></button>';
   }
-  var lots = lotsOf(), h = '<div class="card ctedit" data-ctd="' + d.id + '"><div style="display:flex;align-items:center;gap:10px"><span class="ctn">' + d.n + '</span><h3 style="font-size:20px;flex:1">Désordre n° ' + d.n + '</h3><button class="btn pri" type="button" data-ctclose="1">✓ Fini pour ce désordre</button></div>';
-  h += '<div class="eyebrow">Lot concerné</div><div class="ctlots">' + lots.map(function(l){ var on = d.lotId == l.id, e = entrepriseOf(l); return '<button type="button" class="ctlot' + (on ? ' on' : '') + '" data-ctlot="' + esc(l.id) + '" aria-pressed="' + on + '">' + (on ? '✓ ' : '') + '<b>' + esc(lotLabel(l)) + '</b><span>' + esc(e || 'Aucune entreprise') + '</span></button>'; }).join('') + '<button type="button" class="ctlot' + (!d.lotId ? ' on' : '') + '" data-ctlot="" aria-pressed="' + !d.lotId + '">' + (!d.lotId ? '✓ ' : '') + '<b>À déterminer</b><span>Lot pas encore identifié</span></button></div>';
-  h += '<div class="eyebrow">Gravité</div><span class="seg">' + Object.keys(CT_GRAV).map(function(k){ return '<button type="button" data-ctgrav="' + k + '" aria-pressed="' + (d.gravite === k) + '">' + CT_GRAV[k][1] + ' ' + CT_GRAV[k][0] + '</button>'; }).join('') + '</span>';
-  h += '<label class="ctf"><span class="eyebrow">Titre court</span><input data-ctf="titre" value="' + esc(d.titre || '') + '" placeholder="Ex. : fissure sur la cloison de la chambre 2"></label>';
-  h += '<div class="ctf"><span class="eyebrow">Ce qui est constaté</span><textarea data-ctf="description" rows="4" placeholder="Décrivez le désordre, ou touchez « Dicter » et parlez.">' + esc(d.description || '') + '</textarea><div><button class="btn" type="button" data-ctmic="description">🎙 Dicter</button></div></div>';
-  h += '<label class="ctf"><span class="eyebrow">Localisation</span><input data-ctf="lieu" value="' + esc(d.lieu || '') + '" placeholder="Ex. : salle de bain, mur côté fenêtre, à 1,20 m du sol"></label>';
-  h += '<div class="eyebrow">Photos (' + (d.photos || []).length + ')</div><div class="ctph">' + (d.photos || []).map(function(p, i){ return '<span class="ctthumb"><img src="' + p.dataUrl + '" alt="Photo ' + (i + 1) + ' du désordre ' + d.n + '"><button type="button" data-ctphdel="' + i + '" aria-label="Supprimer la photo">×</button></span>'; }).join('') + '</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn big pri" type="button" data-ctcam="1">📷 Prendre des photos</button><button class="btn big" type="button" data-ctfiles="1">🖼 Depuis les fichiers</button></div>';
-  h += '<div class="eyebrow">Sur le plan (' + (d.pastilles || []).length + ')</div>' + ((d.pastilles || []).length ? '<div style="display:flex;gap:6px;flex-wrap:wrap">' + d.pastilles.map(function(a, i){ return '<span class="chip">📍 ' + esc(a.planNom) + (a.page ? ' · p. ' + (a.page + 1) : '') + ' <button type="button" data-ctpdel="' + i + '" aria-label="Enlever la pastille" style="border:0;background:transparent;font-size:18px;min-width:30px;min-height:30px">×</button></span>'; }).join('') + '</div>' : '') + '<div><button class="btn big" type="button" data-ctplan="1">📍 Pointer sur un plan</button></div>';
-  h += '<div class="ctf"><span class="eyebrow">Reprise demandée</span><textarea data-ctf="action" rows="2" placeholder="Ex. : reprendre la bande et l\'enduit, puis repeindre la cloison.">' + esc(d.action || '') + '</textarea><div><button class="btn" type="button" data-ctmic="action">🎙 Dicter</button></div></div>';
-  h += '<label class="ctf" style="max-width:300px"><span class="eyebrow">À reprendre avant le</span><input type="date" data-ctf="delai" value="' + esc(d.delai || '') + '"></label>';
-  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:12px"><button class="btn pri big" type="button" data-ctclose="1">✓ Fini pour ce désordre</button><span style="flex:1"></span><button class="btn ghost" type="button" data-ctdel="1">Supprimer ce désordre</button></div></div>';
+  var lots = lotsOf(), chf = ctChfLots(), p = 'ctf-' + d.id + '-';
+  var h = '<div class="card ctedit" data-ctd="' + d.id + '"><div style="display:flex;align-items:center;gap:10px"><span class="ctn">' + d.n + '</span><h3 style="font-size:20px;flex:1">' + it + ' n° ' + d.n + '</h3><button class="btn pri" type="button" data-ctclose="1">✓ Fini</button></div>';
+  h += '<div class="eyebrow">Lot concerné</div><div class="ctlots">' + lots.map(function(l){ return ctLotBtn(l.id, d.lotId == l.id, lotLabel(l), entrepriseOf(l) || 'Aucune entreprise'); }).join('') +
+    chf.map(function(x){ return ctLotBtn(x.id, d.lotId === x.id, x.lbl, (x.ent || 'Aucune entreprise') + ' · chiffrage'); }).join('') + ctLotBtn('', !d.lotId, 'À déterminer', 'Lot pas encore identifié') + '</div>';
+  h += '<div class="eyebrow">Gravité</div><span class="seg" style="flex-wrap:wrap">' + Object.keys(CT_GRAV).map(function(k){ return '<button type="button" data-ctgrav="' + k + '" aria-pressed="' + (d.gravite === k) + '">' + CT_GRAV[k][1] + ' ' + CT_GRAV[k][0] + '</button>'; }).join('') + '</span>';
+  h += ctIn('Titre court', p + 'titre', d.titre, { attr:'data-ctf="titre"', ph:'Ex. : infiltration en rive de toiture' });
+  h += ctIn('Localisation', p + 'lieu', d.lieu, { attr:'data-ctf="lieu"', ph:'Ex. : chambre 1, angle nord-est, à 1,20 m du sol' });
+  h += ctIn(CT.type === 'cr' ? 'Ce qui est relevé' : 'Ce qui est constaté', p + 'description', d.description, { attr:'data-ctf="description"', rows:4, ph:'Écrivez, ou touchez 🎙 et parlez.' });
+  h += '<div class="eyebrow">Photos (' + (d.photos || []).length + ')</div><div class="ctph">' + (d.photos || []).map(function(ph, i){ return '<span class="ctthumb"><img src="' + ph.dataUrl + '" alt="Photo ' + (i + 1) + '"><button type="button" data-ctphdel="' + i + '" aria-label="Supprimer la photo">×</button></span>'; }).join('') + '</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn big pri" type="button" data-ctcam="1">📷 Prendre des photos</button><button class="btn big" type="button" data-ctfiles="1">🖼 Depuis les fichiers</button></div>';
+  h += '<div class="eyebrow">Sur le plan (' + (d.pastilles || []).length + ')</div>' + ((d.pastilles || []).length ? '<div style="display:flex;gap:6px;flex-wrap:wrap">' + d.pastilles.map(function(a, i){ return '<span class="chip">📍 ' + esc(a.planNom) + ' <button type="button" data-ctpdel="' + i + '" aria-label="Enlever la pastille" style="border:0;background:transparent;font-size:18px;min-width:30px;min-height:30px">×</button></span>'; }).join('') + '</div>' : '') + '<div><button class="btn big" type="button" data-ctplan="1">📍 Pointer sur un plan</button></div>';
+  h += '<div class="ctrow" style="align-items:flex-end">' + ctIn('Reprise demandée', p + 'action', d.action, { attr:'data-ctf="action"', rows:2, ph:'Ex. : reprendre le closoir et la rive, vérifier l\'écran sous toiture.', style:'flex:3 1 340px' }) +
+    '<div class="ctf" style="flex:1 1 200px"><label class="eyebrow" for="' + p + 'delai">Date de reprise demandée</label><input type="date" id="' + p + 'delai" data-ctf="delai" value="' + esc(d.delai || '') + '"><div style="display:flex;gap:6px;flex-wrap:wrap">' + [[7, '+ 1 sem.'], [14, '+ 2 sem.'], [30, '+ 1 mois']].map(function(x){ return '<button class="btn" type="button" data-ctdl="' + x[0] + '" style="min-height:40px;padding:0 10px;font-size:13px">' + x[1] + '</button>'; }).join('') + '</div></div></div>';
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:12px"><button class="btn pri big" type="button" data-ctclose="1">✓ Fini pour ce ' + ctItem(true) + '</button><span style="flex:1"></span><button class="btn ghost" type="button" data-ctdel="1">Supprimer</button></div></div>';
   return h;
+}
+function ctAvHtml(){
+  var l = lotsOf(); if (!l.length) return '';
+  return '<div class="eyebrow">Avancement par lot <span style="text-transform:none;letter-spacing:0;font-weight:500">(touchez − / + ; inchangé si vous n\'y touchez pas)</span></div><div class="ctav">' + l.map(function(x){
+    var v = CT.avLots[x.id] != null ? CT.avLots[x.id] : (+x.av || 0), ch = CT.avLots[x.id] != null && CT.avLots[x.id] !== (+x.av || 0);
+    return '<div class="ctavl' + (ch ? ' on' : '') + '"><span style="flex:1;min-width:0"><b>' + esc(lotLabel(x)) + '</b><span class="muted" style="display:block;font-size:13px">' + esc(entrepriseOf(x) || 'Aucune entreprise') + ' · avant : ' + (+x.av || 0) + ' %</span></span><button class="btn" type="button" data-av="' + esc(x.id) + '" data-d="-10" aria-label="Moins 10 %">−</button><b style="min-width:58px;text-align:center;font-size:17px">' + v + ' %' + (ch ? ' ✎' : '') + '</b><button class="btn" type="button" data-av="' + esc(x.id) + '" data-d="10" aria-label="Plus 10 %">+</button></div>';
+  }).join('') + '</div>';
 }
 function ctRender(){
   ctStopMic();
   var o = $('overlay'), c = chantier(); if (!CT || !c) return;
+  var K = CT_K[CT.type], cr = CT.type === 'cr';
   o.className = 'on';
-  var y = o.scrollTop, np = 0; CT.desordres.forEach(function(d){ np += (d.photos || []).length; });
-  var on = CT.presents.filter(function(p){ return p.on; });
-  var h = '<div class="cthead"><div style="flex:1;min-width:220px"><div class="eyebrow">Constat de litige · gardé sur la tablette à chaque geste</div><div style="font:400 26px var(--fd)">' + esc(c.nom || '') + '</div></div><button class="btn" type="button" id="ct-back">← Retour au chantier</button></div>';
-  h += '<div class="ctwrap">';
-  h += '<section class="card ctsec"><h2 style="font-size:22px">1. La visite</h2><div class="ctrow"><label class="ctf"><span class="eyebrow">Date</span><input type="date" data-ctg="date" value="' + esc(CT.date) + '"></label><label class="ctf"><span class="eyebrow">Heure</span><input type="time" data-ctg="heure" value="' + esc(CT.heure) + '"></label><label class="ctf" style="flex:2 1 260px"><span class="eyebrow">Objet</span><input data-ctg="objet" value="' + esc(CT.objet) + '"></label></div>';
-  h += '<div class="eyebrow">Qui est présent ? (' + on.length + ')</div><div class="ctpres">' + CT.presents.map(function(p){ return '<button type="button" class="ctlot' + (p.on ? ' on' : '') + '" data-ctpres="' + esc(p.id) + '" aria-pressed="' + !!p.on + '">' + (p.on ? '✓ Présent · ' : '○ Absent · ') + '<b>' + esc(p.nom) + '</b><span>' + esc(p.qualite || '') + '</span></button>'; }).join('') + '<button type="button" class="ctlot" id="ct-addp"><b>+ Ajouter une personne</b><span>Nom et qualité</span></button></div></section>';
-  h += '<section class="card ctsec"><h2 style="font-size:22px">2. Désordres constatés (' + CT.desordres.length + ')</h2>' + CT.desordres.map(ctDesHtml).join('') + '<button class="btn big pri" type="button" id="ct-newd" style="align-self:flex-start">+ Nouveau désordre</button></section>';
-  h += '<section class="card ctsec"><h2 style="font-size:22px">3. Conclusion et suite à donner</h2><textarea id="ct-concl" rows="4" placeholder="Ex. : l\'entreprise reconnaît les désordres et s\'engage à les reprendre avant le… Un nouveau passage sera fait ensemble pour lever les réserves.">' + esc(CT.conclusion || '') + '</textarea><div><button class="btn" type="button" id="ct-concl-mic">🎙 Dicter</button></div></section>';
-  h += '<section class="card ctsec"><h2 style="font-size:22px">4. Signatures sur place <span class="muted" style="font:500 14px var(--fs)">(facultatif)</span></h2>' + (on.length ? '<div class="ctpres">' + on.map(function(p){ var s = CT.signatures[p.id]; return '<button type="button" class="ctlot' + (s ? ' on' : '') + '" data-ctsign="' + esc(p.id) + '">' + (s ? '✓ Signé · ' : '✍ Faire signer · ') + '<b>' + esc(p.nom) + '</b><span>' + (s ? 'Toucher pour refaire' : esc(p.qualite || '')) + '</span>' + (s ? '<img src="' + s.dataUrl + '" alt="Signature de ' + esc(p.nom) + '" style="height:46px;background:#fff;border-radius:6px;margin-top:4px">' : '') + '</button>'; }).join('') + '</div>' : '<div class="muted">Cochez d\'abord les présents.</div>') + '<div class="muted">Sans signature ici, le PDF garde des cadres à signer à la main.</div></section>';
-  h += '<section class="card ctsec"><label style="display:flex;gap:12px;align-items:center;min-height:48px"><input type="checkbox" id="ct-res"' + (CT.reserves ? ' checked' : '') + ' style="width:24px;height:24px"> <span>Ajouter chaque désordre aux <b>réserves</b> du chantier (avec ses photos)</span></label>' +
-    '<div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn big pri" type="button" id="ct-save">✓ Enregistrer le constat</button><button class="btn big" type="button" id="ct-pdf">📄 Aperçu PDF</button><span style="flex:1"></span><button class="btn ghost" type="button" id="ct-drop">Abandonner ce brouillon</button></div>' +
-    '<div class="muted">' + CT.desordres.length + ' désordre' + (CT.desordres.length > 1 ? 's' : '') + ' · ' + np + ' photo' + (np > 1 ? 's' : '') + ' · ' + (S.online ? 'en ligne' : '⚠ hors ligne : l\'envoi partira au retour du réseau') + '</div></section>';
-  h += '</div>';
+  var y = o.scrollTop, np = (CT.photosG || []).length; CT.desordres.forEach(function(d){ np += (d.photos || []).length; });
+  var on = CT.presents.filter(function(p){ return p.on; }), n = 1, sec = function(t, extra){ return '<section class="card ctsec"><h2 style="font-size:22px">' + (n++) + '. ' + t + (extra || '') + '</h2>'; };
+  var h = '<div class="cthead"><div style="flex:1;min-width:220px"><div class="eyebrow">' + K.ico + ' ' + K.titre + ' · gardé sur la tablette à chaque geste</div><div style="font:400 26px var(--fd)">' + esc(c.nom || '') + '</div></div><button class="btn" type="button" id="ct-back">← Retour au chantier</button></div><div class="ctwrap">';
+  h += sec('La visite') + '<div class="ctrow"><div class="ctf" style="flex:0 1 190px"><label class="eyebrow" for="ct-date">Date</label><input type="date" id="ct-date" data-ctg="date" value="' + esc(CT.date) + '"></div><div class="ctf" style="flex:0 1 150px"><label class="eyebrow" for="ct-heure">Heure</label><input type="time" id="ct-heure" data-ctg="heure" value="' + esc(CT.heure) + '"></div>' + ctIn('Objet', 'ct-objet', CT.objet, { attr:'data-ctg="objet"', style:'flex:2 1 260px' }) + '</div>';
+  if (cr) h += ctIn('Météo', 'ct-meteo', CT.meteo, { attr:'data-ctg="meteo"', ph:'Ex. : ensoleillé, 8 °C, sol sec' });
+  h += '<div class="eyebrow">Qui est présent ? (' + on.length + ')</div><div class="ctpres">' + CT.presents.map(function(p){ return '<button type="button" class="ctlot' + (p.on ? ' on' : '') + '" data-ctpres="' + esc(p.id) + '" aria-pressed="' + !!p.on + '">' + (p.on ? '✓ Présent · ' : '○ Absent · ') + '<b>' + esc(p.nom) + '</b><span>' + esc(p.qualite || '') + '</span></button>'; }).join('') + '<button type="button" class="ctlot" id="ct-addp"><b>+ Ajouter une personne</b><span>Annuaire des artisans ou saisie à la main</span></button></div></section>';
+  if (cr) h += sec('Avancement des travaux') + ctIn('Ce qui a avancé', 'ct-av', CT.avancement, { attr:'data-ctg="avancement"', rows:3, ph:'Ex. : la couverture est posée sur le pan sud, les menuiseries arrivent lundi.' }) + ctAvHtml() + '</section>';
+  h += sec(K.items + ' (' + CT.desordres.length + ')') + CT.desordres.map(ctDesHtml).join('') + '<button class="btn big pri" type="button" id="ct-newd" style="align-self:flex-start">' + K.nouv + '</button></section>';
+  if (cr) {
+    h += sec('Décisions') + ctIn('Une décision par ligne (chacune devient une tâche)', 'ct-dec', CT.decisions, { attr:'data-ctg="decisions"', rows:3, ph:'Ex. : commander les menuiseries\nl\'électricien passe jeudi' }) + '</section>';
+    h += sec('Photos générales (' + (CT.photosG || []).length + ')') + '<div class="ctph">' + (CT.photosG || []).map(function(ph, i){ return '<span class="ctthumb"><img src="' + ph.dataUrl + '" alt="Photo ' + (i + 1) + '"><button type="button" data-ctgdel="' + i + '" aria-label="Supprimer la photo">×</button></span>'; }).join('') + '</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn big pri" type="button" id="ct-gcam">📷 Prendre des photos</button><button class="btn big" type="button" id="ct-gfiles">🖼 Depuis les fichiers</button></div></section>';
+    h += sec('Prochaine réunion') + '<div class="ctrow"><div class="ctf" style="flex:0 1 190px"><label class="eyebrow" for="ct-pd">Date</label><input type="date" id="ct-pd" data-ctg="prochaineDate" value="' + esc(CT.prochaineDate) + '"></div><div class="ctf" style="flex:0 1 150px"><label class="eyebrow" for="ct-ph">Heure</label><input type="time" id="ct-ph" data-ctg="prochaineHeure" value="' + esc(CT.prochaineHeure) + '"></div>' + ctIn('Précision', 'ct-pn', CT.prochaineNote, { attr:'data-ctg="prochaineNote"', ph:'Ex. : sur place, avec le plombier', style:'flex:2 1 240px' }) + '</div></section>';
+  }
+  h += sec(cr ? 'Observations' : 'Conclusion et suite à donner') + ctIn(cr ? 'Observations' : 'Conclusion', 'ct-concl', CT.conclusion, { attr:'data-ctg="conclusion"', rows:4, ph:cr ? 'Facultatif' : 'Ex. : l\'entreprise reconnaît les désordres et s\'engage à les reprendre avant le… Un nouveau passage sera fait ensemble pour lever les réserves.' }) + '</section>';
+  h += sec('Signatures sur place', ' <span class="muted" style="font:500 14px var(--fs)">(facultatif)</span>') + (on.length ? '<div class="ctpres">' + on.map(function(p){ var s = CT.signatures[p.id]; return '<button type="button" class="ctlot' + (s ? ' on' : '') + '" data-ctsign="' + esc(p.id) + '">' + (s ? '✓ Signé · ' : '✍ Faire signer · ') + '<b>' + esc(p.nom) + '</b><span>' + (s ? 'Toucher pour refaire' : esc(p.qualite || '')) + '</span>' + (s ? '<img src="' + s.dataUrl + '" alt="Signature de ' + esc(p.nom) + '" style="height:46px;background:#fff;border-radius:6px;margin-top:4px">' : '') + '</button>'; }).join('') + '</div>' : '<div class="muted">Cochez d\'abord les présents.</div>') + (cr ? '' : '<div class="muted">Sans signature ici, le PDF garde des cadres à signer à la main.</div>') + '</section>';
+  h += '<section class="card ctsec">' + (cr ? '<div class="muted">' + (S.role === 'chantier' ? 'Le compte rendu part au bureau pour validation : avancements, réserves et tâches seront appliqués à ce moment-là.' : 'À l\'enregistrement, les avancements sont appliqués aux lots, chaque point devient une réserve et chaque décision une tâche.') + '</div>' : '<label style="display:flex;gap:12px;align-items:center;min-height:48px"><input type="checkbox" id="ct-res"' + (CT.reserves ? ' checked' : '') + ' style="width:24px;height:24px"> <span>Ajouter chaque désordre aux <b>réserves</b> du chantier (avec ses photos)</span></label>') +
+    '<div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn big pri" type="button" id="ct-save">✓ Enregistrer le ' + K.court.toLowerCase() + '</button><button class="btn big" type="button" id="ct-pdf">📄 Aperçu PDF</button><span style="flex:1"></span><button class="btn ghost" type="button" id="ct-drop">Abandonner ce brouillon</button></div>' +
+    '<div class="muted">' + CT.desordres.length + ' ' + ctItem(true) + (CT.desordres.length > 1 ? 's' : '') + ' · ' + np + ' photo' + (np > 1 ? 's' : '') + ' · ' + (S.online ? 'en ligne' : '⚠ hors ligne : l\'envoi partira au retour du réseau') + '</div></section></div>';
   o.innerHTML = h; o.scrollTop = y;
   var q = function(s, f){ [].forEach.call(o.querySelectorAll(s), f); };
   $('ct-back').onclick = ctClose;
   q('[data-ctg]', function(x){ x.oninput = function(){ CT[x.getAttribute('data-ctg')] = x.value; ctPutSoon(); }; });
+  q('[data-mic]', function(b){ b.onclick = function(){ var t = $(b.getAttribute('data-mic')); if (t) ctMic(b, t); }; });
   q('[data-ctpres]', function(b){ b.onclick = function(){ var p = CT.presents.filter(function(z){ return z.id === b.getAttribute('data-ctpres'); })[0]; if (p) { p.on = !p.on; ctPut(); ctRender(); } }; });
   $('ct-addp').onclick = ctAddPerson;
-  $('ct-newd').onclick = function(){ var d = { id:'d' + Date.now().toString(36), n:CT.desordres.length + 1, lotId:null, gravite:'important', titre:'', description:'', lieu:'', photos:[], pastilles:[], action:'', delai:'' }; CT.desordres.push(d); CTS.open = d.id; ctPut(); ctRender(); var el = o.querySelector('[data-ctd="' + d.id + '"]'); if (el) el.scrollIntoView({ block:'start', behavior:'smooth' }); };
+  q('[data-av]', function(b){ b.onclick = function(){ var l = ctLot(b.getAttribute('data-av')); if (!l) return; var v = CT.avLots[l.id] != null ? CT.avLots[l.id] : (+l.av || 0); v = Math.max(0, Math.min(100, Math.round((v + (+b.getAttribute('data-d'))) / 10) * 10)); if (v === (+l.av || 0)) delete CT.avLots[l.id]; else CT.avLots[l.id] = v; ctPut(); ctRender(); }; });
+  $('ct-newd').onclick = function(){ var d = { id:'d' + Date.now().toString(36), n:CT.desordres.length + 1, lotId:null, lotNom:'', gravite:CT.type === 'cr' ? 'mineur' : 'important', titre:'', description:'', lieu:'', photos:[], pastilles:[], action:'', delai:'' }; CT.desordres.push(d); CTS.open = d.id; ctPut(); ctRender(); var el = o.querySelector('[data-ctd="' + d.id + '"]'); if (el) el.scrollIntoView({ block:'start', behavior:'smooth' }); };
   q('[data-ctopen]', function(b){ b.onclick = function(){ CTS.open = b.getAttribute('data-ctopen'); ctRender(); var el = o.querySelector('[data-ctd="' + CTS.open + '"]'); if (el) el.scrollIntoView({ block:'start' }); }; });
+  var addG = function(du){ (CT.photosG = CT.photosG || []).push({ id:'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), dataUrl:du, t:new Date().toISOString() }); ctPut(); };
+  if ($('ct-gcam')) $('ct-gcam').onclick = function(){ ctCamera(addG, ctRender); };
+  if ($('ct-gfiles')) $('ct-gfiles').onclick = function(){ ctFiles(function(du){ addG(du); ctRender(); }); };
+  q('[data-ctgdel]', function(b){ b.onclick = function(){ if (!confirm('Supprimer cette photo ?')) return; CT.photosG.splice(+b.getAttribute('data-ctgdel'), 1); ctPut(); ctRender(); }; });
   var ed = o.querySelector('.ctedit');
   if (ed) {
     var d = ctD(ed.getAttribute('data-ctd')), e = function(s, f){ [].forEach.call(ed.querySelectorAll(s), f); };
     e('[data-ctclose]', function(b){ b.onclick = function(){ CTS.open = null; ctRender(); }; });
-    e('[data-ctlot]', function(b){ b.onclick = function(){ var v = b.getAttribute('data-ctlot'); d.lotId = v ? (ctLot(v) || {}).id || v : null; ctPut(); ctRender(); }; });
+    e('[data-ctlot]', function(b){ b.onclick = function(){ var v = b.getAttribute('data-ctlot'), l = v && ctLot(v), cf = v && v.indexOf('chf:') === 0 ? ctChfLots().filter(function(x){ return x.id === v; })[0] : null;
+      d.lotId = l ? l.id : cf ? cf.id : null; d.lotNom = l ? '' : cf ? cf.lbl + (cf.ent ? ' · ' + cf.ent : '') : ''; ctPut(); ctRender(); }; });
     e('[data-ctgrav]', function(b){ b.onclick = function(){ d.gravite = b.getAttribute('data-ctgrav'); ctPut(); ctRender(); }; });
     e('[data-ctf]', function(x){ x.oninput = function(){ d[x.getAttribute('data-ctf')] = x.value; ctPutSoon(); }; });
-    e('[data-ctmic]', function(b){ b.onclick = function(){ ctMic(b, ed.querySelector('[data-ctf="' + b.getAttribute('data-ctmic') + '"]')); }; });
+    e('[data-ctdl]', function(b){ b.onclick = function(){ var t = new Date(); t.setDate(t.getDate() + (+b.getAttribute('data-ctdl'))); d.delai = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0'); ctPut(); ctRender(); }; });
     var addPh = function(du){ (d.photos = d.photos || []).push({ id:'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), dataUrl:du, t:new Date().toISOString() }); ctPut(); };
     e('[data-ctcam]', function(b){ b.onclick = function(){ ctCamera(addPh, ctRender); }; });
     e('[data-ctfiles]', function(b){ b.onclick = function(){ ctFiles(function(du){ addPh(du); ctRender(); }); }; });
     e('[data-ctphdel]', function(b){ b.onclick = function(){ if (!confirm('Supprimer cette photo ?')) return; d.photos.splice(+b.getAttribute('data-ctphdel'), 1); ctPut(); ctRender(); }; });
     e('[data-ctplan]', function(b){ b.onclick = function(){ ctPlanPick(d); }; });
     e('[data-ctpdel]', function(b){ b.onclick = function(){ d.pastilles.splice(+b.getAttribute('data-ctpdel'), 1); ctPut(); ctRender(); }; });
-    e('[data-ctdel]', function(b){ b.onclick = function(){ if (!confirm('Supprimer le désordre n° ' + d.n + ', ses photos et ses pastilles ?')) return; CT.desordres = CT.desordres.filter(function(z){ return z.id !== d.id; }); CT.desordres.forEach(function(z, i){ z.n = i + 1; }); CTS.open = null; ctPut(); ctRender(); }; });
+    e('[data-ctdel]', function(b){ b.onclick = function(){ if (!confirm('Supprimer le ' + ctItem(true) + ' n° ' + d.n + ', ses photos et ses pastilles ?')) return; CT.desordres = CT.desordres.filter(function(z){ return z.id !== d.id; }); CT.desordres.forEach(function(z, i){ z.n = i + 1; }); CTS.open = null; ctPut(); ctRender(); }; });
   }
-  $('ct-concl').oninput = function(){ CT.conclusion = this.value; ctPutSoon(); };
-  $('ct-concl-mic').onclick = function(){ ctMic(this, $('ct-concl')); };
   q('[data-ctsign]', function(b){ b.onclick = function(){ var p = CT.presents.filter(function(z){ return z.id === b.getAttribute('data-ctsign'); })[0]; if (p) ctSign(p); }; });
-  $('ct-res').onchange = function(){ CT.reserves = this.checked; ctPut(); };
+  if ($('ct-res')) $('ct-res').onchange = function(){ CT.reserves = this.checked; ctPut(); };
   $('ct-pdf').onclick = function(){ ctPdf(ctRecord(false)); };
   $('ct-save').onclick = ctSave;
-  $('ct-drop').onclick = function(){ if (!confirm('Abandonner ce brouillon de constat ? Les photos et le texte saisis seront perdus.')) return; var cid = CT.cid; ctDel(cid); if (S.ctDrafts) delete S.ctDrafts[cid]; CT = null; ctClose(); toast('Brouillon abandonné'); };
+  $('ct-drop').onclick = function(){ if (!confirm('Abandonner ce brouillon ? Les photos et le texte saisis seront perdus.')) return; ctDel(ctKey(CT.cid, CT.type)); CT = null; ctClose(); toast('Brouillon abandonné'); };
 }
+/* Ajouter une personne : Annuaire des artisans (recherche, dictée possible) ou saisie à la main */
 function ctAddPerson(){
   var bg = document.createElement('div'); bg.className = 'sheetbg';
-  bg.innerHTML = '<div class="sheet"><div class="eyebrow">Ajouter une personne présente</div><input id="ctp-n" placeholder="Nom (ex. M. Durand)" style="min-height:48px"><input id="ctp-q" placeholder="Qualité (ex. client, expert, chef d\'équipe de l\'entreprise…)" style="min-height:48px"><div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn ghost" type="button" data-x="1">Annuler</button><button class="btn pri" type="button" id="ctp-ok">Ajouter</button></div></div>';
-  document.body.appendChild(bg); $('ctp-n').focus();
-  bg.onclick = function(e){ if (e.target === bg || (e.target.getAttribute && e.target.getAttribute('data-x'))) bg.remove(); };
-  $('ctp-ok').onclick = function(){ var n = $('ctp-n').value.trim(); if (!n) { toast('Indiquez un nom.'); return; } CT.presents.push({ id:'p' + Date.now().toString(36), nom:n, qualite:$('ctp-q').value.trim(), on:true }); ctPut(); bg.remove(); ctRender(); };
+  bg.innerHTML = '<div class="sheet" style="width:min(720px,100%)"><div class="eyebrow">Ajouter une personne présente</div>' +
+    '<span class="seg light"><button type="button" data-tab="ann" aria-pressed="true">Annuaire des artisans</button><button type="button" data-tab="man" aria-pressed="false">Saisir à la main</button></span>' +
+    '<div id="ctp-ann" style="display:flex;flex-direction:column;gap:8px"><div class="ctmicrow"><input id="ctp-q" placeholder="Rechercher une entreprise, un métier, un nom…" style="min-height:48px"><button class="btn ctmic" type="button" id="ctp-qmic" aria-label="Dicter la recherche">🎙</button></div><div id="ctp-list" style="display:flex;flex-direction:column;gap:6px;max-height:46vh;overflow:auto"></div></div>' +
+    '<div id="ctp-man" hidden style="display:flex;flex-direction:column;gap:8px"><div class="ctmicrow"><input id="ctp-n" placeholder="Nom (ex. M. Durand, entreprise Durand)" style="min-height:48px"><button class="btn ctmic" type="button" id="ctp-nmic" aria-label="Dicter le nom">🎙</button></div><div class="ctmicrow"><input id="ctp-ql" placeholder="Qualité (ex. client, expert, chef d\'équipe…)" style="min-height:48px"><button class="btn ctmic" type="button" id="ctp-qlmic" aria-label="Dicter la qualité">🎙</button></div><div style="display:flex;justify-content:flex-end"><button class="btn pri" type="button" id="ctp-ok">Ajouter</button></div></div>' +
+    '<button class="btn ghost" type="button" data-x="1">Fermer</button></div>';
+  document.body.appendChild(bg);
+  var close = function(){ ctStopMic(); bg.remove(); };
+  bg.onclick = function(e){ if (e.target === bg || (e.target.getAttribute && e.target.getAttribute('data-x'))) close(); };
+  [].forEach.call(bg.querySelectorAll('[data-tab]'), function(b){ b.onclick = function(){ var m = b.getAttribute('data-tab') === 'man'; bg.querySelector('#ctp-ann').hidden = m; bg.querySelector('#ctp-man').hidden = !m; bg.querySelector('#ctp-ann').style.display = m ? 'none' : 'flex'; bg.querySelector('#ctp-man').style.display = m ? 'flex' : 'none'; [].forEach.call(bg.querySelectorAll('[data-tab]'), function(x){ x.setAttribute('aria-pressed', String(x === b)); }); }; });
+  bg.querySelector('#ctp-man').style.display = 'none';
+  var have = {}; CT.presents.forEach(function(p){ have[norm(p.nom)] = 1; });
+  var list = function(){
+    var t = norm(bg.querySelector('#ctp-q').value), a = (CTS.ann || []).filter(function(x){ var s = norm([x.entreprise, x.nom, x.metier].join(' ')); return !t || t.split(/\s+/).every(function(w){ return s.indexOf(w) >= 0; }); }).sort(function(x, y){ return String(x.entreprise || x.nom).localeCompare(String(y.entreprise || y.nom), 'fr'); }).slice(0, 60);
+    bg.querySelector('#ctp-list').innerHTML = a.length ? a.map(function(x){ var nm = (x.entreprise || x.nom || '').trim(), deja = have[norm(nm)]; return '<button type="button" class="ctlot" data-ann="' + esc(x.id) + '"' + (deja ? ' disabled style="opacity:.55"' : '') + '><b>' + (deja ? '✓ ' : '+ ') + esc(nm) + '</b><span>' + esc([x.metier, x.entreprise && x.nom && x.nom !== x.entreprise ? x.nom : '', x.tel].filter(Boolean).join(' · ') || 'Artisan') + (deja ? ' · déjà dans la liste' : '') + '</span></button>'; }).join('') : '<div class="muted">' + ((CTS.ann || []).length ? 'Aucun artisan ne correspond. Essayez un autre mot, ou « Saisir à la main ».' : 'Annuaire indisponible (pas de réseau ?) : utilisez « Saisir à la main ».') + '</div>';
+    [].forEach.call(bg.querySelectorAll('[data-ann]'), function(b){ b.onclick = function(){ var x = (CTS.ann || []).filter(function(z){ return String(z.id) === b.getAttribute('data-ann'); })[0]; if (!x) return; var nm = (x.entreprise || x.nom || '').trim();
+      CT.presents.push({ id:'a_' + x.id, nom:nm, qualite:['Entreprise', x.metier, x.entreprise && x.nom && x.nom !== x.entreprise ? x.nom : ''].filter(Boolean).join(' · '), on:true, annId:x.id }); ctPut(); close(); ctRender(); toast(nm + ' ajouté aux présents'); }; });
+  };
+  bg.querySelector('#ctp-q').oninput = list; list();
+  bg.querySelector('#ctp-qmic').onclick = function(){ ctMic(this, bg.querySelector('#ctp-q')); };
+  bg.querySelector('#ctp-nmic').onclick = function(){ ctMic(this, bg.querySelector('#ctp-n')); };
+  bg.querySelector('#ctp-qlmic').onclick = function(){ ctMic(this, bg.querySelector('#ctp-ql')); };
+  bg.querySelector('#ctp-ok').onclick = function(){ var n = bg.querySelector('#ctp-n').value.trim(); if (!n) { toast('Indiquez un nom.'); return; } CT.presents.push({ id:'p' + Date.now().toString(36), nom:n, qualite:bg.querySelector('#ctp-ql').value.trim(), on:true }); ctPut(); close(); ctRender(); };
 }
 
 /* ─── Enregistrement ─── */
-function ctNum(){ var n = 0; D.crs.filter(function(c){ return c.chantierId == S.cid && c.type === 'litige'; }).forEach(function(c){ var m = /(\d+)\s*$/.exec(c.num || ''); if (m) n = Math.max(n, +m[1]); }); return 'CL-' + String(n + 1).padStart(2, '0'); }
-/* withMedia=true : les images partent dans phenix_media et le constat ne garde que leurs identifiants */
+function ctNum(type){ var pre = type === 'cr' ? 'CR' : 'CL', n = 0; D.crs.filter(function(c){ return c.chantierId == S.cid && (type === 'cr' ? c.type !== 'litige' : c.type === 'litige'); }).forEach(function(c){ var m = /(\d+)\s*$/.exec(c.num || ''); if (m) n = Math.max(n, +m[1]); }); return pre + '-' + String(n + 1).padStart(2, '0'); }
+function ctProchaine(){ if (!CT.prochaineDate && !CT.prochaineNote) return ''; var t = CT.prochaineDate ? new Date(CT.prochaineDate + 'T12:00:00').toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }) : ''; t = t ? t.charAt(0).toUpperCase() + t.slice(1) : ''; return [t + (CT.prochaineHeure ? ' à ' + ctH(CT.prochaineHeure) : ''), CT.prochaineNote].filter(function(x){ return x && x.trim(); }).join(' — '); }
+/* withMedia=true : les images partent dans phenix_media et le document ne garde que leurs identifiants */
 function ctRecord(withMedia){
-  var c = chantier(), put = function(du, kind){ if (!withMedia) return { dataUrl:du }; var id = 'm_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 9); MEDC[id] = du; if (!FB.demo) FB.putMedia(id, du, kind).catch(function(){}); return { mediaId:id }; };
+  var c = chantier(), cr = CT.type === 'cr', put = function(du, kind){ if (!withMedia) return { dataUrl:du }; var id = 'm_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 9); MEDC[id] = du; if (!FB.demo) FB.putMedia(id, du, kind).catch(function(){}); return { mediaId:id }; };
   var on = CT.presents.filter(function(p){ return p.on; }), sig = {}, pim = {};
   Object.keys(CT.signatures).forEach(function(k){ var s = CT.signatures[k]; if (!on.some(function(p){ return p.id === k; })) return; sig[k] = Object.assign({ nom:s.nom, qualite:s.qualite, t:s.t }, put(s.dataUrl, 'signature')); });
   var used = {}; CT.desordres.forEach(function(d){ (d.pastilles || []).forEach(function(a){ used[a.planId + '_' + (a.page || 0)] = 1; }); });
   Object.keys(CT.planImgs).forEach(function(k){ if (!used[k]) return; var p = CT.planImgs[k]; pim[k] = Object.assign({ nom:p.nom, page:p.page, planId:p.planId }, put(p.dataUrl, 'plan')); });
-  var des = CT.desordres.map(function(d){ return { id:d.id, n:d.n, lotId:d.lotId || null, lot:ctLotTxt(d.lotId), gravite:d.gravite, titre:(d.titre || '').trim(), description:(d.description || '').trim(), lieu:(d.lieu || '').trim(), action:(d.action || '').trim(), delai:d.delai || '',
+  var des = CT.desordres.map(function(d){ var lid = d.lotId && String(d.lotId).indexOf('chf:') !== 0 ? d.lotId : null; return { id:d.id, n:d.n, lotId:lid, lot:ctLotTxt(lid, d.lotNom), gravite:d.gravite, titre:(d.titre || '').trim(), description:(d.description || '').trim(), lieu:(d.lieu || '').trim(), action:(d.action || '').trim(), delai:d.delai || '',
     photos:(d.photos || []).map(function(p){ return put(p.dataUrl, 'photo'); }), pastilles:(d.pastilles || []).map(function(a){ return { planId:a.planId, planNom:a.planNom, page:a.page || 0, x:a.x, y:a.y }; }) }; });
-  return { id:CT.id, num:withMedia ? ctNum() : (CT.num || 'Brouillon'), type:'litige', chantierId:c ? c.id : CT.cid, chantierNom:c ? c.nom || '' : '', date:CT.date, heure:CT.heure, objet:(CT.objet || 'Constat de désordres').trim(),
+  var r = { id:CT.id, num:withMedia ? ctNum(CT.type) : 'Brouillon', type:cr ? 'visite' : 'litige', chantierId:c ? c.id : CT.cid, chantierNom:c ? c.nom || '' : '', date:CT.date, heure:CT.heure, objet:(CT.objet || CT_K[CT.type].obj).trim(),
     presents:on.map(function(p){ return p.nom + (p.qualite ? ' (' + p.qualite + ')' : ''); }).join(', '), presentsListe:on.map(function(p){ return { id:p.id, nom:p.nom, qualite:p.qualite || '' }; }),
-    desordres:des, conclusion:(CT.conclusion || '').trim(), signatures:sig, planImgs:pim, reserves:des.map(function(d){ return '• n° ' + d.n + ' ' + (d.titre || d.description.slice(0, 70)) + ' — ' + d.lot; }).join('\n'),
-    auteur:S.user || 'Phénix-Architecture', source:'constat', aValider:false, createdAt:new Date().toISOString() };
+    conclusion:(CT.conclusion || '').trim(), signatures:sig, planImgs:pim, reserves:des.map(function(d){ return '• n° ' + d.n + ' ' + (d.titre || d.description.slice(0, 70)) + ' — ' + d.lot + (d.delai ? ' (reprise avant le ' + frDate(d.delai) + ')' : ''); }).join('\n'),
+    auteur:S.user || 'Phénix-Architecture', source:'formulaire', aValider:false, createdAt:new Date().toISOString() };
+  if (!cr) { r.desordres = des; return r; }
+  var gph = (CT.photosG || []).map(function(p){ return Object.assign({ lotId:null, caption:'' }, put(p.dataUrl, 'photo')); });
+  r.points = des; r.meteo = (CT.meteo || '').trim(); r.avancement = (CT.avancement || '').trim(); r.decisions = (CT.decisions || '').trim(); r.prochaine = ctProchaine();
+  r.taches = String(CT.decisions || '').split('\n').map(function(x){ return x.replace(/^[-•*–\s]+/, '').trim(); }).filter(function(x){ return x.length > 2; });
+  r.propositions = Object.keys(CT.avLots).map(function(k){ var l = ctLot(k); return l ? { lotId:l.id, de:+l.av || 0, a:CT.avLots[k] } : null; }).filter(function(x){ return x && x.de !== x.a; });
+  r.photos = gph.concat([].concat.apply([], des.map(function(d){ return d.photos.map(function(p){ return Object.assign({ lotId:d.lotId, pointId:d.id, caption:'Point ' + d.n }, p); }); })));
+  r.reservesNouvelles = des.map(function(d){ return { id:d.id, titre:d.titre || (d.description.length > 70 ? d.description.slice(0, 67) + '…' : d.description) || 'Point n° ' + d.n, description:d.description + (d.action ? '\nReprise demandée : ' + d.action : ''), lieu:d.lieu, lotId:d.lotId, photoMediaId:d.photos[0] && d.photos[0].mediaId || null }; });
+  r.visite = { debut:CT.date + 'T' + (CT.heure || '00:00') + ':00', fin:new Date().toISOString() }; r.aValider = S.role === 'chantier'; r.plans = [];
+  return r;
 }
 function ctSave(){
-  if (!CT || CTS.busy) return; var c = chantier(); if (!c) return;
-  if (!CT.desordres.length && !confirm('Aucun désordre saisi. Enregistrer quand même le constat ?')) return;
+  if (!CT || CTS.busy) return; var c = chantier(); if (!c) return; var cr = CT.type === 'cr', it = ctItem(true);
+  if (!cr && !CT.desordres.length && !confirm('Aucun désordre saisi. Enregistrer quand même le constat ?')) return;
   var vide = CT.desordres.filter(function(d){ return !(d.titre || d.description); });
-  if (vide.length && !confirm('Le désordre n° ' + vide.map(function(d){ return d.n; }).join(', ') + ' n\'a pas de description. Enregistrer quand même ?')) return;
+  if (vide.length && !confirm('Le ' + it + ' n° ' + vide.map(function(d){ return d.n; }).join(', ') + ' n\'a pas de description. Enregistrer quand même ?')) return;
   CTS.busy = true; ctStopMic();
   var rec = ctRecord(true);
   D.crs.push(rec); save('crs', rec);
-  if (CT.reserves) { var n = D.reserves.filter(function(r){ return r.chantierId == c.id; }).length;
+  if (cr) { if (!rec.aValider) validerCR(rec.id); }
+  else if (CT.reserves) { var n = D.reserves.filter(function(r){ return r.chantierId == c.id; }).length;
     rec.desordres.forEach(function(d){ n++; var rs = { id:uid(), chantierId:c.id, ref:'R' + String(n).padStart(2, '0'), titre:d.titre || (d.description.length > 70 ? d.description.slice(0, 67) + '…' : d.description) || 'Désordre n° ' + d.n, description:d.description + (d.action ? '\nReprise demandée : ' + d.action : ''), lieu:d.lieu, lotId:d.lotId, intervId:(ctLot(d.lotId) || {}).interv || null, priorite:d.gravite === 'bloquant' ? 'haute' : 'normale', origine:'constat ' + rec.num, echeance:d.delai || '', statut:'ouverte', dateLevee:'', photos:d.photos.slice(0, 6).map(function(p){ return { mediaId:p.mediaId, caption:'' }; }) }; D.reserves.push(rs); save('reserves', rs); }); }
-  var cid = CT.cid; ctDel(cid); if (S.ctDrafts) delete S.ctDrafts[cid]; CT = null; CTS.busy = false; CTS.open = null;
+  ctDel(ctKey(CT.cid, CT.type)); var K = CT_K[CT.type], nb = rec.desordres ? rec.desordres.length : rec.points.length; CT = null; CTS.busy = false; CTS.open = null;
   var o = $('overlay'); o.className = ''; o.innerHTML = ''; renderAll();
   var bg = document.createElement('div'); bg.className = 'sheetbg';
-  bg.innerHTML = '<div class="sheet"><div class="eyebrow">Constat ' + esc(rec.num) + ' enregistré</div><h2 style="font-size:24px">' + rec.desordres.length + ' désordre' + (rec.desordres.length > 1 ? 's' : '') + ' constaté' + (rec.desordres.length > 1 ? 's' : '') + '</h2><div class="muted">' + (S.online ? 'Envoyé dans le dossier du chantier' : '⚠ Hors ligne : il partira dès le retour du réseau. Gardez l\'onglet ouvert.') + '. Vous le retrouvez dans l\'onglet « Comptes rendus ».</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn big pri" type="button" id="cts-pdf">📄 Télécharger le PDF</button><button class="btn big ghost" type="button" data-x="1">Fermer</button></div></div>';
+  bg.innerHTML = '<div class="sheet"><div class="eyebrow">' + K.court + ' ' + esc(rec.num) + ' enregistré</div><h2 style="font-size:24px">' + nb + ' ' + it + (nb > 1 ? 's' : '') + (cr ? ' relevé' : ' constaté') + (nb > 1 ? 's' : '') + '</h2><div class="muted">' + (S.online ? 'Envoyé dans le dossier du chantier' : '⚠ Hors ligne : il partira dès le retour du réseau. Gardez l\'onglet ouvert') + '. ' + (cr && rec.aValider ? 'Il attend la validation au bureau. ' : '') + 'Vous le retrouvez dans l\'onglet « Comptes rendus ».</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn big pri" type="button" id="cts-pdf">📄 Télécharger le PDF</button><button class="btn big ghost" type="button" data-x="1">Fermer</button></div></div>';
   document.body.appendChild(bg);
   bg.onclick = function(e){ if (e.target === bg || (e.target.getAttribute && e.target.getAttribute('data-x'))) bg.remove(); };
   $('cts-pdf').onclick = function(){ ctPdf(rec); };
@@ -2121,7 +2221,7 @@ var CTP = {
   fiche:function(px, lignes){ lignes = lignes.filter(function(l){ return l && l[1]; }); px.ensure(lignes.length * 6.6 + 2); lignes.forEach(function(l){ px.ligne(l[0], l[1]); px.y += 0.6; }); px.y += 3; },
   photos:function(px, ph){ if (!ph.length) return; px.ensure(72); px.y += 1; px.vignettes(ph, { w:88, h:64 }); px.y += 3; },
   presents:function(px, liste){ CTP.section(px, 'Personnes présentes', 14); if (liste.length) px.puces(liste.map(function(p){ return '**' + p.nom + '**' + (p.qualite ? ' — ' + p.qualite : ''); }), { taille:10, pas:5.6 }); else px.texte('Aucune personne renseignée.', { taille:10 }); px.y += 2; },
-  entete:function(px, r, quoi){ px.cadres([{ titre:'Chantier', lignes:['**' + (r.chantierNom || '') + '**', quoi + ' n° ' + r.num, 'Le ' + frDate(r.date) + (r.heure ? ' à ' + r.heure.replace(':', ' h ') : '')] }, { titre:'Rédigé par', lignes:['**Phénix-Architecture**', 'Maître d\'œuvre et contractant général', 'Établi sur place'] }]); px.y += 3; },
+  entete:function(px, r, quoi){ px.cadres([{ titre:'Chantier', lignes:['**' + (r.chantierNom || '') + '**', quoi + ' n° ' + r.num, 'Le ' + frDate(r.date) + (r.heure ? ' à ' + ctH(r.heure) : '')] }, { titre:'Rédigé par', lignes:['**Phénix-Architecture**', 'Maître d\'œuvre et contractant général', 'Établi sur place'] }]); px.y += 3; },
   /* charge les images (photos, plans, signatures), lance le gabarit, enregistre */
   run:function(imgs, build, fichier){
     if (CTS.pdf) return; CTS.pdf = true; toast('Préparation du PDF…'); var P;
@@ -2133,85 +2233,102 @@ var CTP = {
   },
   nom:function(s){ return String(s || 'chantier').replace(/[^\wÀ-ſ-]+/g, '_'); }
 };
+/* images d'un document (photos des points, photos générales, plans, signatures) */
+function ctImgs(r){
+  var imgs = [], pts = r.desordres || r.points || [];
+  pts.forEach(function(d){ d.photos.forEach(function(p){ imgs.push({ x:p, k:'photo' }); }); });
+  if (r.points || !r.desordres) (r.photos || []).filter(function(p){ return !p.pointId && !p.reserveId; }).forEach(function(p){ imgs.push({ x:p, k:'photoG' }); });
+  if (!r.points && !r.desordres) (r.photos || []).filter(function(p){ return p.reserveId; }).forEach(function(p){ imgs.push({ x:p, k:'photoG' }); });
+  Object.keys(r.planImgs || {}).forEach(function(k){ imgs.push({ x:r.planImgs[k], k:'plan' }); });
+  Object.keys(r.signatures || {}).forEach(function(k){ imgs.push({ x:r.signatures[k], k:'sig' }); });
+  return imgs;
+}
+/* points (désordres ou points relevés) avec fiche, textes, photos ; puis les plans repérés */
+function ctPointsPdf(px, pts, planImgs, item){
+  pts.forEach(function(d){
+    var g = CT_GRAV[d.gravite] || CT_GRAV.important, nl = function(t){ return String(t || '').split('\n').reduce(function(n, l){ return n + Math.max(1, Math.ceil(l.length / 95)); }, 0); };
+    var hD = 32 + 4 * 7.2 + 12 + nl(d.description) * 6.6 + (d.action || d.delai ? 12 + nl(d.action) * 6.6 : 0) + Math.ceil(d.photos.length / 2) * 72;
+    if (hD < 225) px.ensure(hD);   /* le point entier (texte + photos) sur une même page quand il y tient */
+    CTP.section(px, item + ' n° ' + d.n + (d.titre ? ' — ' + d.titre : ''), 34);
+    CTP.fiche(px, [['Lot :', d.lot], ['Gravité :', g[0]], ['Localisation :', d.lieu], ['Sur le plan :', d.pastilles.length ? d.pastilles.map(function(a){ return a.planNom; }).filter(function(x, i, a){ return a.indexOf(x) === i; }).join(', ') + ' — pastille n° ' + d.n : '']]);
+    CTP.bloc(px, item === 'Désordre' ? 'Constat' : 'Relevé', d.description, 'Non décrit.');
+    if (d.action || d.delai) CTP.bloc(px, 'Reprise demandée' + (d.delai ? ' — avant le ' + frDate(d.delai) : ''), d.action, 'À préciser.');
+    CTP.photos(px, d.photos.filter(function(p){ return p._src; }).map(function(p, i){ return { src:p._src, legende:item + ' ' + d.n + ' · photo ' + (i + 1) }; }));
+  });
+  Object.keys(planImgs || {}).forEach(function(k){
+    var p = planImgs[k]; if (!p._src) return;
+    var pas = []; pts.forEach(function(d){ d.pastilles.forEach(function(a){ if (a.planId + '_' + (a.page || 0) === k) pas.push({ x:a.x, y:a.y, n:d.n, couleur:d.gravite === 'bloquant' ? '#a3261b' : '#0a1628', t:d }); }); });
+    CTP.section(px, 'Plan repéré : ' + (p.nom || 'plan'), 150);
+    px.image(p._src, { pastilles:pas, hMax:170 }); px.y += 3;
+    var vus = {}; px.legende(pas.filter(function(a){ if (vus[a.n]) return false; vus[a.n] = 1; return true; }).map(function(a){ return { n:a.n, texte:'**' + item + ' n° ' + a.n + '** — ' + (a.t.titre || a.t.description.slice(0, 90) || '') + ' (' + a.t.lot + ')', couleur:a.couleur }; }));
+  });
+}
+function ctSignPdf(px, r, toujours){
+  var on = r.presentsListe || [], signes = on.filter(function(p){ return r.signatures && r.signatures[p.id] && r.signatures[p.id]._src; }), reste = toujours ? on.filter(function(p){ return signes.indexOf(p) < 0; }) : [];
+  if (!signes.length && !reste.length) return;
+  px.ensure(Math.min(230, 30 + signes.length * 38 + Math.ceil(reste.length / 3) * 58));
+  CTP.section(px, 'Signatures', signes.length ? 40 : 52);
+  signes.forEach(function(p){ px.ensure(38); px.texte('**' + p.nom + '**' + (p.qualite ? ' — ' + p.qualite : '') + ' · signé sur place le ' + frDate(r.date), { taille:9.5, apres:1.5 }); px.image(r.signatures[p.id]._src, { w:70, hMax:24 }); px.y += 3; });
+  for (var i = 0; i < reste.length; i += 3) { px.signatures(reste.slice(i, i + 3).map(function(p){ return { titre:p.nom, qualite:p.qualite || '' }; })); px.y += 2; }
+}
 function ctPdf(r){
-  var imgs = [];
-  r.desordres.forEach(function(d){ d.photos.forEach(function(p){ imgs.push({ x:p, k:'photo' }); }); });
-  Object.keys(r.planImgs || {}).forEach(function(k){ imgs.push({ x:r.planImgs[k], k:'plan' }); }); Object.keys(r.signatures || {}).forEach(function(k){ imgs.push({ x:r.signatures[k], k:'sig' }); });
+  if (r.type !== 'litige') return crPdf(r);
+  var imgs = ctImgs(r);
   CTP.run(imgs, function(P){
-    var px = P.create({ titre:r.objet || 'Constat de désordres', sousTitre:(r.chantierNom || '') + ' · ' + frDate(r.date) + (r.heure ? ' à ' + r.heure.replace(':', ' h ') : ''), reference:r.num + ' · ' + (r.chantierNom || '') });
+    var px = P.create({ titre:r.objet || 'Constat des désordres', sousTitre:(r.chantierNom || '') + ' · ' + frDate(r.date) + (r.heure ? ' à ' + ctH(r.heure) : ''), reference:r.num + ' · ' + (r.chantierNom || '') });
     CTP.entete(px, r, 'Constat');
     var lots = {}; r.desordres.forEach(function(d){ lots[d.lot] = 1; });
     px.cles([{ etiquette:'Désordres', valeur:String(r.desordres.length) }, { etiquette:'Lots concernés', valeur:String(Object.keys(lots).length) }, { etiquette:'Photos', valeur:String(imgs.filter(function(o){ return o.k === 'photo'; }).length) }]); px.y += 2;
     CTP.presents(px, r.presentsListe || []);
-    r.desordres.forEach(function(d){
-      var g = CT_GRAV[d.gravite] || CT_GRAV.important, nl = function(t){ return String(t || '').split('\n').reduce(function(n, l){ return n + Math.max(1, Math.ceil(l.length / 95)); }, 0); };
-      var hD = 32 + 4 * 7.2 + 12 + nl(d.description) * 6.6 + (d.action || d.delai ? 12 + nl(d.action) * 6.6 : 0) + Math.ceil(d.photos.length / 2) * 72;
-      if (hD < 225) px.ensure(hD);   /* le désordre entier (texte + photos) sur une même page quand il y tient */
-      CTP.section(px, 'Désordre n° ' + d.n + (d.titre ? ' — ' + d.titre : ''), 34);
-      CTP.fiche(px, [['Lot :', d.lot], ['Gravité :', g[0]], ['Localisation :', d.lieu], ['Sur le plan :', d.pastilles.length ? d.pastilles.map(function(a){ return a.planNom; }).filter(function(x, i, a){ return a.indexOf(x) === i; }).join(', ') + ' — pastille n° ' + d.n : '']]);
-      CTP.bloc(px, 'Constat', d.description, 'Non décrit.');
-      if (d.action || d.delai) CTP.bloc(px, 'Reprise demandée' + (d.delai ? ' — avant le ' + frDate(d.delai) : ''), d.action, 'À préciser.');
-      CTP.photos(px, d.photos.filter(function(p){ return p._src; }).map(function(p, i){ return { src:p._src, legende:'Désordre ' + d.n + ' · photo ' + (i + 1) }; }));
-    });
-    Object.keys(r.planImgs || {}).forEach(function(k){
-      var p = r.planImgs[k]; if (!p._src) return;
-      var pas = []; r.desordres.forEach(function(d){ d.pastilles.forEach(function(a){ if (a.planId + '_' + (a.page || 0) === k) pas.push({ x:a.x, y:a.y, n:d.n, couleur:d.gravite === 'bloquant' ? '#a3261b' : '#0a1628', t:d }); }); });
-      CTP.section(px, 'Plan repéré : ' + (p.nom || 'plan'), 150);
-      px.image(p._src, { pastilles:pas, hMax:170 }); px.y += 3;
-      var vus = {}; px.legende(pas.filter(function(a){ if (vus[a.n]) return false; vus[a.n] = 1; return true; }).map(function(a){ return { n:a.n, texte:'**Désordre n° ' + a.n + '** — ' + (a.t.titre || a.t.description.slice(0, 90) || '') + ' (' + a.t.lot + ')', couleur:a.couleur }; }));
-    });
+    ctPointsPdf(px, r.desordres, r.planImgs, 'Désordre');
     if (r.conclusion) { CTP.section(px, 'Conclusion et suite à donner', 18); CTP.texte(px, r.conclusion); }
-    var on = r.presentsListe || [], signes = on.filter(function(p){ return r.signatures && r.signatures[p.id] && r.signatures[p.id]._src; }), reste = on.filter(function(p){ return signes.indexOf(p) < 0; });
-    if (on.length) {
-      px.ensure(Math.min(230, 30 + signes.length * 38 + Math.ceil(reste.length / 3) * 58));
-      CTP.section(px, 'Signatures', signes.length ? 40 : 52);
-      signes.forEach(function(p){ px.ensure(38); px.texte('**' + p.nom + '**' + (p.qualite ? ' — ' + p.qualite : '') + ' · signé sur place le ' + frDate(r.date), { taille:9.5, apres:1.5 }); px.image(r.signatures[p.id]._src, { w:70, hMax:24 }); px.y += 3; });
-      for (var i = 0; i < reste.length; i += 3) { px.signatures(reste.slice(i, i + 3).map(function(p){ return { titre:p.nom, qualite:p.qualite || '' }; })); px.y += 2; }
-    }
+    ctSignPdf(px, r, true);
     return px;
   }, 'Constat_' + CTP.nom(r.chantierNom) + '_' + r.date + '_' + r.num + '.pdf');
 }
-/* Compte rendu de visite (dictée) : même gabarit que le constat */
+/* Compte rendu de chantier (formulaire ou dictée) : même gabarit que le constat */
 function crPdf(c){
   var ch = D.chantiers.filter(function(y){ return y.id == c.chantierId; })[0] || {}, lotName = function(id){ var l = ctLot(id); return l ? lotLabel(l) : ''; };
-  var r = { num:c.num || 'CR', date:c.date, heure:c.visite && c.visite.debut ? new Date(c.visite.debut).toTimeString().slice(0, 5) : '', chantierNom:ch.nom || '' };
-  var imgs = (c.photos || []).map(function(p){ return { x:p, k:'photo' }; });
+  var r = { num:c.num || 'CR', date:c.date, heure:c.heure || (c.visite && c.visite.debut ? new Date(c.visite.debut).toTimeString().slice(0, 5) : ''), chantierNom:c.chantierNom || ch.nom || '' };
+  var imgs = ctImgs(c), pts = c.points || [];
   CTP.run(imgs, function(P){
-    var px = P.create({ titre:'Compte rendu de chantier', sousTitre:r.chantierNom + ' · visite du ' + frDate(c.date), reference:r.num + ' · ' + r.chantierNom });
+    var px = P.create({ titre:c.objet || 'Compte rendu de chantier', sousTitre:r.chantierNom + ' · visite du ' + frDate(c.date) + (r.heure ? ' à ' + ctH(r.heure) : ''), reference:r.num + ' · ' + r.chantierNom });
     CTP.entete(px, r, 'Compte rendu');
-    var dec = (c.taches && c.taches.length) ? c.taches : decList(c.decisions), resN = String(c.reserves || '').split('\n').filter(function(x){ return x.trim(); }).length;
-    px.cles([{ etiquette:'Réserves', valeur:String(resN) }, { etiquette:'Décisions', valeur:String(dec.length) }, { etiquette:'Photos', valeur:String((c.photos || []).length) }]); px.y += 2;
-    var pres = String(c.presents || '').split(/\s*[,;]\s*|\s+et\s+/).filter(function(x){ return x.trim(); }).map(function(x){ return { nom:x.trim() }; });
+    var dec = (c.taches && c.taches.length) ? c.taches : decList(c.decisions), resN = pts.length || String(c.reserves || '').split('\n').filter(function(x){ return x.trim(); }).length;
+    px.cles([{ etiquette:pts.length ? 'Points relevés' : 'Réserves', valeur:String(resN) }, { etiquette:'Décisions', valeur:String(dec.length) }, { etiquette:'Photos', valeur:String(imgs.filter(function(o){ return o.k !== 'plan' && o.k !== 'sig'; }).length) }]); px.y += 2;
+    var pres = c.presentsListe || String(c.presents || '').split(/\s*[,;]\s*|\s+et\s+/).filter(function(x){ return x.trim(); }).map(function(x){ return { nom:x.trim() }; });
     CTP.presents(px, pres);
     if (c.meteo) { CTP.section(px, 'Météo', 12); CTP.texte(px, c.meteo); }
-    CTP.section(px, 'Avancement des travaux', 20); CTP.texte(px, c.avancement, 'Rien de particulier.');
+    CTP.section(px, 'Avancement des travaux', 20); CTP.texte(px, c.avancement, (c.propositions || []).length ? '' : 'Rien de particulier.');
     if ((c.propositions || []).length) { px.y += 2; CTP.fiche(px, c.propositions.map(function(q){ return [(lotName(q.lotId) || 'Lot') + ' :', q.de + ' % → ' + q.a + ' %']; })); }
-    CTP.section(px, 'Réserves', 16); CTP.texte(px, c.reserves, 'Aucune réserve.');
+    if (pts.length) ctPointsPdf(px, pts, c.planImgs, 'Point');
+    else { CTP.section(px, 'Réserves', 16); CTP.texte(px, c.reserves, 'Aucune réserve.'); }
     CTP.section(px, 'Décisions', 16); if (dec.length) px.puces(dec.map(function(d){ return typeof d === 'string' ? d : d.txt || ''; }), { taille:10, pas:5.6 }); else CTP.texte(px, '', 'Aucune décision.');
-    var ph = (c.photos || []).filter(function(p){ return p._src; }).map(function(p, i){ return { src:p._src, legende:(lotName(p.lotId) || 'Photo') + ' · ' + (i + 1) }; });
+    var ph = imgs.filter(function(o){ return o.k === 'photoG' && o.x._src; }).map(function(o, i){ return { src:o.x._src, legende:(lotName(o.x.lotId) || 'Photo') + ' · ' + (i + 1) }; });
     if (ph.length) { CTP.section(px, 'Photos (' + ph.length + ')', 70); CTP.photos(px, ph); }
-    if (c.prochaine) { px.y += 4; px.bandeau('Prochaine réunion', c.prochaine); }
+    if (c.conclusion) { CTP.section(px, 'Observations', 16); CTP.texte(px, c.conclusion); }
+    if (c.prochaine && c.prochaine !== 'non fixée') { px.y += 4; px.bandeau('Prochaine réunion', c.prochaine); }
+    ctSignPdf(px, Object.assign({}, c, { date:c.date }), false);
     return px;
   }, 'Compte_rendu_' + CTP.nom(r.chantierNom) + '_' + c.date + '_' + r.num + '.pdf');
 }
 
-/* Liste des constats dans l'onglet « Comptes rendus » */
+/* Listes dans l'onglet « Comptes rendus » */
 function ctListHtml(){
   var l = D.crs.filter(function(c){ return c.type === 'litige' && c.chantierId == S.cid; }).sort(function(a, b){ return String(b.date + b.heure).localeCompare(String(a.date + a.heure)); });
-  var h = '<div class="card" style="max-width:720px;margin-bottom:14px;display:flex;flex-direction:column;gap:10px"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><div class="eyebrow" style="flex:1">Constats de litige (' + l.length + ')</div><button class="btn" type="button" data-ctgo="1">⚠ ' + (ctHas(S.cid) ? 'Reprendre le constat en cours' : 'Nouveau constat') + '</button></div>';
-  h += l.length ? l.map(function(c){ var n = (c.desordres || []).length; return '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:10px"><span style="flex:1 1 260px"><b>' + esc(c.num) + ' · ' + frDate(c.date) + (c.heure ? ' à ' + esc(c.heure) : '') + '</b><span class="muted" style="display:block">' + n + ' désordre' + (n > 1 ? 's' : '') + ' · ' + esc((c.desordres || []).map(function(d){ return d.lot; }).filter(function(x, i, a){ return a.indexOf(x) === i; }).join(', ')) + '</span></span><button class="btn" type="button" data-ctpdf="' + esc(c.id) + '">📄 PDF</button></div>'; }).join('') : '<div class="muted">Aucun constat. Sur place : « Constat de litige » sur la maquette.</div>';
-  h += '</div>';
-  var v = D.crs.filter(function(c){ return c.type !== 'litige' && c.chantierId == S.cid; }).sort(function(a, b){ return String(b.date).localeCompare(String(a.date)); });
-  if (v.length) h += '<div class="card" style="max-width:720px;margin-bottom:14px;display:flex;flex-direction:column;gap:10px"><div class="eyebrow">Comptes rendus de visite (' + v.length + ')</div>' + v.map(function(c){ return '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:10px"><span style="flex:1 1 260px"><b>' + esc(c.num || 'CR') + ' · visite du ' + frDate(c.date) + '</b><span class="muted" style="display:block">' + (c.aValider ? '⚠ À valider' : '✓ Validé') + ' · ' + (c.photos || []).length + ' photo' + ((c.photos || []).length > 1 ? 's' : '') + '</span></span><button class="btn" type="button" data-crpdf="' + esc(c.id) + '">📄 PDF</button></div>'; }).join('') + '</div>';
+  var v = D.crs.filter(function(c){ return c.type !== 'litige' && c.chantierId == S.cid; }).sort(function(a, b){ return String(b.date + (b.heure || '')).localeCompare(String(a.date + (a.heure || ''))); });
+  var row = function(c, sub){ return '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:10px"><span style="flex:1 1 260px"><b>' + esc(c.num || 'CR') + ' · ' + frDate(c.date) + (c.heure ? ' à ' + esc(c.heure) : '') + '</b><span class="muted" style="display:block">' + sub + '</span></span><button class="btn" type="button" data-ctpdf="' + esc(c.id) + '">📄 PDF</button></div>'; };
+  var h = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px"><button class="btn big pri" type="button" data-ctgo="cr">📋 ' + (ctHas(S.cid, 'cr') ? 'Reprendre le compte rendu' : 'Compte rendu de chantier') + '</button><button class="btn big" type="button" data-ctgo="litige" style="border-color:rgba(252,211,77,.6)">⚠ ' + (ctHas(S.cid, 'litige') ? 'Reprendre le constat' : 'Constat des désordres') + '</button></div>';
+  h += '<div class="card" style="max-width:720px;margin-bottom:14px;display:flex;flex-direction:column;gap:10px"><div class="eyebrow">Comptes rendus de chantier (' + v.length + ')</div>' + (v.length ? v.map(function(c){ var n = (c.points || []).length; return row(c, (c.aValider ? '⚠ À valider' : '✓ Validé') + (n ? ' · ' + n + ' point' + (n > 1 ? 's' : '') : '') + ' · ' + (c.photos || []).length + ' photo' + ((c.photos || []).length > 1 ? 's' : '')); }).join('') : '<div class="muted">Aucun compte rendu.</div>') + '</div>';
+  h += '<div class="card" style="max-width:720px;margin-bottom:14px;display:flex;flex-direction:column;gap:10px"><div class="eyebrow">Constats des désordres (' + l.length + ')</div>' + (l.length ? l.map(function(c){ var n = (c.desordres || []).length; return row(c, n + ' désordre' + (n > 1 ? 's' : '') + ' · ' + esc((c.desordres || []).map(function(d){ return d.lot; }).filter(function(x, i, a){ return a.indexOf(x) === i; }).join(', '))); }).join('') : '<div class="muted">Aucun constat.</div>') + '</div>';
   return h;
 }
 function ctListBind(root){
-  [].forEach.call(root.querySelectorAll('[data-crpdf]'), function(b){ b.onclick = function(){ var c = D.crs.filter(function(y){ return String(y.id) === b.getAttribute('data-crpdf'); })[0]; if (c) crPdf(c); }; });
   [].forEach.call(root.querySelectorAll('[data-ctpdf]'), function(b){ b.onclick = function(){ var c = D.crs.filter(function(y){ return String(y.id) === b.getAttribute('data-ctpdf'); })[0]; if (c) ctPdf(c); }; });
-  [].forEach.call(root.querySelectorAll('[data-ctgo]'), function(b){ b.onclick = ctOpen; });
+  [].forEach.call(root.querySelectorAll('[data-ctgo]'), function(b){ b.onclick = function(){ ctOpen(b.getAttribute('data-ctgo')); }; });
 }
-function ctScan(){ /* brouillons présents sur l'appareil (bouton « Reprendre le constat ») */
-  ctIdb().then(function(db){ var q = db.transaction('draft').objectStore('draft').getAllKeys(); q.onsuccess = function(){ S.ctDrafts = {}; (q.result || []).forEach(function(k){ S.ctDrafts[k] = 1; }); if (S.screen === 'chantier') renderGx(); }; }).catch(function(){});
+function ctScan(){ /* brouillons présents sur l'appareil (boutons « Reprendre… ») */
+  ctIdb().then(function(db){ var q = db.transaction('draft').objectStore('draft').getAllKeys(); q.onsuccess = function(){ S.ctDrafts = {}; (q.result || []).forEach(function(k){ S.ctDrafts[String(k).indexOf('|') < 0 ? k + '|litige' : k] = 1; }); if (S.screen === 'chantier') renderGx(); }; }).catch(function(){});
 }
 
 function stHtmlTxt(l){ return LOT_ST[stOf(l)][0] + ' · ' + (l.av || 0) + ' %'; }
