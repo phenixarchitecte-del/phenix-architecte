@@ -2376,16 +2376,36 @@ function ctRecord(withMedia){
   r.visite = { debut:CT.date + 'T' + (CT.heure || '00:00') + ':00', fin:new Date().toISOString() }; r.aValider = S.role === 'chantier'; r.plans = [];
   return r;
 }
+/* [Statuts client v2] Maxime choisit, document par document, s'il le montre au client (bouton « Montrer au client » / « Retirer ») :
+   rien ne part tout seul. Retirer efface le bloc et la ligne du fil. */
+function ctClientBascule(rec, montrer){
+  var c = D.chantiers.filter(function(y){ return y.id == rec.chantierId; })[0] || chantier();
+  if (!c || !c.projetId) { toast('Ce chantier n\'est relié à aucun dossier : pas d\'espace client.'); return; }
+  if (!FB.clientMaj) { toast('Espace client indisponible en démonstration.'); return; }
+  var cr = rec.type !== 'litige';   /* compte rendu : type « visite » ; constat : « litige » */
+  if (montrer) { ctVersClient(c, rec, cr); return; }
+  FB.clientMaj(c.projetId, function(d){
+    var sv = Object.assign({}, d.suivi || {}), fid = rec.client && rec.client.filId;
+    if (cr && sv.cr && sv.cr.num === rec.num) sv.cr = null;
+    if (!cr && sv.constat && sv.constat.num === rec.num) sv.constat = null;
+    return { suivi:sv, fil:(d.fil || []).filter(function(x){ return !fid || x.id !== fid; }), majAt:new Date().toISOString() };
+  }).then(function(ok){ rec.client = null; save('crs', rec); toast(ok ? 'Retiré de l\'espace du client' : 'Espace client introuvable pour ce dossier'); if ($('overlay').className !== 'on') renderAll(); });
+}
 function ctVersClient(c, rec, cr){
   if (!c || !c.projetId || !FB.clientMaj) return;
+  var filId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   FB.clientMaj(c.projetId, function(d){
     var sv = Object.assign({}, d.suivi || {}), jour = rec.date || ctDay();
     if (cr) sv.cr = { num:rec.num || '', date:jour, nb:(rec.points || []).length };
     else sv.constat = { num:rec.num || '', date:jour, points:(rec.desordres || []).map(function(x){ return { titre:x.titre || (x.description || '').slice(0, 80) || ('Désordre n° ' + x.n), avant:x.delai || '', repris:false }; }) };
-    var ligne = { id:Date.now().toString(36) + Math.random().toString(36).slice(2, 6), date:jour, type:'Note',
+    var ligne = { id:filId, date:jour, type:'Note',
       titre: cr ? 'Nouveau compte rendu n° ' + (rec.num || '') : 'Constat de désordres n° ' + (rec.num || ''),
       texte: cr ? 'Le compte rendu de la visite de chantier est disponible.' : (rec.desordres || []).length + ' désordre' + ((rec.desordres || []).length > 1 ? 's' : '') + ' constaté' + ((rec.desordres || []).length > 1 ? 's' : '') + ' : nous suivons leur reprise avec les entreprises.', etape:false };
     return { suivi:sv, fil:(d.fil || []).concat([ligne]).slice(-120), majAt:new Date().toISOString() };
+  }).then(function(ok){
+    if (ok) { rec.client = { le:new Date().toISOString(), filId:filId }; save('crs', rec); }
+    toast(ok ? 'Visible dans l\'espace du client' : 'Le client n\'a pas encore d\'espace : ouvrez-le depuis Phénix Dossier.');
+    if ($('overlay').className !== 'on') renderAll();
   });
 }
 function ctSave(){
@@ -2397,18 +2417,18 @@ function ctSave(){
   CTS.busy = true; ctStopMic();
   var rec = ctRecord(true);
   D.crs.push(rec); save('crs', rec);
-  ctVersClient(c, rec, cr);
   if (cr) { if (!rec.aValider) validerCR(rec.id); }
   else if (CT.reserves) { var n = D.reserves.filter(function(r){ return r.chantierId == c.id; }).length;
     rec.desordres.forEach(function(d){ n++; var rs = { id:uid(), chantierId:c.id, ref:'R' + String(n).padStart(2, '0'), titre:d.titre || (d.description.length > 70 ? d.description.slice(0, 67) + '…' : d.description) || 'Désordre n° ' + d.n, description:d.description + (d.action ? '\nReprise demandée : ' + d.action : ''), lieu:d.lieu, lotId:d.lotId, intervId:(ctLot(d.lotId) || {}).interv || null, priorite:d.gravite === 'bloquant' ? 'haute' : 'normale', origine:'constat ' + rec.num, echeance:d.delai || '', statut:'ouverte', dateLevee:'', photos:d.photos.slice(0, 6).map(function(p){ return { mediaId:p.mediaId, caption:'' }; }) }; D.reserves.push(rs); save('reserves', rs); }); }
   ctDel(ctKey(CT.cid, CT.type)); var K = CT_K[CT.type], nb = rec.desordres ? rec.desordres.length : rec.points.length; CT = null; CTS.busy = false; CTS.open = null;
   var o = $('overlay'); o.className = ''; o.innerHTML = ''; document.body.classList.remove('ct-on'); renderAll();
   var bg = document.createElement('div'); bg.className = 'sheetbg';
-  bg.innerHTML = '<div class="sheet"><div class="eyebrow">' + K.court + ' ' + esc(rec.num) + ' enregistré</div><h2 style="font-size:24px">' + nb + ' ' + it + (nb > 1 ? 's' : '') + (cr ? ' relevé' : ' constaté') + (nb > 1 ? 's' : '') + '</h2><div class="muted">' + (S.online ? 'Envoyé dans le dossier du chantier' : '⚠ Hors ligne : il partira dès le retour du réseau. Gardez l\'onglet ouvert') + '. ' + (cr && rec.aValider ? 'Il attend la validation au bureau. ' : '') + 'Vous le retrouvez dans l\'onglet « Comptes rendus ».</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn big pri" type="button" id="cts-mail">✉ Envoyer par mail</button><button class="btn big" type="button" id="cts-pdf">📄 Télécharger le PDF</button><button class="btn big ghost" type="button" data-x="1">Fermer</button></div></div>';
+  bg.innerHTML = '<div class="sheet"><div class="eyebrow">' + K.court + ' ' + esc(rec.num) + ' enregistré</div><h2 style="font-size:24px">' + nb + ' ' + it + (nb > 1 ? 's' : '') + (cr ? ' relevé' : ' constaté') + (nb > 1 ? 's' : '') + '</h2><div class="muted">' + (S.online ? 'Envoyé dans le dossier du chantier' : '⚠ Hors ligne : il partira dès le retour du réseau. Gardez l\'onglet ouvert') + '. ' + (cr && rec.aValider ? 'Il attend la validation au bureau. ' : '') + 'Vous le retrouvez dans l\'onglet « Comptes rendus ».</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn big pri" type="button" id="cts-mail">✉ Envoyer par mail</button><button class="btn big" type="button" id="cts-cli">👁 Montrer au client</button><button class="btn big" type="button" id="cts-pdf">📄 Télécharger le PDF</button><button class="btn big ghost" type="button" data-x="1">Fermer</button></div></div>';
   document.body.appendChild(bg);
   bg.onclick = function(e){ if (e.target === bg || (e.target.getAttribute && e.target.getAttribute('data-x'))) bg.remove(); };
   $('cts-pdf').onclick = function(){ ctPdf(rec); };
   $('cts-mail').onclick = function(){ bg.remove(); ctEnvoyer(rec); };
+  $('cts-cli').onclick = function(){ this.disabled = true; this.textContent = '✓ Montré au client'; ctClientBascule(rec, true); };
 }
 
 /* ─── PDF à la charte Phénix (phenix_pdf.js) — gabarit AÉRÉ commun au constat de litige et au compte rendu de chantier ───
@@ -2576,7 +2596,7 @@ function ctEnvoyer(rec){
 function ctListHtml(){
   var l = D.crs.filter(function(c){ return c.type === 'litige' && c.chantierId == S.cid; }).sort(function(a, b){ return String(b.date + b.heure).localeCompare(String(a.date + a.heure)); });
   var v = D.crs.filter(function(c){ return c.type !== 'litige' && c.chantierId == S.cid; }).sort(function(a, b){ return String(b.date + (b.heure || '')).localeCompare(String(a.date + (a.heure || ''))); });
-  var row = function(c, sub){ return '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:10px"><span style="flex:1 1 260px"><b>' + esc(c.num || 'CR') + ' · ' + frDate(c.date) + (c.heure ? ' à ' + esc(c.heure) : '') + '</b><span class="muted" style="display:block">' + sub + '</span></span>' + (c.memos || []).map(function(m, i){ return '<button class="btn" type="button" data-memo="' + esc(c.id) + '|' + i + '" title="' + esc(m.champ || '') + '">🔊 Mémo ' + (i + 1) + '</button>'; }).join('') + '<button class="btn" type="button" data-ctpdf="' + esc(c.id) + '">📄 PDF</button><button class="btn" type="button" data-ctmail="' + esc(c.id) + '">✉ Envoyer</button></div>' + (c.envois && c.envois.length ? '<span class="muted" style="flex-basis:100%;font-size:13px">✉ Mail préparé le ' + frDate(String(c.envois[c.envois.length - 1].le).slice(0, 10)) + ' pour ' + c.envois[c.envois.length - 1].a.length + ' destinataire' + (c.envois[c.envois.length - 1].a.length > 1 ? 's' : '') + '</span>' : ''); };
+  var row = function(c, sub){ return '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:10px"><span style="flex:1 1 260px"><b>' + esc(c.num || 'CR') + ' · ' + frDate(c.date) + (c.heure ? ' à ' + esc(c.heure) : '') + '</b><span class="muted" style="display:block">' + sub + '</span></span>' + (c.memos || []).map(function(m, i){ return '<button class="btn" type="button" data-memo="' + esc(c.id) + '|' + i + '" title="' + esc(m.champ || '') + '">🔊 Mémo ' + (i + 1) + '</button>'; }).join('') + '<button class="btn" type="button" data-ctpdf="' + esc(c.id) + '">📄 PDF</button><button class="btn" type="button" data-ctmail="' + esc(c.id) + '">✉ Envoyer</button><button class="btn" type="button" data-ctcli="' + esc(c.id) + '" aria-pressed="' + !!c.client + '">' + (c.client ? '✓ Visible par le client · Retirer' : '👁 Montrer au client') + '</button></div>' + (c.envois && c.envois.length ? '<span class="muted" style="flex-basis:100%;font-size:13px">✉ Mail préparé le ' + frDate(String(c.envois[c.envois.length - 1].le).slice(0, 10)) + ' pour ' + c.envois[c.envois.length - 1].a.length + ' destinataire' + (c.envois[c.envois.length - 1].a.length > 1 ? 's' : '') + '</span>' : ''); };
   var h = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px"><button class="btn big pri" type="button" data-ctgo="cr">📋 ' + (ctHas(S.cid, 'cr') ? 'Reprendre le compte rendu' : 'Compte rendu de chantier') + '</button><button class="btn big" type="button" data-ctgo="litige" style="border-color:rgba(252,211,77,.6)">⚠ ' + (ctHas(S.cid, 'litige') ? 'Reprendre le constat' : 'Constat des désordres') + '</button></div>';
   h += '<div class="card" style="max-width:720px;margin-bottom:14px;display:flex;flex-direction:column;gap:10px"><div class="eyebrow">Comptes rendus de chantier (' + v.length + ')</div>' + (v.length ? v.map(function(c){ var n = (c.points || []).length; return row(c, (c.aValider ? '⚠ À valider' : '✓ Validé') + (n ? ' · ' + n + ' point' + (n > 1 ? 's' : '') : '') + ' · ' + (c.photos || []).length + ' photo' + ((c.photos || []).length > 1 ? 's' : '')); }).join('') : '<div class="muted">Aucun compte rendu.</div>') + '</div>';
   h += '<div class="card" style="max-width:720px;margin-bottom:14px;display:flex;flex-direction:column;gap:10px"><div class="eyebrow">Constats des désordres (' + l.length + ')</div>' + (l.length ? l.map(function(c){ var n = (c.desordres || []).length; return row(c, n + ' désordre' + (n > 1 ? 's' : '') + ' · ' + esc((c.desordres || []).map(function(d){ return d.lot; }).filter(function(x, i, a){ return a.indexOf(x) === i; }).join(', '))); }).join('') : '<div class="muted">Aucun constat.</div>') + '</div>';
@@ -2586,6 +2606,7 @@ function ctListBind(root){
   [].forEach.call(root.querySelectorAll('[data-memo]'), function(b){ b.onclick = function(){ var p = b.getAttribute('data-memo').split('|'), c = D.crs.filter(function(y){ return String(y.id) === p[0]; })[0], m = c && (c.memos || [])[+p[1]]; if (!m) return; ctSrc(m).then(function(du){ if (du) new Audio(du).play(); else toast('Mémo introuvable (réseau ?).'); }); }; });
   [].forEach.call(root.querySelectorAll('[data-ctpdf]'), function(b){ b.onclick = function(){ var c = D.crs.filter(function(y){ return String(y.id) === b.getAttribute('data-ctpdf'); })[0]; if (c) ctPdf(c); }; });
   [].forEach.call(root.querySelectorAll('[data-ctgo]'), function(b){ b.onclick = function(){ ctOpen(b.getAttribute('data-ctgo')); }; });
+  [].forEach.call(root.querySelectorAll('[data-ctcli]'), function(b){ b.onclick = function(){ var c = D.crs.filter(function(y){ return String(y.id) === b.getAttribute('data-ctcli'); })[0]; if (c) { b.disabled = true; ctClientBascule(c, !c.client); } }; });
   [].forEach.call(root.querySelectorAll('[data-ctmail]'), function(b){ b.onclick = function(){ var c = D.crs.filter(function(y){ return String(y.id) === b.getAttribute('data-ctmail'); })[0]; if (c) ctEnvoyer(c); }; });
 }
 function ctScan(){ /* brouillons présents sur l'appareil (boutons « Reprendre… ») */
