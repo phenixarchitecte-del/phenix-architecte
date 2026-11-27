@@ -36,6 +36,8 @@
    (« euh », « heu », « hum », « bah »…, « le le le ») ; après la dictée, le texte se corrige à la main et « ↺ Refaire » remet le texte d'avant et réécoute.
    Lots d'un désordre / point : ceux du chantier + ceux des autres fiches chantier du même dossier + ceux de Chiffrage + « ✎ Autre lot » à écrire ou dicter.
    Les pastilles de la maquette 3D ne passent plus par-dessus l'écran du constat / compte rendu (#h3-host isolé, masquées pendant la saisie).
+   (8) [Caméra] La photo prend la caméra de la Surface (arrière d'abord), plus jamais la caméra virtuelle du téléphone relié à Windows ;
+   « Changer de caméra » passe d'une vraie caméra à l'autre, le nom de la caméra s'affiche, le choix est retenu sur l'appareil.
    (5) Micro 🎙 aussi sur le nom du plan à l'étape du cadrage (le premier appui vide le nom pré-rempli puis écoute).
  15/11/2026 — [Travaux] Ordre « open-projet » avec onglet 'travaux' (bouton « Préciser les travaux » de la Synthèse) : ouvre l'onglet Travaux ;
    si le dossier n'a pas encore de chantier, il est créé vide depuis la fiche du dossier (phenix_projets) pour renseigner les travaux tout de suite.
@@ -262,6 +264,7 @@ body.ct-on #stage .h3-layer,body.ct-on #gx-lab{visibility:hidden}
 .ctcam-shot:active span{transform:scale(.9)}
 .ctcam-n{position:absolute;top:16px;left:50%;transform:translateX(-50%);padding:6px 14px;border-radius:999px;background:rgba(10,22,40,.85);font:600 15px var(--fs)}
 .ctcam-n:empty{display:none}
+.ctcam-lbl{position:absolute;top:16px;right:16px;max-width:45%;padding:5px 12px;border-radius:999px;background:rgba(10,22,40,.85);font:500 13px var(--fs);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ctcam-lbl:empty{display:none}
 .ctcam-flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}.ctcam-flash.on{animation:ctfl .35s}
 @keyframes ctfl{0%{opacity:.8}100%{opacity:0}}
 .ctplan{position:fixed;inset:0;z-index:80;background:var(--bg);display:flex;flex-direction:column}
@@ -1896,17 +1899,46 @@ function ctFiles(cb){
   var i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.multiple = true;
   i.onchange = function(){ [].forEach.call(i.files || [], function(f){ readPhoto(f).then(cb).catch(function(){ toast('Photo illisible.'); }); }); }; i.click();
 }
+/* [Caméra] 27/11/2026 : on choisit nous-mêmes la caméra de l'appareil (Surface : caméra ARRIÈRE d'abord), jamais la caméra virtuelle
+   du téléphone relié à Windows (« Lien avec Windows », caméras virtuelles). « Changer de caméra » passe d'une caméra réelle à l'autre ; le choix est retenu. */
+function ctCamScore(l){ l = String(l || '').toLowerCase();
+  if (/virtual|virtuel|phone|t[ée]l[ée]phone|mobile|link|lien|droidcam|iriun|obs|camo|snap|ndi|epoccam/.test(l)) return -10;
+  if (/rear|back|arri[eè]re|environment|world|wide|ir camera/.test(l) && !/\bir\b/.test(l)) return 5;
+  if (/front|avant|user|facing front/.test(l)) return 2;
+  if (/surface|integrated|int[ée]gr|built-in|webcam|camera|cam[ée]ra/.test(l)) return 1;
+  return 0; }
 function ctCamera(onShot, onEnd){
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { ctFiles(function(du){ onShot(du); if (onEnd) onEnd(); }); return; }
-  var bg = document.createElement('div'), facing = 'environment', stream = null, n = 0;
+  var bg = document.createElement('div'), stream = null, n = 0, devs = [], cur = lk('px2.cam') || '';
   bg.className = 'ctcam';
-  bg.innerHTML = '<video playsinline autoplay muted></video><div class="ctcam-flash"></div><div class="ctcam-bar"><button class="btn" type="button" data-k="flip">↺ Changer de caméra</button><button class="ctcam-shot" type="button" data-k="shot" aria-label="Prendre la photo"><span></span></button><button class="btn pri" type="button" data-k="end">Terminer</button></div><div class="ctcam-n" aria-live="polite"></div>';
+  bg.innerHTML = '<video playsinline autoplay muted></video><div class="ctcam-flash"></div><div class="ctcam-bar"><button class="btn" type="button" data-k="flip">↺ Changer de caméra</button><button class="ctcam-shot" type="button" data-k="shot" aria-label="Prendre la photo"><span></span></button><button class="btn pri" type="button" data-k="end">Terminer</button></div><div class="ctcam-n" aria-live="polite"></div><div class="ctcam-lbl" aria-live="polite"></div>';
   document.body.appendChild(bg);
-  var v = bg.querySelector('video');
+  var v = bg.querySelector('video'), lbl = bg.querySelector('.ctcam-lbl');
   var stop = function(){ if (stream) stream.getTracks().forEach(function(t){ t.stop(); }); stream = null; };
-  var start = function(){ stop(); navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:facing }, width:{ ideal:2560 }, height:{ ideal:1440 } }, audio:false }).then(function(s){ stream = s; v.srcObject = s; v.play().catch(function(){}); }).catch(function(){ stop(); bg.remove(); toast('Caméra inaccessible : choisissez les photos dans les fichiers.'); ctFiles(function(du){ onShot(du); if (onEnd) onEnd(); }); }); };
+  var fallback = function(){ stop(); bg.remove(); toast('Caméra inaccessible : choisissez les photos dans les fichiers.'); ctFiles(function(du){ onShot(du); if (onEnd) onEnd(); }); };
+  var lister = function(){ return navigator.mediaDevices.enumerateDevices().then(function(a){ devs = a.filter(function(d){ return d.kind === 'videoinput'; }).sort(function(x, y){ return ctCamScore(y.label) - ctCamScore(x.label); }); }).catch(function(){ devs = []; }); };
+  var ouvrir = function(id, essai){
+    stop();
+    var c = id ? { deviceId:{ exact:id }, width:{ ideal:2560 }, height:{ ideal:1440 } } : { facingMode:{ ideal:'environment' }, width:{ ideal:2560 }, height:{ ideal:1440 } };
+    return navigator.mediaDevices.getUserMedia({ video:c, audio:false }).then(function(s){
+      stream = s; v.srcObject = s; v.play().catch(function(){});
+      var tr = s.getVideoTracks()[0], st = tr && tr.getSettings ? tr.getSettings() : {}, nom = tr ? tr.label : '';
+      if (!essai) return lister().then(function(){
+        /* 1re ouverture : le navigateur a peut-être pris la caméra du téléphone → on bascule sur la meilleure caméra réelle */
+        var best = devs.filter(function(d){ return d.deviceId === cur && ctCamScore(d.label) > -10; })[0] || devs.filter(function(d){ return ctCamScore(d.label) > -10; })[0];
+        if (best && best.deviceId && best.deviceId !== st.deviceId) return ouvrir(best.deviceId, true);
+        lbl.textContent = nom; cur = st.deviceId || cur; lk('px2.cam', cur);
+      });
+      lbl.textContent = nom; cur = st.deviceId || id; lk('px2.cam', cur);
+    });
+  };
   var end = function(){ stop(); bg.remove(); if (onEnd) onEnd(); };
-  bg.querySelector('[data-k=flip]').onclick = function(){ facing = facing === 'environment' ? 'user' : 'environment'; start(); };
+  bg.querySelector('[data-k=flip]').onclick = function(){
+    var ok = devs.filter(function(d){ return ctCamScore(d.label) > -10; }), list = ok.length > 1 ? ok : devs;
+    if (list.length < 2) { toast('Une seule caméra disponible sur cet appareil.'); return; }
+    var i = list.map(function(d){ return d.deviceId; }).indexOf(cur), nx = list[(i + 1) % list.length];
+    ouvrir(nx.deviceId, true).then(function(){ toast('Caméra : ' + (nx.label || 'suivante')); }).catch(fallback);
+  };
   bg.querySelector('[data-k=end]').onclick = end;
   bg.querySelector('[data-k=shot]').onclick = function(){
     if (!v.videoWidth) return;
@@ -1916,7 +1948,8 @@ function ctCamera(onShot, onEnd){
     bg.querySelector('.ctcam-n').textContent = n + ' photo' + (n > 1 ? 's' : '') + ' prise' + (n > 1 ? 's' : '');
     bg.querySelector('[data-k=end]').textContent = 'Terminer (' + n + ')';
   };
-  start();
+  /* caméra retenue la dernière fois (si elle existe encore), sinon la caméra arrière */
+  ouvrir(cur || null, false).catch(function(){ if (cur) { cur = ''; ouvrir(null, false).catch(fallback); } else fallback(); });
 }
 
 /* ─── Signature sur la tablette (doigt ou stylet) ─── */
