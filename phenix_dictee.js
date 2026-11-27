@@ -14,13 +14,35 @@
      var d = PhenixDictee.ecouter({ base:'texte déjà là', onTexte:function(affiche, definitif){…}, onFin:function(texte){…}, onEtat:function(etat, msg){…} });
      d.stop();          // fin voulue : onFin(texte complet) est appelé
      d.stop(true);      // annuler : onFin n'est pas appelé
-   États : 'ecoute', 'pause' (relance discrète après un silence), 'fin', 'erreur' (msg en clair).
+   États : 'ecoute', 'pause' (relance discrète après un silence), 'fin', 'erreur' (msg en clair ; 3e argument 'horsligne' quand il n'y a pas de réseau).
+   Hors ligne : PhenixDictee.horsLigne() / installerHorsLigne() (dictée sur l'appareil si le navigateur la propose), memo() (enregistrement audio), transcrire(audio).
    ===================================================================== */
 (function (g) {
   'use strict';
   var SR = g.SpeechRecognition || g.webkitSpeechRecognition;
   var ANDROID = /Android/i.test(navigator.userAgent || '');
   var actif = null;   /* une seule dictée à la fois dans la page */
+  /* [Hors ligne] dictée sur l'appareil (sans réseau) quand le navigateur la propose : SpeechRecognition.available / install / processLocally */
+  /* PRUDENCE : SpeechRecognition.available() fait planter certains navigateurs (constaté sur Chromium sans service local) :
+     on ne l'appelle QUE sur demande (bouton « Préparer la dictée hors ligne », avec du réseau), et on retient le résultat sur l'appareil. */
+  var LS = 'phenix.dicteeLocale';
+  function lsGet() { try { return localStorage.getItem(LS) || ''; } catch (x) { return ''; } }
+  function lsSet(v) { try { localStorage.setItem(LS, v); } catch (x) {} }
+  var LOCAL = { etat: lsGet() || 'inconnu' };   /* 'available' | 'downloadable' | 'downloading' | 'unavailable' | 'inconnu' */
+  var OPT = { langs: ['fr-FR'], processLocally: true, quality: 'dictation' };
+  function horsLigne() {
+    if (!SR || typeof SR.available !== 'function') { LOCAL.etat = 'unavailable'; return Promise.resolve(LOCAL.etat); }
+    return Promise.resolve().then(function () { return SR.available(OPT); }).catch(function () { return SR.available({ langs: ['fr-FR'], processLocally: true }); })
+      .then(function (r) { LOCAL.etat = r || 'unavailable'; lsSet(LOCAL.etat === 'available' || LOCAL.etat === 'unavailable' ? LOCAL.etat : ''); return LOCAL.etat; }).catch(function () { LOCAL.etat = 'unavailable'; lsSet('unavailable'); return LOCAL.etat; });
+  }
+  function installerHorsLigne() {
+    if (!SR || typeof SR.install !== 'function') return Promise.resolve(false);
+    LOCAL.etat = 'downloading';
+    return Promise.resolve().then(function () { return SR.install(OPT); }).catch(function () { return SR.install({ langs: ['fr-FR'], processLocally: true }); })
+      .then(function (ok) { return horsLigne().then(function () { return !!ok || LOCAL.etat === 'available'; }); }).catch(function () { return horsLigne().then(function () { return false; }); });
+  }
+  function localOk() { return LOCAL.etat === 'available'; }
+  function enLigne() { return navigator.onLine !== false; }
 
   function n(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9àâäéèêëîïôöùûüç]+/g, ' ').trim(); }
   /* hésitations et répétitions retirées : « euh », « heu », « hum », « bah »… et « le le le », « de de » */
@@ -76,10 +98,11 @@
     if (actif) actif.stop();
     var etat = { base: o.base || '', acquis: '', session: '', voulu: false, annule: false, sr: null, relances: 0, t0: Date.now(), fini: false, dernier: '' };
     var api = { stop: stop, actif: function () { return !etat.fini; } };
-    var dire = function (e, m) { if (o.onEtat) try { o.onEtat(e, m || ''); } catch (x) {} };
+    var dire = function (e, m, code) { if (o.onEtat) try { o.onEtat(e, m || '', code || ''); } catch (x) {} };
     var texte = function (prov) { var t = coller(etat.base, etat.acquis); t = coller(t, ponctuer(etat.session)); return prov ? coller(t, prov) : t; };
     var montrer = function (prov) { if (o.onTexte) try { o.onTexte(texte(prov), texte('')); } catch (x) {} };
     if (!SR) { etat.fini = true; dire('erreur', 'Dictée indisponible dans ce navigateur : utilisez le micro du clavier (Windows + H sur la Surface).'); return api; }
+    if (!enLigne() && !localOk()) { etat.fini = true; dire('erreur', 'Pas de réseau : la dictée de ce navigateur a besoin d\'Internet.', 'horsligne'); return api; }
     actif = api;
 
     function terminer() {
@@ -93,6 +116,7 @@
       var sr = new SR(); etat.sr = sr;
       sr.lang = o.lang || 'fr-FR'; sr.interimResults = true; sr.maxAlternatives = 1;
       sr.continuous = !ANDROID;
+      if (localOk() && (!enLigne() || etat.local)) { try { sr.processLocally = true; } catch (x) {} }   /* sans réseau : reconnaissance sur l'appareil */
       sr.onstart = function () { dire('ecoute'); };
       sr.onresult = function (e) {
         var r = lire(e.results);
@@ -104,7 +128,8 @@
         var c = e && e.error;
         if (c === 'no-speech' || c === 'aborted') return;                 /* simple silence : on relance à la fin */
         if (c === 'not-allowed' || c === 'service-not-allowed') { etat.voulu = true; dire('erreur', 'Micro refusé : autorisez-le dans le navigateur (icône à gauche de l\'adresse).'); }
-        else if (c === 'network') { etat.voulu = true; dire('erreur', 'Dictée impossible sans réseau : utilisez la dictée de Windows (Windows + H) ou le micro du clavier.'); }
+        else if (c === 'network' && localOk() && !etat.local) { etat.local = true; }   /* le réseau tombe : on bascule sur l'appareil à la relance */
+        else if (c === 'network') { etat.voulu = true; dire('erreur', 'Pas de réseau : la dictée de ce navigateur a besoin d\'Internet.', 'horsligne'); }
         else if (c === 'audio-capture') { etat.voulu = true; dire('erreur', 'Aucun micro trouvé.'); }
       };
       sr.onend = function () {
@@ -141,5 +166,31 @@
   Reconnaissance.prototype.stop = function () { if (this._d) this._d.stop(); };
   Reconnaissance.prototype.abort = function () { if (this._d) this._d.stop(true); if (this._fin) this._fin(); };
 
-  g.PhenixDictee = { nettoyer: nettoyer, dispo: !!SR, Reconnaissance: SR ? Reconnaissance : null, android: ANDROID, ecouter: ecouter, ponctuer: ponctuer, coller: coller, arreter: function () { if (actif) actif.stop(); } };
+  /* [Hors ligne] mémo vocal : enregistrement audio sans réseau (MediaRecorder), retranscrit plus tard */
+  function memo() {
+    var rec = null, morceaux = [], flux = null, t0 = Date.now();
+    var p = navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? navigator.mediaDevices.getUserMedia({ audio: true }) : Promise.reject(new Error('micro indisponible'));
+    var pret = p.then(function (s) { flux = s; var types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'], ty = types.filter(function (x) { return g.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(x); })[0];
+      rec = new MediaRecorder(s, ty ? { mimeType: ty, audioBitsPerSecond: 24000 } : undefined); rec.ondataavailable = function (e) { if (e.data && e.data.size) morceaux.push(e.data); }; rec.start(1000); });
+    return { pret: pret, stop: function () { return pret.then(function () { return new Promise(function (ok) { rec.onstop = function () { flux.getTracks().forEach(function (t) { t.stop(); }); var b = new Blob(morceaux, { type: rec.mimeType || 'audio/webm' }), fr = new FileReader(); fr.onload = function () { ok({ dataUrl: fr.result, duree: Math.round((Date.now() - t0) / 1000) }); }; fr.readAsDataURL(b); }; rec.stop(); }); }); },
+      annuler: function () { try { rec && rec.stop(); } catch (x) {} if (flux) flux.getTracks().forEach(function (t) { t.stop(); }); } };
+  }
+  /* retranscription d'un mémo (avec réseau) : l'audio est donné à la reconnaissance comme une piste micro ; à défaut, on le joue et on écoute */
+  function transcrire(dataUrl, onTexte) {
+    return new Promise(function (ok, ko) {
+      if (!SR) return ko(new Error('Dictée indisponible dans ce navigateur.'));
+      var au = new Audio(dataUrl), ac = new (g.AudioContext || g.webkitAudioContext)(), src = ac.createMediaElementSource(au), dest = ac.createMediaStreamDestination();
+      src.connect(dest);
+      var sr = new SR(), texte = '', fini = false; sr.lang = 'fr-FR'; sr.continuous = true; sr.interimResults = true;
+      var finir = function () { if (fini) return; fini = true; try { ac.close(); } catch (x) {} ok(ponctuer(texte)); };
+      sr.onresult = function (e) { var r = lire(e.results); texte = r.def; if (onTexte) onTexte(ponctuer(r.def + (r.prov ? ' ' + r.prov : ''))); };
+      sr.onerror = function (e) { if (e && (e.error === 'no-speech' || e.error === 'aborted')) return; if (!fini) { fini = true; try { ac.close(); } catch (x) {} ko(new Error(e && e.error === 'network' ? 'Pas de réseau.' : 'Retranscription impossible (' + (e && e.error) + ').')); } };
+      sr.onend = finir;
+      au.onended = function () { setTimeout(function () { try { sr.stop(); } catch (x) { finir(); } }, 1200); };
+      try { sr.start(dest.stream.getAudioTracks()[0]); } catch (x) { return ko(new Error('Ce navigateur ne sait pas retranscrire un enregistrement : écoutez le mémo et tapez ou dictez le texte.')); }
+      au.play().catch(function () {});
+    });
+  }
+
+  g.PhenixDictee = { peutHorsLigne: !!(SR && typeof SR.install === 'function'), horsLigne: horsLigne, installerHorsLigne: installerHorsLigne, local: function () { return LOCAL.etat; }, memo: memo, transcrire: transcrire, nettoyer: nettoyer, dispo: !!SR, Reconnaissance: SR ? Reconnaissance : null, android: ANDROID, ecouter: ecouter, ponctuer: ponctuer, coller: coller, arreter: function () { if (actif) actif.stop(); } };
 })(window);

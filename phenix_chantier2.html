@@ -40,6 +40,10 @@
    « Changer de caméra » passe d'une vraie caméra à l'autre, le nom de la caméra s'affiche, le choix est retenu sur l'appareil.
    (9) Import de plan : plus d'étape « cadre autour du plan » (inutile sur chantier) : on choisit la page, puis on pose les pastilles sur la page entière.
    (10) Lots du constat / compte rendu : on lit aussi le chiffrage EN COURS dans Phénix Chiffrage (phenix_chiffrage), pas seulement le dernier « Envoyer vers Chantier ».
+   (11) [Hors ligne] Commencer avec du réseau, continuer sans : la page se recharge hors ligne (phenix_sw.js : réseau d'abord, copie gardée
+   seulement pour l'absence de réseau ; Firestore n'est jamais intercepté). Micro sans réseau : dictée sur la tablette si le navigateur la propose
+   (bouton « ⬇ Préparer la dictée hors ligne », à faire avec du réseau) ; sinon le micro enregistre un MÉMO VOCAL rattaché au champ, gardé sur
+   la tablette, puis « 📝 Retranscrire » au retour du réseau. Mémos non retranscrits : joints au document (🔊 dans « Comptes rendus »).
    (5) Micro 🎙 aussi sur le nom du plan à l'étape du cadrage (le premier appui vide le nom pré-rempli puis écoute).
  15/11/2026 — [Travaux] Ordre « open-projet » avec onglet 'travaux' (bouton « Préciser les travaux » de la Synthèse) : ouvre l'onglet Travaux ;
    si le dossier n'a pas encore de chantier, il est créé vide depuis la fiche du dossier (phenix_projets) pour renseigner les travaux tout de suite.
@@ -282,6 +286,9 @@ body.ct-on #stage .h3-layer,body.ct-on #gx-lab{visibility:hidden}
 .ctav{display:flex;flex-direction:column;gap:6px}
 .ctavl{display:flex;gap:8px;align-items:center;padding:8px 10px;border-radius:12px;border:1px solid var(--line);background:var(--pan2)}
 .ctavl.on{border:2px solid var(--accent)}
+.ctmemos{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+.ctmemo{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:6px 10px;border-radius:12px;border:1px dashed var(--amber);font:600 14px var(--fs)}
+.ctmemo .btn{min-height:40px;padding:0 10px;font-size:13px}
 .ctdot{position:absolute;transform:translate(-50%,-50%);width:38px;height:38px;border-radius:50%;border:3px dashed #0a1628;background:rgba(255,255,255,.85);color:#0a1628;font:700 16px var(--fs);display:flex;align-items:center;justify-content:center;padding:0}
 .ctdot.mine{border:3px solid #fff;background:#0a1628;color:#fff;box-shadow:0 0 0 3px #fcd34d}
 .ctpgrid{flex:1;overflow:auto;padding:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;align-content:start;background:#3b4048}
@@ -322,7 +329,7 @@ body.ct-on #stage .h3-layer,body.ct-on #gx-lab{visibility:hidden}
 </div>
 
 <!-- Dictée commune à la suite (pauses possibles, rien n'est validé avant le 2e appui) [Dictée] -->
-<script src="phenix_dictee.js?v=20261127b"></script>
+<script src="phenix_dictee.js?v=20261127c"></script>
 <!-- Moteur 3D partagé avec le Carnet [Moteur partagé] -->
 <script type="module" src="phenix_maquette3d.js?v=20261122b"></script>
 
@@ -1895,7 +1902,8 @@ function ctMic(btn, ta){
   if (!S.dicteeVu) { S.dicteeVu = 1; toast('Je vous écoute : prenez votre temps, faites des pauses ; touchez « ■ Terminer » quand vous avez fini.'); }
   var me = PhenixDictee.ecouter({ base:ta.value,
     onTexte:function(a){ ta.value = a; ta.dispatchEvent(new Event('input')); ta.scrollTop = ta.scrollHeight; },
-    onEtat:function(e, m){
+    onEtat:function(e, m, code){
+      if (e === 'erreur' && code === 'horsligne') { if (CTS.sr === me) { CTS.sr = null; CTS.srBtn = null; ctBtnOff(btn); } ctMemoStart(btn, ta); return; }
       if (e === 'erreur') toast(m);
       if ((e === 'fin' || e === 'erreur') && CTS.sr === me) { CTS.sr = null; CTS.srBtn = null; ctBtnOff(btn); }
       if (e === 'fin' && row && ta.value !== avant && !row.querySelector('.ctredo')) {
@@ -1903,8 +1911,46 @@ function ctMic(btn, ta){
         r.onclick = function(){ r.remove(); ta.value = avant; ta.dispatchEvent(new Event('input')); ctMic(btn, ta); };
         row.appendChild(r); ta.addEventListener('input', function kill(ev){ if (ev.isTrusted) { r.remove(); ta.removeEventListener('input', kill); } });
       } } });
-  CTS.sr = me; CTS.srBtn = btn;
+  if (me.actif()) { CTS.sr = me; CTS.srBtn = btn; }   /* sans réseau, la dictée a déjà laissé la place au mémo vocal */
 }
+/* [Hors ligne] sans réseau (et sans dictée sur l'appareil) : le micro enregistre un MÉMO VOCAL rattaché au champ ;
+   au retour du réseau, « 📝 Retranscrire » le transforme en texte dans ce champ (rien n'est perdu entre-temps). */
+function ctMemoStart(btn, ta){
+  if (!window.PhenixDictee || !PhenixDictee.memo || !window.MediaRecorder) { toast('Pas de réseau et pas d\'enregistrement possible ici : tapez le texte, ou utilisez Windows + H.'); return; }
+  if (btn.dataset.html == null) btn.dataset.html = btn.innerHTML;
+  var row = btn.parentNode, r = PhenixDictee.memo();
+  btn.innerHTML = '■ Fin du mémo'; btn.setAttribute('aria-pressed', 'true'); if (row) row.classList.add('rec');
+  toast('Pas de réseau : j\'enregistre un mémo vocal. Il sera retranscrit au retour du réseau.');
+  CTS.sr = { stop:function(){ CTS.sr = null; r.stop().then(function(m){ ((CT.memos = CT.memos || {})[ta.id] = CT.memos[ta.id] || []).push({ id:'v' + Date.now().toString(36), dataUrl:m.dataUrl, duree:m.duree, t:new Date().toISOString() }); ctPut(); ctRender(); toast('Mémo vocal gardé sur la tablette'); }).catch(function(){ toast('Mémo non enregistré.'); }); } };
+  CTS.srBtn = btn;
+  r.pret.catch(function(){ CTS.sr = null; CTS.srBtn = null; ctBtnOff(btn); toast('Micro indisponible pour le mémo.'); });
+}
+function ctMemosHtml(id){
+  var l = CT && CT.memos && CT.memos[id]; if (!l || !l.length) return '';
+  return '<div class="ctmemos">' + l.map(function(m, i){ return '<span class="ctmemo">🔊 Mémo ' + (i + 1) + ' · ' + Math.floor(m.duree / 60) + ':' + String(m.duree % 60).padStart(2, '0') + '<button type="button" class="btn" data-mplay="' + id + '|' + m.id + '">▶ Écouter</button><button type="button" class="btn" data-mtr="' + id + '|' + m.id + '">📝 Retranscrire</button><button type="button" class="btn ghost" data-mdel="' + id + '|' + m.id + '" aria-label="Supprimer le mémo">×</button></span>'; }).join('') + '<span class="muted" style="font-size:12px">Retranscription possible dès le retour du réseau.</span></div>';
+}
+function ctMemoBind(o){
+  var get = function(k){ var p = k.split('|'), l = CT.memos && CT.memos[p[0]] || []; return { id:p[0], l:l, m:l.filter(function(x){ return x.id === p[1]; })[0] }; };
+  [].forEach.call(o.querySelectorAll('[data-mplay]'), function(b){ b.onclick = function(){ var x = get(b.getAttribute('data-mplay')); if (x.m) new Audio(x.m.dataUrl).play().catch(function(){ toast('Lecture impossible.'); }); }; });
+  [].forEach.call(o.querySelectorAll('[data-mdel]'), function(b){ b.onclick = function(){ var x = get(b.getAttribute('data-mdel')); if (!x.m || !confirm('Supprimer ce mémo vocal ?')) return; CT.memos[x.id] = x.l.filter(function(y){ return y !== x.m; }); ctPut(); ctRender(); }; });
+  [].forEach.call(o.querySelectorAll('[data-mtr]'), function(b){ b.onclick = function(){ var x = get(b.getAttribute('data-mtr')), ta = $(x.id); if (!x.m || !ta) return;
+    if (!navigator.onLine) { toast('Toujours pas de réseau : la retranscription se fera dès qu\'il revient.'); return; }
+    b.disabled = true; b.textContent = '… retranscription (le mémo est lu)'; var avant = ta.value;
+    PhenixDictee.transcrire(x.m.dataUrl, function(t){ ta.value = PhenixDictee.coller(avant, t); }).then(function(t){
+      if (!t) { toast('Rien de compris dans ce mémo : écoutez-le et tapez le texte.'); b.disabled = false; b.textContent = '📝 Retranscrire'; return; }
+      ta.value = PhenixDictee.coller(avant, t); ta.dispatchEvent(new Event('input')); CT.memos[x.id] = x.l.filter(function(y){ return y !== x.m; }); ctPut(); ctRender(); toast('Mémo retranscrit : relisez et corrigez si besoin.');
+    }).catch(function(e){ ta.value = avant; b.disabled = false; b.textContent = '📝 Retranscrire'; toast(e && e.message || 'Retranscription impossible.'); }); }; });
+}
+function ctNbMemos(){ var n = 0; Object.keys(CT && CT.memos || {}).forEach(function(k){ n += CT.memos[k].length; }); return n; }
+/* état de la dictée hors ligne, affiché en tête de l'écran */
+function ctOffHtml(){
+  if (!window.PhenixDictee) return '';
+  var l = PhenixDictee.local(), on = navigator.onLine;
+  if (l === 'available') return '<span class="chip">' + (on ? '✓ Dictée hors ligne prête' : '✓ Hors ligne · dictée sur la tablette') + '</span>';
+  if (on && PhenixDictee.peutHorsLigne && l !== 'unavailable') return '<button class="btn" type="button" id="ct-offdl">' + (l === 'downloading' ? '⏳ Préparation de la dictée hors ligne…' : '⬇ Préparer la dictée hors ligne') + '</button>';
+  return '<span class="chip amber">' + (on ? 'Sans réseau : le micro enregistrera des mémos vocaux' : '⚠ Hors ligne · micro = mémo vocal') + '</span>';
+}
+
 /* ─── Photos : caméra dans l'appli (Windows n'ouvre pas l'appareil photo depuis un simple bouton fichier) ─── */
 function ctFiles(cb){
   var i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.multiple = true;
@@ -2086,7 +2132,7 @@ function ctItem(min){ var t = CT ? CT_K[CT.type].item : 'Désordre'; return min 
 function ctIn(label, id, val, o){
   o = o || {};
   var f = o.rows ? '<textarea id="' + id + '" ' + o.attr + ' rows="' + o.rows + '" placeholder="' + esc(o.ph || '') + '">' + esc(val || '') + '</textarea>' : '<input id="' + id + '" ' + o.attr + ' value="' + esc(val || '') + '" placeholder="' + esc(o.ph || '') + '">';
-  return '<div class="ctf"' + (o.style ? ' style="' + o.style + '"' : '') + '><label class="eyebrow" for="' + id + '">' + label + '</label><div class="ctmicrow">' + f + '<button class="btn ctmic" type="button" data-mic="' + id + '" aria-label="Dicter : ' + esc(label) + '">🎙 Dicter</button></div></div>';
+  return '<div class="ctf"' + (o.style ? ' style="' + o.style + '"' : '') + '><label class="eyebrow" for="' + id + '">' + label + '</label><div class="ctmicrow">' + f + '<button class="btn ctmic" type="button" data-mic="' + id + '" aria-label="Dicter : ' + esc(label) + '">🎙 Dicter</button></div>' + ctMemosHtml(id) + '</div>';
 }
 function ctLotBtn(id, on, b, s){ return '<button type="button" class="ctlot' + (on ? ' on' : '') + '" data-ctlot="' + esc(id) + '" aria-pressed="' + on + '">' + (on ? '✓ ' : '') + '<b>' + esc(b) + '</b><span>' + esc(s) + '</span></button>'; }
 function ctDesHtml(d){
@@ -2124,7 +2170,7 @@ function ctRender(){
   o.className = 'on'; document.body.classList.add('ct-on');
   var y = o.scrollTop, np = (CT.photosG || []).length; CT.desordres.forEach(function(d){ np += (d.photos || []).length; });
   var on = CT.presents.filter(function(p){ return p.on; }), n = 1, sec = function(t, extra){ return '<section class="card ctsec"><h2 style="font-size:22px">' + (n++) + '. ' + t + (extra || '') + '</h2>'; };
-  var h = '<div class="cthead"><div style="flex:1;min-width:220px"><div class="eyebrow">' + K.ico + ' ' + K.titre + ' · gardé sur la tablette à chaque geste</div><div style="font:400 26px var(--fd)">' + esc(c.nom || '') + '</div></div><button class="btn" type="button" id="ct-back">← Retour au chantier</button></div><div class="ctwrap">';
+  var h = '<div class="cthead"><div style="flex:1;min-width:220px"><div class="eyebrow">' + K.ico + ' ' + K.titre + ' · gardé sur la tablette à chaque geste</div><div style="font:400 26px var(--fd)">' + esc(c.nom || '') + '</div></div><span id="ct-off">' + ctOffHtml() + '</span><button class="btn" type="button" id="ct-back">← Retour au chantier</button></div><div class="ctwrap">';
   h += sec('La visite') + '<div class="ctrow"><div class="ctf" style="flex:0 1 190px"><label class="eyebrow" for="ct-date">Date</label><input type="date" id="ct-date" data-ctg="date" value="' + esc(CT.date) + '"></div><div class="ctf" style="flex:0 1 150px"><label class="eyebrow" for="ct-heure">Heure</label><input type="time" id="ct-heure" data-ctg="heure" value="' + esc(CT.heure) + '"></div>' + ctIn('Objet', 'ct-objet', CT.objet, { attr:'data-ctg="objet"', style:'flex:2 1 260px' }) + '</div>';
   if (cr) h += ctIn('Météo', 'ct-meteo', CT.meteo, { attr:'data-ctg="meteo"', ph:'Ex. : ensoleillé, 8 °C, sol sec' });
   h += '<div class="eyebrow">Qui est présent ? (' + on.length + ')</div><div class="ctpres">' + CT.presents.map(function(p){ return '<button type="button" class="ctlot' + (p.on ? ' on' : '') + '" data-ctpres="' + esc(p.id) + '" aria-pressed="' + !!p.on + '">' + (p.on ? '✓ Présent · ' : '○ Absent · ') + '<b>' + esc(p.nom) + '</b><span>' + esc(p.qualite || '') + '</span></button>'; }).join('') + '<button type="button" class="ctlot" id="ct-addp"><b>+ Ajouter une personne</b><span>Annuaire des artisans ou saisie à la main</span></button></div></section>';
@@ -2143,6 +2189,8 @@ function ctRender(){
   o.innerHTML = h; o.scrollTop = y;
   var q = function(s, f){ [].forEach.call(o.querySelectorAll(s), f); };
   $('ct-back').onclick = ctClose;
+  ctMemoBind(o);
+  if ($('ct-offdl')) $('ct-offdl').onclick = function(){ var b = this; b.disabled = true; b.textContent = '⏳ Téléchargement de la dictée hors ligne…'; PhenixDictee.installerHorsLigne().then(function(ok){ toast(ok ? 'Dictée hors ligne prête : le micro marchera sans réseau.' : 'Ce navigateur ne propose pas la dictée hors ligne en français : sans réseau, le micro enregistrera des mémos vocaux.'); if ($('ct-off')) { $('ct-off').innerHTML = ctOffHtml(); } }); };
   q('[data-ctg]', function(x){ x.oninput = function(){ CT[x.getAttribute('data-ctg')] = x.value; ctPutSoon(); }; });
   q('[data-mic]', function(b){ b.onclick = function(){ var t = $(b.getAttribute('data-mic')); if (t) ctMic(b, t); }; });
   q('[data-ctpres]', function(b){ b.onclick = function(){ var p = CT.presents.filter(function(z){ return z.id === b.getAttribute('data-ctpres'); })[0]; if (p) { p.on = !p.on; ctPut(); ctRender(); } }; });
@@ -2221,6 +2269,7 @@ function ctRecord(withMedia){
     presents:on.map(function(p){ return p.nom + (p.qualite ? ' (' + p.qualite + ')' : ''); }).join(', '), presentsListe:on.map(function(p){ return { id:p.id, nom:p.nom, qualite:p.qualite || '' }; }),
     conclusion:(CT.conclusion || '').trim(), signatures:sig, planImgs:pim, reserves:des.map(function(d){ return '• n° ' + d.n + ' ' + (d.titre || d.description.slice(0, 70)) + ' — ' + d.lot + (d.delai ? ' (reprise avant le ' + frDate(d.delai) + ')' : ''); }).join('\n'),
     auteur:S.user || 'Phénix-Architecture', source:'formulaire', aValider:false, createdAt:new Date().toISOString() };
+  r.memos = []; Object.keys(CT.memos || {}).forEach(function(k){ (CT.memos[k] || []).forEach(function(m){ var lab = document.querySelector('label[for="' + k + '"]'); r.memos.push(Object.assign({ champ:lab ? lab.textContent : k, duree:m.duree }, put(m.dataUrl, 'audio'))); }); });
   if (!cr) { r.desordres = des; return r; }
   var gph = (CT.photosG || []).map(function(p){ return Object.assign({ lotId:null, caption:'' }, put(p.dataUrl, 'photo')); });
   r.points = des; r.meteo = (CT.meteo || '').trim(); r.avancement = (CT.avancement || '').trim(); r.decisions = (CT.decisions || '').trim(); r.prochaine = ctProchaine();
@@ -2236,6 +2285,7 @@ function ctSave(){
   if (!cr && !CT.desordres.length && !confirm('Aucun désordre saisi. Enregistrer quand même le constat ?')) return;
   var vide = CT.desordres.filter(function(d){ return !(d.titre || d.description); });
   if (vide.length && !confirm('Le ' + it + ' n° ' + vide.map(function(d){ return d.n; }).join(', ') + ' n\'a pas de description. Enregistrer quand même ?')) return;
+  var nm = ctNbMemos(); if (nm && !confirm(nm + ' mémo' + (nm > 1 ? 's' : '') + ' vocal' + (nm > 1 ? 'aux' : '') + ' pas encore retranscrit' + (nm > 1 ? 's' : '') + '. Enregistrer quand même ? Les mémos seront joints au document, à écouter dans l\'onglet « Comptes rendus ».')) return;
   CTS.busy = true; ctStopMic();
   var rec = ctRecord(true);
   D.crs.push(rec); save('crs', rec);
@@ -2368,13 +2418,14 @@ function crPdf(c){
 function ctListHtml(){
   var l = D.crs.filter(function(c){ return c.type === 'litige' && c.chantierId == S.cid; }).sort(function(a, b){ return String(b.date + b.heure).localeCompare(String(a.date + a.heure)); });
   var v = D.crs.filter(function(c){ return c.type !== 'litige' && c.chantierId == S.cid; }).sort(function(a, b){ return String(b.date + (b.heure || '')).localeCompare(String(a.date + (a.heure || ''))); });
-  var row = function(c, sub){ return '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:10px"><span style="flex:1 1 260px"><b>' + esc(c.num || 'CR') + ' · ' + frDate(c.date) + (c.heure ? ' à ' + esc(c.heure) : '') + '</b><span class="muted" style="display:block">' + sub + '</span></span><button class="btn" type="button" data-ctpdf="' + esc(c.id) + '">📄 PDF</button></div>'; };
+  var row = function(c, sub){ return '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:10px"><span style="flex:1 1 260px"><b>' + esc(c.num || 'CR') + ' · ' + frDate(c.date) + (c.heure ? ' à ' + esc(c.heure) : '') + '</b><span class="muted" style="display:block">' + sub + '</span></span>' + (c.memos || []).map(function(m, i){ return '<button class="btn" type="button" data-memo="' + esc(c.id) + '|' + i + '" title="' + esc(m.champ || '') + '">🔊 Mémo ' + (i + 1) + '</button>'; }).join('') + '<button class="btn" type="button" data-ctpdf="' + esc(c.id) + '">📄 PDF</button></div>'; };
   var h = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px"><button class="btn big pri" type="button" data-ctgo="cr">📋 ' + (ctHas(S.cid, 'cr') ? 'Reprendre le compte rendu' : 'Compte rendu de chantier') + '</button><button class="btn big" type="button" data-ctgo="litige" style="border-color:rgba(252,211,77,.6)">⚠ ' + (ctHas(S.cid, 'litige') ? 'Reprendre le constat' : 'Constat des désordres') + '</button></div>';
   h += '<div class="card" style="max-width:720px;margin-bottom:14px;display:flex;flex-direction:column;gap:10px"><div class="eyebrow">Comptes rendus de chantier (' + v.length + ')</div>' + (v.length ? v.map(function(c){ var n = (c.points || []).length; return row(c, (c.aValider ? '⚠ À valider' : '✓ Validé') + (n ? ' · ' + n + ' point' + (n > 1 ? 's' : '') : '') + ' · ' + (c.photos || []).length + ' photo' + ((c.photos || []).length > 1 ? 's' : '')); }).join('') : '<div class="muted">Aucun compte rendu.</div>') + '</div>';
   h += '<div class="card" style="max-width:720px;margin-bottom:14px;display:flex;flex-direction:column;gap:10px"><div class="eyebrow">Constats des désordres (' + l.length + ')</div>' + (l.length ? l.map(function(c){ var n = (c.desordres || []).length; return row(c, n + ' désordre' + (n > 1 ? 's' : '') + ' · ' + esc((c.desordres || []).map(function(d){ return d.lot; }).filter(function(x, i, a){ return a.indexOf(x) === i; }).join(', '))); }).join('') : '<div class="muted">Aucun constat.</div>') + '</div>';
   return h;
 }
 function ctListBind(root){
+  [].forEach.call(root.querySelectorAll('[data-memo]'), function(b){ b.onclick = function(){ var p = b.getAttribute('data-memo').split('|'), c = D.crs.filter(function(y){ return String(y.id) === p[0]; })[0], m = c && (c.memos || [])[+p[1]]; if (!m) return; ctSrc(m).then(function(du){ if (du) new Audio(du).play(); else toast('Mémo introuvable (réseau ?).'); }); }; });
   [].forEach.call(root.querySelectorAll('[data-ctpdf]'), function(b){ b.onclick = function(){ var c = D.crs.filter(function(y){ return String(y.id) === b.getAttribute('data-ctpdf'); })[0]; if (c) ctPdf(c); }; });
   [].forEach.call(root.querySelectorAll('[data-ctgo]'), function(b){ b.onclick = function(){ ctOpen(b.getAttribute('data-ctgo')); }; });
 }
@@ -2425,8 +2476,11 @@ function authed(email){
   }).catch(function(e){ console.warn('Rôle illisible', e && e.message); if (ADMIN_EMAILS.indexOf(String(email).toLowerCase()) >= 0) { S.role = 'admin'; $('login').style.display = 'none'; setMode(S.mode); startData(); } else $('app').innerHTML = '<div class="card" style="margin:24px">Accès impossible (rôle illisible).</div>'; });
 }
 function init(){
+  /* [Hors ligne] la page et ses bibliothèques restent rechargeables sans réseau (réseau d'abord, copie seulement hors ligne) */
+  try { if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('phenix_sw.js').catch(function(){}); } catch (e) {}
   S.mode = lk('px2.mode') === 'bureau' ? 'bureau' : 'terrain';
-  window.addEventListener('online', function(){ S.online = true; renderTop(); }); window.addEventListener('offline', function(){ S.online = false; renderTop(); });
+  window.addEventListener('online', function(){ S.online = true; renderTop(); if (CT && $('ct-off')) { $('ct-off').innerHTML = ctOffHtml(); var n = ctNbMemos(); if (n) toast('Réseau revenu : ' + n + ' mémo' + (n > 1 ? 's' : '') + ' vocal' + (n > 1 ? 'aux' : '') + ' à retranscrire (bouton 📝 sous le champ).'); } });
+  window.addEventListener('offline', function(){ if (CT && $('ct-off')) $('ct-off').innerHTML = ctOffHtml(); }); window.addEventListener('offline', function(){ S.online = false; renderTop(); });
   /* ordres du Shell : ouvrir le chantier d'un dossier */
   window.addEventListener('message', function(ev){ var d = ev.data; if (!d || d.source !== 'phenix-shell' || d.action !== 'open-projet' || d.id == null) return; if (String(d.id) === 'fiches') { S.screen = 'home'; setMode(S.mode); return; } S.wantPid = { id:String(d.id), onglet:d.onglet || '', t:Date.now() }; ouvrirVoulu(); });
   try { window.parent.postMessage({ source:'phenix-chantier', ready:true }, '*'); } catch (e) {}
