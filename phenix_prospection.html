@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
+<title>Phénix-Architecture · Prospection</title>
+<!--
+══════════════════════════════════════════════════════════════════════
+ HISTORIQUE DES MODIFICATIONS — phenix_prospection.html
+──────────────────────────────────────────────────────────────────────
+ 28/11/2026 — [Prospection] Création. Salle « Prospection » des bureaux de la Synthèse 3D (prospection des entreprises par mail).
+   • Réservé à l'administrateur (contact@phenixarchitecte.fr). Restriction d'affichage : la règle Firestore de
+     phenix_prospection (lecture et écriture administrateur seulement) protège réellement les données.
+   • Collection phenix_prospection : une fiche par entreprise (nom, contact, e-mail, cible, commune, étape,
+     mails[] datés, prochaine relance, rendez-vous, demande « ne plus contacter » avec sa preuve).
+   • Écran : « N mails envoyés à N entreprises », barre de répartition + six étapes cliquables (filtre),
+     cartes « À faire », tableau en colonnes par étape, fiche de l'entreprise avec ses mails et ses actions.
+   • Bouclier : une entreprise « Ne plus contacter » (ou son domaine mail) est refusée à l'import et sort dans
+     « Liste à exclure » (CSV à donner à Sellbird avant chaque campagne). Sa fiche ne peut pas être supprimée (preuve).
+   • La Synthèse 3D lit la même collection : avenue « Prospection par mail » (mails = véhicules, réponses = piétons).
+══════════════════════════════════════════════════════════════════════
+-->
+<script type="module">
+import { initializeApp }       from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getFirestore, collection, doc, onSnapshot, setDoc, deleteDoc }
+                               from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged }
+                               from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { initializeAppCheck, ReCaptchaV3Provider }
+                               from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js';
+
+const firebaseConfig = {
+  apiKey:            "AIzaSyCjNKNvS6p3nqE6-_Gw9I397ZtXm2FG1ew",
+  authDomain:        "phenix-architecte-9151b.firebaseapp.com",
+  projectId:         "phenix-architecte-9151b",
+  storageBucket:     "phenix-architecte-9151b.firebasestorage.app",
+  messagingSenderId: "811231684720",
+  appId:             "1:811231684720:web:413fa324ae43c07607acb5"
+};
+const app  = initializeApp(firebaseConfig);
+const db   = getFirestore(app);
+const auth = getAuth(app);
+try {
+  initializeAppCheck(app, { provider: new ReCaptchaV3Provider('6LeObWktAAAAAL9eyppDRtLp5yZTyBaF4ZNKXNIO'), isTokenAutoRefreshEnabled: true });
+} catch (e) { console.warn('App Check non initialisé :', e); }
+
+window.addEventListener('message', function(ev){
+  var d = ev.data;
+  if (d && d.source === 'phenix-shell' && d.action === 'auto-login' && d.email && d.password && ev.source === window.parent) {
+    signInWithEmailAndPassword(auth, d.email, d.password).catch(function(){});
+  }
+});
+try { window.parent.postMessage({ source:'phenix-module', readyForLogin:true }, '*'); } catch(e) {}
+
+let unsub = null;
+const propre = (x) => JSON.parse(JSON.stringify(x, (k, v) => (v === undefined ? null : v)));
+window._pr = {
+  ecouter(onData, onErr) {
+    if (unsub) unsub();
+    unsub = onSnapshot(collection(db, 'phenix_prospection'), (s) => { const l = []; s.forEach((d) => { const x = d.data(); x._id = d.id; l.push(x); }); onData(l); }, onErr);
+  },
+  arreter() { if (unsub) { unsub(); unsub = null; } },
+  ecrire(id, v) { const { _id, ...reste } = v; return setDoc(doc(db, 'phenix_prospection', String(id)), propre({ ...reste, maj: new Date().toISOString() }), { merge: false }); },
+  supprimer(id) { return deleteDoc(doc(db, 'phenix_prospection', String(id))); },
+  logout: () => signOut(auth),
+};
+onAuthStateChanged(auth, (u) => {
+  const ov = document.getElementById('phenix-login');
+  if (ov) ov.style.display = u ? 'none' : 'flex';
+  if (window.PR) window.PR.utilisateur(u ? (u.email || '') : '');
+  else window._prUser = u ? (u.email || '') : '';
+});
+</script>
+<style>
+:root{
+  --bg:#0a1628; --bg2:#101f38; --bg3:#16283f; --card:rgba(16,31,56,.72);
+  --text:#e5ecf3; --text2:#a9bbcf; --text3:#7d93ad; --border:rgba(141,180,226,.18);
+  --accent:#5c8cc4; --accent-bg:rgba(92,140,196,.16); --or:#e3bc66; --or-bg:rgba(227,188,102,.14);
+  --red:#e0776c;
+  --font-serif:'DM Serif Display',Georgia,serif; --font-sans:'DM Sans',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100%}
+body{font-family:var(--font-sans);background:radial-gradient(1200px 700px at 85% -10%,#16305a 0%,transparent 60%),linear-gradient(180deg,#0a1628,#0b1830);color:var(--text);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font-family:inherit;font-size:inherit}
+button{cursor:pointer}
+.filigrane{position:fixed;right:-90px;top:70px;width:560px;height:560px;opacity:.05;pointer-events:none;z-index:0}
+.wrap{position:relative;z-index:1;max-width:1480px;margin:0 auto;padding:18px 18px 70px}
+.verre{background:var(--card);border:1px solid var(--border);border-radius:16px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:16px}
+.fil{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);display:flex;align-items:center;gap:8px}
+.fil svg{flex:none}
+h1{font-family:var(--font-serif);font-weight:400;font-size:clamp(26px,3.4vw,40px);line-height:1.1;color:#fff;margin-top:4px}
+h1 b{color:var(--or);font-weight:400}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+.b{min-height:42px;padding:0 15px;border-radius:11px;border:1px solid var(--border);background:rgba(10,22,40,.55);color:var(--text);font-weight:500}
+.b:hover{border-color:var(--accent)}
+.b.or{background:var(--or);border-color:var(--or);color:#1a1406;font-weight:600}
+.b.petit{min-height:36px;padding:0 12px;font-size:13px}
+.b:disabled{opacity:.45;cursor:default}
+.repart{padding:16px 18px;margin-bottom:14px}
+.repart .l1{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;margin-bottom:12px;color:var(--text2)}
+.repart .l1 b{color:var(--or);font-weight:600}
+.barre{display:flex;gap:4px;height:32px;margin-bottom:12px}
+.seg{display:flex;align-items:center;justify-content:center;border-radius:6px;font-weight:600;font-size:13px;min-width:26px;transition:opacity .2s}
+.chips{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.chip{display:flex;align-items:center;gap:10px;min-height:50px;padding:6px 14px;border-radius:12px;background:rgba(10,20,36,.5);border:1px solid var(--border);color:var(--text);text-align:left}
+.chip .s{color:var(--or);font-size:17px;width:18px;text-align:center}
+.chip .t{flex:1;font-size:14px}
+.chip .n{font-family:var(--font-serif);font-size:24px;color:#fff}
+.chip.on{background:var(--or-bg);border-color:var(--or)}
+.afaire{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-bottom:14px}
+.af{display:flex;align-items:center;gap:12px;padding:12px 16px}
+.af .n{font-family:var(--font-serif);font-size:32px;line-height:1;color:#fff}
+.af.chaud{border-color:var(--or)} .af.chaud .n{color:var(--or)}
+.af .t{flex:1;color:var(--text2)}
+.outils{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+.champ{min-height:40px;padding:0 12px;border-radius:10px;border:1px solid var(--border);background:rgba(10,22,40,.6);color:var(--text)}
+.champ:focus{outline:none;border-color:var(--accent)}
+.zone{display:flex;gap:16px;align-items:flex-start}
+.tableau{flex:1;min-width:0;overflow-x:auto;padding-bottom:6px;scroll-snap-type:x proximity}
+.cols{display:grid;grid-template-columns:repeat(6,minmax(158px,1fr));gap:10px;min-width:1000px}
+.col{display:flex;flex-direction:column;gap:8px;padding:11px;border-radius:14px;background:rgba(12,24,43,.66);border:1px solid rgba(141,180,226,.12);min-height:420px;scroll-snap-align:start;transition:opacity .2s}
+.col.chaud{border-color:var(--or);background:rgba(19,38,68,.72)}
+.col.terne{opacity:.28}
+.col .tete{display:flex;align-items:center;gap:8px;padding:0 2px 8px;border-bottom:1px solid var(--border)}
+.col .tete .s{color:var(--or);width:18px;text-align:center;font-size:15px}
+.col .tete .t{flex:1;font-weight:600;color:#fff}
+.col .tete .n{min-width:28px;padding:1px 8px;border-radius:99px;background:#1c3352;text-align:center;font-weight:600}
+.col .aide{font-size:12px;color:var(--text3);padding:0 2px}
+.col .vide{font-size:12px;color:var(--text3);font-style:italic;padding:8px 2px}
+.carte{display:flex;flex-direction:column;gap:2px;width:100%;text-align:left;padding:10px 12px;border-radius:10px;background:rgba(14,27,48,.9);border:1px solid #22385a;color:var(--text);min-height:44px}
+.carte:hover{border-color:var(--accent)}
+.carte.sel{border-color:var(--or);box-shadow:0 0 0 1px var(--or);background:#1c3352}
+.carte .nm{font-weight:600;color:#fff;line-height:1.3}
+.carte .sb{font-size:12px;color:var(--text2)}
+.carte .bas{display:flex;justify-content:space-between;gap:6px;margin-top:4px;font-size:12px;color:var(--text2)}
+.carte .suite{font-size:12px;color:var(--or)}
+.carte .suite.retard{color:#ffd28a;font-weight:600}
+.fiche{width:340px;flex:none;padding:18px;position:sticky;top:12px}
+.fiche h2{font-family:var(--font-serif);font-weight:400;font-size:26px;color:#fff;line-height:1.15}
+.fiche .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin:14px 0 6px}
+.etiq{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:99px;border:1px solid var(--accent);font-size:13px;margin-top:8px}
+.histo{display:flex;flex-direction:column;gap:6px}
+.histo div{display:grid;grid-template-columns:62px 1fr;gap:8px;font-size:13px}
+.histo span:first-child{color:var(--or)}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}
+.actions .b{min-height:44px;font-size:13px}
+.actions .large{grid-column:1/-1}
+.form{display:grid;gap:8px}
+.form label{display:grid;gap:3px;font-size:12px;color:var(--text3)}
+.form .champ{width:100%}
+.fermer{display:none}
+.vide-fiche{color:var(--text3);font-size:14px;line-height:1.5}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#16294a;border:1px solid var(--or);color:#fff;padding:11px 18px;border-radius:12px;z-index:50;max-width:92vw;display:none}
+.err{padding:12px 14px;border-radius:12px;border:1px solid var(--red);color:#ffd5cf;margin-bottom:12px;display:none}
+dialog{border:none;background:transparent;padding:0;max-width:min(560px,94vw);width:100%;margin:auto}
+dialog::backdrop{background:rgba(4,10,20,.72)}
+dialog .verre{padding:20px;background:rgba(16,31,56,.97)}
+dialog h3{font-family:var(--font-serif);font-weight:400;font-size:22px;color:#fff;margin-bottom:10px}
+dialog p{color:var(--text2);font-size:13px;margin-bottom:10px}
+@media (max-width:980px){
+  .zone{display:block}
+  .fiche{position:fixed;inset:auto 0 0 0;width:auto;max-height:86vh;overflow:auto;border-radius:18px 18px 0 0;z-index:40;display:none;top:auto}
+  .fiche.ouverte{display:block}
+  .fermer{display:inline-flex}
+}
+@media (max-width:640px){
+  .wrap{padding:12px 12px 70px}
+  .cols{grid-template-columns:repeat(6,82vw);min-width:0}
+  .chips{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .btns .b{flex:1}
+}
+</style>
+</head>
+<body>
+<svg class="filigrane" aria-hidden="true" viewBox="0 0 400 400"><path d="M200 60 C150 120 90 140 60 210 C110 190 150 200 175 240 C130 250 100 290 95 340 C140 300 175 290 200 300 C225 290 260 300 305 340 C300 290 270 250 225 240 C250 200 290 190 340 210 C310 140 250 120 200 60 Z" fill="none" stroke="#8DB4E2" stroke-width="2"/><path d="M200 300 C190 330 170 350 140 365 M200 300 C210 330 230 350 260 365" fill="none" stroke="#E3BC66" stroke-width="1.5"/></svg>
+
+<div id="phenix-login" style="display:none;position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#0a1628,#12233f,#2f6fc0);align-items:center;justify-content:center;padding:20px">
+  <div style="background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.18);border-radius:16px;padding:34px 28px;max-width:360px;width:100%;text-align:center">
+    <div style="font-family:'DM Serif Display',Georgia,serif;font-size:30px;color:#fff;margin-bottom:4px">Phénix<span style="color:#e3bc66">-Architecture</span></div>
+    <div style="font-size:14px;color:rgba(255,255,255,.75);margin:18px 0 22px;line-height:1.5">Session fermée ou expirée.<br>La connexion se fait depuis Phénix.</div>
+    <a href="phenix_shell.html" style="display:block;padding:13px;border-radius:9px;background:#2f6fc0;color:#fff;font-size:15px;font-weight:600;text-decoration:none">Ouvrir Phénix</a>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="top">
+    <div>
+      <div class="fil">Bureaux Phénix · Prospection par mail
+        <svg aria-label="Réservé à Maxime" role="img" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#e3bc66" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+      </div>
+      <h1 id="titre">Chargement…</h1>
+    </div>
+    <div class="btns">
+      <button class="b" type="button" id="retour" onclick="PR.retour()" style="display:none">← Synthèse</button>
+      <button class="b" type="button" onclick="PR.ouvrirImport()">⇪ Importer (CSV Sellbird)</button>
+      <button class="b" type="button" onclick="PR.exporterExclusions()">⊘ Liste à exclure</button>
+      <button class="b or" type="button" onclick="PR.nouvelle()">＋ Entreprise</button>
+    </div>
+  </div>
+  <div class="err" id="err" role="alert"></div>
+  <div id="app"></div>
+</div>
+
+<dialog id="dlg"><div class="verre" id="dlg-c"></div></dialog>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+'use strict';
+var ADMIN = 'contact@phenixarchitecte.fr';
+var ETAPES = [
+  { id:'envoye',  s:'○', t:'Mail envoyé',       aide:'En attente de réponse' },
+  { id:'relance', s:'◐', t:'Relancé',           aide:'Relance partie, en attente' },
+  { id:'repondu', s:'●', t:'A répondu',         aide:'À traiter en priorité', chaud:true },
+  { id:'rdv',     s:'★', t:'Rendez-vous',       aide:'Entre au district Devis' },
+  { id:'clos',    s:'–', t:'Pas intéressé',     aide:'Pas de projet ou sans réponse' },
+  { id:'stop',    s:'⊘', t:'Ne plus contacter', aide:'Retirées de toute campagne' }
+];
+var TEINTE = { envoye:['#24426b','#f2f6fb'], relance:['#3a6699','#f2f6fb'], repondu:['#7fa9dc','#0a1424'], rdv:['#e3bc66','#1a1406'], clos:['#1a2c47','#b9c9dd'], stop:['#0e1b30','#9fb3cc'] };
+var CIBLES = { commerce:'Commerce', sante:'Santé', agricole:'Agricole', pme:'Artisans et PME', autre:'Autre' };
+var DELAI_RELANCE = 7;
+
+var S = { user:'', liste:[], focus:null, sel:null, recherche:'', cible:'' };
+var $ = function(id){ return document.getElementById(id); };
+function esc(x){ return String(x == null ? '' : x).replace(/[&<>"']/g, function(c){ return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]; }); }
+function auj(){ var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+function plusJours(iso, n){ var d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0,10); }
+var MOIS = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
+function court(iso){ if (!iso) return ''; var d = new Date(String(iso).slice(0,10) + 'T12:00:00'); if (isNaN(d)) return ''; return d.getDate() + ' ' + MOIS[d.getMonth()]; }
+function heure(iso){ if (!iso || String(iso).length < 16) return ''; return String(iso).slice(11,16).replace(':', ' h '); }
+function domaine(email){ var m = String(email || '').toLowerCase().match(/@([^@\s>]+)$/); return m ? m[1] : ''; }
+var WEBMAIL = /^(gmail|googlemail|hotmail|outlook|live|yahoo|orange|wanadoo|free|sfr|laposte|icloud|me|aol|gmx|bbox|neuf|msn)\./;
+function norm(x){ return String(x || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,' ').trim(); }
+function nbMails(e){ return (e.mails || []).filter(function(m){ return m.type === 'presentation' || m.type === 'relance'; }).length; }
+function dernierMail(e){ var l = (e.mails || []).filter(function(m){ return m.type === 'presentation' || m.type === 'relance'; }); return l.length ? l[l.length-1].d : ''; }
+function etapeDe(id){ return ETAPES.filter(function(x){ return x.id === id; })[0] || ETAPES[0]; }
+function toast(t){ var el = $('toast'); el.textContent = t; el.style.display = 'block'; clearTimeout(toast._t); toast._t = setTimeout(function(){ el.style.display = 'none'; }, 3800); }
+function erreur(t){ var el = $('err'); el.textContent = t || ''; el.style.display = t ? 'block' : 'none'; }
+
+function suite(e){
+  var a = auj();
+  if (e.etape === 'envoye' || e.etape === 'relance') {
+    if (e.prochaineRelance) return { txt: (e.prochaineRelance <= a ? 'Relance à valider (' + court(e.prochaineRelance) + ')' : 'Relance le ' + court(e.prochaineRelance)), retard: e.prochaineRelance <= a };
+    return { txt: 'En attente de réponse' };
+  }
+  if (e.etape === 'repondu') return { txt: 'Répondre', retard: true };
+  if (e.etape === 'rdv') return { txt: e.rdv ? 'RDV ' + court(e.rdv) + (heure(e.rdv) ? ' · ' + heure(e.rdv) : '') : 'Fixer le rendez-vous', retard: !e.rdv };
+  if (e.etape === 'clos') return { txt: e.rappel ? 'Recontacter le ' + court(e.rappel) : 'Clos' };
+  if (e.etape === 'stop') return { txt: 'Demande du ' + court(e.stop && e.stop.d) };
+  return { txt: '' };
+}
+
+/* ═══════════ RENDU ═══════════ */
+function visibles(){
+  var r = norm(S.recherche);
+  return S.liste.filter(function(e){
+    if (S.cible && e.cible !== S.cible) return false;
+    if (!r) return true;
+    return norm([e.nom, e.contact, e.commune, e.email].join(' ')).indexOf(r) >= 0;
+  });
+}
+function rendre(){
+  if (!S.user) { $('titre').textContent = 'Connexion…'; $('app').innerHTML = ''; return; }
+  if (S.user !== ADMIN) { $('titre').textContent = 'Réservé à l’administrateur'; $('app').innerHTML = '<p class="vide-fiche">La prospection est visible par Maxime seul.</p>'; return; }
+  var tous = S.liste, a = auj();
+  var mails = tous.reduce(function(s, e){ return s + nbMails(e); }, 0);
+  $('titre').innerHTML = '<b>' + mails + '</b> mail' + (mails > 1 ? 's' : '') + ' envoyé' + (mails > 1 ? 's' : '') + ' à <b>' + tous.length + '</b> entreprise' + (tous.length > 1 ? 's' : '');
+  var parE = {}; ETAPES.forEach(function(x){ parE[x.id] = []; });
+  var vis = visibles();
+  vis.forEach(function(e){ (parE[e.etape] || parE.envoye).push(e); });
+  var cpt = {}; ETAPES.forEach(function(x){ cpt[x.id] = tous.filter(function(e){ return (e.etape || 'envoye') === x.id; }).length; });
+  var repondues = tous.filter(function(e){ return (e.mails || []).some(function(m){ return m.type === 'reponse'; }) || e.etape === 'repondu' || e.etape === 'rdv'; }).length;
+  var taux = tous.length ? Math.round(repondues / tous.length * 100) : 0;
+  var relDues = tous.filter(function(e){ return (e.etape === 'envoye' || e.etape === 'relance') && e.prochaineRelance && e.prochaineRelance <= plusJours(a, 7); });
+  var rdvAvenir = tous.filter(function(e){ return e.etape === 'rdv' && (!e.rdv || String(e.rdv).slice(0,10) >= a); });
+  var h = '';
+
+  if (!tous.length) {
+    h += '<div class="verre repart"><p class="vide-fiche">Aucune entreprise pour l’instant. Importe le fichier CSV exporté par Sellbird (bouton « Importer ») ou ajoute une entreprise à la main. Chaque mail envoyé fait avancer l’entreprise de colonne.</p></div>';
+  }
+
+  // Répartition
+  h += '<section class="verre repart" aria-label="Où en sont les entreprises"><div class="l1"><span>Où en sont les ' + tous.length + ' entreprises</span><span>' + repondues + ' ont répondu · <b>' + cpt.rdv + ' rendez-vous</b> · taux de réponse ' + taux + ' %</span></div>';
+  h += '<div class="barre" aria-hidden="true">';
+  ETAPES.forEach(function(x){ if (!cpt[x.id]) return; var c = TEINTE[x.id]; h += '<div class="seg" style="flex:' + cpt[x.id] + ' 1 0;background:' + c[0] + ';color:' + c[1] + ';' + (x.id === 'stop' ? 'border:1px solid #3a4f6b;' : '') + 'opacity:' + (S.focus && S.focus !== x.id ? .3 : 1) + '">' + cpt[x.id] + '</div>'; });
+  if (!tous.length) h += '<div class="seg" style="flex:1;background:rgba(255,255,255,.04);color:var(--text3)">—</div>';
+  h += '</div><div class="chips">';
+  ETAPES.forEach(function(x){ h += '<button type="button" class="chip' + (S.focus === x.id ? ' on' : '') + '" aria-pressed="' + (S.focus === x.id) + '" onclick="PR.focus(\'' + x.id + '\')"><span class="s" aria-hidden="true">' + x.s + '</span><span class="t">' + x.t + '</span><span class="n">' + cpt[x.id] + '</span></button>'; });
+  h += '</div></section>';
+
+  // À faire
+  h += '<section class="afaire" aria-label="À faire">';
+  h += '<div class="verre af' + (cpt.repondu ? ' chaud' : '') + '"><span class="n">' + cpt.repondu + '</span><span class="t">réponse' + (cpt.repondu > 1 ? 's' : '') + ' à traiter</span><button class="b petit' + (cpt.repondu ? ' or' : '') + '" type="button" onclick="PR.focus(\'repondu\',true)"' + (cpt.repondu ? '' : ' disabled') + '>Voir</button></div>';
+  h += '<div class="verre af"><span class="n">' + relDues.length + '</span><span class="t">relance' + (relDues.length > 1 ? 's' : '') + ' à valider d’ici 7 jours</span><button class="b petit" type="button" onclick="PR.voirRelances()"' + (relDues.length ? '' : ' disabled') + '>Voir</button></div>';
+  h += '<div class="verre af"><span class="n">' + rdvAvenir.length + '</span><span class="t">rendez-vous à venir</span><button class="b petit" type="button" onclick="PR.focus(\'rdv\',true)"' + (rdvAvenir.length ? '' : ' disabled') + '>Voir</button></div>';
+  h += '</section>';
+
+  // Outils
+  h += '<div class="outils"><input class="champ" type="search" placeholder="Rechercher une entreprise, un contact, une commune…" aria-label="Rechercher" value="' + esc(S.recherche) + '" oninput="PR.chercher(this.value)" style="flex:1 1 260px"><select class="champ" aria-label="Cible" onchange="PR.cible(this.value)"><option value="">Toutes les cibles</option>';
+  Object.keys(CIBLES).forEach(function(k){ h += '<option value="' + k + '"' + (S.cible === k ? ' selected' : '') + '>' + CIBLES[k] + '</option>'; });
+  h += '</select></div>';
+
+  // Tableau + fiche
+  h += '<div class="zone"><section class="tableau" aria-label="Suivi par étape"><div class="cols">';
+  ETAPES.forEach(function(x){
+    var l = parE[x.id].slice().sort(function(p, q){ return String(dernierMail(q) || q.cree || '').localeCompare(String(dernierMail(p) || p.cree || '')); });
+    var cls = 'col' + (x.chaud && l.length ? ' chaud' : '') + (S.focus && S.focus !== x.id ? ' terne' : '');
+    h += '<div class="' + cls + '" id="col-' + x.id + '"><div class="tete"><span class="s" aria-hidden="true">' + x.s + '</span><span class="t">' + x.t + '</span><span class="n">' + l.length + '</span></div><div class="aide">' + x.aide + '</div>';
+    if (!l.length) h += '<div class="vide">Aucune entreprise</div>';
+    l.forEach(function(e){
+      var n = nbMails(e), su = suite(e);
+      h += '<button type="button" class="carte' + (S.sel === e._id ? ' sel' : '') + '" onclick="PR.choisir(\'' + esc(e._id) + '\')">' +
+        '<span class="nm">' + esc(e.nom || '(sans nom)') + '</span>' +
+        '<span class="sb">' + esc([CIBLES[e.cible] || '', e.commune].filter(Boolean).join(' · ')) + '</span>' +
+        '<span class="bas"><span>✉ ' + n + ' mail' + (n > 1 ? 's' : '') + '</span><span>' + court(dernierMail(e) || e.cree) + '</span></span>' +
+        (su.txt ? '<span class="suite' + (su.retard ? ' retard' : '') + '">' + (su.retard ? '▲ ' : '') + esc(su.txt) + '</span>' : '') +
+        '</button>';
+    });
+    h += '</div>';
+  });
+  h += '</div></section>';
+  h += '<aside class="verre fiche' + (S.sel ? ' ouverte' : '') + '" id="fiche" aria-label="Fiche entreprise">' + rendreFiche() + '</aside></div>';
+  h += '<p style="margin-top:12px;font-size:12px;color:var(--text3)">Chaque étape porte un symbole : ○ mail envoyé · ◐ relancé · ● a répondu · ★ rendez-vous · – pas intéressé · ⊘ ne plus contacter. ▲ = action attendue.</p>';
+  $('app').innerHTML = h;
+}
+
+function rendreFiche(){
+  var e = S.liste.filter(function(x){ return x._id === S.sel; })[0];
+  if (!e) return '<p class="vide-fiche">Clique sur une entreprise pour voir ses mails, ses réponses et les actions possibles.</p>';
+  var x = etapeDe(e.etape), id = esc(e._id);
+  var h = '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3)">Fiche entreprise</div><button class="b petit fermer" type="button" onclick="PR.choisir(null)" aria-label="Fermer la fiche">✕</button></div>';
+  h += '<h2>' + esc(e.nom) + '</h2>';
+  h += '<div style="color:var(--text2);margin-top:4px">' + esc(e.contact || '') + (e.contact ? '<br>' : '') + esc([CIBLES[e.cible] || '', e.commune].filter(Boolean).join(' · ')) + '</div>';
+  if (e.email) h += '<div style="color:var(--text2);font-size:13px;margin-top:2px">' + esc(e.email) + '</div>';
+  h += '<div class="etiq"><span aria-hidden="true">' + x.s + '</span> ' + x.t + '</div>';
+  var su = suite(e); if (su.txt) h += '<div style="margin-top:6px;color:var(--or);font-size:13px">' + (su.retard ? '▲ ' : '') + esc(su.txt) + '</div>';
+  h += '<div class="lbl">Mails et réponses</div><div class="histo">';
+  var LIB = { presentation:'Mail de présentation', relance:'Relance', reponse:'Réponse', rdv:'Rendez-vous', note:'Note', stop:'Demande « ne plus contacter »', clos:'Pas intéressé' };
+  (e.mails || []).forEach(function(m){ h += '<div><span>' + court(m.d) + '</span><span>' + esc(LIB[m.type] || m.type) + (m.txt ? ' : « ' + esc(m.txt) + ' »' : '') + '</span></div>'; });
+  if (!(e.mails || []).length) h += '<div><span>—</span><span>Aucun mail enregistré</span></div>';
+  h += '</div>';
+  if (e.etape === 'stop') {
+    h += '<div class="lbl">Bouclier</div><p class="vide-fiche">Cette entreprise et le domaine « ' + esc(domaine(e.email) || '—') + ' » sont exclus de toutes les campagnes. La fiche est conservée comme preuve de la demande.</p>';
+    h += '<div class="actions"><button class="b large" type="button" onclick="PR.modifier(\'' + id + '\')">Modifier les coordonnées</button></div>';
+    return h;
+  }
+  h += '<div class="lbl">Actions</div><div class="actions">';
+  var n = nbMails(e);
+  h += '<button class="b or large" type="button" onclick="PR.mailEnvoye(\'' + id + '\')">✉ ' + (n ? 'Relance envoyée' : 'Mail envoyé') + '</button>';
+  h += '<button class="b" type="button" onclick="PR.reponse(\'' + id + '\')">● A répondu</button>';
+  h += '<button class="b" type="button" onclick="PR.rdv(\'' + id + '\')">★ Rendez-vous</button>';
+  h += '<button class="b" type="button" onclick="PR.pasInteresse(\'' + id + '\')">– Pas intéressé</button>';
+  h += '<button class="b" type="button" onclick="PR.note(\'' + id + '\')">✎ Note</button>';
+  if (e.tel) h += '<a class="b" style="display:flex;align-items:center;justify-content:center;text-decoration:none" href="tel:' + esc(String(e.tel).replace(/\s+/g,'')) + '">✆ Appeler</a>';
+  if (e.email) h += '<a class="b" style="display:flex;align-items:center;justify-content:center;text-decoration:none" href="mailto:' + esc(e.email) + '">✉ Écrire</a>';
+  h += '<button class="b" type="button" onclick="PR.modifier(\'' + id + '\')">Modifier</button>';
+  h += '<button class="b large" type="button" style="color:var(--text2)" onclick="PR.stop(\'' + id + '\')">⊘ Ne plus contacter</button>';
+  h += '<button class="b large" type="button" style="color:var(--text3);font-size:12px;min-height:36px" onclick="PR.supprimer(\'' + id + '\')">Supprimer la fiche (erreur de saisie)</button>';
+  h += '</div>';
+  return h;
+}
+
+/* ═══════════ ÉCRITURE ═══════════ */
+function trouver(id){ return S.liste.filter(function(x){ return x._id === id; })[0]; }
+function sauver(e, msg){
+  return window._pr.ecrire(e._id, e).then(function(){ if (msg) toast(msg); }).catch(function(err){ erreur('Enregistrement impossible (' + (err && err.code || 'erreur') + '). Vérifie la règle Firestore de phenix_prospection.'); });
+}
+function copie(e){ return JSON.parse(JSON.stringify(e)); }
+function ajoutMail(e, type, txt, d){ e.mails = (e.mails || []).concat([{ d: d || auj(), type: type, txt: txt || '' }]); }
+
+function dialogue(html, onOk){
+  var d = $('dlg'); $('dlg-c').innerHTML = html;
+  var f = $('dlg-c').querySelector('form');
+  if (f) f.onsubmit = function(ev){ ev.preventDefault(); var r = onOk(new FormData(f)); if (r !== false) d.close(); };
+  var an = $('dlg-c').querySelector('[data-annuler]'); if (an) an.onclick = function(){ d.close(); };
+  if (d.showModal) d.showModal(); else d.setAttribute('open', '');
+  var p = $('dlg-c').querySelector('input,textarea,select'); if (p) setTimeout(function(){ p.focus(); }, 30);
+}
+var BOUTONS = '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="b" type="button" data-annuler>Annuler</button><button class="b or" type="submit">Enregistrer</button></div>';
+
+function formEntreprise(e){
+  e = e || {};
+  var o = ''; Object.keys(CIBLES).forEach(function(k){ o += '<option value="' + k + '"' + (e.cible === k ? ' selected' : '') + '>' + CIBLES[k] + '</option>'; });
+  return '<div class="form">' +
+    '<label>Entreprise *<input class="champ" name="nom" required value="' + esc(e.nom) + '"></label>' +
+    '<label>Contact (prénom, fonction)<input class="champ" name="contact" value="' + esc(e.contact) + '"></label>' +
+    '<label>E-mail<input class="champ" name="email" type="email" value="' + esc(e.email) + '"></label>' +
+    '<label>Téléphone<input class="champ" name="tel" value="' + esc(e.tel) + '"></label>' +
+    '<label>Cible<select class="champ" name="cible">' + o + '</select></label>' +
+    '<label>Commune<input class="champ" name="commune" value="' + esc(e.commune) + '"></label>' +
+    '</div>';
+}
+function lireForm(fd, e){
+  ['nom','contact','email','tel','cible','commune'].forEach(function(k){ e[k] = String(fd.get(k) || '').trim(); });
+  e.email = e.email.toLowerCase(); e.domaine = domaine(e.email);
+  return e;
+}
+function bloquee(e){
+  var d = domaine(e.email), n = norm(e.nom);
+  return S.liste.filter(function(x){
+    if (x.etape !== 'stop' || x._id === e._id) return false;
+    if (e.email && x.email && x.email === e.email) return true;
+    if (d && !WEBMAIL.test(d) && domaine(x.email) === d) return true;
+    return n && norm(x.nom) === n;
+  })[0];
+}
+function doublon(e){
+  var n = norm(e.nom);
+  return S.liste.filter(function(x){ return x._id !== e._id && ((e.email && x.email === e.email) || (n && norm(x.nom) === n)); })[0];
+}
+function nouvelId(e){ return (norm(e.nom).replace(/ /g,'-').slice(0,40) || 'entreprise') + '-' + Date.now().toString(36); }
+
+window.PR = {
+  utilisateur: function(u){
+    S.user = String(u || '').toLowerCase();
+    if (S.user === ADMIN) window._pr.ecouter(function(l){ S.liste = l; if (S.sel && !trouver(S.sel)) S.sel = null; erreur(''); rendre(); }, function(err){ erreur('Lecture impossible (' + (err && err.code || 'erreur') + '). Il faut publier la règle Firestore de phenix_prospection.'); rendre(); });
+    else window._pr.arreter();
+    rendre();
+  },
+  focus: function(id, force){ S.focus = (S.focus === id && !force) ? null : id; rendre(); if (S.focus) { var c = $('col-' + S.focus); if (c && c.scrollIntoView) c.scrollIntoView({ behavior:'smooth', block:'nearest', inline:'start' }); } },
+  voirRelances: function(){ S.focus = 'envoye'; rendre(); var c = $('col-envoye'); if (c && c.scrollIntoView) c.scrollIntoView({ behavior:'smooth', block:'nearest', inline:'start' }); },
+  chercher: function(v){ S.recherche = v; var pos = document.activeElement && document.activeElement.selectionStart; rendre(); var i = document.querySelector('.outils input'); if (i) { i.focus(); try { i.setSelectionRange(pos, pos); } catch(e){} } },
+  cible: function(v){ S.cible = v; rendre(); },
+  choisir: function(id){ S.sel = id; rendre(); },
+  nouvelle: function(){
+    dialogue('<form><h3>Nouvelle entreprise</h3>' + formEntreprise({ cible:'commerce' }) + '<label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13px;color:var(--text2)"><input type="checkbox" name="envoye" checked> Le mail de présentation est déjà parti aujourd’hui</label>' + BOUTONS + '</form>', function(fd){
+      var e = lireForm(fd, { mails:[], cree: new Date().toISOString() });
+      var b = bloquee(e); if (b) { alert('« ' + b.nom + ' » a demandé à ne plus être contactée (même entreprise ou même domaine mail). Fiche non créée.'); return false; }
+      var dbl = doublon(e); if (dbl && !confirm('« ' + dbl.nom + ' » existe déjà. Créer quand même une deuxième fiche ?')) return false;
+      e._id = nouvelId(e);
+      if (fd.get('envoye')) { ajoutMail(e, 'presentation'); e.etape = 'envoye'; e.prochaineRelance = plusJours(auj(), DELAI_RELANCE); }
+      else { e.etape = 'envoye'; e.prochaineRelance = null; }
+      S.sel = e._id; sauver(e, 'Entreprise ajoutée.');
+    });
+  },
+  modifier: function(id){
+    var e = copie(trouver(id)); if (!e) return;
+    dialogue('<form><h3>Modifier</h3>' + formEntreprise(e) + BOUTONS + '</form>', function(fd){ lireForm(fd, e); sauver(e, 'Fiche enregistrée.'); });
+  },
+  mailEnvoye: function(id){
+    var e = copie(trouver(id)); if (!e) return;
+    var b = bloquee(e); if (b) { alert('Bouclier : cette entreprise a demandé à ne plus être contactée.'); return; }
+    var premier = nbMails(e) === 0;
+    ajoutMail(e, premier ? 'presentation' : 'relance');
+    if (premier) { e.etape = 'envoye'; e.prochaineRelance = plusJours(auj(), DELAI_RELANCE); }
+    else { e.etape = 'relance'; e.prochaineRelance = null; }
+    sauver(e, premier ? 'Mail de présentation enregistré. Relance prévue le ' + court(e.prochaineRelance) + '.' : 'Relance enregistrée.');
+  },
+  reponse: function(id){
+    var e = copie(trouver(id)); if (!e) return;
+    dialogue('<form><h3>Réponse de ' + esc(e.nom) + '</h3><p>Résume la réponse en une phrase (facultatif).</p><textarea class="champ" name="txt" rows="3" style="width:100%;padding:10px"></textarea>' + BOUTONS + '</form>', function(fd){
+      ajoutMail(e, 'reponse', String(fd.get('txt') || '').trim()); e.etape = 'repondu'; e.prochaineRelance = null; sauver(e, 'Réponse enregistrée : à traiter.');
+    });
+  },
+  rdv: function(id){
+    var e = copie(trouver(id)); if (!e) return;
+    dialogue('<form><h3>Rendez-vous avec ' + esc(e.nom) + '</h3><div class="form"><label>Date et heure<input class="champ" type="datetime-local" name="rdv" value="' + esc(e.rdv || '') + '"></label></div>' + BOUTONS + '</form>', function(fd){
+      e.rdv = String(fd.get('rdv') || ''); ajoutMail(e, 'rdv', e.rdv ? court(e.rdv) + (heure(e.rdv) ? ' à ' + heure(e.rdv) : '') : 'à fixer'); e.etape = 'rdv'; e.prochaineRelance = null; sauver(e, 'Rendez-vous enregistré.');
+    });
+  },
+  pasInteresse: function(id){
+    var e = copie(trouver(id)); if (!e) return;
+    dialogue('<form><h3>' + esc(e.nom) + ' : pas intéressé</h3><div class="form"><label>Raison (facultatif)<input class="champ" name="txt" placeholder="Pas de projet pour l’instant"></label><label>Recontacter le (facultatif)<input class="champ" type="date" name="rappel"></label></div>' + BOUTONS + '</form>', function(fd){
+      ajoutMail(e, 'clos', String(fd.get('txt') || '').trim()); e.etape = 'clos'; e.prochaineRelance = null; e.rappel = String(fd.get('rappel') || '') || null; sauver(e, 'Classée « pas intéressé ».');
+    });
+  },
+  note: function(id){
+    var e = copie(trouver(id)); if (!e) return;
+    dialogue('<form><h3>Note</h3><textarea class="champ" name="txt" rows="3" style="width:100%;padding:10px" required></textarea>' + BOUTONS + '</form>', function(fd){ ajoutMail(e, 'note', String(fd.get('txt') || '').trim()); sauver(e, 'Note ajoutée.'); });
+  },
+  stop: function(id){
+    var e = copie(trouver(id)); if (!e) return;
+    dialogue('<form><h3>Ne plus contacter ' + esc(e.nom) + '</h3><p>L’entreprise et son domaine mail seront exclus de toutes les campagnes. Colle ou résume la demande : elle sert de preuve.</p><textarea class="champ" name="preuve" rows="3" style="width:100%;padding:10px" placeholder="STOP"></textarea>' + BOUTONS + '</form>', function(fd){
+      var p = String(fd.get('preuve') || '').trim() || 'STOP';
+      e.stop = { d: auj(), preuve: p }; ajoutMail(e, 'stop', p); e.etape = 'stop'; e.prochaineRelance = null; sauver(e, 'Ajoutée au bouclier « Ne plus contacter ».');
+    });
+  },
+  supprimer: function(id){
+    var e = trouver(id); if (!e) return;
+    if (e.etape === 'stop') { alert('Une demande « ne plus contacter » est conservée comme preuve : la fiche ne peut pas être supprimée.'); return; }
+    if (!confirm('Supprimer la fiche « ' + e.nom + ' » ? (à réserver aux erreurs de saisie)')) return;
+    S.sel = null; window._pr.supprimer(id).then(function(){ toast('Fiche supprimée.'); }).catch(function(err){ erreur('Suppression impossible (' + (err && err.code) + ').'); });
+  },
+  exporterExclusions: function(){
+    var l = S.liste.filter(function(e){ return e.etape === 'stop'; });
+    if (!l.length) { toast('Aucune entreprise dans « Ne plus contacter ».'); return; }
+    var lignes = [['entreprise','email','domaine','date_demande']];
+    l.forEach(function(e){ var d = domaine(e.email); lignes.push([e.nom, e.email || '', d && !WEBMAIL.test(d) ? d : '', (e.stop && e.stop.d) || '']); });
+    var csv = lignes.map(function(r){ return r.map(function(c){ return '"' + String(c).replace(/"/g, '""') + '"'; }).join(';'); }).join('\r\n');
+    var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type:'text/csv;charset=utf-8' })); a.download = 'phenix_ne_plus_contacter_' + auj() + '.csv'; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    toast(l.length + ' entreprise' + (l.length > 1 ? 's' : '') + ' à exclure : donne ce fichier à Sellbird avant la campagne.');
+  },
+  ouvrirImport: function(){
+    var o = ''; Object.keys(CIBLES).forEach(function(k){ o += '<option value="' + k + '">' + CIBLES[k] + '</option>'; });
+    dialogue('<form><h3>Importer une campagne</h3><p>Fichier CSV exporté par Sellbird (ou tout CSV avec au moins une colonne entreprise ou e-mail). Les entreprises déjà connues sont ignorées, celles du bouclier « Ne plus contacter » sont refusées.</p><div class="form">' +
+      '<label>Fichier CSV<input class="champ" type="file" name="f" accept=".csv,text/csv" required style="padding:8px"></label>' +
+      '<label>Cible de la campagne<select class="champ" name="cible">' + o + '</select></label>' +
+      '<label>Date d’envoi du mail de présentation<input class="champ" type="date" name="d" value="' + auj() + '"></label>' +
+      '</div>' + BOUTONS.replace('Enregistrer', 'Importer') + '</form>', function(fd){
+      var f = fd.get('f'); if (!f || !f.size) return false;
+      var cible = String(fd.get('cible') || 'autre'), d = String(fd.get('d') || auj());
+      var r = new FileReader(); r.onload = function(){ importer(String(r.result || ''), cible, d); }; r.readAsText(f, 'utf-8');
+    });
+  }
+};
+
+function parseCSV(txt){
+  txt = txt.replace(/^﻿/, '');
+  var sep = (txt.split('\n')[0].match(/;/g) || []).length > (txt.split('\n')[0].match(/,/g) || []).length ? ';' : ',';
+  var lignes = [], l = [], c = '', q = false;
+  for (var i = 0; i < txt.length; i++) {
+    var ch = txt[i];
+    if (q) { if (ch === '"') { if (txt[i+1] === '"') { c += '"'; i++; } else q = false; } else c += ch; }
+    else if (ch === '"') q = true;
+    else if (ch === sep) { l.push(c); c = ''; }
+    else if (ch === '\n' || ch === '\r') { if (ch === '\r' && txt[i+1] === '\n') i++; l.push(c); lignes.push(l); l = []; c = ''; }
+    else c += ch;
+  }
+  if (c || l.length) { l.push(c); lignes.push(l); }
+  return lignes.filter(function(x){ return x.some(function(v){ return String(v).trim(); }); });
+}
+function importer(txt, cible, d){
+  var L = parseCSV(txt); if (L.length < 2) { toast('Fichier vide ou illisible.'); return; }
+  var tete = L[0].map(norm);
+  function col(motifs){ for (var i = 0; i < tete.length; i++) for (var j = 0; j < motifs.length; j++) if (tete[i].indexOf(motifs[j]) >= 0) return i; return -1; }
+  var cNom = col(['company','entreprise','societe','business','organisation','organization','raison sociale','nom entreprise']);
+  var cMail = col(['email','e mail','mail','courriel']);
+  var cPre = col(['first name','firstname','prenom']), cCont = col(['contact','person','decision','full name','nom contact']);
+  var cRole = col(['title','role','fonction','poste']);
+  var cVille = col(['city','ville','commune','town','locality']);
+  var cTel = col(['phone','telephone','tel']);
+  if (cNom < 0) cNom = col(['name','nom']);
+  if (cNom < 0 && cMail < 0) { toast('Colonnes « entreprise » ou « e-mail » introuvables dans le fichier.'); return; }
+  var ajout = 0, connus = 0, bloques = 0, ecritures = [], vus = {};
+  L.slice(1).forEach(function(r, i){
+    var g = function(k){ return k >= 0 ? String(r[k] || '').trim() : ''; };
+    var e = { nom: g(cNom), email: g(cMail).toLowerCase(), contact: [g(cPre) || g(cCont), g(cRole)].filter(Boolean).join(', '), commune: g(cVille), tel: g(cTel), cible: cible, mails: [], cree: new Date().toISOString() };
+    if (!e.nom && e.email) e.nom = domaine(e.email);
+    if (!e.nom) return;
+    e.domaine = domaine(e.email);
+    var cle = e.email || norm(e.nom); if (vus[cle]) return; vus[cle] = 1;
+    if (bloquee(e)) { bloques++; return; }
+    if (doublon(e)) { connus++; return; }
+    e._id = nouvelId(e) + i.toString(36);
+    ajoutMail(e, 'presentation', '', d); e.etape = 'envoye'; e.prochaineRelance = plusJours(d, DELAI_RELANCE);
+    ecritures.push(window._pr.ecrire(e._id, e)); ajout++;
+  });
+  Promise.all(ecritures).then(function(){
+    toast(ajout + ' ajoutée' + (ajout > 1 ? 's' : '') + ' · ' + connus + ' déjà connue' + (connus > 1 ? 's' : '') + ' · ' + bloques + ' refusée' + (bloques > 1 ? 's' : '') + ' (ne plus contacter)');
+  }).catch(function(err){ erreur('Import interrompu (' + (err && err.code || 'erreur') + ').'); });
+}
+
+window.PR.retour = function(){ try { window.parent.postMessage({ source:'phenix-prospection', action:'ouvrir-synthese' }, '*'); } catch(e){} };
+if (window.parent && window.parent !== window) $('retour').style.display = '';
+if (window._prUser !== undefined) window.PR.utilisateur(window._prUser);
+rendre();
+})();
+</script>
+</body>
+</html>

@@ -5,6 +5,8 @@
 ══════════════════════════════════════════════════════════════════════
  HISTORIQUE DES MODIFICATIONS — phenix_shell.html
 ──────────────────────────────────────────────────────────────────────
+ 28/11/2026 — [Prospection] Nouveau module « Prospection » (phenix_prospection.html, administrateur seulement), ouvert depuis
+   les bureaux de la Synthèse 3D (message « ouvrir-prospection ») ; « ← Synthèse » du module ramène à la Synthèse.
  27/11/2026 — [Cache] Chantier ouvert avec ?v=20261127d (dictée commune phenix_dictee.js) ; avant : ?v=20261127b (puis b : deux boutons CR / constat) (nouveau « Constat de litige ») : sans cela la tablette gardait l'ancienne version.
  25/11/2026 (2) — [Offres reçues] Devis reçu par mail : la cloche propose « 📥 Intégrer à Chiffrage » (le devis va dans Offres reçues,
    où il se range un par un) ou « Ne pas intégrer » (il n'apparaît pas dans Chiffrage, retour possible). Plus aucun lot créé tout seul.
@@ -1709,6 +1711,7 @@ const MODULES = {
   chantier:     { src: 'phenix_chantier2.html?v=20261127p',   /* [Cache] numéro de version : à changer à chaque mise à jour du module pour forcer le rechargement */           title: 'Chantier — suivi de travaux (nouveau module)' },
   financement:  { src: 'phenix_financement.html',        title: 'Dossier de financement' },
   annuaire:     { src: 'Phenix_Annuaire_Artisans.html',  title: 'Annuaire artisans' },
+  prospection:  { src: 'phenix_prospection.html?v=20261128a', title: 'Prospection — entreprises contactées par mail' },   // [Prospection] administrateur seulement, ouvert depuis les bureaux de la Synthèse
 };
 
 // ════════════════════════════════════════════════════════════
@@ -1816,6 +1819,7 @@ window.shellOpenModule = function(name, el, order) {
   if (!mod) return;
   if (window._phenixRestreint && window._phenixModules.indexOf(name) < 0) return;
   if (name === 'journal' && me !== SHELL_ADMIN_EMAIL.toLowerCase()) return;   // [Journal]
+  if (name === 'prospection' && me !== SHELL_ADMIN_EMAIL.toLowerCase()) return;   // [Prospection] Maxime seul
   if (name === 'synthese' && me !== SHELL_ADMIN_EMAIL.toLowerCase() && (window._phenixModules || []).indexOf('synthese') < 0) return;   // [v65] Kevin et Cassandra y ont accès (vue limitée)   // [Synthèse 3D] marges et impayés : administrateur seulement
   if (name === 'dossier' && !window._phenixRestreint && window._accueilFait && window.marquerNotifsTachesLues) window.marquerNotifsTachesLues();   // [Espace assistante]
   shellShowView('module', el);
@@ -1934,7 +1938,7 @@ window.addEventListener('message', (ev) => {
   // [Synthèse 3D · v42] « débloquer » : la fiche d'un dossier bloqué demande d'ouvrir le module qui lève le blocage.
   // On accuse réception (sinon la Synthèse se replie sur « ouvrir-dossier »).
   /* Chantier → Synthèse 3D : « ← Synthèse » dans le module Chantier ramène à la vue d'ensemble des chantiers */
-  if (msg.source === 'phenix-chantier' && msg.action === 'ouvrir-synthese') {
+  if ((msg.source === 'phenix-chantier' || msg.source === 'phenix-prospection') && msg.action === 'ouvrir-synthese') {   // [Prospection] même retour depuis la salle Prospection
     const ns = document.querySelector('.shell-nav-item[data-module="synthese"]'); if (ns && ns.style.display !== 'none') shellOpenModule('synthese', ns);
     return;
   }
@@ -1942,6 +1946,12 @@ window.addEventListener('message', (ev) => {
   if (msg.source === 'phenix-synthese' && msg.action === 'espace-client' && msg.projetId != null) {
     try { ev.source && ev.source.postMessage({ source:'phenix-shell', action:'ack-module' }, '*'); } catch(e) {}
     try { window.ecOuvrirFiche(String(msg.projetId)); } catch (e) { console.warn('Espace client', e); }   // [25/11] directement l'espace client complet (onglet de la fiche Dossier)
+    return;
+  }
+  // [Prospection 28/11/2026] bureaux de la Synthèse › « Prospection » : la salle Prospection (Maxime seul)
+  if (msg.source === 'phenix-synthese' && msg.action === 'ouvrir-prospection') {
+    try { ev.source && ev.source.postMessage({ source:'phenix-shell', action:'ack-module' }, '*'); } catch(e) {}
+    shellOpenModule('prospection', null);
     return;
   }
   if (msg.source === 'phenix-synthese' && msg.action === 'ouvrir-module' && msg.projetId != null) {
