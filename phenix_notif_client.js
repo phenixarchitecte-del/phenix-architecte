@@ -64,7 +64,8 @@ function router(pid, lignes, type) {
 function nouveautes(avant, apres) {
   avant = avant || {}; apres = apres || {};
   const l = [], statutChange = !!((apres.code && apres.code !== avant.code) || (apres.titre && apres.titre !== avant.titre));
-  if (statutChange) l.push({ canal: STATUTS_PUSH.has(String(apres.code || '')) ? 'push' : 'mail', titre: 'Votre dossier avance : ' + court(apres.titre || '', 90), texte: court(apres.petit || apres.texte || '', 220) });
+  if (statutChange) { const push = STATUTS_PUSH.has(String(apres.code || ''));   // [28/11] en push, titre court (« Pose de votre toiture ») ; en mail, « Votre dossier avance : … »
+    l.push({ canal: push ? 'push' : 'mail', titre: (push ? '' : 'Votre dossier avance : ') + court(apres.titre || '', 90), texte: court(apres.petit || apres.texte || '', 220) }); }
   const cle = x => String(x && (x.id || x.url || x.titre) || '');
   const docsAvant = new Set((avant.documents || []).map(cle));
   const nouveauxDocs = (apres.documents || []).filter(x => !docsAvant.has(cle(x)));

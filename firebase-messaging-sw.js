@@ -10,7 +10,8 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 messaging.onBackgroundMessage(p => {
   const n = (p && p.notification) || {}, d = (p && p.data) || {};
-  self.registration.showNotification(n.title || 'Phénix-Architecture', { body: n.body || '', data: { url: d.url || 'phenix_client.html' }, tag: d.tag || 'phenix' });
+  // [28/11/2026] logo Phénix dans la notification (icon) et silhouette du phénix dans la barre d'état (badge)
+  self.registration.showNotification(n.title || 'Phénix-Architecture', { body: n.body || '', icon: 'phenix_notif_icon.png', badge: 'phenix_notif_badge.png', data: { url: d.url || 'phenix_client.html' }, tag: d.tag || 'phenix' });
 });
 self.addEventListener('notificationclick', e => {
   e.notification.close();
