@@ -174,6 +174,30 @@ async function activerPush() {
     toast('C’est fait : vous serez prévenu sur cet appareil à chaque nouveauté.'); rendreClient();
   } catch (e) { console.warn('Push :', e); toast('Activation impossible pour le moment.'); }
 }
+// [28/11/2026] À la première ouverture, on explique au client pourquoi activer les notifications.
+// « Plus tard » : on le lui reproposera dans 7 jours ; le bouton reste toujours dans « Le fil ».
+function inviterPush() {
+  if (!pushPossible() || pushActif() || document.getElementById('inv-push')) return;
+  try { if (Notification.permission === 'denied') return; const t = Number(localStorage.getItem('phx_push_plustard') || 0); if (t && Date.now() - t < 7 * 864e5) return; } catch (e) { return; }
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) && !(window.matchMedia && matchMedia('(display-mode: standalone)').matches) && !navigator.standalone;
+  const el = document.createElement('div'); el.id = 'inv-push';
+  el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-labelledby', 'inv-push-t');
+  el.style.cssText = 'position:fixed;inset:0;z-index:60;display:flex;align-items:flex-end;justify-content:center;padding:16px;background:rgba(5,14,36,.62)';
+  el.innerHTML = `<div class="voile" style="width:100%;max-width:440px;padding:26px 22px 18px;border:.75px solid #3b5f96;border-radius:22px;background:#0b1f4a;margin-bottom:max(12px,env(safe-area-inset-bottom))">
+    <div style="font-size:11px;letter-spacing:6px;color:var(--or)">PHÉNIX</div>
+    <h2 id="inv-push-t" class="ital" style="margin:14px 0 10px;font-size:28px;line-height:1.1;color:var(--t1)">Suivez chaque étape de votre projet</h2>
+    <p style="margin:0 0 10px;font-size:14px;line-height:1.55;color:var(--t3)">Activez les notifications : vous serez prévenu sur ce téléphone à chaque étape de votre projet, à chaque nouveau document et à chaque message de Phénix.</p>
+    <p style="margin:0 0 18px;font-size:12px;line-height:1.5;color:var(--t5)">${ios ? 'Sur iPhone : touchez d’abord Partager › « Sur l’écran d’accueil », puis rouvrez votre espace depuis l’icône Phénix.' : 'Vous pourrez les couper à tout moment dans les réglages de votre téléphone.'}</p>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <button class="btn-or" type="button" id="inv-push-ok">Activer les notifications</button>
+      <button class="btn-discret" type="button" id="inv-push-non">Plus tard</button>
+    </div></div>`;
+  document.body.appendChild(el);
+  const fermer = () => el.remove();
+  document.getElementById('inv-push-ok').onclick = () => { fermer(); activerPush(); };
+  document.getElementById('inv-push-non').onclick = () => { try { localStorage.setItem('phx_push_plustard', String(Date.now())); } catch (e) {} fermer(); toast('Vous retrouverez le bouton dans « Le fil ».'); };
+  setTimeout(() => { const b = document.getElementById('inv-push-ok'); if (b) b.focus(); }, 50);
+}
 const pushActif = () => { try { return localStorage.getItem('phx_push') === '1' && Notification.permission === 'granted'; } catch (e) { return false; } };
 
 const ADMIN = 'contact@phenixarchitecte.fr';
@@ -324,6 +348,7 @@ function rendreClient() {
   const corps = ong === 'documents' ? htmlDocuments(d) : ong === 'fil' ? htmlFil(d) : htmlAvancement(d);
   $app().innerHTML = corps + htmlNav(d);
   brancherClient(d);
+  inviterPush();   // [28/11/2026] première ouverture : proposer les notifications
   window.scrollTo(0, 0);
 }
 // [Carnet 25/11/2026] le carnet s'ouvre DANS l'espace (plus de lien vers une autre page ni de mot de passe)
