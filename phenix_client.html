@@ -158,7 +158,7 @@ const db   = getFirestore(app);
 
 // ══ [Notifications push 26/11/2026] « Être prévenu sur ce téléphone » ══
 // Clé publique Web Push (Firebase › Paramètres du projet › Cloud Messaging › Certificats Web push). Tant qu'elle n'est pas remplie, le bouton reste caché.
-const VAPID = 'A_REMPLIR';
+const VAPID = 'BHP3_7oZE3ug0jfpnsUjj2Zs8qC8o0hFx5fnp7yRaXDty00IR83QYSxg7cHaW9C2SzZb8Whx_dBJ3MlOvJE4rDg';   // clé publique Web Push du projet (28/11/2026)
 const pushPossible = () => VAPID !== 'A_REMPLIR' && 'Notification' in window && 'serviceWorker' in navigator && !S.apercu;
 async function activerPush() {
   try {
